@@ -30,12 +30,15 @@ top of the two objectives above.
 | SBC ROM disassembly (~22 K lines) | `fps3k_clean.asm` | Objective A — protocol on SBC side |
 | MC-derived annotations (644) | merged into clean asm | Objective A |
 | AP I/F protocol doc | `host_to_sbc_communication.md` | Objective A |
+| **Inferred cable protocol** | `cable_protocol_inferred.md` | Objective A |
+| AP I/F card details (P/N 612-4448-401-F + family) | `ap_if_card.md` | Objective A |
 | XLTR↔XP-32 protocol doc | `xltr_protocol.md` + `xp32_eu_command_protocol.md` | Objectives A + B |
 | AP-120B field tables (FPS-7319) | `refs/AP-120B/` | Objective B |
 | FPS-164 instruction layout (Touzeau 1984 fig 2) | `refs/FPS-164/Touzeau...pdf` | Objective B |
+| FPS-100 host driver source (DRIVER.MAC + DAPEX.MAC + IAPEX.FTN) | `fps100_archive/fps100sw/` | Objective A (ancestor reference) |
 | 217 AP-120B HSR microcode kernels | `hsr_decoded/` | Objective B (reference corpus) |
 | AP-120B FFT identity-test microcode | `ucode_transcribed.py` | Objective B (validation) |
-| FPS-3000 EU PROM | physically on EXEC card | **read-out pending** |
+| FPS-3000 EU PROM | physically on EXEC card | **read-out pending (B2/B3)** |
 | FPS Board Revision List (Dec 1989) | `refs/FPS_Board_Revision_List_198912.pdf` | Both — P/N reference |
 
 ### Known unknowns
@@ -142,12 +145,32 @@ either.
 
 ### Critical-path next step for Objective A
 
-**Get a logic-analyzer capture of the chassis-side AP I/F connector
-pins during SBC boot + panel-init (`0x276..0x27D`)**, with the
-SBC running its existing ROM firmware, no host attached. The
-boot-init sequence pokes the AP I/F registers with predictable
-patterns, so the bus traffic is decodable even without
-documentation.
+The cable's **logical protocol is now derived from existing
+sources** (FPS-100 IOP-UNI ancestor + multi-host-bus catalog
+evidence + SBC firmware accesses) — see
+`cable_protocol_inferred.md`. So we know:
+
+- Cable carries register-poke (9-bit addr + 16-bit data + R/W
+  + DTACK), bus-master DMA (full host-address pass-through +
+  arbitration), 3-source AP→host irq, 1-line host→AP irq
+  (APIRT), reset
+- ~50 logical signal lines + power/ground = ~70-80 conductors
+- Cable is **host-bus-abstracted** (same cable for Q-bus / UNIBUS
+  / LSI-11; the host-side card translates per bus type)
+
+What remains is **a much narrower physical-mapping question**:
+which conductor on the chassis-side connector carries which
+logical signal. This needs either:
+- Visual inspection of `612-4448-401-F`'s cable-connector pads
+  and tracing back to identifiable chip pins, OR
+- Logic-analyzer capture during SBC boot to correlate poke
+  patterns to active conductors
+
+Both are short bench tasks (hours not days) — they validate and
+pin down the inferred protocol; they don't have to discover it.
+
+The substitute host-side card design (FPGA + bus transceivers)
+**can start now in parallel**.
 
 ---
 
@@ -234,40 +257,89 @@ read the PROMs.
 
 ---
 
-## Order of operations (dependency-aware)
+## Order of operations (dependency-aware, post cable-inference)
 
 ```
-1.  Lovett does logic-analyzer captures of:
-     (a) AP I/F connector pins during SBC boot
-     (b) EU PROM chip identification (visual)
+DESK WORK — startable now, no bench inputs needed:
 
-2.  Reverse-engineer cable protocol from (a)
-    [unblocks Objective A — substitute host-side card]
-    +
-    Read EU PROMs from (b)
-    [unblocks Objective B — disassemble EU, infer AU layout]
+  D1. FPGA design for substitute host-side card
+       — register-poke handler at chassis-side cable interface
+       — bus-master DMA emulator on host-side bus
+       — irq translation (3 sources cable→host; 1 line host→cable)
+       — based on cable_protocol_inferred.md spec
+  D2. Am29116 disassembler (Python, analogous to disasm.py for 68K)
+       — implements the AMD Am29116 datasheet ISA
+       — ready to decode the EU PROM contents the moment they're read
+  D3. XP-32 candidate AU control-word layout
+       — extends FPS-164 layout (Touzeau fig 2) with second-adder
+         + DMA-controller groups
+       — provisional encoding for hand-authoring trial kernels
 
-3a. Build modern host-side substitute board (FPGA or Teensy)
-3b. Disassemble Am29116 EU instructions, derive AU layout
+BENCH WORK — narrow, on Lovett's hardware:
 
-4a. Validate host-side: send simple commands, observe SBC response
-4b. Author candidate AU microcode for one routine, upload via the
-    host-side substitute (now working from step 3a)
+  B1. Pin-out of 612-4448-401-F's cable connector
+       — visual / DMM / brief LA capture during SBC boot
+       — outputs: physical-pin → logical-signal map
+       [unblocks D1 final step: the FPGA's pin assignments]
+  B2. Visual ID of EU PROM chips on the EXEC card
+       — chip type, package, vendor markings
+       — identify a working PROM-programmer + adapter combo
+  B3. Read EU PROMs
+       — output: 2K × 80-bit binary microcode image
 
-5.  ZVMUL on a 1-element vector — end-to-end test of both objectives.
+INTEGRATION WORK — combines desk + bench:
+
+  I1. Substitute host-side card built (D1 + B1)
+       — Q-bus dev board + FPGA + cable to chassis
+  I2. Bring-up: send simple commands from host substitute,
+       observe SBC response on chassis-side
+  I3. Disassemble EU PROM (B3 + D2)
+       — outputs: Am29116 instruction trace of the EU at boot,
+         and EU↔AU coordination patterns
+  I4. Infer AU layout (I3 → refines D3)
+       — outputs: validated XP-32 AU control-word semantics
+  I5. Author first XP-32 µkernel (D3 + I4)
+       — start with single-instruction NOP, then ZVMUL on 1-vector
+  I6. Upload + run µkernel via I1
+       — observe AU register state, iterate until correct
+
+FINAL DEMO:
+
+  ZVMUL on a 16-element vector, host substitute → SBC →
+  XP-32 AU, result back to host. End-to-end on both objectives.
 ```
 
-Steps 1, 2, 3 are independent of each other (parallelisable).
-Step 4 needs both 3a and 3b. Step 5 needs all of 1-4.
+Dependency graph:
+- `D1`, `D2`, `D3` independent of each other and of bench work
+- `B1`, `B2`, `B3` independent of each other (B1 is for Obj A; B2,B3 for Obj B)
+- `I1` needs D1 + B1
+- `I3` needs D2 + B3
+- `I4` refines D3 using I3 outputs
+- `I5` needs D3 (or refined I4) + AU layout
+- `I6` needs I1 + I5
 
-### Effort total
+### Effort total (revised — cable inference saves ~30h)
 
-Order-of-magnitude: **300-500 engineering hours**, distributed:
-- ~50h reverse-engineering cable protocol (Objective A path)
-- ~50h building modern host-side substitute (Objective A path)
-- ~100h reverse-engineering EU + inferring AU layout (Objective B path)
-- ~50h authoring + validating first XP-32 microcode (Objective B path)
-- ~50h overhead/integration
+| Task | Hours |
+|---|---|
+| D1 (substitute host-side FPGA + transceivers + cable end-points) | ~80 |
+| D2 (Am29116 disassembler) | ~30 |
+| D3 (candidate AU layout) | ~20 |
+| B1 + B2 + B3 (bench, pin-out + PROM read) | ~10 |
+| I1 (host-side bring-up) | ~30 |
+| I2 (host↔SBC validation) | ~20 |
+| I3 (EU disassembly) | ~40 |
+| I4 (AU layout inference) | ~50 |
+| I5 (first µkernel authoring) | ~30 |
+| I6 (microcode bring-up + iterate) | ~50 |
+| Integration / overhead | ~30 |
+| **Total** | **~390** engineering hours |
+
+Same overall scope — cable-protocol inference doesn't reduce
+total engineering effort, but it **unblocks the parallelism**:
+the FPGA work (D1) can now run concurrently with all the bench
+work, instead of being gated on a long reverse-engineering
+phase.
 
 This is a many-month part-time project. Each milestone is
 independently meaningful, so even partial completion produces
