@@ -57,17 +57,31 @@ order to motivate code-generation choices.
 
 So **no FPS Inc. technical documentation is on the open used-book/auction market right now**. The vintage print ads are the only FPS-related items currently listed (~$50-60, decorative).
 
-## Confirmed FPS card P/Ns (for future searches)
+## Confirmed FPS card P/Ns (Dec 1989 catalog + Lovett's chassis)
 
-Reading off Lovett's actual chassis (2026-05):
+**Found and pulled locally**: bitsavers had two FPS catalogs all
+along — `FPS_Board_Revision_List_198912.pdf` (26 pages, Dec 1989)
+and `FPS_Pricing_198403.pdf` (9 pages, Mar 1984). Both now in
+`refs/`.
+
+Reading the BRL gave the full host-bus mapping for Lovett's
+chassis card:
 
 | P/N | Card | Notes |
 |---|---|---|
-| `612-4448-401-F` | **AP I/F** (slot 11) | chassis-side; host-side variant unknown; web search returns ZERO hits |
-| `612-4805-002` | XP-32 EXEC | Am29116 + fixed EU PROM (per Nakazoto photos) |
-| `612-4806-002` | XP-32 ARITH | FP pipes (per Nakazoto photos) |
-| `612-4498-401-A` | MEMORY | system memory card |
-| `612-4456-461` | MEMORY | system memory card |
+| `612-4448-401-F` | **AP I/F (chassis-side)** | "APIF"; current Dec 1989; Lovett's slot-11 card |
+| `612-4448-402..403` | AP I/F MP32 | Multi-Processor 32-bit variants (newer than -401) |
+| `612-4448-301..307` | UNIV APIF | Older Universal APIF generation |
+| `612-4448-011..017` | 448 APIF (specific) | Per-host-AP variants from FPS-100/AP-120B era |
+| **`612-4012-003`** | **Q-bus host-side adapter** | "Q22 BUS ADPTR FPS3000/5000" — for PDP-11/73, /23, /83 |
+| **`612-4013-001`** | **UNIBUS host-side adapter** | "UNIBUS ADPTR FPS3000/5000" — for PDP-11/44, /70, /84 |
+| `612-4014-000` | UNIBUS terminator | Companion to 4013 |
+| `612-4850-000` | LSI-11 hex-height adapter | Alt for LSI-11 hosts |
+| `612-4805-002` | XP-32 EXEC | Am29116 + EU PROM |
+| `612-4806-002` | XP-32 ARITH | FP pipes |
+| `612-4498-401-A` | MEMORY | |
+| `612-4456-461` | MEMORY | |
+| `422-0015-001` | Co-Processor Interconnect Cable | per 1984 pricing list ($100) |
 
 System-level identifiers (from data plate):
 - Model: `FPS 3000`
@@ -75,9 +89,10 @@ System-level identifiers (from data plate):
 - System S/N: `FAS 20282`
 - Chassis P/N (index plate): `821-9008-011`
 
-These are **searchable strings** for surfacing FPS catalog pages,
-schematics, repair manuals, or matching host-side cards if they
-ever appear online. None currently return hits.
+The catalogs **resolved every host-bus-variant question** — the
+specific part to find for Lovett's PDP-11/73 is `612-4012-003`
+("Q22 BUS ADPTR FPS3000/5000"), and the UNIBUS counterpart is
+`612-4013-001`.
 
 ## Higher-yield retro-computing channels (untried as of 2026-05-04)
 

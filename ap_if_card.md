@@ -279,22 +279,116 @@ But this is pure speculation. The actual mapping requires either
 a surviving FPS catalog page, or an FPS engineer / customer who
 remembers.
 
-### Online presence: ZERO
+### Catalog confirmation (FPS Board Revision List, Dec 1989)
 
-A web search for `"612-4448"` (or `"FPS 4448"`, etc., on
-2026-05-04) returned **no hits**. The P/N is completely
-undocumented online — not in bitsavers, not in archive.org, not
-in eBay listings, not in patent filings. Lovett's card is
-effectively the only known surviving reference.
+`refs/FPS_Board_Revision_List_198912.pdf` (12 MB, 26 pages) was on
+bitsavers all along — pulling it apart reveals the *complete*
+`612-4448-xxx` family:
 
-This makes finding the matching **host-side card** (which would
-be a different P/N — same `4448` card-type code but different
-variant suffix, OR a different `4xxx` for the host-side
-counterpart) very difficult through web search alone. Channels
-worth trying:
-- Direct contact with surviving FPS engineers
-- VCFed.org thread (Lovett's existing one)
-- Estate sales / surplus lists from former FPS customer sites
+| P/N | CR REV | Description (verbatim) |
+|---|---|---|
+| `612-4448-000..005` | various | "MULTI WIRE B" (deprecated; "USE -003 1-WAY" etc.) |
+| `612-4448-011` | 02 | **448 APIF RDCP** |
+| `612-4448-012` | 03 | **448 APIF FPS100** |
+| `612-4448-013` | 06 | **448 APIF AP120B** |
+| `612-4448-014` | B | 448 APIF FPS100 (newer rev) |
+| `612-4448-015` | A | 448 APIF AP120 |
+| `612-4448-017` | E | 448 APIF RDCP120 |
+| `612-4448-301` | K | UNIV APIF |
+| `612-4448-303` | T | UNIV APIF |
+| `612-4448-304` | M | **UNIV APIF FPS5100** |
+| `612-4448-305..307` | various | UNIV APIF (various) |
+| `612-4448-400` | 12 | UNIV APIF |
+| **`612-4448-401`** | **F** | **APIF** ← Lovett's exact card |
+| `612-4448-402` | B | AP I/F **MP32** |
+| `612-4448-403` | A | AP I/F **MP32** |
+
+So the family splits chronologically:
+- **`-011`..`-017`**: per-host-AP variants (each labeled with the
+  AP it talks to — RDCP / FPS100 / AP120B / AP120 / RDCP120)
+- **`-301`..`-307`**: "UNIV APIF" (universal — newer generation)
+- **`-401`..`-403`**: just "APIF" / "AP I/F MP32" (newest; "MP32"
+  is FPS internal shorthand — almost certainly **Multi-Processor
+  32-bit** = the FPS-3000/5000 multi-XP-32 family)
+
+Lovett's `-401-F` is the **base APIF** (no host-AP-name suffix
+in the description), which is the chassis-side card for the
+multi-XP-32 family. The matching host-side card is **NOT** in the
+`612-4448-` family — it's a separate part number.
+
+### The matching HOST-SIDE card — found
+
+Same catalog, lines 159-163:
+
+```
+1   612-4013-000    10  10  10   000     UNIBUS ADAPTOR 3000/5000
+2   612-4013-001    D   D   D    001     UNIBUS ADPTR FPS3000/5000   ← UNIBUS
+2   612-4013-002    03  03  03   001     UNIBUS ADAPTER
+1   612-4013-003    02  02  02   002     UNIBUS ADAPTER
+2   612-4014-000    A   A   A    000     UNIBUS TERMINATOR 5000
+```
+
+```
+3   612-4012-000    08  08  08   000     Q22 BUS ADAPTOR 300/5000
+1   612-4012-001    A   06  06   001     Q22 BUS ADAPTOR 3000/5000
+1   612-4012-002    01  01  01   001     Q22 BUS ADAPTOR FPS3000/5000
+* 1 612-4012-003    04  04  04   002     Q22 BUS ADPTR FPS3000/5000  ← Q-bus (current)
+```
+
+Plus an alternate at line 1643:
+```
+3   612-4850-000    B   B   B    000     850 LSI-11 ADAPTOR HEX FPS3000
+```
+
+So the matching host-side cards for Lovett's `612-4448-401-F`
+chassis-side AP I/F are, **definitively, by host bus**:
+
+| Host bus | Host-side card | Description |
+|---|---|---|
+| **UNIBUS** (PDP-11/44, /70, /84; VAX 11/780) | **`612-4013-001` rev D** | UNIBUS ADPTR FPS3000/5000 |
+| **Q-bus** (PDP-11/23, **/73**, /83) | **`612-4012-003` rev 04** | Q22 BUS ADPTR FPS3000/5000 |
+| **LSI-11** (alternative Q-bus form factor) | **`612-4850-000` rev B** | 850 LSI-11 ADAPTOR HEX FPS3000 |
+
+UNIBUS systems also need `612-4014-000` UNIBUS TERMINATOR 5000 as
+a companion termination card (typical for high-speed bus
+extensions over cable).
+
+**For Lovett's PDP-11/73 specifically**: the part to find is
+**`612-4012-003`** — Q22 BUS ADPTR FPS3000/5000, revision 04.
+This was a current-revision FPS catalog item as of Dec 1989 (the
+"*" mark indicates active inventory). It's the matching pair for
+his `612-4448-401-F`.
+
+### The cable
+
+From the FPS pricing list (Mar 1984,
+`refs/FPS_Pricing_198403.pdf`):
+
+```
+422-0015-001  Co-Processor Interconnect Cable  $100
+```
+
+Single P/N — likely the only flavour, but only listed in the
+1984 (FPS-100-era) pricing; the FPS-3000-era cable may be a
+different P/N we haven't identified.
+
+### Pricing context (1984 dollars)
+
+The 1984 pricing list is for the FPS-100/AP-120B-era 38-bit
+parts; FPS-3000-specific cards aren't in it. But the 1984
+prices for analogous earlier-generation host adapters are
+informative on order-of-magnitude:
+
+```
+612-0106-000  Q Bus Adapter             $3,504  (38-bit Q-bus adapter)
+612-4226-024  Formatter, VAX PDP        $3,614
+612-4227-035  Formatter, PDP            $3,344
+612-4239-004  Adaptor, HARRIS           $6,814
+```
+
+So a host-side adapter card in 1984 was a **$3-7K** part.
+Adjusted to 2026 dollars, that's roughly $9-21K — explains why
+these don't surface often in surplus channels.
 
 ## ⚠ Lovett's hardware status — host-side card is missing
 
