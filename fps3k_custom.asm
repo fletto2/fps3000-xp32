@@ -3,8 +3,8 @@
 ; Base   : 0xF00000
 ; Range  : 0xF04488-0xF0FFFF  (47992 bytes)
 ; Method : recursive-descent + reference scan + convergence loop
-; Coverage: 23708/47992 bytes as code  (49.4%)
-; Instructions decoded: 6675
+; Coverage: 23818/47992 bytes as code  (49.6%)
+; Instructions decoded: 6725
 ; DATA   : 0xF0B17E-0xF10000  Zero-fill / ROM checksum word at F0FFFE
 
 ; ============================================================
@@ -217,8 +217,7 @@ F04600  52 44                   addq.w   #$1, d4
 F04602  48 43                   swap     d3
 F04604  00 00 00 00             ori.b    #$0, d0
 F04608  00 00 00 41             ori.b    #$41, d0
-F0460C  00 f0                   DC.W     0x00f0
-F0460E  49 30                   DC.W     0x4930  ; 'I0'
+F0460C  00 f0 49 30             DC.L     loc_F04930
 F04610  00 f0                   DC.W     0x00f0
 F04612  50 fc                   DC.W     0x50fc
 
@@ -1896,6 +1895,8 @@ loc_F0572C:
 F0572C  e5 48                   lsl.w    #$2, d0
 F0572E  49 f9 00 f0 5b a4       lea.l    PanelStatusDispatch.l, a4
 F05734  4e f4 00 00             jmp      (a4, d0.w)
+
+loc_F05738:
 F05738  48 42                   swap     d2
 F0573A  32 82                   move.w   d2, (a1)
 F0573C  48 42                   swap     d2
@@ -2355,22 +2356,21 @@ F05BC0  4e fa fc f0             jmp      loc_F058B2(pc)
 F05BC4  4e fa ff 48             jmp      loc_F05B0E(pc)
 F05BC8  4e fa ff 44             jmp      loc_F05B0E(pc)
 F05BCC  4e fa fe 44             jmp      loc_F05A12(pc)
-F05BD0  4e 75                   DC.W     0x4e75  ; 'Nu'
+F05BD0  4e 75                   rts      
 F05BD2  4e 71                   DC.W     0x4e71  ; 'Nq'
-F05BD4  4e 75                   DC.W     0x4e75  ; 'Nu'
-F05BD6  4e 71                   nop      
+F05BD4  4e 75                   rts      
+F05BD6  4e 71                   DC.W     0x4e71  ; 'Nq'
 F05BD8  4e fa fc d8             jmp      loc_F058B2(pc)
 F05BDC  4e fa fc d4             jmp      loc_F058B2(pc)
 F05BE0  4e fa fc d0             jmp      loc_F058B2(pc)
 F05BE4  4e fa fc cc             jmp      loc_F058B2(pc)
-F05BE8  4e 75                   DC.W     0x4e75  ; 'Nu'
+F05BE8  4e 75                   rts      
 F05BEA  4e 71                   DC.W     0x4e71  ; 'Nq'
-F05BEC  4e 75                   DC.W     0x4e75  ; 'Nu'
+F05BEC  4e 75                   rts      
 F05BEE  4e 71                   DC.W     0x4e71  ; 'Nq'
-F05BF0  4e 75                   DC.W     0x4e75  ; 'Nu'
+F05BF0  4e 75                   rts      
 F05BF2  4e 71                   DC.W     0x4e71  ; 'Nq'
-F05BF4  4e fa                   DC.W     0x4efa
-F05BF6  fb 42                   DC.W     0xfb42
+F05BF4  4e fa fb 42             jmp      loc_F05738(pc)
 
 loc_F05BF8:
 F05BF8  4e 75                   rts      
@@ -2385,21 +2385,21 @@ F05C14  4e fa fe f8             jmp      loc_F05B0E(pc)
 F05C18  4e fa fe f4             jmp      loc_F05B0E(pc)
 F05C1C  4e fa fe f0             jmp      loc_F05B0E(pc)
 F05C20  4e fa fd f0             jmp      loc_F05A12(pc)
-F05C24  4e 75                   DC.W     0x4e75  ; 'Nu'
+F05C24  4e 75                   rts      
 F05C26  4e 71                   DC.W     0x4e71  ; 'Nq'
-F05C28  4e 75                   DC.W     0x4e75  ; 'Nu'
-F05C2A  4e 71                   nop      
+F05C28  4e 75                   rts      
+F05C2A  4e 71                   DC.W     0x4e71  ; 'Nq'
 F05C2C  4e fa fd e4             jmp      loc_F05A12(pc)
 F05C30  4e fa fe dc             jmp      loc_F05B0E(pc)
 F05C34  4e fa fd dc             jmp      loc_F05A12(pc)
 F05C38  4e fa fe d4             jmp      loc_F05B0E(pc)
-F05C3C  4e 75                   DC.W     0x4e75  ; 'Nu'
+F05C3C  4e 75                   rts      
 F05C3E  4e 71                   DC.W     0x4e71  ; 'Nq'
-F05C40  4e 75                   DC.W     0x4e75  ; 'Nu'
+F05C40  4e 75                   rts      
 F05C42  4e 71                   DC.W     0x4e71  ; 'Nq'
-F05C44  4e 75                   DC.W     0x4e75  ; 'Nu'
+F05C44  4e 75                   rts      
 F05C46  4e 71                   DC.W     0x4e71  ; 'Nq'
-F05C48  4e 75                   DC.W     0x4e75  ; 'Nu'
+F05C48  4e 75                   rts      
 F05C4A  4e 71                   DC.W     0x4e71  ; 'Nq'
 
 ; ============================================================
@@ -2461,10 +2461,14 @@ F05D04  00 00                   DC.W     0x0000
 F05D06  00 00                   DC.W     0x0000
 F05D08  00 00                   DC.W     0x0000
 F05D0A  00 4a                   DC.W     0x004a
-F05D0C  00 f0                   DC.W     0x00f0
-F05D0E  5d d6                   DC.W     0x5dd6
-F05D10  00 f0                   DC.W     0x00f0
-F05D12  5e 4c 49 4f 31 49       DC.B     "^LIO1I"  ; 6 bytes
+F05D0C  00 f0 5d d6             DC.L     TCBIO1I_ASQHandler
+F05D10  00 f0 5e 4c             DC.L     TCBIO1I_ISRExit
+
+; ============================================================
+; TCBIO1I_CRTCBParams
+; ============================================================
+TCBIO1I_CRTCBParams:
+F05D14  49 4f 31 49             DC.B     "IO1I"  ; 4 bytes
 F05D18  00 00                   DC.W     0x0000
 F05D1A  00 00                   DC.W     0x0000
 F05D1C  20 00                   DC.W     0x2000
@@ -2678,10 +2682,8 @@ F05F00  58 50                   addq.w   #$4, (a0)
 F05F02  34 49                   movea.w  a1, a2
 F05F04  00 00 00 00             ori.b    #$0, d0
 F05F08  00 00 00 48             ori.b    #$48, d0
-F05F0C  00 f0                   DC.W     0x00f0
-F05F0E  60 ce                   DC.W     0x60ce
-F05F10  00 f0                   DC.W     0x00f0
-F05F12  60 f0                   DC.W     0x60f0
+F05F0C  00 f0 60 ce             DC.L     TCBXP4I_MainEntry
+F05F10  00 f0 60 f0             DC.L     TCBXP4I_ISRExit
 
 ; ============================================================
 ; TCBXP4I_CRTCBParams
@@ -2924,6 +2926,8 @@ loc_F0616C:
 F0616C  e5 48                   lsl.w    #$2, d0
 F0616E  49 f9 00 f0 65 e4       lea.l    loc_F065E4.l, a4
 F06174  4e f4 00 00             jmp      (a4, d0.w)
+
+loc_F06178:
 F06178  48 42                   swap     d2
 F0617A  32 82                   move.w   d2, (a1)
 F0617C  48 42                   swap     d2
@@ -3380,22 +3384,21 @@ F06600  4e fa fc f0             jmp      loc_F062F2(pc)
 F06604  4e fa ff 48             jmp      loc_F0654E(pc)
 F06608  4e fa ff 44             jmp      loc_F0654E(pc)
 F0660C  4e fa fe 44             jmp      loc_F06452(pc)
-F06610  4e 75                   DC.W     0x4e75  ; 'Nu'
+F06610  4e 75                   rts      
 F06612  4e 71                   DC.W     0x4e71  ; 'Nq'
-F06614  4e 75                   DC.W     0x4e75  ; 'Nu'
-F06616  4e 71                   nop      
+F06614  4e 75                   rts      
+F06616  4e 71                   DC.W     0x4e71  ; 'Nq'
 F06618  4e fa fc d8             jmp      loc_F062F2(pc)
 F0661C  4e fa fc d4             jmp      loc_F062F2(pc)
 F06620  4e fa fc d0             jmp      loc_F062F2(pc)
 F06624  4e fa fc cc             jmp      loc_F062F2(pc)
-F06628  4e 75                   DC.W     0x4e75  ; 'Nu'
+F06628  4e 75                   rts      
 F0662A  4e 71                   DC.W     0x4e71  ; 'Nq'
-F0662C  4e 75                   DC.W     0x4e75  ; 'Nu'
+F0662C  4e 75                   rts      
 F0662E  4e 71                   DC.W     0x4e71  ; 'Nq'
-F06630  4e 75                   DC.W     0x4e75  ; 'Nu'
+F06630  4e 75                   rts      
 F06632  4e 71                   DC.W     0x4e71  ; 'Nq'
-F06634  4e fa                   DC.W     0x4efa
-F06636  fb 42                   DC.W     0xfb42
+F06634  4e fa fb 42             jmp      loc_F06178(pc)
 
 loc_F06638:
 F06638  4e 75                   rts      
@@ -3411,21 +3414,21 @@ F06654  4e fa fe f8             jmp      loc_F0654E(pc)
 F06658  4e fa fe f4             jmp      loc_F0654E(pc)
 F0665C  4e fa fe f0             jmp      loc_F0654E(pc)
 F06660  4e fa fd f0             jmp      loc_F06452(pc)
-F06664  4e 75                   DC.W     0x4e75  ; 'Nu'
+F06664  4e 75                   rts      
 F06666  4e 71                   DC.W     0x4e71  ; 'Nq'
-F06668  4e 75                   DC.W     0x4e75  ; 'Nu'
-F0666A  4e 71                   nop      
+F06668  4e 75                   rts      
+F0666A  4e 71                   DC.W     0x4e71  ; 'Nq'
 F0666C  4e fa fd e4             jmp      loc_F06452(pc)
 F06670  4e fa fe dc             jmp      loc_F0654E(pc)
 F06674  4e fa fd dc             jmp      loc_F06452(pc)
 F06678  4e fa fe d4             jmp      loc_F0654E(pc)
-F0667C  4e 75                   DC.W     0x4e75  ; 'Nu'
+F0667C  4e 75                   rts      
 F0667E  4e 71                   DC.W     0x4e71  ; 'Nq'
-F06680  4e 75                   DC.W     0x4e75  ; 'Nu'
+F06680  4e 75                   rts      
 F06682  4e 71                   DC.W     0x4e71  ; 'Nq'
-F06684  4e 75                   DC.W     0x4e75  ; 'Nu'
+F06684  4e 75                   rts      
 F06686  4e 71                   DC.W     0x4e71  ; 'Nq'
-F06688  4e 75                   DC.W     0x4e75  ; 'Nu'
+F06688  4e 75                   rts      
 F0668A  4e 71                   DC.W     0x4e71  ; 'Nq'
 
 loc_F0668C:
@@ -3704,8 +3707,7 @@ F06954  67 0e                   DC.W     0x670e
 F06956  30 3c                   DC.W     0x303c  ; '0<'
 F06958  02 6d                   DC.W     0x026d
 F0695A  4e b9                   DC.W     0x4eb9
-F0695C  00 f0                   DC.W     0x00f0
-F0695E  72 c0                   DC.W     0x72c0
+F0695C  00 f0 72 c0             DC.L     loc_F072C0
 F06960  60 00                   DC.W     0x6000
 F06962  01 ac                   DC.W     0x01ac
 F06964  4f e8                   DC.W     0x4fe8
@@ -3899,6 +3901,8 @@ loc_F06B84:
 F06B84  e5 48                   lsl.w    #$2, d0
 F06B86  49 f9 00 f0 6f fc       lea.l    loc_F06FFC.l, a4
 F06B8C  4e f4 00 00             jmp      (a4, d0.w)
+
+loc_F06B90:
 F06B90  48 42                   swap     d2
 F06B92  32 82                   move.w   d2, (a1)
 F06B94  48 42                   swap     d2
@@ -4355,22 +4359,21 @@ F07018  4e fa fc f0             jmp      loc_F06D0A(pc)
 F0701C  4e fa ff 48             jmp      loc_F06F66(pc)
 F07020  4e fa ff 44             jmp      loc_F06F66(pc)
 F07024  4e fa fe 44             jmp      loc_F06E6A(pc)
-F07028  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07028  4e 75                   rts      
 F0702A  4e 71                   DC.W     0x4e71  ; 'Nq'
-F0702C  4e 75                   DC.W     0x4e75  ; 'Nu'
-F0702E  4e 71                   nop      
+F0702C  4e 75                   rts      
+F0702E  4e 71                   DC.W     0x4e71  ; 'Nq'
 F07030  4e fa fc d8             jmp      loc_F06D0A(pc)
 F07034  4e fa fc d4             jmp      loc_F06D0A(pc)
 F07038  4e fa fc d0             jmp      loc_F06D0A(pc)
 F0703C  4e fa fc cc             jmp      loc_F06D0A(pc)
-F07040  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07040  4e 75                   rts      
 F07042  4e 71                   DC.W     0x4e71  ; 'Nq'
-F07044  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07044  4e 75                   rts      
 F07046  4e 71                   DC.W     0x4e71  ; 'Nq'
-F07048  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07048  4e 75                   rts      
 F0704A  4e 71                   DC.W     0x4e71  ; 'Nq'
-F0704C  4e fa                   DC.W     0x4efa
-F0704E  fb 42                   DC.W     0xfb42
+F0704C  4e fa fb 42             jmp      loc_F06B90(pc)
 
 loc_F07050:
 F07050  4e 75                   rts      
@@ -4385,21 +4388,21 @@ F0706C  4e fa fe f8             jmp      loc_F06F66(pc)
 F07070  4e fa fe f4             jmp      loc_F06F66(pc)
 F07074  4e fa fe f0             jmp      loc_F06F66(pc)
 F07078  4e fa fd f0             jmp      loc_F06E6A(pc)
-F0707C  4e 75                   DC.W     0x4e75  ; 'Nu'
+F0707C  4e 75                   rts      
 F0707E  4e 71                   DC.W     0x4e71  ; 'Nq'
-F07080  4e 75                   DC.W     0x4e75  ; 'Nu'
-F07082  4e 71                   nop      
+F07080  4e 75                   rts      
+F07082  4e 71                   DC.W     0x4e71  ; 'Nq'
 F07084  4e fa fd e4             jmp      loc_F06E6A(pc)
 F07088  4e fa fe dc             jmp      loc_F06F66(pc)
 F0708C  4e fa fd dc             jmp      loc_F06E6A(pc)
 F07090  4e fa fe d4             jmp      loc_F06F66(pc)
-F07094  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07094  4e 75                   rts      
 F07096  4e 71                   DC.W     0x4e71  ; 'Nq'
-F07098  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07098  4e 75                   rts      
 F0709A  4e 71                   DC.W     0x4e71  ; 'Nq'
-F0709C  4e 75                   DC.W     0x4e75  ; 'Nu'
+F0709C  4e 75                   rts      
 F0709E  4e 71                   DC.W     0x4e71  ; 'Nq'
-F070A0  4e 75                   DC.W     0x4e75  ; 'Nu'
+F070A0  4e 75                   rts      
 F070A2  4e 71                   DC.W     0x4e71  ; 'Nq'
 
 loc_F070A4:
@@ -4623,8 +4626,7 @@ F07300  58 50                   addq.w   #$4, (a0)
 F07302  32 49                   movea.w  a1, a1
 F07304  00 00 00 00             ori.b    #$0, d0
 F07308  00 00 00 46             ori.b    #$46, d0
-F0730C  00 f0                   DC.W     0x00f0
-F0730E  74 e6                   DC.W     0x74e6
+F0730C  00 f0 74 e6             DC.L     loc_F074E6
 F07310  00 f0                   DC.W     0x00f0
 F07312  75 08                   DC.W     0x7508
 F07314  58 50 32 49             DC.B     "XP2I"  ; 4 bytes
@@ -4663,8 +4665,7 @@ F07354  67 0e                   DC.W     0x670e
 F07356  30 3c                   DC.W     0x303c  ; '0<'
 F07358  02 6d                   DC.W     0x026d
 F0735A  4e b9                   DC.W     0x4eb9
-F0735C  00 f0                   DC.W     0x00f0
-F0735E  7c c0                   DC.W     0x7cc0
+F0735C  00 f0 7c c0             DC.L     loc_F07CC0
 F07360  60 00                   DC.W     0x6000
 F07362  01 ac                   DC.W     0x01ac
 F07364  4f e8 01 14             lea.l    $114(a0), a7
@@ -4855,6 +4856,8 @@ loc_F07584:
 F07584  e5 48                   lsl.w    #$2, d0
 F07586  49 f9 00 f0 79 fc       lea.l    loc_F079FC.l, a4
 F0758C  4e f4 00 00             jmp      (a4, d0.w)
+
+loc_F07590:
 F07590  48 42                   swap     d2
 F07592  32 82                   move.w   d2, (a1)
 F07594  48 42                   swap     d2
@@ -5311,22 +5314,21 @@ F07A18  4e fa fc f0             jmp      loc_F0770A(pc)
 F07A1C  4e fa ff 48             jmp      loc_F07966(pc)
 F07A20  4e fa ff 44             jmp      loc_F07966(pc)
 F07A24  4e fa fe 44             jmp      loc_F0786A(pc)
-F07A28  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07A28  4e 75                   rts      
 F07A2A  4e 71                   DC.W     0x4e71  ; 'Nq'
-F07A2C  4e 75                   DC.W     0x4e75  ; 'Nu'
-F07A2E  4e 71                   nop      
+F07A2C  4e 75                   rts      
+F07A2E  4e 71                   DC.W     0x4e71  ; 'Nq'
 F07A30  4e fa fc d8             jmp      loc_F0770A(pc)
 F07A34  4e fa fc d4             jmp      loc_F0770A(pc)
 F07A38  4e fa fc d0             jmp      loc_F0770A(pc)
 F07A3C  4e fa fc cc             jmp      loc_F0770A(pc)
-F07A40  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07A40  4e 75                   rts      
 F07A42  4e 71                   DC.W     0x4e71  ; 'Nq'
-F07A44  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07A44  4e 75                   rts      
 F07A46  4e 71                   DC.W     0x4e71  ; 'Nq'
-F07A48  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07A48  4e 75                   rts      
 F07A4A  4e 71                   DC.W     0x4e71  ; 'Nq'
-F07A4C  4e fa                   DC.W     0x4efa
-F07A4E  fb 42                   DC.W     0xfb42
+F07A4C  4e fa fb 42             jmp      loc_F07590(pc)
 
 loc_F07A50:
 F07A50  4e 75                   rts      
@@ -5341,21 +5343,21 @@ F07A6C  4e fa fe f8             jmp      loc_F07966(pc)
 F07A70  4e fa fe f4             jmp      loc_F07966(pc)
 F07A74  4e fa fe f0             jmp      loc_F07966(pc)
 F07A78  4e fa fd f0             jmp      loc_F0786A(pc)
-F07A7C  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07A7C  4e 75                   rts      
 F07A7E  4e 71                   DC.W     0x4e71  ; 'Nq'
-F07A80  4e 75                   DC.W     0x4e75  ; 'Nu'
-F07A82  4e 71                   nop      
+F07A80  4e 75                   rts      
+F07A82  4e 71                   DC.W     0x4e71  ; 'Nq'
 F07A84  4e fa fd e4             jmp      loc_F0786A(pc)
 F07A88  4e fa fe dc             jmp      loc_F07966(pc)
 F07A8C  4e fa fd dc             jmp      loc_F0786A(pc)
 F07A90  4e fa fe d4             jmp      loc_F07966(pc)
-F07A94  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07A94  4e 75                   rts      
 F07A96  4e 71                   DC.W     0x4e71  ; 'Nq'
-F07A98  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07A98  4e 75                   rts      
 F07A9A  4e 71                   DC.W     0x4e71  ; 'Nq'
-F07A9C  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07A9C  4e 75                   rts      
 F07A9E  4e 71                   DC.W     0x4e71  ; 'Nq'
-F07AA0  4e 75                   DC.W     0x4e75  ; 'Nu'
+F07AA0  4e 75                   rts      
 F07AA2  4e 71                   DC.W     0x4e71  ; 'Nq'
 
 loc_F07AA4:
@@ -5621,8 +5623,7 @@ F07D54  67 0e                   DC.W     0x670e
 F07D56  30 3c                   DC.W     0x303c  ; '0<'
 F07D58  02 6d                   DC.W     0x026d
 F07D5A  4e b9                   DC.W     0x4eb9
-F07D5C  00 f0                   DC.W     0x00f0
-F07D5E  86 c0                   DC.W     0x86c0
+F07D5C  00 f0 86 c0             DC.L     loc_F086C0
 F07D60  60 00                   DC.W     0x6000
 F07D62  01 ac                   DC.W     0x01ac
 F07D64  4f e8 01 14             lea.l    $114(a0), a7
@@ -5813,6 +5814,8 @@ loc_F07F84:
 F07F84  e5 48                   lsl.w    #$2, d0
 F07F86  49 f9 00 f0 83 fc       lea.l    loc_F083FC.l, a4
 F07F8C  4e f4 00 00             jmp      (a4, d0.w)
+
+loc_F07F90:
 F07F90  48 42                   swap     d2
 F07F92  32 82                   move.w   d2, (a1)
 F07F94  48 42                   swap     d2
@@ -6269,22 +6272,21 @@ F08418  4e fa fc f0             jmp      loc_F0810A(pc)
 F0841C  4e fa ff 48             jmp      loc_F08366(pc)
 F08420  4e fa ff 44             jmp      loc_F08366(pc)
 F08424  4e fa fe 44             jmp      loc_F0826A(pc)
-F08428  4e 75                   DC.W     0x4e75  ; 'Nu'
+F08428  4e 75                   rts      
 F0842A  4e 71                   DC.W     0x4e71  ; 'Nq'
-F0842C  4e 75                   DC.W     0x4e75  ; 'Nu'
-F0842E  4e 71                   nop      
+F0842C  4e 75                   rts      
+F0842E  4e 71                   DC.W     0x4e71  ; 'Nq'
 F08430  4e fa fc d8             jmp      loc_F0810A(pc)
 F08434  4e fa fc d4             jmp      loc_F0810A(pc)
 F08438  4e fa fc d0             jmp      loc_F0810A(pc)
 F0843C  4e fa fc cc             jmp      loc_F0810A(pc)
-F08440  4e 75                   DC.W     0x4e75  ; 'Nu'
+F08440  4e 75                   rts      
 F08442  4e 71                   DC.W     0x4e71  ; 'Nq'
-F08444  4e 75                   DC.W     0x4e75  ; 'Nu'
+F08444  4e 75                   rts      
 F08446  4e 71                   DC.W     0x4e71  ; 'Nq'
-F08448  4e 75                   DC.W     0x4e75  ; 'Nu'
+F08448  4e 75                   rts      
 F0844A  4e 71                   DC.W     0x4e71  ; 'Nq'
-F0844C  4e fa                   DC.W     0x4efa
-F0844E  fb 42                   DC.W     0xfb42
+F0844C  4e fa fb 42             jmp      loc_F07F90(pc)
 
 loc_F08450:
 F08450  4e 75                   rts      
@@ -6299,21 +6301,21 @@ F0846C  4e fa fe f8             jmp      loc_F08366(pc)
 F08470  4e fa fe f4             jmp      loc_F08366(pc)
 F08474  4e fa fe f0             jmp      loc_F08366(pc)
 F08478  4e fa fd f0             jmp      loc_F0826A(pc)
-F0847C  4e 75                   DC.W     0x4e75  ; 'Nu'
+F0847C  4e 75                   rts      
 F0847E  4e 71                   DC.W     0x4e71  ; 'Nq'
-F08480  4e 75                   DC.W     0x4e75  ; 'Nu'
-F08482  4e 71                   nop      
+F08480  4e 75                   rts      
+F08482  4e 71                   DC.W     0x4e71  ; 'Nq'
 F08484  4e fa fd e4             jmp      loc_F0826A(pc)
 F08488  4e fa fe dc             jmp      loc_F08366(pc)
 F0848C  4e fa fd dc             jmp      loc_F0826A(pc)
 F08490  4e fa fe d4             jmp      loc_F08366(pc)
-F08494  4e 75                   DC.W     0x4e75  ; 'Nu'
+F08494  4e 75                   rts      
 F08496  4e 71                   DC.W     0x4e71  ; 'Nq'
-F08498  4e 75                   DC.W     0x4e75  ; 'Nu'
+F08498  4e 75                   rts      
 F0849A  4e 71                   DC.W     0x4e71  ; 'Nq'
-F0849C  4e 75                   DC.W     0x4e75  ; 'Nu'
+F0849C  4e 75                   rts      
 F0849E  4e 71                   DC.W     0x4e71  ; 'Nq'
-F084A0  4e 75                   DC.W     0x4e75  ; 'Nu'
+F084A0  4e 75                   rts      
 F084A2  4e 71                   DC.W     0x4e71  ; 'Nq'
 
 loc_F084A4:
@@ -9799,8 +9801,7 @@ F0A614  00 00                   DC.W     0x0000
 F0A616  96 00                   DC.W     0x9600
 F0A618  00 10                   DC.W     0x0010
 F0A61A  a0 00                   DC.W     0xa000
-F0A61C  00 f0                   DC.W     0x00f0
-F0A61E  46 f0                   DC.W     0x46f0
+F0A61C  00 f0 46 f0             DC.L     TCBRDHC_Entry
 F0A620  f0 46                   DC.W     0xf046
 F0A622  f0 5c                   DC.W     0xf05c
 F0A624  00 00                   DC.W     0x0000
@@ -9843,8 +9844,7 @@ F0A674  00 00                   DC.W     0x0000
 F0A676  96 00                   DC.W     0x9600
 F0A678  00 10                   DC.W     0x0010
 F0A67A  a0 00                   DC.W     0xa000
-F0A67C  00 f0                   DC.W     0x00f0
-F0A67E  5d 36                   DC.W     0x5d36  ; ']6'
+F0A67C  00 f0 5d 36             DC.L     TCBIO1I_Entry
 F0A680  f0 5d                   DC.W     0xf05d
 F0A682  f0 5e                   DC.W     0xf05e
 F0A684  00 00                   DC.W     0x0000
@@ -9887,8 +9887,7 @@ F0A6D4  00 00                   DC.W     0x0000
 F0A6D6  96 00                   DC.W     0x9600
 F0A6D8  00 10                   DC.W     0x0010
 F0A6DA  a0 00                   DC.W     0xa000
-F0A6DC  00 f0                   DC.W     0x00f0
-F0A6DE  5f 4a                   DC.W     0x5f4a  ; '_J'
+F0A6DC  00 f0 5f 4a             DC.L     TCBXP4I_Entry
 F0A6E0  f0 5f                   DC.W     0xf05f
 F0A6E2  f0 68                   DC.W     0xf068
 F0A6E4  00 00                   DC.W     0x0000
