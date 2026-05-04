@@ -186,14 +186,15 @@ With this protocol now documented byte-for-byte:
    doesn't talk to it directly. The XLTR is the bridge.
 3. **Microcode-loader ground truth** — the SRecordDataHandler at
    `F051A2` shovels bytes into `0x10000–0x1FFFF` SBC RAM, then this
-   panel-command sequence ships them across the XLTR to the XP32
-   control stores. The panel-command codes for "WCS WRITE" must be
+   panel-command sequence ships them across the XLTR to the XP32 AU
+   control store. The panel-command codes for "WCS WRITE" must be
    among the `0x258..0x27D` codes, identifiable by tracing which one is
-   invoked from the SRecord finalize path at `F05256`. Note that the
-   load may have to populate **both** the EU control store (Am29116
-   instruction stream, ~16 bits wide) **and** the AU control store (FP
-   pipeline, ~128 bits wide) — neither has any fixed mask-ROM
-   microcode that we've identified on the cards.
+   invoked from the SRecord finalize path at `F05256`. Per Hockney
+   fig 2.53 (and the user's confirmation that PROMs *are* present on
+   the EXEC card), the **EU runs from a fixed 2K × 80-bit mask PROM**
+   on the EXEC card and is alive at power-on; only the **AU writable
+   control store (4K × 128-bit, 4 banks)** is host-uploaded. The
+   64 KB SBC staging buffer = exactly one AU bank.
 4. **A working test sequence** — issue a single
    `PanelIOConfigure_25A(0x276)` manually (the start of the init
    sequence) and expect bit-14 of `[FF0000]` to go high within 1000

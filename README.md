@@ -39,13 +39,35 @@ Motorola **M68KVM02-3** VERSAmodule monoboard (MC68000 @ 8 MHz).
 - **`xltr_protocol.md`** — XLTR / AP-I-F command protocol decoded
   from the disassembly (`0x8004`/`0x8005` opcodes, `0x258..0x27D`
   command codes, panel-send-and-wait kernel at `F056BA`).
-- **`xp32_microcode_format_inferred.md`** — what we can infer about
-  the XP32 control-store layout from the AMD Am29116 sequencer
-  identification on the EXEC card and the upload mechanism.
-- **`xp32_opcode_clues.md`** — synthesis of MAXL / APAL / APMATH64
-  microinstruction-format evolution across the FPS family.
+- **`xp32_eu_command_protocol.md`** — inferred EU panel-command
+  alphabet and three-register transaction protocol.
+- **`xp32_opcode_clues.md`** — XP-32 microinstruction format
+  inferred from AP-120B (FPS-7319 manual) + FPS-164 (Touzeau 1984
+  fig 2 + APSIM64 appendix A) + Curington 1986. The bit-level FPS-
+  164 layout is now pinned; XP-32 is a structured widening of it.
+- **`xp32_microcode_format_inferred.md`** — older companion analysis
+  focused on the AMD Am29116 sequencer side. Some claims here predate
+  the Hockney fig 2.53 confirmation that the EU has a fixed PROM
+  (not SRAM); the EU portion is pinned mask-PROM, the AU is the
+  writable target.
+- **`fps_library_uniformity.md`** — how `VMUL`/`ZVMUL`/`DVMUL` are
+  the same operation across AP-120B/FPS-100/FPS-3000-5000/FPS-164.
+- **`host_to_fps100_protocol.md`** — full host-side protocol:
+  6 UNIBUS registers, 3 RSX event flags, RUNDMA function dispatch,
+  recovered from the FPS-100 `DRIVER.MAC` source.
+- **`hsr_decoded/`** — **217 routines, 21,066 microinstructions**
+  of FPS-100 production microcode disassembled with full APAL-style
+  output. See `hsr_decoded/README.md` and `hsr_decoded/CORPUS_ANALYSIS.md`.
+- **`RSX_v511/PDP11_DISASM_README.md`** — full PDP-11 disassembler
+  for RSX-11M+ task images.
 - **`mc_results.md`** — Monte Carlo annotation pipeline results
   (15 rounds, 644 annotations on 576 unique addresses).
+- **`mc_xp32_debate_log.md`** — Council-of-Clankers debate on
+  inferring the XP-32 microinstruction layout (4 rounds incl. strict
+  bit-accounting verification).
+- **`search_log_apal64_refs.md`** — negative-result search log for
+  the APAL64 / XP-32 reference manuals (eBay/abebooks/bitsavers/
+  Internet Archive).
 
 ### AP-120B FFT/IFFT identity-test microcode
 A 52-page assembly listing was vision-transcribed to a binary image:
@@ -95,17 +117,22 @@ focused on the recovered artifacts.
                   │
                 ──┴───────────────────  XP32 BUS (32-bit IEEE-754)
                   │            │            │
-            XP32 ARITH      MEM CTRL    MAIN DATA
-                 │
-            XP32 EXEC
-              (Am29116 16-bit + Am2168 SRAM WCS + PALs)
+        XP-32 AC1   XP-32 AC2  MEM CTL ─── SCM (5 banks)
+        (ARITH+    (ARITH+
+         EXEC)      EXEC)
+              EU = fixed bipolar PROM (2K × 80-bit, mask)
+              AU = writable control store (4K × 128-bit, 4 banks,
+                   Am2168 SRAM, host-uploaded)
 ```
 
-The CP/SBC is the integer/address/control brain. The XP32 ARITH+EXEC
-cards are bit-slice floating-point coprocessors that **do nothing
-without microcode loaded into their writable control store**. The
-whole point of this ROM is to upload that microcode from the host (via
-the AP I/F, in S-record format) and arm the XP32 to run it.
+The CP/SBC is the integer/address/control brain. Each XP-32 AC has
+its EU running fixed mask-PROM microcode at power-on, but its AU
+**writable control store starts empty**. The whole point of this
+ROM is to upload AU microcode from the host (via the AP I/F, in
+S-record format) and arm the XP-32 to run it. Lovett's specific
+chassis (model 821-9008-011, per the index plate photo) is
+populated as a 2-AC configuration; the SBC firmware exposes 4
+channels (`TCBXP1I..XP4I`) for the family's larger variants.
 
 ### Microcode upload path
 ```

@@ -1,5 +1,17 @@
 # Inferred XP32 microinstruction format (using Am29116 datasheet)
 
+> **Note (post-revision):** parts of this doc were written assuming
+> the EU sequencer's program lives in writable SRAM, host-uploaded.
+> Hockney figure 2.53 + chassis-photo confirmation later clarified
+> that the **EU runs from a fixed 2K × 80-bit mask PROM** on the
+> EXEC card; only the AU's 4K × 128-bit × 4 banks of writable
+> control store is host-uploaded. So **the SBC's 64 KB staging
+> buffer feeds the AU, not the EU**. The Am29116-side analysis
+> below is still factually correct as ISA reference for that chip,
+> but its interpretation as "what the SBC uploads" was wrong.
+> See `xp32_opcode_clues.md` for the better-grounded analysis
+> based on the Touzeau 1984 / APSIM64 manual sources.
+
 Combining: (a) the Nakazoto/Usagi photographs of the EXEC card showing
 the AMD Am29116 sequencer + SRAM array + PALs; (b) Hockney's "4K ×
 128-bit, 4 banks" WCS description; (c) the FPS-3000 ROM's S-record

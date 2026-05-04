@@ -33,6 +33,14 @@ The **FPS-3000** is an FPS-5000-class entry-level system: a single
 **XP-32 arithmetic coprocessors**, all on a VersaBUS backplane sharing a
 **System Common Memory (SCM)**.
 
+**The specific FPS-3000 we have** (Lovett's, model 821-9008-011, per
+the index-plate photo `refs/FPS-3000/fps-3000.jpg`) is a **14-slot
+chassis populated as a 2-AC configuration**: AP I/F + FMT + VBUS XLTR
++ VBUS SBC (slots 11-14), 2 × XP-32 AC each as ARITH+EXEC pair
+(slots 7-10), MEM CTL (slot 6), and 5 × MEMORY (slots 1-5). The SBC
+firmware exposes 4 channels (`TCBXP1I..XP4I`) for the family's
+larger variants; only AC1 and AC2 are populated in this hardware.
+
 ## 2. System block diagram (the layout webp)
 
 ```

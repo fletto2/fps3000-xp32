@@ -64,8 +64,9 @@ Each `<routine>.md` contains:
   ```
   ;   uPC | w1     w2     w3     w4    | symbolic
   ;  ----+-------+------+------+------+----------
-    0000  001620 000000 002000 000001  SP_OP1 SPSF=16,SPD=4; MEM[TMA=1]
-    0001  040000 000000 016000 020060  SPMOV SPS=0,SPD=0; DP[WY,XR=0/YR=0,XW=0/YW=1,BS=6]; MEM[LDMA|INCMA]
+    0000  001620 000000 002000 000001  LDSPI R4; DP[DB=VALUE]; #000001
+    0001  040000 000000 016000 020060  SPMOV R0,R0; DP[DPY1,DB=SPFN,YW=1]; SETMA
+    0002  030404 000000 000000 000000  SPSUB R4,R1
   ```
 
 The symbolic column shows non-empty field groups separated by `;`.
