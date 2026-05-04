@@ -236,6 +236,114 @@ So a UNIBUS AP I/F might be `612-4456-461` (matching the partial
 "4 4 5 6" pattern visible on the slot label) and a Q-bus variant
 would be a different `NNNN`.
 
+## ⚠ Lovett's hardware status — host-side card is missing
+
+**As of 2026-05, Lovett has only the chassis-side hardware** —
+the FPS-3000 chassis with VersaBUS-side AP I/F card in slot 11
+is present, but the **host-side AP I/F card is not in his
+inventory**. This is a significant constraint: without the
+host-side card (and its cable), the chassis cannot communicate
+with any host computer at all, regardless of host model. The SBC
+boots and runs its self-tests, but every command path that ends
+at `0xFF0000+` register reads will see no host-side activity.
+
+This means:
+- No CPLOAD / CPRUN can be issued from a host
+- No microcode can be uploaded to the XP-32 banks via the normal
+  S-record path (which ingests S-records from the host through
+  the AP I/F)
+- The XP-32 cards' AU WCS will stay empty, so the XP-32s can't
+  do useful FP work even though their EU PROMs run at power-on
+
+### Three realistic paths forward
+
+**(1) Find an original host-side AP I/F card.** The only sure-fire
+way to get an end-to-end working FPS-3000 in the original
+configuration. Used parts from this era surface periodically in:
+- VCFed.org forums (Lovett's existing thread is the natural place)
+- eBay vintage-computing listings (the broader sweep we did showed
+  no FPS Inc. host-interface cards currently listed, but they do
+  appear sporadically)
+- University equipment surplus from sites that ran FPS-3000s in
+  the 80s
+- Estate sales / liquidations of former FPS engineers
+The most likely variant to surface is **UNIBUS** (most-shipped) —
+not Q-bus.
+
+**(2) Build a substitute host-side interface** with modern hardware
+(FPGA / microcontroller) that:
+- Speaks the **cable protocol** between host-side and chassis-side
+  AP I/F cards on one side
+- Speaks something **modern** (USB, Ethernet, SPI to a Pi) on the
+  other side
+
+This is more achievable than it sounds *if* the cable protocol
+turns out to be a simple register-bus extender (16 data lines +
+address/control + ground), which is the typical late-1970s pattern
+for cards split across two chassis. Reverse-engineering the cable
+protocol requires:
+- Tracing connector pinout on the chassis-side card with a
+  multimeter and the schematics (visible chip-level on the card)
+- Logic-analyzer captures during SBC boot (the SBC pokes the
+  register file even with no host attached, e.g., during init
+  and when reading the IRQ-mask register at startup)
+- Cross-reference against the FPS-100's known UNIBUS interface
+  (the FPS-3000 AP I/F evolved from it; field assignments likely
+  preserved even if widened)
+
+A simpler version of this approach: build a UNIBUS-master FPGA
+board that *acts as* a UNIBUS PDP-11 host, drives the cable to
+the chassis-side AP I/F card from the UNIBUS side. Then run
+UNIBUS-style register pokes from a modern host through it.
+This works if the host-side card is just a bus-extender (most
+likely case for UNIBUS variant).
+
+**(3) Bypass the AP I/F entirely** and drive the SBC's VersaBUS
+directly via slot 14 or via SBC RAM via on-chassis injection.
+This is the most invasive option but doesn't need any
+host-side card at all. Concretely:
+- Plug a custom VersaBUS card into a free slot, present it to the
+  SBC as a substitute "host I/O" device
+- Modify the SBC ROM (or attach a different boot ROM) to read
+  microcode from the substitute device instead of the AP I/F
+- Or even more invasive: replace the SBC entirely with a modern
+  68K-emulator board that speaks VersaBUS but has its own
+  Ethernet for host connection
+
+Option 3 is the "make it work without any FPS host hardware"
+approach — useful if the goal is just to drive the XP-32s
+through their paces, less useful if the goal is to recreate
+the original Bomem DA3 + FPS-100 + PDP-11 user experience.
+
+### What's still useful even without a host
+
+Even with no host attached, Lovett can:
+
+- **Verify the SBC boots** — the ROM runs through its self-tests
+  (PTM init, RAM checksum, ROM checksum, hardware probe — see
+  `architecture.md` for the full init sequence) and will report
+  pass/fail via the front-panel LEDs. This validates the SBC
+  card, the VersaBUS backplane, and basic chassis power.
+- **Probe the XP-32 EU PROMs** with a logic analyzer — the EU's
+  Am29116 sequencer fetches its first instruction from PROM at
+  power-on. Watching the EU's clock + address bus would reveal
+  the PROM contents instruction-by-instruction. (And/or the PROM
+  chips can be read out of-circuit with a vintage PROM
+  programmer.)
+- **Verify the XLTR responds** to SBC pokes — an in-circuit
+  probe at `0xFF0200+` while the SBC runs its panel-init sequence
+  (issuing `0x276..0x27D` boot codes) would show the XLTR's
+  acknowledgement pattern, validating that side of the chassis
+  is alive.
+- **Read the AP I/F card's part number** off the chassis-side
+  card directly. This identifies the host-bus variant FPS
+  shipped, and tells future searchers exactly which P/N to look
+  for in (1) above.
+
+This isn't "running real software", but it's enough to validate
+that 80% of the chassis is healthy and to characterize what's
+needed for path (1) or (2).
+
 ## Cross-references to other docs
 
 - `host_to_fps100_protocol.md` — FPS-100-generation protocol
