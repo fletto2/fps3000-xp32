@@ -90,44 +90,97 @@ about CPFORTRAN memory allocation, not microcode.
 
 What the papers DO say about XP32 hardware:
 
-- **167 ns clock**, identical to AP-120B (Curington 1984)
-- **MAXL compiles to APAL** (explicit statement, Curington 1984:
-  *"the speed of MAXL code interpreted by the processor, where MAXL
-  is compiled to APAL rather than interpreted"*)
-- **128-bit horizontal microinstructions** (Hockney & Jesshope §2.5)
+- **6 MHz instruction clock**, all FP elements (Curington 1986
+  *Synchronization and Pipeline Overhead Measurements*, p.3)
+- **2 floating-point adders + 1 floating-point multiplier**, all
+  pipelined, all producing one result per 6 MHz cycle (Curington 1986
+  p.3, FPS-internal): *"The XP32 co-processor is also an SIMD
+  architecture with a separate program storage memory, two floating
+  point adders and one floating point multiplier. All three of these
+  produce results at the instruction clock rate of 6 MHz."*
+  (vs CP/AP-120B-class which has 1 adder + 1 multiplier — same paper)
+- **Separate DMA controller on each XP32** for SCM↔local-memory
+  movement, distinct from the FP pipelines (Curington 1986 p.3:
+  *"the XP32 contains a high speed local memory, and a separate
+  controller for movement of data between the local and the System
+  Common Memory"*) — this is **not** present on the FPS-164/AP-120B
+  in the same form
+- **MAXL compiles to APAL** (explicit, Curington 1984: *"the speed
+  of MAXL code interpreted by the processor, where MAXL is compiled
+  to APAL rather than interpreted"*)
+- **128-bit horizontal microinstructions** (Hockney & Jesshope §2.5,
+  fig 2.53; corroborated by 4K × 128 × 4-banks WCS sizing)
 - **4K × 128-bit WCS, 4 banks** per AC card (matches what the
-  FPS-3000 ROM uploads to)
+  FPS-3000 ROM uploads to: 64 KB staging buffer = one bank)
+- **80-bit EU PROM, 2K words** — fixed mask-programmed, *not* uploaded
+  by the SBC (Hockney fig 2.53)
 - **IEEE-754 32-bit float** (vs AP-120B's 38-bit proprietary)
-- **MIMD with 1–4 AC channels** (XP1I..XP4I in this firmware)
+- **TCM** (table mem, sin/cos): 4K × 32', 2 banks; **LMD**
+  (local main data): 16K × 32', 2 banks (Hockney fig 2.53)
+- **MIMD chassis with up to 3 XP-32 ACs** in FPS-5000 (Curington
+  1986 p.3); the FPS-3000 SBC firmware exposes 4 channels
+  (`TCBXP1I..XP4I`), of which the 4th may be a chassis variant
+  difference or a slot reserved for a GPIOP-style I/O processor
 
-## The strong inference
+## The strong inference (and where it gets soft)
 
-Combining these:
+The **firm part** is the family lineage:
 
-> **The XP32 microinstruction is the AP-120B/FPS-164 microinstruction
-> doubled in width, with the lower 64 bits keeping (or extending)
-> APAL's field layout, and the upper 64 bits providing additional
-> functional-unit control — most likely a second parallel issue slot
-> or further extensions to the S-Pad / Data-Pad / immediate fields.**
+> **The XP32 microinstruction inherits the AP-120B / FPS-164 field
+> taxonomy.** Same group structure (S-Pad / Adder / Branch / Data-Pad
+> / Multiplier / Memory / Immediate / Special-Op / I/O-Op), same
+> pure-additive evolution philosophy, same APAL-source mnemonics
+> visible to the programmer. The only degrees of freedom are which
+> fields are extended, what's added in the new bits, and the exact
+> bit-position offsets.
 
-Evidence for this specific shape:
+Evidence:
 
-1. **Curington's "MAXL compiles to APAL"** is the load-bearing
-   statement. APAL is the AP-120B/FPS-100 assembly language. If MAXL
-   targets APAL, then APAL is the human-readable layer for the XP32
-   too — and APAL field names are fixed by the AP-120B Vol 2
-   reference manual. The XP32 must therefore ACCEPT the same field
-   names. The only degrees of freedom are: which fields are extended,
-   and what's added in the new bits.
-2. **FPS-164's evolution pattern is purely additive.** No field
-   shrinks; no field is repurposed; only widths grow and new fields
-   slot in. The XP32 is contemporary with the FPS-164 (both early-
-   to-mid 1980s) and was designed at the same company; the same
+1. **Curington 1984: "MAXL compiles to APAL"** — load-bearing. APAL
+   field names are fixed by FPS-7319 Vol 2 (AP-120B Programmer's Ref
+   Part 2). If MAXL targets APAL on the XP32, then the XP32 accepts
+   the same field-mnemonic vocabulary; the encoding is then
+   constrained to be a structure-preserving widening of that.
+2. **FPS-164's evolution pattern is purely additive** (APSIM64
+   Appendix A): no field shrinks, none is repurposed, only widths
+   grow and new fields slot in. XP32 (early–mid 1980s) is
+   contemporary with FPS-164 and from the same company — same
    philosophy almost certainly applies.
-3. **Byte-shoveling firmware.** The FPS-3000 ROM uploads opaque bytes
-   without decoding instructions. So the upload mechanism doesn't
-   constrain or reveal the microinstruction format; it just confirms
-   the WCS is 128-bit wide × 4K deep.
+3. **Byte-shoveling firmware:** the FPS-3000 ROM uploads opaque
+   bytes, so it neither constrains nor reveals the microinstruction
+   layout — but it does confirm the **WCS is 128-bit wide × 4K deep
+   × 4 banks**.
+
+The **soft part** is what the extra 64 bits do (FPS-164 = 64-bit,
+XP32 = 128-bit). Earlier drafts of this doc said something like
+"almost certainly a second adder's control fields" — that's
+**overclaiming**. Here's the honest version, supported by
+Curington 1986:
+
+The extra 64 bits **plausibly** divide between:
+
+| Plausible use of extra 64 bits | Why | Estimated bits |
+|---|---|---|
+| Second-adder controls (FADD₂ / A1₂ / A2₂ etc.) | Curington 1986 confirms 2 adders, 1 multiplier on XP32 vs 1+1 on CP/AP-120B. The extra adder needs ~10 control bits (function + 2× operand source) | ~10 |
+| Wider Data-Pad addressing for TCM/LMD | XP32 has on-card TCM (4K×32') + LMD (16K×32') — a much larger on-card memory hierarchy than AP-120B/FPS-164. The XR/YR/XW/YW indices likely widen accordingly. The FPS-164 already added 6×1-bit XE/YE extension fields; XP32 likely adds more | ~10–15 |
+| DMA-controller field group | Curington 1986: XP32 has "a separate controller for movement of data between the local and the System Common Memory" — distinct from FP pipelines. APSIM64 has no analogous group. XP32 likely has a new DMA-control field group similar in shape to the FPS-164 I/O-Op group (~3 bits × multiple decode classes) | ~5–10 |
+| Wider IEEE-754 immediates | 32-bit IEEE-754 needs single-instruction loadable constants. FPS-164 already added `HVAL` (32-bit immediate); XP32 likely refines for IEEE-754 single-precision layout | ~0–8 |
+| Per-AC sync / multi-AC bus fields | XP32 is multi-AC (1–3 per chassis) and the SBC firmware orchestrates inter-AC handoff via panel commands (`0x258..0x27D`); some of the 4 banks of WCS may be selected via control bits in the µinst itself rather than externally | ~2–4 |
+| EU↔AU split-control (80-bit EU vs 128-bit AU) | The AU runs from the 128-bit WCS, but the EU runs from a separate 80-bit PROM. Some bits must coordinate the two. Could be a single "EU-issue-this-cycle" field carrying an EU PROM address | ~12 |
+
+These add to ≥ 39 and ≤ ~60 bits — i.e. plausibly fill the extra 64
+without needing radical re-design. But **which of these are actually
+present, and what their exact widths and positions are, is unknown.**
+Without an APAL-XP reference manual or simulator source, we are
+guessing the *categories* from architectural function, not the
+encoding.
+
+The frame I'd stand behind: *"the XP32 microinstruction is the
+AP-120B/FPS-164 microinstruction widened to 128 bits to accommodate
+a second adder, a separate DMA controller, wider on-card data
+addressing for TCM+LMD, and EU/AU coordination — with the field
+taxonomy preserved per APAL-on-XP, but exact bit positions
+undocumented in any source we currently have."*
 
 ## What this means for the recovered microcode
 
