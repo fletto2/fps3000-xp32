@@ -94,6 +94,62 @@ specific part to find for Lovett's PDP-11/73 is `612-4012-003`
 ("Q22 BUS ADPTR FPS3000/5000"), and the UNIBUS counterpart is
 `612-4013-001`.
 
+## Curington's personal publications page (thames3.org)
+
+`https://thames3.org/curington_pubs.html` hosts ~30 papers by Ian
+Curington (FPS UK signal/image specialist, 1979-onward). The
+FPS-era subset (1983-1989) overlaps with bitsavers but contains
+several papers we didn't have:
+
+| Year | Title | Source | Local? |
+|---|---|---|---|
+| 1983 | Multiple AP Landsat Adaptive Filtering / FPS-5000 | CHECKPOINT 1(8) | (only metadata online) |
+| 1983 | Power Spectrum Analysis with the FPS-5000 | CHECKPOINT 1(7) | yes (refs/FPS-5000/) |
+| 1983 | **IOP-UNI Applications** | CHECKPOINT 1(4) | **bib only — PDF 404** |
+| 1983 | Using A/D Converters with the IOP-16 | CHECKPOINT 1(3) | yes (refs/curington_extras/) |
+| 1984 | Performance Estimation Methods for XP32 MAXL | FUSE-84 | yes (refs/FPS-5000/) |
+| 1985 | Fast Vectorized Surface Shading on FPS-5000 | ARRAY-85 | not downloadable |
+| 1985 | Multi-Band Image Classification | Image Vision Computing | not downloadable |
+| 1986 | Synchronization & Pipeline Overhead / FPS-5000 | Parallel Computing 85 | yes (refs/FPS-5000/) |
+| 1986 | Graphics on the FPS M64 | CHECKPOINT 1986 | not downloadable |
+| 1986 | **Symbolic Data Memory Allocation for XP-32** | CHECKPOINT 4(7) | yes (refs/curington_extras/) |
+| 1986 | Run Length Encoding (RLE) for XP-32 | CHECKPOINT 4(3) | yes (refs/curington_extras/) |
+| 1987 | The Application of Array Processing in Earth Resources | DECUS Rome | not downloadable |
+| 1989 | f∞ memory/comm bottleneck parameter | Parallel Computing 10(3) | not downloadable |
+
+### What CHECKPOINT was
+
+Floating Point Systems' **internal customer newsletter**, printed
+and mailed to FPS customers ~quarterly during 1983-1989. Each
+issue contains technical articles + product announcements + tips.
+**The single most-likely-to-be-relevant document for the AP I/F
+question** is `IOP-UNI Applications` (CHECKPOINT 1(4), 1983) which
+the bib confirms exists but no PDF is online.
+
+### What the OCR pass added (2026-05-04)
+
+- **`IOP-16` paper (1983) confirmed the IOP family inventory**:
+  - IOP-16 = DMA for external devices (A/D etc.), 1 board
+  - IOP-38 = General-purpose 38-bit parallel, 2 boards
+  - **IOP-UNI = UNIBUS host interface with cable, 1 board** ←
+    this is the FPS-100-era predecessor to `612-4013-001`
+- **GPIOP** (General Purpose I/O Processor) confirmed as separate
+  card variant (mentioned in RLE paper)
+- FPS-5205 / FPS-5320 confirmed as CP variants of FPS-5000 family
+  (same architecture, different speed grades)
+- The XP-32 LMD has **16K × 32-bit** standard size (= LMDMAX 65535
+  in CPFORTRAN allocator) — confirms the 16K LMD figure from
+  Hockney fig 2.53
+
+### Direct contact opportunity
+
+Curington maintains the publications page (newest entries 2003).
+A polite email asking specifically for IOP-UNI Applications + any
+FPS-3000-specific CHECKPOINT articles he kept would have a non-
+trivial hit rate. Currently visible web presence: Floating Point
+Systems UK Ltd alumnus → AVS/Express visualization (1990s) →
+present-day independent. LinkedIn-findable.
+
 ## Higher-yield retro-computing channels (untried as of 2026-05-04)
 
 These don't have public-search APIs, but tend to surface FPS docs ~1×/year:
