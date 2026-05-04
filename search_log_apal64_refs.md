@@ -150,6 +150,27 @@ trivial hit rate. Currently visible web presence: Floating Point
 Systems UK Ltd alumnus → AVS/Express visualization (1990s) →
 present-day independent. LinkedIn-findable.
 
+### Wayback / archive.org check (2026-05-04)
+
+Confirmed the IOP-UNI Applications paper has **never been on the
+public web** in any form:
+
+- `web.archive.org/cdx` search for `thames3.org/pdf/curington1983iop*`:
+  zero captures
+- Full thames3.org/pdf/ directory in Wayback: only 2 PDFs ever
+  archived (`curington2001animated.pdf`, `HOCKNEY1989277.pdf`).
+  None of the 1983-1986 CHECKPOINT articles were ever captured.
+- Wildcard `*curington1983iop*` anywhere on Wayback: zero.
+- archive.org full-text search for `"IOP-UNI Applications"`: zero.
+- archive.org full-text search for `CHECKPOINT "Floating Point
+  Systems"`: zero.
+
+Pattern: the 1986+ Curington PDFs are on Wayback (his site is
+periodically captured), but the **1983-1985 CHECKPOINT issues
+that contain IOP-UNI Applications and most of the host-interface
+discussion were never digitised online**. Direct outreach is the
+only realistic acquisition path.
+
 ## Higher-yield retro-computing channels (untried as of 2026-05-04)
 
 These don't have public-search APIs, but tend to surface FPS docs ~1×/year:
