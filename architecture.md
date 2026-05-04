@@ -118,20 +118,25 @@ on separate VersaBUS cards that talk over the chassis backplane.
 
 | Memory | Size | Role | Storage |
 |---|---|---|---|
-| EU control store | (size unconfirmed) | Am29116 instruction stream | **Am2168 SRAM** — writable, must be loaded |
-| AU control store | (size unconfirmed) | FP-pipeline microcode | **Am2168 SRAM** — writable, must be loaded |
+| EU control store | 2K × 80 bit | Am29116 sequencer program | **bipolar PROM** — fixed mask, on EXEC card |
+| AU control store (WCS) | 4K × 128 bit, 4 banks | FP-pipeline microcode | **Am2168 SRAM** — writable, host-uploaded |
 | TCM | 4 K × 32 bit, 2 banks | Table/coefficient memory (sin/cos for FFT) | RAM |
 | LMD | 16 K × 32 bit, 2 banks | Local Main Data (operand workspace) | RAM |
 | SCM | 0.25–1 M × 32 bit | System Common Memory (off-card, shared) | RAM |
 
-> **Important caveat:** Hockney's text describes the FPS-5000 family
-> as having a fixed EU PROM (2K × 80-bit). The actual FPS-3000 EXEC
-> card photos (Usagi/Nakazoto, 612-4805-002 dated 1985) **show no chip
-> array consistent with that PROM** — only PALs (custom-marked DIP-24
-> chips at top-left of card) and Am2168 SRAMs. Either Hockney is
-> describing a different family member, or there's no fixed-mask
-> microcode on this specific board. **Treat both EU and AU as empty at
-> power-on; assume the SBC must populate both.**
+Confirmed against Hockney & Jesshope figure 2.53 (XP-32 internal
+architecture). The earlier draft of this file claimed the EU was
+also SRAM and that no fixed PROM existed — that was wrong; the
+FPS-3000 EXEC card *does* carry the EU PROM (separate from the
+white-labelled PALs that handle decode logic). The white-label
+chips were misidentified as PROMs in an even earlier pass; both
+mistakes are now fixed.
+
+The SBC's microcode upload path is therefore **AU-only**: the
+64 KB staging buffer at `0x10000–0x1FFFF` exactly equals one
+4K × 128-bit AU WCS bank. The EU is already alive at power-on
+(running its mask PROM) — without that, the panel-command
+interface that the SBC drives wouldn't have anything to talk to.
 
 ### Microcode word widths
 
@@ -387,12 +392,13 @@ These all live elsewhere (uploaded at runtime, on the XP-32 card itself,
 or on the host):
 
 - ❌ **AU control-store microcode** — the actual ZVMUL/ZRFFT/etc.
-  kernels. Uploaded fresh per workload. Stored in SRAM (Am2168 array)
-  on the ARITH card.
-- ❌ **EU control-store microcode** — the Am29116 sequencer's program.
-  Earlier docs (and Hockney's generic FPS-5000 description) called this
-  an "EU PROM" but the FPS-3000 EXEC card photos show only Am2168 SRAM
-  in the role; assume it's also writable and SBC-loaded.
+  kernels. Uploaded fresh per workload. Stored in 128-bit-wide SRAM
+  (Am2168 array) — 4K × 128 × 4 banks of writable WCS.
+- ✓ **EU control-store microcode** — the Am29116 sequencer's program
+  *is* on the board, in a fixed bipolar PROM array (per Hockney
+  fig. 2.53: 2K × 80-bit). Already alive at power-on; the SBC ROM
+  never uploads it. The white-labelled chips earlier mistaken for
+  this PROM are PALs.
 - ❌ **Any IEEE-754 arithmetic in software** — done by WTL-1232/1233
   hardware under microcode control. The 68K never adds/multiplies floats.
 - ❌ **MAXL compiler** — runs on the host development system; emits the
