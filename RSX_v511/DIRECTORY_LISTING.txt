@@ -1,0 +1,534 @@
+RSX-11M+ V5.1.1 distribution - complete directory listing
+======================================================================
+
+=== Boot1v511.img : volume 'BOOT1' fmt='DECFILE11A' fmax=60 ===
+  [    1,    1] INDEXF.SYS;1              32256
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001002.DIR;1  (UFD, file 6):
+    [   41,    1] STARTBOO1.CMD;1            1024
+    [   42,    1] STARTBOO5.CMD;1             512
+    [   44,    1] STARTUP.CMD;1               512
+
+  001054.DIR;1  (UFD, file 7):
+    [    8,    1] BOOT1.SYS;1              102400
+    [    9,    1] DMDRV.TSK;2                2560
+    [   10,    1] DLDRV.TSK;2                2048
+    [   11,    1] DUDRV.TSK;2                6144
+    [   12,    1] DRDRV.TSK;2                2560
+    [   13,    1] DYDRV.TSK;2                3584
+    [   14,    1] TTDRV.TSK;1                4608
+    [   15,    1] EXCOM1.TSK;1               5632
+    [   16,    1] EXCOM2.TSK;1               4096
+    [   17,    1] DYCOM.TSK;1                2048
+    [   18,    1] FCPMDL.TSK;1              34816
+    [   19,    1] FCSRES.TSK;1              16384
+    [   20,    1] MCR.TSK;2                 57344
+    [   21,    1] SAV.TSK;2                 39936
+    [   22,    1] BOMICP.TSK;1              17408
+    [   23,    1] BAD.TSK;1                 27136
+    [   24,    1] INI.TSK;2                 29696
+    [   25,    1] PIP.TSK;2                 27136
+    [   26,    1] BOO.TSK;2                 16896
+    [   27,    1] DMO.TSK;2                  7680
+    [   28,    1] MOU.TSK;2                 23552
+    [   29,    1] UFD.TSK;2                  4096
+    [   30,    1] BOOT1.STB;1                6656
+    [   31,    1] DLDRV.STB;2                 512
+    [   32,    1] DMDRV.STB;2                 512
+    [   33,    1] DUDRV.STB;2                1024
+    [   34,    1] DRDRV.STB;2                 512
+    [   35,    1] DYDRV.STB;2                 512
+    [   36,    1] TTDRV.STB;1                1024
+    [   37,    1] DYCOM.STB;1                 512
+    [   38,    1] EXCOM1.STB;2               2048
+    [   39,    1] EXCOM2.STB;2               1024
+    [   40,    1] FCSRES.STB;1               5632
+    [   43,    1] VMRBOO5.CMD;1              1024
+
+=== Boot2v511.img : volume 'BOOT2' fmt='DECFILE11A' fmax=60 ===
+  [    1,    1] INDEXF.SYS;1              32256
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001002.DIR;1  (UFD, file 6):
+    [   37,    1] STARTBOO2.CMD;1             512
+    [   38,    1] STARTUP.CMD;1               512
+
+  001054.DIR;1  (UFD, file 7):
+    [    8,    1] BOOT2.SYS;1              102400
+    [    9,    1] DMDRV.TSK;2                2560
+    [   10,    1] DLDRV.TSK;2                2048
+    [   11,    1] DRDRV.TSK;2                2560
+    [   12,    1] DUDRV.TSK;2                6144
+    [   13,    1] DYDRV.TSK;2                3584
+    [   14,    1] TTDRV.TSK;1                4608
+    [   15,    1] EXCOM1.TSK;1               5632
+    [   16,    1] EXCOM2.TSK;1               4096
+    [   17,    1] DYCOM.TSK;1                2048
+    [   18,    1] FCPMDL.TSK;1              34816
+    [   19,    1] FCSRES.TSK;1              16384
+    [   20,    1] VMR.TSK;2                 81408
+    [   21,    1] MCR.TSK;2                 57344
+    [   22,    1] SAV.TSK;2                 39936
+    [   23,    1] BOMICP.TSK;1              17408
+    [   24,    1] INS.TSK;2                 30720
+    [   25,    1] MOU.TSK;2                 23552
+    [   26,    1] BOOT2.STB;1                6656
+    [   27,    1] DMDRV.STB;2                 512
+    [   28,    1] DLDRV.STB;2                 512
+    [   29,    1] DRDRV.STB;2                 512
+    [   30,    1] DUDRV.STB;2                1024
+    [   31,    1] DYDRV.STB;2                 512
+    [   32,    1] TTDRV.STB;1                1024
+    [   33,    1] DYCOM.STB;1                 512
+    [   34,    1] EXCOM1.STB;2               2048
+    [   35,    1] EXCOM2.STB;2               1024
+    [   36,    1] FCSRES.STB;1               5632
+
+=== Boot3v511.img : volume 'BOOT3' fmt='DECFILE11A' fmax=60 ===
+  [    1,    1] INDEXF.SYS;1              32256
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001002.DIR;1  (UFD, file 6):
+    [   37,    1] STARTBOO3.CMD;1             512
+    [   38,    1] STARTUP.CMD;1               512
+
+  001054.DIR;1  (UFD, file 7):
+    [    8,    1] BOOT3.SYS;1              102400
+    [    9,    1] DMDRV.TSK;2                2560
+    [   10,    1] DLDRV.TSK;2                2048
+    [   11,    1] DUDRV.TSK;2                6144
+    [   12,    1] DRDRV.TSK;2                2560
+    [   13,    1] DYDRV.TSK;2                3584
+    [   14,    1] TTDRV.TSK;1                4608
+    [   15,    1] EXCOM1.TSK;1               5632
+    [   16,    1] EXCOM2.TSK;1               4096
+    [   17,    1] DYCOM.TSK;1                2048
+    [   18,    1] FCPMDL.TSK;1              34816
+    [   19,    1] FCSRES.TSK;1              16384
+    [   20,    1] RSX11M.TSK;1              66560
+    [   21,    1] MCR.TSK;2                 57344
+    [   22,    1] SAV.TSK;2                 39936
+    [   23,    1] BOMICP.TSK;1              17408
+    [   24,    1] INS.TSK;2                 30720
+    [   25,    1] MOU.TSK;2                 23552
+    [   26,    1] BOOT3.STB;1                6656
+    [   27,    1] DMDRV.STB;2                 512
+    [   28,    1] DLDRV.STB;2                 512
+    [   29,    1] DRDRV.STB;2                 512
+    [   30,    1] DUDRV.STB;2                1024
+    [   31,    1] DYDRV.STB;2                 512
+    [   32,    1] TTDRV.STB;1                1024
+    [   33,    1] DYCOM.STB;1                 512
+    [   34,    1] EXCOM1.STB;2               2048
+    [   35,    1] EXCOM2.STB;2               1024
+    [   36,    1] FCSRES.STB;1               5632
+
+=== Boot4v511.img : volume 'BOOT4' fmt='DECFILE11A' fmax=60 ===
+  [    1,    1] INDEXF.SYS;1              32256
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001002.DIR;1  (UFD, file 6):
+    [   37,    1] STARTBOO4.CMD;1            1024
+    [   38,    1] STARTUP.CMD;1               512
+
+  001054.DIR;1  (UFD, file 7):
+    [    8,    1] BOOT4.SYS;1              102400
+    [    9,    1] DMDRV.TSK;2                2560
+    [   10,    1] DLDRV.TSK;2                2048
+    [   11,    1] DRDRV.TSK;2                2560
+    [   12,    1] DUDRV.TSK;2                6144
+    [   13,    1] DYDRV.TSK;2                3584
+    [   14,    1] TTDRV.TSK;1                4608
+    [   15,    1] EXCOM1.TSK;1               5632
+    [   16,    1] EXCOM2.TSK;1               4096
+    [   17,    1] DYCOM.TSK;1                2048
+    [   18,    1] FCPMDL.TSK;1              34816
+    [   19,    1] FCSRES.TSK;1              16384
+    [   20,    1] ICP.TSK;2                 72704
+    [   21,    1] MCR.TSK;2                 57344
+    [   22,    1] SAV.TSK;2                 39936
+    [   23,    1] BOO.TSK;2                 16896
+    [   24,    1] INS.TSK;2                 30720
+    [   25,    1] MOU.TSK;2                 23552
+    [   26,    1] BOOT4.STB;1                6656
+    [   27,    1] DMDRV.STB;2                 512
+    [   28,    1] DLDRV.STB;2                 512
+    [   29,    1] DRDRV.STB;2                 512
+    [   30,    1] DUDRV.STB;2                1024
+    [   31,    1] DYDRV.STB;2                 512
+    [   32,    1] TTDRV.STB;1                1024
+    [   33,    1] DYCOM.STB;1                 512
+    [   34,    1] EXCOM1.STB;2               2048
+    [   35,    1] EXCOM2.STB;2               1024
+    [   36,    1] FCSRES.STB;1               5632
+    [   40,    1] RESRSX.CMD;2               2048
+    [   41,    2] LOABOM.CMD;2               4096
+
+=== RSX01v511.img : volume 'RSX1' fmt='DECFILE11A' fmax=60 ===
+  [    1,    1] INDEXF.SYS;1              12288
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001001.DIR;1  (UFD, file 6):
+    [    7,    2] ANSLIB.OLB;1             137216
+    [    8,    1] DEUNA.MLB;1               10752
+    [    9,    1] EXELIB.OLB;1              23040
+    [   10,    1] EXEMC.MLB;1               34304
+    [   11,    2] FCSRES.TSK;1              16384
+    [   12,    2] FCSRES.STB;1               5632
+    [   13,    1] ODT.OBJ;1                  4096
+    [   14,    1] RSXMAC.SML;1             130048
+
+=== RSX02v511.img : volume 'RSX2' fmt='DECFILE11A' fmax=60 ===
+  [    1,    1] INDEXF.SYS;1              12288
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001001.DIR;1  (UFD, file 6):
+    [    7,    1] SYSLIB.OLB;1             120832
+    [    8,    1] TRACE.OBJ;1                1536
+    [    9,    1] UNAMC.TSK;1                1536
+    [   10,    1] VMLIB.OLB;1                8192
+
+=== RSX03v511.img : volume 'RSX3' fmt='DECFILE11A' fmax=100 ===
+  [    1,    1] INDEXF.SYS;1              52736
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001002.DIR;1  (UFD, file 6):
+    [    7,    1] A.A;1                       512
+    [    8,    1] ASCII.HLP;1                4608
+    [    9,    1] BAD.HLP;1                  3072
+    [   10,    1] BAS.HLP;1                  1536
+    [   11,    1] BRU.HLP;1                 20992
+    [   12,    1] CDA.HLP;1                  2560
+    [   13,    1] CMP.HLP;1                  1536
+    [   14,    1] COT.HLP;1                  1024
+    [   15,    1] DCL.HLP;1                  6144
+    [   16,    1] DCLABORT.HLP;1             1024
+    [   17,    1] DCLALLOC.HLP;1             1024
+    [   18,    1] DCLAPPEND.HLP;1            2560
+    [   19,    1] DCLASSIGN.HLP;1            3584
+    [   20,    1] DCLASSQ.HLP;1               512
+    [   21,    1] DCLBACKUP.HLP;1           21504
+    [   22,    1] DCLBASIC.HLP;1             1536
+    [   23,    1] DCLBRO.HLP;1               1024
+    [   24,    1] DCLCANCEL.HLP;1             512
+    [   25,    1] DCLCOBOL.HLP;1             9216
+    [   26,    1] DCLCONT.HLP;1               512
+    [   27,    1] DCLCONV.HLP;1             13824
+    [   28,    1] DCLCOPY.HLP;1              3072
+    [   29,    1] DCLCORAL.HLP;1            11264
+    [   30,    1] DCLCREATE.HLP;1            2560
+    [   31,    1] DCLC81.HLP;1               6656
+    [   32,    1] DCLDEASS.HLP;1             2048
+    [   33,    1] DCLDEASSQ.HLP;1             512
+    [   34,    1] DCLDELETE.HLP;1            3072
+    [   35,    1] DCLDELJ.HLP;1              1024
+    [   36,    1] DCLDELQ.HLP;1              1024
+    [   37,    1] DCLDIFF.HLP;1              5632
+    [   38,    1] DCLDIR.HLP;1               4608
+    [   39,    1] DCLDIS.HLP;1               1024
+    [   40,    1] DCLEDIT.HLP;1              3584
+    [   41,    1] DCLEDT.HLP;1               2048
+    [   42,    1] DCLFIX.HLP;1               1536
+    [   43,    1] DCLFORT.HLP;1             11776
+    [   44,    1] DCLHELP.HLP;1              2048
+    [   45,    1] DCLHOLD.HLP;1              1024
+    [   46,    1] DCLINIT.HLP;1             15872
+    [   47,    1] DCLINST.HLP;1              3584
+    [   48,    1] DCLLIB.HLP;1              11264
+    [   49,    1] DCLLINK.HLP;1             24576
+    [   50,    1] DCLLOGIN.HLP;1             1536
+    [   51,    1] DCLLOGOUT.HLP;1            1536
+    [   52,    1] DCLMACRO.HLP;1             7680
+    [   53,    1] DCLMCR.HLP;1                512
+    [   54,    1] DCLMOUNT.HLP;1            23040
+    [   55,    1] DCLPASCAL.HLP;1             512
+    [   56,    1] DCLPRINT.HLP;1             7680
+    [   57,    1] DCLPURGE.HLP;1             2560
+    [   58,    1] DCLREL.HLP;1               1024
+    [   59,    1] DCLREMOVE.HLP;1             512
+    [   60,    1] DCLRENAME.HLP;1            1536
+    [   61,    1] DCLREQ.HLP;1                512
+    [   62,    1] DCLRES.HLP;1                512
+    [   63,    1] DCLRUN.HLP;1               7168
+    [   64,    1] DCLSET.HLP;1              26624
+    [   65,    1] DCLSETQ.HLP;1              7168
+    [   66,    1] DCLSHORTS.HLP;1             512
+    [   67,    1] DCLSHOW.HLP;1             27136
+    [   68,    1] DCLSHOWP.HLP;1             1024
+    [   69,    1] DCLSHOWQ.HLP;1             3584
+    [   70,    1] DCLSORT.HLP;1              7168
+    [   71,    1] DCLSTART.HLP;1             6656
+    [   72,    1] DCLSTOP.HLP;1              3584
+    [   73,    1] DCLTYPE.HLP;1              1536
+    [   74,    1] DCLUNFIX.HLP;1              512
+    [   75,    1] DMP.HLP;1                  6144
+    [   76,    1] DSC.HLP;1                  4608
+    [   77,    1] EDI.HLP;1                 10752
+
+=== RSX04v511.img : volume 'RSX4' fmt='DECFILE11A' fmax=100 ===
+  [    1,    1] INDEXF.SYS;1              34304
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001002.DIR;1  (UFD, file 6):
+    [    7,    1] EDTHELP.HLP;1            114176
+    [    8,    1] ERROR.HLP;1               13312
+    [    9,    1] EXECUTIVE.HLP;1           77824
+    [   10,    1] FCS.HLP;1                 53760
+    [   11,    1] FLX.HLP;1                  5632
+    [   12,    1] FMT.HLP;1                  5632
+    [   13,    1] HELPF.HLP;1               11264
+    [   14,    1] ICP.HLP;1                 64000
+    [   15,    1] IOX.HLP;1                 26624
+    [   16,    1] LBR.HLP;1                 11776
+    [   17,    1] MAG.HLP;1                  3072
+    [   18,    1] MCR.HLP;1                 14336
+    [   19,    1] MCRACT.HLP;1               1024
+    [   20,    1] MCRALT.HLP;1               1024
+    [   21,    1] MCRASN.HLP;1               1536
+    [   22,    1] MCRATL.HLP;1               2048
+    [   23,    1] MCRBRO.HLP;1                512
+    [   24,    1] MCRCLI.HLP;1               4096
+    [   25,    1] MCRCORAL.HLP;1            10240
+    [   26,    1] MCREDT.HLP;1               1024
+    [   27,    1] MCRFLA.HLP;1               1024
+    [   28,    1] MCRFORT.HLP;1              7680
+    [   29,    1] MCRGENRL.HLP;1             1024
+    [   30,    1] MCRHELO.HLP;1              1536
+    [   31,    1] MCRHELP.HLP;1              2560
+    [   32,    1] MCRHOM.HLP;1               4608
+    [   33,    1] MCRINI.HLP;1               7680
+    [   34,    1] MCRINS.HLP;1               1536
+    [   35,    1] MCRLOA.HLP;1               1024
+    [   36,    1] MCRLOGIN.HLP;1             1536
+
+=== RSX05v511.img : volume 'RSX5' fmt='DECFILE11A' fmax=100 ===
+  [    1,    1] INDEXF.SYS;1              52736
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001002.DIR;1  (UFD, file 6):
+    [    7,    1] MCRMAC.HLP;1               5632
+    [    8,    1] MCRMOU.HLP;1              15360
+    [    9,    1] MCROPE.HLP;1               3584
+    [   10,    1] MCRPASCAL.HLP;1             512
+    [   11,    1] MCRPRINT.HLP;1             6656
+    [   12,    1] MCRQUE.HLP;1              15360
+    [   13,    1] MCRRUN.HLP;1               5632
+    [   14,    1] MCRSAV.HLP;1               1024
+    [   15,    1] MCRSET.HLP;1              26112
+    [   16,    1] MCRTAS.HLP;1               1024
+    [   17,    1] MCRUFD.HLP;1               2048
+    [   18,    1] ODT.HLP;1                 24064
+    [   19,    1] PAT.HLP;1                  1536
+    [   20,    1] PIP.HLP;1                 15872
+    [   21,    1] PMD.HLP;1                  2560
+    [   22,    1] QIOSYM.MSG;1              14848
+    [   23,    1] RMS.HLP;1                 21504
+    [   24,    1] RMSBCK.HLP;1               2560
+    [   25,    1] RMSCNV.HLP;1               4096
+    [   26,    1] RMSDEF.HLP;1               1024
+    [   27,    1] RMSDES.HLP;1               1024
+    [   28,    1] RMSDSP.HLP;1               2048
+    [   29,    1] RMSIFL.HLP;1               3072
+    [   30,    1] RMSRST.HLP;1               3072
+    [   31,    1] SLP.HLP;1                  8704
+    [   32,    1] STARTUPIN.CMD;1            1024
+    [   33,    1] SYSGEN.HLP;1               1024
+    [   34,    1] SYSLIB.HLP;1              14848
+    [   35,    1] TDX.HLP;1                  5632
+    [   36,    1] TKB.HLP;1                 24064
+    [   37,    1] TKBOPT.HLP;1              26624
+    [   38,    1] TKTN.HLP;1                  512
+    [   39,    1] VFY.HLP;1                  8192
+    [   40,    1] VMR.HLP;1                  8192
+    [   41,    1] ZAP.HLP;1                 13312
+
+=== RSX06v511.img : volume 'RSX6' fmt='DECFILE11A' fmax=60 ===
+  [    1,    1] INDEXF.SYS;1              32256
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001054.DIR;1  (UFD, file 6):
+    [    7,    2] ACNT.TSK;1                31744
+    [    8,    2] ACS.TSK;1                  3584
+    [    9,    1] BAD.TSK;1                 27136
+    [   10,    2] BOO.TSK;1                 16896
+    [   11,    2] BRO.TSK;1                 13824
+    [   12,    1] BRU.TSK;1                 91136
+    [   13,    2] BYE.TSK;1                 12288
+    [   14,    1] CDA.TSK;1                 58880
+    [   15,    1] CFL.TSK;1                 52736
+    [   16,    1] CMP.TSK;1                 12288
+    [   17,    2] CODRV.TSK;1                1536
+    [   18,    2] CODRV.STB;1                 512
+    [   19,    2] COT.TSK;1                 12288
+    [   20,    1] CRF.TSK;1                 12288
+    [   21,    2] DCL.STB;1                  4096
+    [   22,    2] DLDRV.STB;1                 512
+    [   23,    2] DLDRV.TSK;1                2560
+    [   24,    2] DMDRV.TSK;1                2560
+    [   25,    2] DMDRV.STB;1                 512
+    [   26,    2] DMO.TSK;1                  7680
+
+=== RSX07v511.img : volume 'RSX7' fmt='DECFILE11A' fmax=60 ===
+  [    1,    1] INDEXF.SYS;1              32256
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001054.DIR;1  (UFD, file 6):
+    [    7,    2] DCL.TSK;1                143872
+    [    8,    1] DMP.TSK;1                 20480
+    [    9,    2] DPDRV.TSK;1                2048
+    [   10,    2] DPDRV.STB;1                 512
+    [   11,    2] DRDRV.TSK;1                2560
+    [   12,    2] DRDRV.STB;1                 512
+    [   13,    1] DSC.TSK;1                 44032
+    [   14,    2] DUDRV.TSK;1                7168
+    [   15,    2] DUDRV.STB;1                1024
+    [   16,    2] DXDRV.TSK;1                2048
+    [   17,    2] DXDRV.STB;1                 512
+    [   18,    2] DYDRV.TSK;1                3584
+    [   19,    2] DYDRV.STB;1                 512
+    [   20,    2] DYCOM.TSK;1                2048
+    [   21,    2] DYCOM.STB;1                 512
+    [   22,    1] EDI.TSK;1                 20992
+    [   23,    1] EDT.TSK;1                109056
+    [   24,    2] ELI.TSK;1                  9216
+    [   25,    2] ERL.TSK;1                 18432
+
+=== RSX08v511.img : volume 'RSX8' fmt='DECFILE11A' fmax=60 ===
+  [    1,    1] INDEXF.SYS;1              32256
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001054.DIR;1  (UFD, file 6):
+    [    7,    2] EXCOM1.STB;1               2560
+    [    8,    2] EXCOM1.TSK;1               7680
+    [    9,    2] EXCOM2.STB;1               1536
+    [   10,    2] EXCOM2.TSK;1               5632
+    [   11,    2] FCPLRG.TSK;1              38400
+    [   12,    1] FLX.TSK;1                 49664
+    [   13,    1] FMT.TSK;1                 34816
+    [   14,    1] FMTDY.CMD;1                 512
+    [   15,    1] FTB.TSK;1                 37376
+    [   16,    2] F11MSG.TSK;1               5120
+    [   17,    1] F11MSGSTB.STB;1             512
+    [   18,    2] HEL.TSK;1                 28672
+    [   19,    2] ICP.TSK;1                 72704
+    [   20,    2] INI.TSK;1                 29696
+    [   21,    2] INS.TSK;1                 30720
+    [   22,    1] IOX.TSK;1                 44032
+
+=== RSX09v511.img : volume 'RSX9' fmt='DECFILE11A' fmax=60 ===
+  [    1,    1] INDEXF.SYS;1              32256
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001054.DIR;1  (UFD, file 6):
+    [    7,    1] LBR.TSK;1                 25088
+    [    8,    2] LDR.TSK;1                  2560
+    [    9,    2] LOA.TSK;1                 14848
+    [   10,    2] LPDRV.TSK;1                2048
+    [   11,    2] LPDRV.STB;1                 512
+    [   12,    2] LPP.TSK;1                 19456
+    [   13,    1] MAC.TSK;1                 35328
+    [   14,    2] MAG.TSK;1                 14336
+    [   15,    1] MCR.TSK;1                 57856
+    [   16,    2] MCRMU.TSK;1               15360
+    [   17,    1] MFT.TSK;1                 91136
+    [   18,    2] MMDRV.TSK;1                3584
+    [   19,    2] MMDRV.STB;1                 512
+    [   20,    2] MOU.TSK;1                 23552
+    [   21,    2] MSDRV.TSK;1                3584
+    [   22,    2] MSDRV.STB;1                 512
+    [   23,    2] MTAACP.TSK;1              44032
+    [   24,    2] MTDRV.TSK;1                3072
+    [   25,    2] MTDRV.STB;1                 512
+    [   26,    1] PAT.TSK;1                 11776
+    [   27,    1] PIP.TSK;1                 27136
+    [   28,    2] PMD.TSK;1                 11264
+    [   29,    2] PMT.TSK;1                  8192
+
+=== RSX10v511.img : volume 'RSX10' fmt='DECFILE11A' fmax=60 ===
+  [    1,    1] INDEXF.SYS;1              32256
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001054.DIR;1  (UFD, file 6):
+    [    7,    2] QMG.TSK;1                 14336
+    [    8,    2] QMGCLI.TSK;1              28160
+    [    9,    2] QMGPRT.TSK;1               2048
+    [   10,    2] RCT.TSK;1                  5632
+    [   11,    2] RMD.TSK;1                 44032
+    [   12,    1] RPT.TSK;1                 70656
+    [   13,    2] RSX11M.STB;1               7680
+    [   14,    1] RSXWINVMR.CMD;1            2560
+    [   15,    2] RSX11M.TSK;1              66560
+    [   16,    2] SAV.TSK;1                 39936
+    [   17,    1] SGNPARM.CMD;1              2048
+    [   18,    2] SHF.TSK;1                  7680
+    [   19,    2] SHUTUP.TSK;1              10240
+    [   20,    1] SLP.TSK;1                 12800
+    [   21,    1] SRD.TSK;1                 14336
+    [   22,    1] STK.TSK;1                 92160
+
+=== RSX11v511.img : volume 'RSX11' fmt='DECFILE11A' fmax=60 ===
+  [    1,    1] INDEXF.SYS;1              12288
+  [    2,    2] BITMAP.SYS;1               1024
+  [    3,    3] BADBLK.SYS;1                512
+  [    4,    4] 000000.DIR;1                512
+  [    5,    5] CORIMG.SYS;1                  0
+
+  001054.DIR;1  (UFD, file 6):
+    [    8,    2] SYS.TSK;1                 60416
+    [    9,    1] TKB.TSK;1                 82432
+    [   10,    2] TKN.TSK;1                  9216
+    [   11,    2] TTDRV.TSK;1               11264
+    [   12,    2] TTDRV.STB;1                3072
+    [   13,    2] UFD.TSK;1                  4096
+    [   14,    2] UNL.TSK;1                 11776
+    [   15,    1] VFY.TSK;1                 18944
+    [   16,    1] VMR.TSK;1                 81408
+    [   17,    1] ZAP.TSK;1                 14336
+    [   20,    1] POKE.TSK;1                 2048
+    [   21,    1] BIGRSX.CMD;1               3584
+
+  011010.DIR;1  (UFD, file 7):
+    [   18,    2] RSXMC.MAC;1               11264

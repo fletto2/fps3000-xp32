@@ -1,0 +1,11 @@
+simh/
+ext/
+CLAUDE.md
+refs/
+fps100_archive/
+RSX_v511/extracted/
+.claude/
+__pycache__/
+*.pyc
+*.swp
+.DS_Store
