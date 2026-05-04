@@ -45,6 +45,90 @@ re-implementation of those formulas decoded my transcribed microcode
 and produced register indices consistent with the source listing's
 mnemonics. Encoding is solid.
 
+## FPS-164 INSTRUCTION-FORMAT FIGURE — finally pinned down
+
+Recovered from **Touzeau 1984** (`refs/FPS-164/Touzeau_1984_Fortran_compiler_FPS-164.pdf`,
+SIGPLAN '84 Compiler Construction, page 49 Figure 2). Bit positions
+are 1-indexed; MSB = bit 1, LSB = bit 64.
+
+The 64-bit FPS-164 microinstruction is divided into multiple
+*independent instruction groups* called **PARCELS**, with two parcel
+sets that can be intermixed: **primary** and **secondary**.
+
+### Primary parcel layout
+
+Boundaries shown in Touzeau Fig 2 are 1, 13, 22, 31, 50, 55, 63 — six
+groups summing to 63 bits. The 64th bit is not drawn; almost certainly
+a 1-bit overlay/class-selector flag (per AP-120B precedent's `DF`).
+
+| Bits | Parcel | Width | APSIM64 fields it carries |
+|---|---|---|---|
+| **1–12** | SPAD Grp | 12 | SOP/SOP1, SH, SPS, SPD (SOP/SOP1 mutex saves 1 bit) |
+| **13–21** | Adder Grp | 9 | FADD/FADD1/IFADD1, A1, A2 (FADD-class mutex saves 1 bit) |
+| **22–30** | Branch Grp | 9 | COND(4) + DISP(5) — **width matches APSIM64 exactly** |
+| **31–49** | Data Pad Grp | 19 | DPX(2)+DPY(2)+DPBS(3)+XR(3)+YR(3)+XW(3)+YW(3) = **19 ✓ exact** |
+| **50–54** | Multiplier Grp | 5 | FM(1)+M1(2)+M2(2) = **5 ✓ exact** |
+| **55–63** | Memory Grp | 9 | MI(2)+MA(2)+DPA(2)+TMA(2) + 1 ext bit |
+| **64** | overlay flag | 1 | inferred — primary/secondary parcel selector |
+
+### Secondary parcel layout (overlays primary)
+
+Boundaries shown: 1, 13, 22, 31, 39, 63. Five cells visible; one is
+unlabeled in the figure.
+
+| Bits | Parcel | Width | Notes |
+|---|---|---|---|
+| 1–12 | Spec Grp | 12 | 8-class SPECIAL OP per APSIM64 A-8 |
+| 13–21 | I/O Grp | 9 | 8-class I/O OP per APSIM64 A-9 |
+| 22–30 | Short value (hi) | 9 | likely SVALNL(1) + SVAL upper bits |
+| 31–38 | (unlabeled) | 8 | likely SVAL low byte (SVAL=8 per APSIM64 A-7) |
+| 39–63 | Address value | 25 | 24-bit `VALUE` per APSIM64 A-7, +1 ext bit |
+
+Touzeau §2.2: "The secondary instruction parcels can be intermixed
+with primary instruction parcels to produce a wide variety of
+instruction formats."
+
+### What this confirms about the family
+
+- **Width-summing from APSIM64 Appendix A is correct to the bit** for
+  Branch / Data Pad / Multiplier.
+- **SPAD and Adder groups are 1 bit narrower** than naive width-sum
+  suggests, because SOP/SOP1 share encoding (and similarly
+  FADD/FADD1/IFADD1 share). This validates our "decode-class overlay"
+  reading of those groups.
+- **DPX / DPY are 32 × 64-bit registers each, with a 16-register
+  "window"** the compiler can shift; SPAD = **64 × 32-bit registers**.
+  These are the actual register-file sizes the field widths must
+  address.
+- **5 parallel functional units** issue per cycle: memory / FP-mul /
+  FP-add / address-computation / control. The pipe depths are
+  memory=3, multiplier=3, adder=2, address=1.
+- **Pipes are explicitly pushed** by separate APAL operations
+  (`FMPUSH`, `FAPUSH`); output latches FM/FA/SPFN hold values until
+  the unit is pushed or re-issued.
+
+### XP-32 inference, sharpened
+
+Now that FPS-164 is pinned, XP-32 = "FPS-164 widened to 128 bits with
+an extra adder and DMA controller" becomes specific:
+
+| Group | FPS-164 (64-bit) | XP-32 (128-bit), inferred |
+|---|---|---|
+| SPAD | 12 bits | ~14 bits (with SPSX/SPDX/SPDX1 extensions slotted in) |
+| Adder #1 | 9 bits | ~9 bits (preserved) |
+| **Adder #2** | — | **~9 bits NEW** (Curington 1986: 2 adders on XP32) |
+| Branch | 9 bits | ~12 bits (DISP widens to 12 to address 4K WCS) |
+| Data Pad | 19 bits | ~25 bits (XR/YR/XW/YW + XE/YE extensions for larger TCM/LMD) |
+| Multiplier | 5 bits | ~7 bits (FM/FM1/FM0 added) |
+| Memory | 10 bits | ~10 bits (preserved) |
+| **DMA Controller** | — | **~8-10 bits NEW** (Curington 1986: separate SCM↔local DMA) |
+| Spec/IO Groups | 21 bits (secondary parcel) | ~21 bits (preserved as secondary) |
+| Immediate | up to 26 bits (Address value) | ~26-32 bits (HVAL widens for IEEE-754 32-bit constants) |
+
+Sums to ~125-135, which is close enough to 128 that the XP-32 layout
+is now constrained to ≤±5 bits per group — a *much* tighter envelope
+than the prior "guess between 39 and 60 bits of new content."
+
 ## The FPS-164 evolution (authoritative for direction of change)
 
 From APSIM64 Appendix A, Tables A-1 through A-9. Same field names,
