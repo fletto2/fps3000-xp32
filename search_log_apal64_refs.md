@@ -46,7 +46,10 @@ order to motivate code-generation choices.
 | eBay | `FPS-100 manual` | camera modules, jukeboxes, irrelevant |
 | eBay | `AP-120B` | Yamaha YZ450-F motorcycle parts |
 | eBay | `APAL64` | APAL is a Belgian kitcar brand |
-| eBay | `"floating point systems"` exact-phrase | **3 vintage print ads from 1982-83 of the FPS-5000** at ~$50-60 each — decorative, not technical. Listing IDs `188323026488`, `366199887864` |
+| eBay | `"floating point systems"` exact-phrase (broader sort) | **6 vintage print ads** (1977/1979×2/1982×2/1983×2/1987), $41-99 each — decorative |
+| eBay | broader sweep with US-locale headers | **🎯 NASA AP-120B Array Processor (1975, all 28 boards)** ~$8,200 — listing ID `256771111122`. Hardware, not a manual; but a working unit lets us dump the EU PROM directly and validate the recovered FFT microcode |
+| eBay UK + DE | `"floating point systems"` | 0 hits each |
+| eBay sold-listings (historical) | `"floating point systems"` | 0 — no FPS-Inc transactions in recent history |
 | abebooks | `floating point systems` | only generic numerical-computing books |
 | abebooks | `FPS-164` / `AP-120B` | only **Frederic P. Miller** print-on-demand Wikipedia-scrape books — skip |
 | bookfinder.com (federated) | `floating point systems manual` | 0 |
