@@ -37,6 +37,39 @@ about how Fortran maps to FPS-164 microcode. A compiler paper almost
 necessarily exposes more field-level detail than user manuals do, in
 order to motivate code-generation choices.
 
+## Used-book / auction channels (checked 2026-05-04)
+
+| Channel | Query | Result |
+|---|---|---|
+| eBay | `"floating point systems" manual` | 0 hits |
+| eBay | `FPS-164 manual` | only Ford / Mercedes / aviation manuals, no FPS Inc. |
+| eBay | `FPS-100 manual` | camera modules, jukeboxes, irrelevant |
+| eBay | `AP-120B` | Yamaha YZ450-F motorcycle parts |
+| eBay | `APAL64` | APAL is a Belgian kitcar brand |
+| eBay | `"floating point systems"` exact-phrase | **3 vintage print ads from 1982-83 of the FPS-5000** at ~$50-60 each — decorative, not technical. Listing IDs `188323026488`, `366199887864` |
+| abebooks | `floating point systems` | only generic numerical-computing books |
+| abebooks | `FPS-164` / `AP-120B` | only **Frederic P. Miller** print-on-demand Wikipedia-scrape books — skip |
+| bookfinder.com (federated) | `floating point systems manual` | 0 |
+| Internet Archive item search | `"floating point systems" "FPS-164"` | 0 unique items beyond bitsavers mirror |
+
+So **no FPS Inc. technical documentation is on the open used-book/auction market right now**. The vintage print ads are the only FPS-related items currently listed (~$50-60, decorative).
+
+## Higher-yield retro-computing channels (untried as of 2026-05-04)
+
+These don't have public-search APIs, but tend to surface FPS docs ~1×/year:
+
+- **VCFed.org forum** — David Lovett's existing FPS-100 thread already
+  there; would be cheap to bump with a specific "looking for APAL64
+  Programmer's Reference Manual, FPS doc 860-7485-000" post
+- **Computer Reset (Dallas)** — periodically liquidates FPS-era kit
+  including documentation; usually phone/email
+- **Weirdstuff Warehouse / NextStaging** — Bay Area surplus channels
+- **University equipment-surplus auctions** — sites that ran FPS-164s
+  in the 80s sometimes still have docs
+- **eBay saved-search alerts** — "floating point systems" with email
+  notification (free); periodic listings do appear
+- **abebooks "Want" alerts** — same idea
+
 ## Acquisition paths
 
 1. **ACM Digital Library** — pay or institutional access for Touzeau 1984.
