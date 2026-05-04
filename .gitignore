@@ -5,6 +5,7 @@ refs/
 fps100_archive/
 .claude/
 *.py
+RSX_v511/*.img
 __pycache__/
 *.pyc
 *.swp
