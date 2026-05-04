@@ -218,23 +218,83 @@ For most retrocomputing purposes, **option 1** is the path of least
 resistance — UNIBUS↔Q-bus bridges were common 1980s commercial
 products and several survive in working order.
 
-## Reading the AP I/F's actual part number
+## The AP I/F card's exact part number
 
-Lovett's chassis has the AP I/F's full part number on the card
-itself but the index-plate photo only shows the prefix `4` (the
-last 2-3 digits are illegible due to glare). Reading the full
-number from the card directly would tell us:
-- The host-bus variant (UNIBUS vs Q-bus vs other)
-- The card revision
-- Whether it matches an FPS published part-number table
+**Confirmed (2026-05): the AP I/F card in Lovett's chassis is
+`612-4448-401`, revision F.**
 
-FPS engineering numbering is `612-NNNN-RRR` where:
-- `NNNN` = card type + host-variant code
-- `RRR` = revision
+Reading: FPS engineering numbering is `612-NNNN-VVV` followed by
+a revision letter:
+- `612` — VersaBUS-family card series prefix
+- `4448` — card-type code (this is "AP I/F")
+- `401` — variant code (host-bus type or feature option)
+- `F` — revision letter (sixth revision; A is first)
 
-So a UNIBUS AP I/F might be `612-4456-461` (matching the partial
-"4 4 5 6" pattern visible on the slot label) and a Q-bus variant
-would be a different `NNNN`.
+### What we can deduce from neighbours in Lovett's chassis
+
+| Slot | Function | P/N (full or partial) |
+|---:|---|---|
+| 14 | VBUS SBC | (slot label "80B" → ~612-44**80**B-... or 612-44xx, suffix B not yet read) |
+| 13 | VBUS XLTR | (slot label "803" → 612-44**80**3-401 or similar) |
+| 12 | FMT | (slot label "804" → 612-44**80**4-401 or similar) |
+| **11** | **AP I/F** | **`612-4448-401-F`** ← this confirmed |
+| 10 | XP-32 EXEC #1 | `612-4805-002` (visible in Nakazoto photos) |
+| 9  | XP-32 ARITH #1 | `612-4806-002` (visible in Nakazoto photos) |
+| 8  | XP-32 EXEC #2 | `612-4805-002` |
+| 7  | XP-32 ARITH #2 | `612-4806-002` |
+| 6  | MEM CTL | (not yet read) |
+| 5  | MEMORY | `612-4498-401-A` (per index-plate photo) |
+| 4  | MEMORY | `612-4456-461` (per cardcage-photo label) |
+| 3-1 | MEMORY ×3 | (presumably same as 4 or 5) |
+
+So the FPS-3000 VersaBUS card-type codes cluster like this:
+- `4408..449x` — system memory cards
+- `4428` — likely FMT (middle of cardcage-photo PN)
+- `4448` — AP I/F (confirmed)
+- `4805/4806` — XP-32 EXEC/ARITH
+
+The "44xx" codes are SBC-family / system cards; "48xx" codes are
+XP-32-family cards. AP I/F at `4448` slots cleanly into the
+SBC-family numbering.
+
+### What `612-4448-401` tells us about the host-bus variant
+
+**Nothing definitive** without an FPS catalog. The `-401` variant
+suffix likely encodes the host-bus type (UNIBUS vs Q-bus vs VAX
+BI vs IBM channel), but we don't have a P/N→variant mapping. Best
+inference: since FPS's most-shipped FPS-3000 host pairing was
+**PDP-11 UNIBUS** (per Hockney), the `-401` suffix on a card
+shipped with what appears to be a stock 833-2003-004 chassis is
+**most likely the UNIBUS variant**. Hypothesis only — needs
+catalog confirmation.
+
+If FPS used `-401`/`-402`/`-403` for sequential host-bus options
+(plausible naming pattern), the variants might be:
+- `-401` — UNIBUS (best guess)
+- `-402` — Q-bus
+- `-403` — VAX BI
+- `-404` — IBM channel
+
+But this is pure speculation. The actual mapping requires either
+a surviving FPS catalog page, or an FPS engineer / customer who
+remembers.
+
+### Online presence: ZERO
+
+A web search for `"612-4448"` (or `"FPS 4448"`, etc., on
+2026-05-04) returned **no hits**. The P/N is completely
+undocumented online — not in bitsavers, not in archive.org, not
+in eBay listings, not in patent filings. Lovett's card is
+effectively the only known surviving reference.
+
+This makes finding the matching **host-side card** (which would
+be a different P/N — same `4448` card-type code but different
+variant suffix, OR a different `4xxx` for the host-side
+counterpart) very difficult through web search alone. Channels
+worth trying:
+- Direct contact with surviving FPS engineers
+- VCFed.org thread (Lovett's existing one)
+- Estate sales / surplus lists from former FPS customer sites
 
 ## ⚠ Lovett's hardware status — host-side card is missing
 

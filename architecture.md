@@ -33,13 +33,33 @@ The **FPS-3000** is an FPS-5000-class entry-level system: a single
 **XP-32 arithmetic coprocessors**, all on a VersaBUS backplane sharing a
 **System Common Memory (SCM)**.
 
-**The specific FPS-3000 we have** (Lovett's, model 821-9008-011, per
-the index-plate photo `refs/FPS-3000/fps-3000.jpg`) is a **14-slot
+**The specific FPS-3000 we have** (Lovett's, system model
+`FPS 3000` / system P/N `833-2003-004` REV B, S/N `FAS 20282`,
+120VAC 1ph 15A 50/60Hz per the back-panel data plate
+`refs/FPS-3000/fps-3000-sn.jpg`; chassis index-plate photo
+`refs/FPS-3000/fps-3000.jpg`, model `821-9008-011`) is a **14-slot
 chassis populated as a 2-AC configuration**: AP I/F + FMT + VBUS XLTR
 + VBUS SBC (slots 11-14), 2 × XP-32 AC each as ARITH+EXEC pair
 (slots 7-10), MEM CTL (slot 6), and 5 × MEMORY (slots 1-5). The SBC
 firmware exposes 4 channels (`TCBXP1I..XP4I`) for the family's
 larger variants; only AC1 and AC2 are populated in this hardware.
+
+Card-level P/Ns confirmed for Lovett's chassis (slot → card → FPS
+engineering P/N, where read):
+| Slot | Card | P/N | Note |
+|---:|---|---|---|
+| 11 | AP I/F | `612-4448-401-F` | host-bus variant unidentified |
+| 10/8 | XP-32 EXEC | `612-4805-002` | Am29116 + EU PROM |
+| 9/7 | XP-32 ARITH | `612-4806-002` | FP pipes |
+| 4 | MEMORY | `612-4456-461` | per cardcage-photo label |
+| 5 | MEMORY | `612-4498-401-A` | per index-plate |
+
+**Status (2026-05)**: Lovett has the chassis-side AP I/F (slot 11)
+but the **host-side AP I/F card and its cable are missing**. So
+the chassis can boot and run its self-tests but cannot
+communicate with any host computer until the host-side card is
+sourced or substituted. See `ap_if_card.md` for the three
+realistic paths forward.
 
 ## 2. System block diagram (the layout webp)
 

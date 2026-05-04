@@ -57,6 +57,28 @@ order to motivate code-generation choices.
 
 So **no FPS Inc. technical documentation is on the open used-book/auction market right now**. The vintage print ads are the only FPS-related items currently listed (~$50-60, decorative).
 
+## Confirmed FPS card P/Ns (for future searches)
+
+Reading off Lovett's actual chassis (2026-05):
+
+| P/N | Card | Notes |
+|---|---|---|
+| `612-4448-401-F` | **AP I/F** (slot 11) | chassis-side; host-side variant unknown; web search returns ZERO hits |
+| `612-4805-002` | XP-32 EXEC | Am29116 + fixed EU PROM (per Nakazoto photos) |
+| `612-4806-002` | XP-32 ARITH | FP pipes (per Nakazoto photos) |
+| `612-4498-401-A` | MEMORY | system memory card |
+| `612-4456-461` | MEMORY | system memory card |
+
+System-level identifiers (from data plate):
+- Model: `FPS 3000`
+- System P/N: `833-2003-004` REV B
+- System S/N: `FAS 20282`
+- Chassis P/N (index plate): `821-9008-011`
+
+These are **searchable strings** for surfacing FPS catalog pages,
+schematics, repair manuals, or matching host-side cards if they
+ever appear online. None currently return hits.
+
 ## Higher-yield retro-computing channels (untried as of 2026-05-04)
 
 These don't have public-search APIs, but tend to surface FPS docs ~1×/year:
