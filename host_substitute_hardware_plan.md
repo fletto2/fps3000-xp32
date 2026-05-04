@@ -1,283 +1,302 @@
 # Substitute host-side AP I/F card — hardware plan
 
 A **modern hardware substitute** for the missing host-side AP I/F
-card (`612-4012-003 Q22 BUS ADPTR FPS3000/5000` for Q-bus, or its
-UNIBUS sibling `612-4013-001`). Implements the cable protocol
-documented in `cable_protocol_inferred.md`.
+card (P/N `612-4012-003 Q22 BUS ADPTR FPS3000/5000`). The
+substitute card plugs into the **PDP-11/73's Q-bus** on one side
+and the **FPS-3000 chassis cable** on the other, presenting itself
+to the /73 as a Q-bus peripheral and to the FPS-3000 as the
+expected host-side AP I/F.
 
-This is the **D1 task** in `project_plan.md` — desk-work that
-unblocks Objective A (PDP-11/73 ↔ FPS-3000 connection).
+Implements the cable protocol documented in
+`cable_protocol_inferred.md`. This is the **D1 task** in
+`project_plan.md` — desk-work that unblocks Objective A
+(PDP-11/73 ↔ FPS-3000 connection).
 
-## Scope: two phases
+```
+   PDP-11/73                        FPS-3000 chassis
+   ┌──────────┐  Q-bus     ┌──────────────────────┐    cable    ┌────────┐
+   │  J-11    │◄──────────►│ Substitute AP I/F    │◄───────────►│ slot 11│
+   │          │  ~34       │   (this card)        │   ~50       │ AP I/F │
+   │          │  signals   │                      │   signals   │chassis │
+   └──────────┘            └──────────────────────┘             └────────┘
+                              │
+                              │ (optional, dev only)
+                              ▼
+                           USB-C to dev workstation
+                           (firmware updates, debug)
+```
 
-The substitute board can be built incrementally:
+## Two interfaces to handle
 
-**Phase 1 — modern host PC ↔ FPS-3000.** A USB-attached board
-drives the chassis-side cable interface. A Python tool on the PC
-issues commands. Lets us bring up the chassis, validate the SBC
-firmware, develop XP-32 microcode — without yet involving a
-PDP-11 host. **First-milestone target.**
+### Q-bus side (PDP-11/73)
 
-**Phase 2 — PDP-11/73 ↔ FPS-3000.** Adds Q-bus electricals so the
-/73 sees the substitute board as a Q-bus peripheral. The chassis
-side is the same as Phase 1. Effectively wraps the Phase-1
-hardware with a Q-bus front-end.
+22-bit Q-bus signals, all 5V TTL:
+- **BDAL[15:0]** — address/data, time-multiplexed (16 lines)
+- **BDAL[21:16]** — extended address (6 lines, only address phase)
+- **BSYNC** — bus cycle start
+- **BDIN** — read strobe (CPU → device)
+- **BDOUT** — write strobe (device → CPU... wait, names confusing)
+- **BWTBT** — write/byte indicator
+- **BRPLY** — device acknowledge
+- **BIRQ4..BIRQ7** — interrupt request lines (1-4 lines, depends on level)
+- **BIAKI / BIAKO** — interrupt acknowledge daisy chain
+- **BDMR** — DMA request (substitute card asserting bus mastery)
+- **BDMGI / BDMGO** — DMA grant daisy chain
+- **BSACK** — DMA grant acknowledge
+- **BREF** — refresh
+- **BINIT** — bus reset
 
-Phase 1 alone is enough to develop microcode. Phase 2 is needed
-for "running real Bomem-style host software on a PDP-11", which
-is **out of scope per the refocused project objectives** but
-worth doing eventually as a hardware demonstration.
+**Total: ~34 logical signal lines** plus power, ground, spares.
 
-## Three design options (Phase 1)
+The card needs to be both a **Q-bus slave** (receiving CPU
+register pokes and reading them back) and a **Q-bus master**
+(performing DMA into /73 RAM during AP-initiated transfers).
 
-| Option | Parts cost | Pin count | Sync complexity | Effort |
+### FPS cable side (to chassis)
+
+Per `cable_protocol_inferred.md`: ~50 logical signals — register
+pokes (9 addr + 16 data + R/W + DTACK), bus-master pass-through
+for DMA, 3 AP→host irq + 1 host→AP irq, reset.
+
+## Two-Pico tandem fits, just barely
+
+Total cable-side + Q-bus-side: ~84 logical signals. Standard Pi
+Pico 2 has 30 accessible GPIO. **Two Picos = 60 GPIO**, ~24
+short of the worst case. Bridged via small amount of expansion
+glue:
+
+```
+                          Pi Pico 2 — "Pico Q" (Q-bus side)
+                          ┌──────────────────────────────┐
+   PDP-11/73       ┌──────┤  GP00..GP15: BDAL[15:0]       │
+   Q-bus           │      │  GP16..GP21: BDAL[21:16]      │   (level-
+                   │      │  GP22..GP29: 8 control lines  │   shifted
+   ────────────────┤      │              (BSYNC, BDIN,    │   3.3V↔5V
+   ─────────34─────┤      │               BDOUT, BWTBT,   │   via 74LVCH
+                   │      │               BRPLY, BIRQ,    │    245s)
+                   │      │               BIAK, BBSY)     │
+                   │      │  + 1 × 74HC595 latch for      │
+                   │      │    BDMR/BDMG/BSACK/BREF/BINIT │
+                   │      │    (5 signals via shift reg)  │
+                   │      │  GP25: SPI to Pico F          │
+                   │      └───────────────┬───────────────┘
+                   │                      │
+                   │              SPI + PIO-IRQ sync
+                   │                      │
+                   │      ┌───────────────┴───────────────┐
+                   │      │  Pi Pico 2 — "Pico F" (FPS    │
+                   │      │  cable side)                  │
+                   │      │  GP00..GP15: 16 data lines    │
+                   │      │  GP16..GP24: 9 addr lines     │   (level-
+                   │      │  GP25..GP28: R/W,strobe,DTACK,│   shifted
+                   │      │              host→AP IRQ      │    via 2nd
+                   │      │  GP29: SPI to Pico Q          │    set of
+                   │      │  + 1 × 74HC165 shift-in for   │    74LVCH245s)
+                   │      │    3 AP→host IRQs + 1 reset   │
+                   │      │    + 4 bus-arb lines (Phase 2)│
+   ─────────50─────┤◄─────┤    (8 signals via shift reg)  │
+                   │      └───────────────────────────────┘
+                   │
+                   FPS cable to chassis-side AP I/F card
+                   (612-4448-401-F in chassis slot 11)
+```
+
+### GPIO budget (revised)
+
+| Pico | Direct GPIO | Via shift-reg expander | Total |
+|---|---|---|---|
+| Pico Q (Q-bus side) | 30 / 30 | 5 (BDMR, BDMG, BSACK, BREF, BINIT) | 35 ✓ |
+| Pico F (cable side) | 30 / 30 | 8 (3 IRQ in + reset + 4 Phase-2 arb) | 38 ✓ |
+
+**Each Pico exactly fills its 30 GPIO + needs one $0.30 shift
+register to handle the lower-priority signals**. Workable.
+
+## Sync between Pico Q and Pico F
+
+The two cards share state at three places:
+
+1. **Register-poke pass-through** (slowest, simplest): /73 writes
+   to a Q-bus register on the substitute card → Pico Q decodes
+   the write → SPI to Pico F → Pico F drives the corresponding
+   FPS cable poke → DTACK back. Round trip ~10 µs at SPI
+   60 MHz. Q-bus needs response in ~150 ns; we need to assert
+   BRPLY *first* (before forwarding to Pico F) and **buffer the
+   data** in Pico Q for write-pokes — the cable poke completes
+   asynchronously.
+
+2. **Read-back pokes** are trickier — /73 read needs data from
+   the cable side. Two options:
+   - **Cache-and-prefetch**: Pico F polls cable register file
+     on a timer, keeps a shadow copy in shared SRAM (via SPI).
+     /73 reads from the cache. ~1 ms staleness, fine for
+     status polling.
+   - **Block-and-fetch**: Pico Q stalls Q-bus by holding off
+     BRPLY until SPI round-trip completes. Q-bus has a
+     Bus-Timeout of ~10 µs, our SPI round-trip is comfortably
+     under that. Cleaner semantically but stalls the /73 CPU.
+
+3. **DMA bus-master** (Phase 2 / advanced): when the chassis
+   wants to write to /73 RAM, the cable signals "AP wants bus
+   mastership", Pico F notifies Pico Q via PIO IRQ sync line,
+   Pico Q requests Q-bus mastery (BDMR), gets BDMG, then drives
+   /73 RAM addresses on BDAL[21:0] and shuttles data through
+   the cable. This needs cycle-accurate sync between the two
+   Picos, hence the dedicated PIO IRQ line.
+
+## Power and form factor
+
+A Q-bus card lives in a **1× height (8.9 × 5.2 inch) slot** in
+the /73 chassis backplane. The substitute card should fit a
+quad-height (Q-Q) Q-bus slot:
+
+- Custom PCB with 2 × Pico 2 SMD-soldered or socketed
+- 6-7 × 74LVCH16245 level shifters (3 per side bus + a couple
+  for control lines)
+- 2 × 74HC595/165 shift register expanders
+- Q-bus edge connector (40 fingers ÷ side, top + bottom = 80
+  contacts on a quad card)
+- FPS cable connector on the back edge (matches whatever
+  Lovett's chassis-side card uses — TBD per `B1` bench task)
+- USB-C breakout to one Pico for dev/debug
+- Power: take 5 V off Q-bus, generate 3.3 V on-card with a
+  buck regulator
+
+Approximate PCB cost via OSHPark or JLCPCB: **$15-30** for a
+quad Q-bus card. PCB design effort: **~30 hours** (KiCad,
+mostly-mechanical layout; the schematic is straightforward).
+
+## Alternative: skip the /73 for now, use modern PC
+
+The user's clarification says the host **is** the /73, so the
+runtime path goes Q-bus → substitute card → FPS cable. **But for
+bring-up + Objective B microcode work**, the /73 isn't strictly
+required — a modern PC over USB-C to one of the Picos can issue
+the same command sequences.
+
+Two phases possible:
+
+**Phase 1A — modern-PC dev mode** (build first):
+- Pico F populated, Pico Q omitted (or Pico Q populated but Q-bus
+  side disabled)
+- Modern PC ↔ Pico F via USB-C ↔ FPS cable to chassis
+- All XP-32 microcode work happens here; lets us validate the
+  cable + microcode path before committing to a PCB
+
+**Phase 1B — full Q-bus integration** (build after 1A validates):
+- Pico Q added on top of working Pico F
+- Substitute card plugs into the /73's Q-bus
+- Same FPS-cable-side firmware, new Q-bus-side firmware
+
+This is **lower risk** — Phase 1A on a perfboard validates the
+cable interface in days; Phase 1B then adds the Q-bus front-end
+on a proper PCB once Phase 1A confirms everything works.
+
+## Three design options compared
+
+| Option | Phase 1A cost | Full Phase 1B cost | Pin headroom | Effort |
 |---|---|---|---|---|
-| Single Pico 2 + port expanders | $25 | 30 GPIO + 8-bit latches | none | ~80h |
-| **Dual Pico 2 in tandem** | **$45** | **60 GPIO** | **moderate** | **~90h** |
-| Teensy 4.1 | $60 | 55 GPIO | none | ~80h |
-| RP2350B custom board | $150 + PCB | 48 GPIO | none | ~100h |
-| Lattice ECP5 / Cyclone IV FPGA | $150-300 | 100+ I/O | low | ~150h |
+| Single Pico 2 + heavy expanders | $25 / $50 | $80 | tight, lots of glue | ~120h |
+| **Dual Pico 2 tandem** | **$30 / $50** | **$80** | **tight, light glue** | **~110h** |
+| Teensy 4.1 + expanders | $35 / $60 | $90 | comfortable | ~90h |
+| RP2350B custom board | $50 / $100 | $150 | very comfortable | ~120h |
+| Lattice ECP5 FPGA | $80 / $150 | $200+ | abundant | ~160h |
 
-**Recommended: dual Pico 2 in tandem** — best parts-on-hand /
-GPIO-headroom / cost balance. The Pico's PIO is genuinely
-purpose-built for this kind of synchronous register-bus driving.
+**Recommendation unchanged: dual Pico 2 tandem**, but now the
+"host PC" in Phase 1A is just a dev workstation talking to Pico F
+over USB-C, **and Phase 1B adds Pico Q for actual /73 Q-bus
+integration**.
 
-## The dual-Pico tandem topology
+## Phase 1A — the parts list (build first)
 
-Two Pico 2s split the cable signals along functional lines:
+| Part | Qty | Cost | Notes |
+|---|---|---|---|
+| Raspberry Pi Pico 2 (1 of the two for now) | 1 | $5 | Pico F |
+| 74LVCH16245 16-bit level shifter | 3 | $9 | for FPS cable's 50 lines |
+| 74HC165 shift-input | 1 | $0.50 | for IRQ-source + reset reads |
+| 50-pin IDC ribbon + connectors | 1 | $10 | matches FPS chassis cable |
+| Mating connector for `612-4448-401-F` | 1 | $5-15 | TBD per B1 bench task |
+| Perfboard / breakout proto PCB | 1 | $5 | bring-up only |
+| **Phase 1A subtotal** | | **~$35-45** | |
 
-```
-                            FPS-3000 chassis
-                            slot 11: AP I/F card
-                            (612-4448-401-F)
-                                    │
-                                    │ ~50-pin cable
-                            ┌───────┴────────┐
-                            │ Custom adapter │  ← matches the
-                            │   connector    │     (TBD-physical-pinout)
-                            └───────┬────────┘     connector on the
-                                    │              chassis-side card
-                                    │
-         3.3V ↔ 5V level-shift via 74LVCH16245s × 3
-                                    │
-            ┌───────────────────────┴─────────────────────────┐
-            │                                                 │
-   ┌────────┴───────────┐                          ┌──────────┴──────────┐
-   │  Pico A             │                          │  Pico B             │
-   │  "Register Pico"    │                          │  "Bus-Master Pico"  │
-   │                     │                          │                     │
-   │  16 data            │                          │  22 host-bus addr   │
-   │  9 register addr    │                          │   (Phase 2 unused)  │
-   │  R/W + strobe       │                          │  4 bus arb signals  │
-   │  DTACK              │                          │  3 IRQ-source lines │
-   │  USB CDC ↔ host PC  │                          │  1 host→AP IRQ      │
-   │                     │                          │  1 reset            │
-   │  GPIO used: 30      │                          │  GPIO used: 31*     │
-   │                     │                          │   (*one IRQ via I²C │
-   │                     │                          │    or pri-encoded)  │
-   └─────────┬───────────┘                          └──────────┬──────────┘
-             │                                                 │
-             └────── PIO-IRQ sync line (1 GPIO) ───────────────┘
-             └────── SPI master/slave (4 GPIO) ────────────────┘
-             └────── shared 5V power, common ground ───────────┘
-```
+## Phase 1B — adds Q-bus front-end
 
-### Pin assignment per Pico
+| Part | Qty | Cost | Notes |
+|---|---|---|---|
+| Second Pico 2 | 1 | $5 | Pico Q |
+| 74LVCH16245 (Q-bus side) | 3 | $9 | for BDAL + control |
+| 74HC595 shift-output | 1 | $0.50 | for low-priority Q-bus signals |
+| Q-bus edge-connector PCB | 1 | $20-30 | quad-height, OSHPark or JLCPCB |
+| 5 V → 3.3 V buck regulator (e.g., MP1584) | 1 | $1 | from Q-bus 5 V |
+| Decoupling caps, resistors, LEDs | bag | $5 | |
+| **Phase 1B incremental** | | **~$40-55** | |
 
-**Pico A — "Register Pico"** (the cleaner half):
+**Total Phase 1A + 1B: ~$90**.
 
-| GPIO range | Function |
-|---|---|
-| GP0..GP15 | 16-bit data bus (bidirectional, level-shifted to 5V) |
-| GP16..GP24 | 9-bit register address |
-| GP25 | R/W strobe |
-| GP26 | DTACK (input from chassis) |
-| GP27 | PIO-IRQ sync line (to/from Pico B) |
-| GP28 | SPI clock to Pico B |
-| GP29 | SPI MOSI to Pico B |
-| **Total** | **30 GPIO** ✓ |
+## Validation step sequence
 
-**Pico B — "Bus-Master Pico"** (Phase 1 uses just IRQ + sync):
+### Phase 1A (cable side only)
 
-| GPIO range | Function (Phase 1 only) |
-|---|---|
-| GP0..GP2 | 3 IRQ-source lines from chassis |
-| GP3 | Host→AP IRQ (CTRL bit 14 APIRT) |
-| GP4 | Reset |
-| GP5 | PIO-IRQ sync line (to/from Pico A) |
-| GP6..GP9 | SPI slave from Pico A (CLK, MOSI, MISO, CS) |
-| GP10..GP31 | **Phase 2: 22-bit host-bus DMA address** (unused in Phase 1) |
-| **Total** | **10 GPIO used in Phase 1; 31 in Phase 2** |
+1. Power up Pico F + level shifters; USB enumerates on dev workstation.
+2. Connect cable to chassis-side `612-4448-401-F`; chassis off.
+3. Continuity test every line in the cable.
+4. Power chassis on; observe SBC's panel-init sequence
+   (`0x276..0x27D`) on the cable via Pico F's PIO sniffer.
+5. Pico F mirrors the SBC's writes — confirms the chassis-side
+   card is responding correctly to the cable.
+6. Pico F issues a register read (e.g., read AP I/F status at
+   offset `0x18`) — confirms cable-side decode + DTACK works.
+7. Pico F issues a register write (e.g., panel command `0x26C`
+   PCMD_RELEASE) — confirms write path + the SBC's `TCBRDHC`
+   processes it.
 
-### Inter-Pico coordination
+### Phase 1B (add Q-bus integration)
 
-Two mechanisms working together:
-
-1. **SPI (Pico A → Pico B)** — command-level coordination.
-   Pico A is master, Pico B is slave. Operations like "raise
-   IRQ to host" or "monitor irq line N" sent as SPI packets.
-   Plenty fast at 60+ MHz; ~1 µs round-trip.
-
-2. **PIO-IRQ sync line** — cycle-accurate bus-cycle sync.
-   When a register cycle on the cable needs both Picos to
-   change pin state simultaneously (rare in Phase 1, but
-   essential in Phase 2 for DMA bus-master operations), one
-   Pico raises a hardware sync line and the other's PIO state
-   machine triggers off it. ~20 ns skew.
-
-**Phase 1 only needs SPI**. PIO sync is reserved for Phase 2's
-DMA path.
-
-## Level shifting
-
-Pico 2 GPIOs are 3.3 V; the cable carries 5 V TTL signals.
-
-- **3 × 74LVCH16245** (16-bit bidirectional level translators
-  with direction control) cover the 16 data + 9 addr + assorted
-  control lines.
-- Direction lines driven by the Pico's R/W output.
-- ~$3 each, jellybean part.
-
-## Connector to the chassis-side cable
-
-The `612-4448-401-F` card has **a specific FPS-proprietary
-cable connector**. We don't yet know its exact type/pinout —
-this is the only remaining bench task for Phase 1 (and it's
-short: hours, not days).
-
-Once the connector is identified:
-- **If it's standard 50-pin or 60-pin IDC** (common in FPS gear
-  per the FPS-100 IOP-UNI ancestor): off-the-shelf ribbon cable
-  + IDC connectors, $10.
-- **If it's a custom multi-pin proprietary connector**: probe
-  the chip-level layout on the card and use individual female
-  jumper wires to a custom adapter PCB. Slightly less elegant
-  but cheap.
-
-The 1984 FPS pricing list shows the cable as `422-0015-001
-Co-Processor Interconnect Cable` — $100 in 1984 dollars,
-suggesting a moderately complex cable assembly but not exotic.
-
-## USB host PC interface
-
-Pico A's USB-C presents as a **CDC virtual serial port** to a
-modern PC. A Python script on the PC sends frame-formatted
-commands like:
-
-```
-WRITE_REG addr=0xE  data=0x26C    ; PCMD_RELEASE
-READ_REG  addr=0x18                ; status / trigger
-WAIT_IRQ  src=DMA  timeout=1000    ; wait for DMA complete
-DMA_READ  host_phys=...            ; staged DMA op
-```
-
-The Pico A firmware decodes these and either:
-- Issues the corresponding cable transaction directly (for
-  register pokes), or
-- Coordinates with Pico B via SPI (for DMA / IRQ-related ops)
-
-USB CDC at 12 Mbps gives ~1 MB/s sustained — plenty for
-register-poke development. Bulk DMA validation in Phase 2 may
-benefit from USB 2.0 high-speed (Pico W variant or external USB
-PHY) or moving to Ethernet (Teensy or ESP32 add-on).
-
-## Firmware structure (Pico A)
-
-```
-main.c (Pico A — Register Pico)
-├── usb_cdc.c           — host PC packet protocol
-├── cable_master.c      — issues cable transactions
-│   ├── pio_register_poke  ; PIO program: 9-addr + 16-data
-│   │                       ; + strobe, sample DTACK
-│   └── pio_register_read   ; mirror of above for reads
-├── spi_to_picob.c      — coordination with Pico B
-└── timing_constants.h  — strobe widths, setup/hold times
-```
-
-**Firmware structure (Pico B)**:
-
-```
-main.c (Pico B — Bus-Master Pico)
-├── spi_from_picoa.c    — slave to Pico A
-├── irq_monitor.c       — watches the 3 IRQ source lines from
-│                          chassis, reports source via SPI
-├── irq_inject.c        — drives the host→AP IRQ line on demand
-└── reset.c             — drives the reset line on demand
-```
-
-Firmware lives in C with embedded PIO assembly for the
-register-poke timing path. Total LoC estimate: ~2000 across both
-Picos.
-
-## Validation steps after build
-
-1. **Power-up + blink test** — confirm both Picos boot, USB
-   enumerates, SPI handshake succeeds.
-2. **Cable connector continuity test** — multimeter every wire
-   end-to-end with chassis off, no surprises.
-3. **Chassis powered, no commands** — observe what the SBC
-   pokes onto the AP I/F register file at boot. (The SBC's
-   panel-init sequence at `0x276..0x27D` writes to specific
-   register offsets; if Pico A captures those writes correctly,
-   the cable is physically working.)
-4. **First register read** — Pico A reads back what the SBC
-   wrote. If values match, full register-poke path works.
-5. **First write** — Pico A writes a recognised value (e.g.,
-   the panel-command for "release/no-op", `0x26C`). Confirm
-   the SBC's `TCBRDHC` task processes it (visible via SBC's
-   front-panel LEDs or further reads).
-6. **First IRQ propagation** — set up a chassis-side condition
-   that raises `DMAEVF`-equivalent and confirm Pico B sees it.
-
-Each step is a short bench session (~1-2 hours including
-debug). Total bring-up time once hardware is built: ~2-3 days
-of focused work.
-
-## Cost summary
-
-| Part | Source | Cost |
-|---|---|---|
-| 2 × Raspberry Pi Pico 2 | Adafruit / Pimoroni / Mouser | $10 |
-| 3 × 74LVCH16245 16-bit level shifter | Mouser / Digikey | $9 |
-| 50-pin IDC ribbon + connectors | Mouser / eBay | $10 |
-| Mating connector for chassis card | TBD per pinout | $5-15 |
-| Perfboard / custom PCB | Mouser / OSHPark | $5-20 |
-| Hookup wire / DuPont jumpers | bench supply | $5 |
-| **Total parts** | | **~$50** |
-
-vs. ~$60 for Teensy 4.1 alternative. Tandem-Pico is the
-**cheapest path that uses commodity parts on the bench**.
+1. Substitute card builds out on quad PCB; Pico Q + Pico F both
+   populated; Q-bus edge connector wired.
+2. Card inserted into /73 backplane in a free slot.
+3. /73 boots, DCL/MCR running. Console: `MCR>SET /UIC=[1,1]` etc.
+4. From /73, issue a register read at the substitute card's
+   SYSGEN-configured I/O address (`0o176000` default for FPS).
+   Confirm BRPLY + correct data.
+5. From /73, issue a register write — confirm the FPS chassis
+   reflects the change (visible via Pico F sniffer or via
+   chassis SBC behaviour).
+6. Trigger an interrupt on the FPS cable side; confirm the /73
+   receives the corresponding Q-bus IRQ at the right vector.
+7. End-to-end sanity: from /73, send a panel-command that
+   selects an XP-32 channel; observe the chassis-side SBC's
+   `TCBRDHC` task wake and dispatch.
 
 ## What this unblocks
 
-Once Phase 1 is built and validated:
+Phase 1A alone is **enough to develop XP-32 microcode**:
+- Modern-PC tool issues the SBC's command vocabulary via USB
+- The substitute card forwards to the FPS-3000 chassis via cable
+- XP-32 µkernels uploaded via the SBC's S-record path
+- AU runs uploaded code; results read back via the same path
 
-- **Objective A.2** (substitute host-side card) is achieved.
-- **Objective B** can proceed: microcode authored for the XP-32
-  AU can be uploaded via the Pico-to-cable bridge, run on the
-  chassis, and the result observed in MD memory by reading it
-  back through the same bridge.
-- **The SBC firmware can be exercised** with arbitrary command
-  sequences from a modern PC, accelerating the discovery of
-  edge cases and undocumented behaviours.
-
-The Phase 1 substitute is **the gateway to all downstream
-microcode work** — without it, no kernel can be uploaded to the
-XP-32 because the S-record path enters via the AP I/F that's
-currently disconnected.
+Phase 1B converts this from a development setup to a **real
+PDP-11/73 ↔ FPS-3000 system** — same microcode runs unchanged,
+now driven by an RSX-11M-flavoured driver on the /73 making
+QIO/IO.WLB calls (analogous to the FPS-100 `DRIVER.MAC` we have
+as ancestor reference). Writing that /73-side driver is a
+separate ~50-hour software task, not blocked by the substitute
+hardware.
 
 ## Next concrete actions
 
-1. **Order parts** — 2 Pico 2s, 3 × 74LVCH16245, IDC connectors,
-   ribbon cable. Total ~$30; lead time ~1 week.
-2. **Identify the chassis-side cable connector** on Lovett's
-   `612-4448-401-F`. Photo + DMM continuity → connector type +
-   pinout. ~2 hours bench work.
-3. **Write the host-PC Python tool** — packet protocol over USB
-   CDC, mirror of the SBC's command vocabulary. ~10 hours desk
-   work; can start before parts arrive.
-4. **Write the Pico A PIO program** for register-poke timing.
-   ~8 hours; can start before parts arrive.
+1. **Order Phase 1A parts** (Pico 2, level shifters, ribbon
+   cable, shift register, perfboard) — **~$45, 1-week lead time**
+2. **B1 bench task: identify chassis-side cable connector** on
+   Lovett's `612-4448-401-F` — visual + DMM. **~2h.**
+3. **Write Pico F PIO program** for register-poke timing on the
+   FPS cable side. **~8h, can start before parts arrive.**
+4. **Write dev-workstation Python tool** (USB CDC packet protocol
+   mirroring the SBC command vocabulary). **~10h, can start now.**
+5. After Phase 1A validates: **Phase 1B PCB design + fab** for
+   the Q-bus integration. **~30h design + 1-2 weeks fab.**
 
-Steps 1-4 are independent; can run in parallel once Lovett
-provides the connector identification.
+Phase 1A is buildable on perfboard for first validation. Phase
+1B requires a proper PCB because Q-bus electricals demand
+controlled-impedance traces and the card must mechanically fit
+the /73's quad slot.
