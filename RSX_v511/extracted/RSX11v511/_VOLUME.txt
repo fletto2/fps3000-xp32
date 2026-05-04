@@ -1,0 +1,32 @@
+Volume: 'RSX11'
+Format: 'DECFILE11A'
+Owner UIC: [1,1]
+Max files: 60
+Index file LBN: 495
+
+MFD entries:
+  [    1,    1] INDEXF.SYS;1
+  [    2,    2] BITMAP.SYS;1
+  [    3,    3] BADBLK.SYS;1
+  [    4,    4] 000000.DIR;1
+  [    5,    5] CORIMG.SYS;1
+  [    6,    1] 001054.DIR;1
+  [    7,    1] 011010.DIR;1
+
+
+001054/ (12 entries):
+  SYS.TSK
+  TKB.TSK
+  TKN.TSK
+  TTDRV.TSK
+  TTDRV.STB
+  UFD.TSK
+  UNL.TSK
+  VFY.TSK
+  VMR.TSK
+  ZAP.TSK
+  POKE.TSK
+  BIGRSX.CMD
+
+011010/ (1 entries):
+  RSXMC.MAC

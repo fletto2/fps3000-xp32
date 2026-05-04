@@ -1,0 +1,52 @@
+Volume: 'BOOT4'
+Format: 'DECFILE11A'
+Owner UIC: [1,1]
+Max files: 60
+Index file LBN: 495
+
+MFD entries:
+  [    1,    1] INDEXF.SYS;1
+  [    2,    2] BITMAP.SYS;1
+  [    3,    3] BADBLK.SYS;1
+  [    4,    4] 000000.DIR;1
+  [    5,    5] CORIMG.SYS;1
+  [    6,    1] 001002.DIR;1
+  [    7,    1] 001054.DIR;1
+
+
+001002/ (2 entries):
+  STARTBOO4.CMD
+  STARTUP.CMD
+
+001054/ (31 entries):
+  BOOT4.SYS
+  DMDRV.TSK;2
+  DLDRV.TSK;2
+  DRDRV.TSK;2
+  DUDRV.TSK;2
+  DYDRV.TSK;2
+  TTDRV.TSK
+  EXCOM1.TSK
+  EXCOM2.TSK
+  DYCOM.TSK
+  FCPMDL.TSK
+  FCSRES.TSK
+  ICP.TSK;2
+  MCR.TSK;2
+  SAV.TSK;2
+  BOO.TSK;2
+  INS.TSK;2
+  MOU.TSK;2
+  BOOT4.STB
+  DMDRV.STB;2
+  DLDRV.STB;2
+  DRDRV.STB;2
+  DUDRV.STB;2
+  DYDRV.STB;2
+  TTDRV.STB
+  DYCOM.STB
+  EXCOM1.STB;2
+  EXCOM2.STB;2
+  FCSRES.STB
+  RESRSX.CMD;2
+  LOABOM.CMD;2

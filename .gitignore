@@ -3,8 +3,8 @@ ext/
 CLAUDE.md
 refs/
 fps100_archive/
-RSX_v511/extracted/
 .claude/
+*.py
 __pycache__/
 *.pyc
 *.swp
