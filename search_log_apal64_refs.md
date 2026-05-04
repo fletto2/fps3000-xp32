@@ -171,6 +171,54 @@ that contain IOP-UNI Applications and most of the host-interface
 discussion were never digitised online**. Direct outreach is the
 only realistic acquisition path.
 
+## Exhaustive FPS-source search of the RSX-11M+ V5.1.1 disks (2026-05-04)
+
+The 15 extracted RX02 floppies (`RSX_v511/extracted/`, 462 files,
+6.2 MB) contain **zero FPS Inc. source code, binaries, libraries,
+or references** beyond two files:
+
+1. **`LOABOM.CMD`** (Boot4v511/001054) — the Bomem application
+   installer command file. Mentions HPVP file names
+   (`hpvp.*`, `hpcoad.*`, `hpregs.*`, `hptest.*`, `loahpvp`,
+   `IV2DRV.MAC`, `MGDRV2.MAC`, `BOMRES.STB`) but those files are
+   **not on the system disks** — they were on BOM1-BOM13 floppies
+   we don't have.
+2. **`BOMICP.TSK`** (Boot1-3/001054) — Bomem-customised Indirect
+   Command Processor (replaces stock ICP). 17 KB. The CLI
+   replacement, not FPS-related.
+
+### What was searched
+
+- **File-name search**: zero hits for `AP*` / `FPS*` / `APLOAD` /
+  `APRUN` / `APEX` / `APMATH` / `APSIM` / `APAL` / `HPVP` /
+  `IV2DRV` / `MGDRV` / `BOMRES` / `VFC*` / `SIG*`
+- **strings-content search of all 156 .TSK / .OLB / .OBJ / .STB
+  files**: only one borderline hit (`PMD.TSK` contains "FLOATING
+  POINT UNIT" — but that's the PDP-11 hardware FPP-11, not FPS)
+- **OLB module-table strings** for `SYSLIB`, `VMLIB`, `ANSLIB`,
+  `EXELIB`: zero `AP*` / `FPS*` / `APEX` / `HPVP` modules
+- **MAC/FTN/HLP source content** for FPS markers: only HLP files
+  match on "FP" sub-strings unrelated to FPS Inc.
+- **All RAD50-encoded names** scanned: only `APPEND` (the DCL
+  command, not FPS)
+
+### Conclusion
+
+The Bomem-customised RSX-11M+ disks contain a **stock DEC
+RSX-11M+ V5.1.1 distribution with a thin Bomem-themed ICP layer**
+on top. The actual FPS-100/HPVP integration software (Bomem's
+APEX-style runtime, HPVP loader, math library wrappers) was
+delivered on the application floppies (BOM1-BOM13 + TASK + HELP +
+MENU) that **are not in this dataset**. The system disks alone
+provide the OS but not the array-processor application stack.
+
+The recovered FPS-100 software stack lives in
+`fps100_archive/fps100sw/` — that's the bitsavers FLX-tape
+recovery of the FPS-100 RSX-11M v3.2 distribution (Joseph Ramus
+era), which is the *upstream* of what Bomem customised. So we
+have the parent code; we just don't have Bomem's specific
+modifications to it.
+
 ## Higher-yield retro-computing channels (untried as of 2026-05-04)
 
 These don't have public-search APIs, but tend to surface FPS docs ~1×/year:
