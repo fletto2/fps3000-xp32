@@ -1,0 +1,47 @@
+# VTSMUL — AP-120B microcode
+
+- Library: **BAALIB**
+- Args (NSPADS): **6**
+- Entry uPC: **000** (octal)
+- Microcode size: **9** instructions (72 bytes)
+
+## Host-side PDP-11 stub
+
+```
+
+        .GLOBL VTSMUL,APEX
+VTSMUL: MOV (%5)+,%0
+        BEQ NONE
+        MOV #SLIST,%1
+LOOP:   MOV @(%5)+,(%1)+
+        DEC %0
+        BNE LOOP
+NONE:   MOV #PARAM,%5
+        JSR %7,APEX
+        RTS %7
+PARAM:  4
+        CODE
+        START
+        SLIST
+        NSPADS
+NSPADS:      6.
+SLIST:  .BLKW      6.
+START:       0.
+CODE:        9.
+```
+
+## AP-120B microcode disassembly
+
+```
+;   uPC | w1     w2     w3     w4    | symbolic
+;  ----+-------+------+------+------+----------
+  0000  040000 000000 000000 000060  SPMOV SPS=0,SPD=0; MEM[LDMA|INCMA]
+  0001  040524 000000 000000 000000  SPMOV SPS=5,SPD=5
+  0002  040210 000626 000000 000003  SPMOV SPS=2,SPD=2; JGE 26; MEM[TMA=3]
+  0003  020100 000000 000000 000060  SPADD SPS=1,SPD=0; MEM[LDMA|INCMA]
+  0004  030414 000000 000000 017400  SPSUB SPS=4,SPD=3; FMUL<MD,MD>
+  0005  020100 000000 000000 017460  SPADD SPS=1,SPD=0; FMUL<MD,MD>; MEM[LDMA|INCMA]
+  0006  001224 000000 000000 017400  SP_OP1 SPSF=12,SPD=5; FMUL<MD,MD>
+  0007  020414 000656 000000 000260  SPADD SPS=4,SPD=3; JGT 16; MEM[RMD,LDMA|INCMA]
+  0010  000000 000340 000000 000000  JFN 0
+```

@@ -1,0 +1,48 @@
+# CVCONJ — AP-120B microcode
+
+- Library: **BAALIB**
+- Args (NSPADS): **5**
+- Entry uPC: **000** (octal)
+- Microcode size: **10** instructions (80 bytes)
+
+## Host-side PDP-11 stub
+
+```
+
+        .GLOBL CVCONJ,APEX
+CVCONJ: MOV (%5)+,%0
+        BEQ NONE
+        MOV #SLIST,%1
+LOOP:   MOV @(%5)+,(%1)+
+        DEC %0
+        BNE LOOP
+NONE:   MOV #PARAM,%5
+        JSR %7,APEX
+        RTS %7
+PARAM:  4
+        CODE
+        START
+        SLIST
+        NSPADS
+NSPADS:      5.
+SLIST:  .BLKW      5.
+START:       0.
+CODE:       10.
+```
+
+## AP-120B microcode disassembly
+
+```
+;   uPC | w1     w2     w3     w4    | symbolic
+;  ----+-------+------+------+------+----------
+  0000  040000 000000 000000 000060  SPMOV SPS=0,SPD=0; MEM[LDMA|INCMA]
+  0001  040420 000000 000000 000020  SPMOV SPS=4,SPD=4; MEM[INCMA]
+  0002  030310 000627 000000 000000  SPSUB SPS=3,SPD=2; JGE 27
+  0003  000000 000000 045004 000000  DP[WX,XR=0/YR=0,XW=4/YW=0,BS=5]
+  0004  020101 054000 000000 000060  SPADD SPS=1,SPD=0; FAA-B<FM,FA>; MEM[LDMA|INCMA]
+  0005  000001 100000 000000 000020  FAB-A<DB,DB>; MEM[INCMA]
+  0006  020310 000000 003400 000360  SPADD SPS=3,SPD=2; DP[XR=4/YR=0,XW=0/YW=0,BS=3]; MEM[WMD|RMD,LDMA|INCMA]
+  0007  001220 000000 045004 000120  SP_OP1 SPSF=12,SPD=4; DP[WX,XR=0/YR=0,XW=4/YW=0,BS=5]; MEM[WMD,INCMA]
+  0010  020101 054655 000000 000060  SPADD SPS=1,SPD=0; FAA-B<FM,FA>; JGT 15; MEM[LDMA|INCMA]
+  0011  000000 000340 000000 000000  JFN 0
+```

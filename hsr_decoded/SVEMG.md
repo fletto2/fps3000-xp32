@@ -1,0 +1,48 @@
+# SVEMG — AP-120B microcode
+
+- Library: **BAALIB**
+- Args (NSPADS): **4**
+- Entry uPC: **000** (octal)
+- Microcode size: **10** instructions (80 bytes)
+
+## Host-side PDP-11 stub
+
+```
+
+        .GLOBL SVEMG ,APEX
+SVEMG : MOV (%5)+,%0
+        BEQ NONE
+        MOV #SLIST,%1
+LOOP:   MOV @(%5)+,(%1)+
+        DEC %0
+        BNE LOOP
+NONE:   MOV #PARAM,%5
+        JSR %7,APEX
+        RTS %7
+PARAM:  4
+        CODE
+        START
+        SLIST
+        NSPADS
+NSPADS:      4.
+SLIST:  .BLKW      4.
+START:       0.
+CODE:       10.
+```
+
+## AP-120B microcode disassembly
+
+```
+;   uPC | w1     w2     w3     w4    | symbolic
+;  ----+-------+------+------+------+----------
+  0000  040000 000000 000000 000060  SPMOV SPS=0,SPD=0; MEM[LDMA|INCMA]
+  0001  000000 000000 000000 000000  (zero word)
+  0002  020100 000000 000000 000060  SPADD SPS=1,SPD=0; MEM[LDMA|INCMA]
+  0003  000001 155000 000000 000000  FAB-A<FM,FM>
+  0004  020100 074000 000000 000060  SPADD SPS=1,SPD=0; MEM[LDMA|INCMA]
+  0005  040315 151000 000000 000000  SPMOV SPS=3,SPD=3; FAB-A<FM,DPX>
+  0006  020100 074623 100004 000060  SPADD SPS=1,SPD=0; JGE 23; DP[RX,XR=0/YR=0,XW=4/YW=0,BS=0]; MEM[LDMA|INCMA]
+  0007  001215 121000 000400 000000  SP_OP1 SPSF=12,SPD=3; FAB-A<DPY,DPX>; DP[XR=4/YR=0,XW=0/YW=0,BS=0]
+  0010  020100 074657 100004 000060  SPADD SPS=1,SPD=0; JGT 17; DP[RX,XR=0/YR=0,XW=4/YW=0,BS=0]; MEM[LDMA|INCMA]
+  0011  040210 000340 000000 000160  SPMOV SPS=2,SPD=2; JFN 0; MEM[WMD,LDMA|INCMA]
+```

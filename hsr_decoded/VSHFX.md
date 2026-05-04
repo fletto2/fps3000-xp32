@@ -1,0 +1,48 @@
+# VSHFX — AP-120B microcode
+
+- Library: **BABLIB**
+- Args (NSPADS): **6**
+- Entry uPC: **000** (octal)
+- Microcode size: **10** instructions (80 bytes)
+
+## Host-side PDP-11 stub
+
+```
+
+        .GLOBL VSHFX ,APEX
+VSHFX : MOV (%5)+,%0
+        BEQ NONE
+        MOV #SLIST,%1
+LOOP:   MOV @(%5)+,(%1)+
+        DEC %0
+        BNE LOOP
+NONE:   MOV #PARAM,%5
+        JSR %7,APEX
+        RTS %7
+PARAM:  4
+        CODE
+        START
+        SLIST
+        NSPADS
+NSPADS:      6.
+SLIST:  .BLKW      6.
+START:       0.
+CODE:       10.
+```
+
+## AP-120B microcode disassembly
+
+```
+;   uPC | w1     w2     w3     w4    | symbolic
+;  ----+-------+------+------+------+----------
+  0000  040000 000000 000000 000060  SPMOV SPS=0,SPD=0; MEM[LDMA|INCMA]
+  0001  040420 000000 000000 000000  SPMOV SPS=4,SPD=4
+  0002  001630 000627 002000 000034  SP_OP1 SPSF=16,SPD=6; JGE 27; MEM[INCMA,DPA=3]
+  0003  030530 000000 000000 000000  SPSUB SPS=5,SPD=6
+  0004  030310 000000 000000 000000  SPSUB SPS=3,SPD=2
+  0005  040630 034000 000000 000000  SPMOV SPS=6,SPD=6
+  0006  020101 100000 000000 000060  SPADD SPS=1,SPD=0; FAB-A<DB,DB>; MEM[LDMA|INCMA]
+  0007  001220 000000 000000 000000  SP_OP1 SPSF=12,SPD=4
+  0010  020310 000655 000000 000160  SPADD SPS=3,SPD=2; JGT 15; MEM[WMD,LDMA|INCMA]
+  0011  000000 000340 000000 000000  JFN 0
+```

@@ -1,0 +1,49 @@
+# CVNEG — AP-120B microcode
+
+- Library: **BAALIB**
+- Args (NSPADS): **5**
+- Entry uPC: **000** (octal)
+- Microcode size: **11** instructions (88 bytes)
+
+## Host-side PDP-11 stub
+
+```
+
+        .GLOBL CVNEG ,APEX
+CVNEG : MOV (%5)+,%0
+        BEQ NONE
+        MOV #SLIST,%1
+LOOP:   MOV @(%5)+,(%1)+
+        DEC %0
+        BNE LOOP
+NONE:   MOV #PARAM,%5
+        JSR %7,APEX
+        RTS %7
+PARAM:  4
+        CODE
+        START
+        SLIST
+        NSPADS
+NSPADS:      5.
+SLIST:  .BLKW      5.
+START:       0.
+CODE:       11.
+```
+
+## AP-120B microcode disassembly
+
+```
+;   uPC | w1     w2     w3     w4    | symbolic
+;  ----+-------+------+------+------+----------
+  0000  040000 000000 000000 000060  SPMOV SPS=0,SPD=0; MEM[LDMA|INCMA]
+  0001  000000 000000 000000 000020  MEM[INCMA]
+  0002  030310 000000 000000 000000  SPSUB SPS=3,SPD=2
+  0003  000001 054000 000000 000000  FAA-B<FM,FA>
+  0004  040421 054000 000000 000000  SPMOV SPS=4,SPD=4; FAA-B<FM,FA>
+  0005  020100 000625 000000 000060  SPADD SPS=1,SPD=0; JGE 25; MEM[LDMA|INCMA]
+  0006  000000 000000 000000 000020  MEM[INCMA]
+  0007  000000 000000 000000 000000  (zero word)
+  0010  020311 054000 000000 000160  SPADD SPS=3,SPD=2; FAA-B<FM,FA>; MEM[WMD,LDMA|INCMA]
+  0011  001221 054114 000000 000120  SP_OP1 SPSF=12,SPD=4; FAA-B<FM,FA>; JFG 14; MEM[WMD,INCMA]
+  0012  000000 000340 000000 000000  JFN 0
+```

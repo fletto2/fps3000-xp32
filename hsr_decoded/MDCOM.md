@@ -1,0 +1,49 @@
+# MDCOM — AP-120B microcode
+
+- Library: **BABLIB**
+- Args (NSPADS): **2**
+- Entry uPC: **000** (octal)
+- Microcode size: **11** instructions (88 bytes)
+
+## Host-side PDP-11 stub
+
+```
+
+        .GLOBL MDCOM ,APEX
+MDCOM : MOV (%5)+,%0
+        BEQ NONE
+        MOV #SLIST,%1
+LOOP:   MOV @(%5)+,(%1)+
+        DEC %0
+        BNE LOOP
+NONE:   MOV #PARAM,%5
+        JSR %7,APEX
+        RTS %7
+PARAM:  4
+        CODE
+        START
+        SLIST
+        NSPADS
+NSPADS:      2.
+SLIST:  .BLKW      2.
+START:       0.
+CODE:       11.
+```
+
+## AP-120B microcode disassembly
+
+```
+;   uPC | w1     w2     w3     w4    | symbolic
+;  ----+-------+------+------+------+----------
+  0000  040000 000000 000000 000060  SPMOV SPS=0,SPD=0; MEM[LDMA|INCMA]
+  0001  040104 000000 000000 000060  SPMOV SPS=1,SPD=1; MEM[LDMA|INCMA]
+  0002  000000 000000 000000 000000  (zero word)
+  0003  000000 000000 045004 000000  DP[WX,XR=0/YR=0,XW=4/YW=0,BS=5]
+  0004  000001 024000 000400 000000  FAA-B<DPY,FA>; DP[XR=4/YR=0,XW=0/YW=0,BS=0]
+  0005  000001 024000 000400 000000  FAA-B<DPY,FA>; DP[XR=4/YR=0,XW=0/YW=0,BS=0]
+  0006  001675 100000 002000 000001  SP_OP1 SPSF=16,SPD=17; FAB-A<DB,DB>; MEM[TMA=1]
+  0007  000000 000563 000000 000000  JLT 23
+  0010  001674 000462 002000 177777  SP_OP1 SPSF=16,SPD=17; FMUL<MD,MD>; JNE 22; DP[XR=0/YR=0,XW=0/YW=7,BS=2]; MEM[WMD|RMD,LDMA|INCMA,DPA=3,TMA=3]
+  0011  001074 000340 000000 000000  SP_OP1 SPSF=10,SPD=17; JFN 0
+  0012  000000 000340 000000 000000  JFN 0
+```
