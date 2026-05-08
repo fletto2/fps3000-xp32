@@ -1,5 +1,18 @@
 # Can we infer XP-32 microcode from FPS-100 and FPS-164?
 
+> **Erratum (2026-05-09)**: an earlier conversation pass decoded the
+> SBC's 21 panel-command codes (`0x258..0x27D`) as a clean
+> "MOV R4 → R[D], mode M" pattern in the Am29116 ISA, claiming this
+> "decisively proved" interpretation B (panel codes are literal
+> Am29116 instructions). **That analysis used an incorrect instruction
+> format.** Re-decoding against the actual Am29116 / Am29C116
+> datasheets shows the codes are `TOR1 SUBRC` two-operand subtract
+> instructions, not MOVs. The conclusion that interpretation B is
+> "decisively correct" is retracted; interpretations A, B, and a
+> hybrid all remain plausible. See `panel_codes_am29116_decoded.md`
+> for the corrected analysis. The PROM read remains the only way to
+> settle the question definitively.
+
 The honest answer is **structurally yes, bit-for-bit no** — and
 that distinction matters a lot for what we can actually do
 without reading the EU PROM off Lovett's hardware.
