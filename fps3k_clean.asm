@@ -10,7 +10,8 @@
 ;   above their target instruction.
 ;
 ; Functions / regions in this disassembly:
-;   F04488–F046EF  task__init_misc
+;   F04488–F046DF  task__init_misc
+;   F046E0–F046EF  ChannelConfigOffsetTable
 ;   F046F0–F051A1  TCBRDHC
 ;   F051A2–F05255  SRecordDataHandler
 ;   F05256–F05687  SRecordFinalize_andHelpers
@@ -396,7 +397,7 @@ TCBDefEntry_UPGM:
   f046dc: 00 00                   DC.W     0x0000
   f046de: d0 00                   DC.W     0xd000
 
-loc_F046E0:                            ; in task__init_misc (0xF046E0)
+loc_F046E0:                            ; in ChannelConfigOffsetTable (0xF046E0)
   f046e0:  00 00 02 44             ori.b      #$44, d0
   f046e4:  00 00 02 46             ori.b      #$46, d0
   f046e8:  00 00 02 50             ori.b      #$50, d0
