@@ -30,9 +30,15 @@ top of the two objectives above.
 | SBC ROM disassembly (~22 K lines) | `fps3k_clean.asm` | Objective A — protocol on SBC side |
 | MC-derived annotations (644) | merged into clean asm | Objective A |
 | AP I/F protocol doc | `host_to_sbc_communication.md` | Objective A |
-| **Inferred cable protocol** | `cable_protocol_inferred.md` | Objective A |
+| **Cable protocol from netlist** | `cable_protocol_inferred.md` | Objective A |
 | AP I/F card details (P/N 612-4448-401-F + family) | `ap_if_card.md` | Objective A |
 | XLTR↔XP-32 protocol doc | `xltr_protocol.md` + `xp32_eu_command_protocol.md` | Objectives A + B |
+| **AP-120B SimH emulator (Phase 1)** | `github.com/fletto2/ap120dg/nova_fps.c` | Objective B (host-I/O sim) |
+| **AP-120B Python simulator (full APSIM)** | `github.com/roy20100/python-sim100` | Objective B (microcode-execution sim) |
+| **AP-120B assembler (asm2lm.py)** | same Python repo | Objective B (author + assemble µcode) |
+| **LNK100 linker replacement** | `github.com/fletto2/ap120dg/lnk100.py` | Objective B (link APO libraries) |
+| **4448 cable-connector pinout** | `github.com/fletto2/ap120dg/4448_APIF_netlist.txt` | Objective A (cable signal map) |
+| **Reference host adapter design** | `github.com/fletto2/ap120dg/adapter.md` (280B Nova) | Objective A (Q-bus adapter pattern) |
 | AP-120B field tables (FPS-7319) | `refs/AP-120B/` | Objective B |
 | FPS-164 instruction layout (Touzeau 1984 fig 2) | `refs/FPS-164/Touzeau...pdf` | Objective B |
 | FPS-100 host driver source (DRIVER.MAC + DAPEX.MAC + IAPEX.FTN) | `fps100_archive/fps100sw/` | Objective A (ancestor reference) |
@@ -145,32 +151,39 @@ either.
 
 ### Critical-path next step for Objective A
 
-The cable's **logical protocol is now derived from existing
-sources** (FPS-100 IOP-UNI ancestor + multi-host-bus catalog
-evidence + SBC firmware accesses) — see
-`cable_protocol_inferred.md`. So we know:
+The cable's **complete pinout is now documented**, not just
+inferred. `github.com/fletto2/ap120dg/4448_APIF_netlist.txt`
+has every signal name on the J22 + J23 connectors of the
+AP-120B-era 4448 AP I/F card. Lovett's FPS-3000-era
+`612-4448-401-F` is the next-generation revision in the same
+card family; pinout almost certainly identical or trivially
+mappable.
 
-- Cable carries register-poke (9-bit addr + 16-bit data + R/W
-  + DTACK), bus-master DMA (full host-address pass-through +
-  arbitration), 3-source AP→host irq, 1-line host→AP irq
-  (APIRT), reset
-- ~50 logical signal lines + power/ground = ~70-80 conductors
-- Cable is **host-bus-abstracted** (same cable for Q-bus / UNIBUS
-  / LSI-11; the host-side card translates per bus type)
+**The cable carries ~150 logical signals** (much wider than my
+earlier ~50 estimate), with separate parallel buses for HD,
+DMA, and HST data paths plus REGSEL00-05 (6-bit register
+select), DPMBS / IOxx routing, multiple clocks, multiple
+interrupts, and arbitration handshakes.
 
-What remains is **a much narrower physical-mapping question**:
-which conductor on the chassis-side connector carries which
-logical signal. This needs either:
-- Visual inspection of `612-4448-401-F`'s cable-connector pads
-  and tracing back to identifiable chip pins, OR
-- Logic-analyzer capture during SBC boot to correlate poke
-  patterns to active conductors
+**Implication**: substitute card requires an **FPGA**, not an
+MCU. ~150 GPIOs needed. Recommended: Lattice **ECP5-5G-EVN**
+($99 dev board, 150+ I/O). See `host_substitute_hardware_plan.md`.
 
-Both are short bench tasks (hours not days) — they validate and
-pin down the inferred protocol; they don't have to discover it.
+What remains for Objective A:
 
-The substitute host-side card design (FPGA + bus transceivers)
-**can start now in parallel**.
+1. **Validate the netlist matches Lovett's specific card** —
+   visual inspection of J22+J23 connectors on `612-4448-401-F`
+   plus 5-pin DMM check during chassis power-on. **~1 hour
+   bench task.**
+
+2. **HDL design for the FPGA**: cable interface + register file +
+   Q-bus interface + DMA bus-master FSM. ~75h Phase 1A
+   (cable-side validation), +80h Phase 1B (Q-bus integration).
+
+3. **Mating connectors** for J22+J23 — sourced once visual
+   inspection identifies the connector type/manufacturer.
+
+The HDL work **starts now in parallel** with the bench task.
 
 ---
 
@@ -318,28 +331,50 @@ Dependency graph:
 - `I5` needs D3 (or refined I4) + AU layout
 - `I6` needs I1 + I5
 
-### Effort total (revised — cable inference saves ~30h)
+### Effort total (revised — May 9 with upstream-repo discovery)
 
-| Task | Hours |
-|---|---|
-| D1 (substitute host-side FPGA + transceivers + cable end-points) | ~80 |
-| D2 (Am29116 disassembler) | ~30 |
-| D3 (candidate AU layout) | ~20 |
-| B1 + B2 + B3 (bench, pin-out + PROM read) | ~10 |
-| I1 (host-side bring-up) | ~30 |
-| I2 (host↔SBC validation) | ~20 |
-| I3 (EU disassembly) | ~40 |
-| I4 (AU layout inference) | ~50 |
-| I5 (first µkernel authoring) | ~30 |
-| I6 (microcode bring-up + iterate) | ~50 |
-| Integration / overhead | ~30 |
-| **Total** | **~390** engineering hours |
+| Task | Hours | Notes |
+|---|---|---|
+| D1 (substitute host-side ECP5 FPGA, see `host_substitute_hardware_plan.md`) | ~155 | Cable-side + Q-bus side HDL on single FPGA; was ~80h with Pico-tandem plan, but Pico plan was infeasible with ~150-signal cable |
+| D2 (Am29116 disassembler) | ~30 | |
+| D3 (candidate AU layout) | ~20 | Already partly done in `xp32_opcode_clues.md` |
+| D4 (extend AP-120B emulator + assembler to XP-32 128-bit width) | ~40 | NEW — wasn't listed before; from `roy20100/python-sim100` baseline |
+| B1 (validate `4448_APIF_netlist.txt` matches Lovett's card) | ~1 | Visual inspection + 5-pin DMM check |
+| B2 (visual ID of EU PROM chips) | ~2 | |
+| B3 (read EU PROMs) | ~4 | with vintage PROM programmer |
+| I1 (host-side bring-up Phase 1A) | ~30 | FPGA dev-board on bench |
+| I2 (host↔SBC validation) | ~20 | |
+| I3 (EU disassembly) | ~40 | uses D2 |
+| I4 (AU layout inference from EU's AU-control patterns) | ~50 | refines D3 |
+| I5 (first µkernel authoring) | ~30 | uses D4 (XP-32-extended assembler) |
+| I6 (microcode bring-up + iterate) | ~50 | end-to-end |
+| Integration / overhead | ~30 | |
+| **Total** | **~500** engineering hours | |
 
-Same overall scope — cable-protocol inference doesn't reduce
-total engineering effort, but it **unblocks the parallelism**:
-the FPGA work (D1) can now run concurrently with all the bench
-work, instead of being gated on a long reverse-engineering
-phase.
+The upstream-repo discovery (`fletto2/ap120dg` +
+`roy20100/python-sim100`) cuts substantial AP-120B-side work,
+**but** the cable's actual signal count (~150 vs ~50 inferred)
+forces a switch from MCU to FPGA hardware which adds back ~75h.
+Net: the gains from upstream offset the FPGA effort, leaving
+total ~500h.
+
+The breakdown that **didn't change** because of upstream finds:
+- Q-bus interface: still HDL work (D1)
+- EU PROM read + disassembly + AU inference (B/I 2-4)
+- XP-32 µkernel authoring + bring-up (I5-6)
+
+The breakdown that **did change**:
+- AP-120B emulator: already done in `nova_fps.c`
+- AP-120B assembler: already done in `asm2lm.py`
+- AP-120B linker: already done in `lnk100.py`
+- Cable connector pinout: already documented in
+  `4448_APIF_netlist.txt`
+- Host-bus adapter pattern: already documented in `adapter.md`
+
+Net: same overall project, **~30h saved on AP-120B baseline
+work**, **~75h added on FPGA hardware**. The numbers are
+similar; the *quality* of the path is much better — we're now
+extending working tools instead of building from scratch.
 
 This is a many-month part-time project. Each milestone is
 independently meaningful, so even partial completion produces

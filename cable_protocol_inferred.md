@@ -1,233 +1,291 @@
-# FPS-3000 host-cable protocol — inferred from available sources
+# FPS-3000 host-cable protocol — derived from sources
 
 The cable runs between the **host-side AP I/F card** (e.g.
 `612-4012-003` Q-bus or `612-4013-001` UNIBUS) and the
-**chassis-side AP I/F card** (`612-4448-401-F`). We can pin its
-protocol down without LA captures by triangulating four sources:
+**chassis-side AP I/F card** (`612-4448-401-F`).
 
-1. **FPS-100 ancestor**: the `IOP-UNI` UNIBUS interface (Curington
-   1983 IOP-16 paper confirms it as a 1-board UNIBUS interface
-   "with cable"). The FPS-100's host-side driver source
-   (`DRIVER.MAC` in `fps100_archive/`) shows how UNIBUS bus
-   cycles reach the AP-120B's internal memory — by direct
-   bus-master operation, with the IOP-UNI card just extending
-   the UNIBUS through the cable.
-2. **Same-chassis catalog**: `612-4012-003` (Q-bus), `612-4013-001`
-   (UNIBUS), `612-4850-000` (LSI-11) all pair with the *same*
-   chassis-side `612-4448-401-F`. So **the cable protocol is
-   host-bus-agnostic** — each host-side card adapts its
-   bus-specific signals to a common cable abstraction.
-3. **SBC's view of the chassis-side AP I/F**: the firmware accesses
-   a register file at VersaBUS `0xFF0000+`. We have the full
-   accessed-register table from MC-derived disassembly.
-4. **The XP-32 panel-command protocol** (in `xp32_eu_command_protocol.md`)
-   tells us about the SBC↔XLTR side; the AP I/F sits in front of
-   that on the host side and therefore must support equivalent
-   primitives.
+> **Update (2026-05-09)**: this protocol is no longer purely
+> *inferred* — `4448_APIF_netlist.txt` in
+> [github.com/fletto2/ap120dg](https://github.com/fletto2/ap120dg)
+> documents the actual J22 + J23 cable connectors with every
+> signal named for the AP-120B-era 4448 AP I/F card. Lovett's
+> FPS-3000-era `612-4448-401-F` is the next-generation revision
+> in the same card family — pinout almost certainly identical
+> or trivially mappable.
+>
+> The earlier "inference" estimate of ~50 logical signals was
+> off by ~3× — the actual cable carries ~150 logical signals
+> across two connectors. Substantial implications for the
+> substitute-card design (FPGA required, not MCU).
 
-The triangulation rules out the "extend UNIBUS literally over
-cable" model that the FPS-100 used. The FPS-3000 cable must be
-**abstracted** because the same cable plugs into both the Q-bus
-and UNIBUS host-side cards, and Q-bus signaling is electrically
-incompatible with UNIBUS.
+## Source: `4448_APIF_netlist.txt`
 
-## What the cable must carry
+The 4448 chassis-side AP I/F card has two cable connectors:
 
-Five signal classes, derivable from the operations the SBC
-firmware performs:
+| Connector | Pin count | Position |
+|---|---|---|
+| **J22** | A1-A100 | left side of card |
+| **J23** | B1-B99 (B100 not listed) | right side |
+| **Total** | **~199 pins per card** | |
 
-### 1. Register-poke (host → chassis)
+Pin numbering convention (per netlist preamble): `1 = leftmost
+component side, 100 = rightmost solder side; odd = component
+side, even = solder side`.
 
-The host writes to AP I/F registers at offsets visible to it
-(maps to chassis-side `0xFF0000+`). The cable conveys:
-- **9-bit address** (selects one of 256 × 16-bit registers in the
-  AP I/F register file, covering `0xFF0000..0xFF01FE`)
-- **16-bit data** (write data going to the chassis-side card)
-- **Write strobe** (~1 µs assertion timing per host-bus cycle)
-- **Acknowledge / DTACK** (chassis side responds to confirm)
+## Logical signal classes
 
-### 2. Register-read (chassis → host) — same as (1) but data flows the other direction
+From the 4448 netlist's signal names, the cable carries these
+distinct functional classes:
 
-The chassis-side card drives the data lines back to the host on
-read cycles. So the data lines are bidirectional with direction
-controlled by the read/write line.
+### Power and ground (~16 conductors)
 
-### 3. Bus-master DMA (chassis becomes bus master on host's bus)
+`+5V`, `GND` distributed through the cable. The connectors have
++5V/GND at A1-A4 and similar pins, plus alternation through the
+length. Standard noise-immunity practice for ribbon cables.
 
-This is the critical one. From `DRIVER.MAC RUNDMA`:
+### Three independent 16-bit data buses (48 lines)
 
-```mac
-MOV     R0,LITES(R3)            ; high 2 bits of host phys addr
-MOV     U.BUF+2(R5),HMA(R3)     ; low 16 bits
-BIS     #HDMAGO,CTRL(R3)        ; ★ AP becomes bus master, fires DMA
-```
+The 4448 separates data paths by purpose, **not** multiplexing
+them like a typical bus:
 
-The AP becomes bus master — meaning **the chassis-side AP I/F
-card requests bus mastership of the HOST'S bus, through the
-cable, then issues memory-read/write cycles to the host's RAM**.
+| Bus | Pins | Use |
+|---|---|---|
+| **HD00..HD15** | A74-A80, B24-B36, B40-B64 | Host-buffer data path (host ↔ HSR / register file) |
+| **DMA00..DMA15** | A62-A68, B10-B16, B39-B85 | DMA path (parallel to HD; for bus-master DMA cycles) |
+| **HST00..HST15** | A61-A69, B9-B15, B47-B95 | Host strobe/status (associated with HD path) |
 
-For this the cable must carry:
-- **Bus-request / bus-grant arbitration** (1-2 lines each direction)
-- **Full host-physical address** — 18 bits for UNIBUS / 22 bits
-  for Q-bus (the chassis-side card needs to drive the host's
-  full address space)
-- **Bus master signaling** — direction, master/slave swap
+The **separate parallel buses** are why the cable is wide: the
+4448 architecture lets DMA proceed concurrently with host
+register pokes, with each path having its own data lanes and
+control. Modern designs would multiplex these onto fewer wires
+with arbitration overhead; the 4448 era spent the pins instead.
 
-The host-side card uses these signals to actually drive the
-host's bus. So the cable carries an abstracted master/slave
-arbitration that the host-side card translates to its specific
-bus's mastership protocol (UNIBUS NPR/NPG vs Q-bus DMR/DMG vs
-LSI-11 etc.).
+### Auxiliary data routing (~24 lines)
 
-### 4. Interrupt propagation (chassis → host)
+| Bus | Pins | Use |
+|---|---|---|
+| **PNL08..PNL15** | A11-A29 | Panel data (front-panel switch register?) |
+| **DA08..DA15** | A12-A30 | Data-pad-A side |
+| **SP+DP08..SP+DP15** | A19-A34 | S-pad + Data-pad combined routing |
 
-Three RSX event flags are sourced from chassis-side hardware
-events:
-- `DMAEVF=23` — DMA complete (CTRL.IHWC bit, after CTRL.HDMAST clears)
-- `RUNEVF=22` — AP halted itself (CTRL.IHALT bit)
-- `CB5EVF=24` — CTL5 programmed I/O word ready (CTRL.IHCB5 bit)
+These connect to the AP-side data-pad register file via the
+cable — the host can examine/deposit DPX/DPY contents directly
+through these wires (per FN.EXAM and FN.DEP semantics in
+`nova_fps.c`).
 
-So the cable carries **at least 1 interrupt line** (probably 1
-line + 3-bit identification of the irq source, or 3 separate
-lines). The host-side card translates these into the host's
-native interrupt-vector mechanism (UNIBUS BR4/5/6/7 + BG-grant
-chain, Q-bus IRQ4-7, etc.).
+### Register-select address (6 bits)
 
-### 5. Host → AP interrupt (CTRL bit 14 = APIRT)
+`REGSEL00..REGSEL05` (B54-B65, scattered) — **6 bits = 64
+register slots**. Matches the SBC ROM's observation that the
+AP I/F register file occupies 0xFF0000-0xFF00FF (= 256 bytes /
+4 bytes per dword = 64 32-bit slots, or = 128 16-bit registers
+addressed in pairs).
 
-The reverse direction. From `DAPEX.MAC SENDER`:
+### I/O bus extension (~16 lines)
 
-```mac
-BIS     #APIRT,R3                ; raise CTRL bit 14
-MOV     R3,CTRL(R2)              ; → AP receives interrupt
-```
+`IO24..IO39` (A47-A90, B68-B84) — looks like a wider extension
+of the ~6-bit register select for higher-bandwidth I/O paths.
+In a 16-bit address space the IOxx lines may carry the full
+host address for DMA bus-mastering.
 
-So the cable also carries **a single line, host → chassis**, that
-asserts an "interrupt the AP" signal. This is just one bit, no
-data, no acknowledgment beyond the AP eventually responding via
-SWR.
+### Data-pad multiplex select (16 lines)
 
-### 6. Reset
+`DPMBS12..DPMBS27` (A51-A91, B67-B77) — selects which data-pad
+register routes onto the SP+DP bus. Equivalent to the 4-bit
+register file index inside DPX/DPY.
 
-Cold-start mechanism. `RSTAP/ABRT` register (offset `0o116`) is
-the AP-side reset trigger. From the host's side, asserting it
-likely flows through the cable as **one reset line** to the
-chassis-side card. May or may not be a separate cable conductor
-vs. multiplexed through the register-write path.
+### Bus arbitration / DMA control (~6 lines)
 
-## Putting it together — cable conductor count
+| Signal | Pin | Use |
+|---|---|---|
+| `APDMAACT` / `APDMAACTR` | B7-B8 | AP DMA active (and strobed) |
+| `HDMAACT` / `HDMAACTR` | B19-B21 | Host DMA active (and strobed) |
+| `DMASTB` / `DMASTBR` | B22-B23 | DMA strobe |
+| `HADRCLK` | B13 | Host address clock |
 
-For full functional coverage:
+These coordinate **which side is bus master** (host or AP) and
+the timing of address/data transitions during DMA cycles.
 
-| Signal class | Conductors |
+### Interrupts (7 lines)
+
+| Signal | Pin | Use |
+|---|---|---|
+| `INTR*` | A39 | General interrupt |
+| `INTFN` | A40 | FN-register interrupt |
+| `INTPIN` / `INTPOUT` | A44, A92 | Interrupt-priority chain pins |
+| `HALTINT*` / `CHALTINT*` | B34-B35 | AP-halt interrupt + clear |
+| `CTL5INT*` / `CCT5INT*` | B50-B51 | CTL5 (programmed-I/O) interrupt + clear |
+| `INT06*` / `INT07*` | B76-B78 | Two more interrupt sources |
+
+These are the **3 documented event flags** (`RUNEVF=22`,
+`DMAEVF=23`, `CB5EVF=24`) plus additional inputs for DMA-active
+status and panel-busy indication.
+
+### Handshake / acknowledge (~6 lines)
+
+| Signal | Pin | Use |
+|---|---|---|
+| `READY*` | A5 | Generic ready |
+| `IORDY*` | A10 | I/O ready (DTACK-equivalent) |
+| `IOACK*` | A46 | I/O acknowledge |
+| `CTLACK` / `CTLACKR` | B5-B6 | Control acknowledge |
+| `DACK` / `DACKR` | A75-A77 | DMA acknowledge |
+| `DAVAL` / `DAVALR` | A71-A73 | Data valid |
+
+Multiple parallel handshake lines reflect the 4448's
+multi-channel nature — each register access, DMA cycle, and
+control pulse has its own ack path.
+
+### Clocks (7 lines)
+
+`IOCLK`, `B0CLK`, `B1CLK`, `B2CLK`, `B3CLK`, `NUF2CLK`,
+`CTLCLK` — clocks distributed through the cable for
+synchronisation with the AP's own internal clock domains.
+
+### Reset and miscellany
+
+`HRSET` (host reset), `SYRST*` (system reset) — separate-purpose
+reset lines.
+
+`MDCA1`, `B0CLK`, `MDWRT*`, `IN100`, `OUT*`, `BXA2HD`,
+`BXB2HD`, `SAPX`, `SAPXR`, `SHSTX`, `SHSTXR`, `SPLFMT*` — additional
+control / mux-select / format-select lines.
+
+`OVFL*`, `UNFL*` — floating-point overflow / underflow status.
+
+`RUN*`, `RUNIND`, `DMAIND` — AP run/DMA indicator lines.
+
+## Total signal count
+
+Adding it up:
+
+| Class | Count |
 |---|---|
-| Address (host-bus-superset = 22 bit for Q-bus mastery) | 22 |
-| Data (16-bit) | 16 |
-| Read/Write + strobe + ack | 3-4 |
-| Bus arbitration (request, grant, master, ack) | 4 |
-| Interrupt host→AP | 1 |
-| Interrupt AP→host (3 sources, encoded as 3 lines OR 1 line + 2-bit cause) | 3 |
-| Reset (could be in-band) | 0-1 |
-| **Logical signal lines total** | **~50** |
-| Ground / power-return alternation | ~16-24 |
-| Power for transceiver (5V supply if not on host-side) | 1-2 |
-| **Conductor count total** | **~70-80** |
+| Power / ground | ~16 |
+| HD data | 16 |
+| DMA data | 16 |
+| HST strobe/status | 16 |
+| PNL data | 8 |
+| DA data | 8 |
+| SP+DP data | 8 |
+| Register select (REGSEL) | 6 |
+| I/O extension (IOxx) | 16 |
+| DP-Mux select (DPMBS) | 16 |
+| Arbitration / DMA control | 6 |
+| Interrupts | 7 |
+| Handshake / ack | 6 |
+| Clocks | 7 |
+| Reset | 2 |
+| Misc control + status | ~15 |
+| **TOTAL** | **~169** |
 
-This is consistent with **a heavy ribbon cable or a 50-pin × 2
-hex-cable bundle** — the format FPS used for `Co-Processor
-Interconnect Cable` (P/N `422-0015-001`, $100 in 1984).
+Of which **~150 are logical signals** (excluding power/ground).
+The 199-pin total leaves a small margin for un-listed
+signals + cable-side noise-immunity grounds.
 
-## Comparison to FPS-100 IOP-UNI cable
+## Implications for the substitute card
 
-The FPS-100's cable was simpler — UNIBUS-only host, so the cable
-literally extended UNIBUS:
-- 18 address (UNIBUS A0-A17)
-- 16 data
-- ~10 control + arb + irq
-- Ground / power
-- Total: ~50 conductors, common UNIBUS bus extension format
+### MCU options are not viable
 
-The FPS-3000 cable is **bus-extension generalised** — the
-abstraction layer adds a small amount of overhead (different
-arbitration semantics, irq-cause encoding) but is structurally
-the same kind of thing. The host-side card per bus-type does the
-specific translation.
+A single Pi Pico 2 has 30 GPIOs. Two in tandem give 60. Even
+the highest-pin MCU options (Teensy 4.1 with 55, RP2350B with
+48) are **far short of the 150 logical signals needed**.
 
-## Protocol timing (from SBC firmware behavior)
+Port-expander solutions (74HC595/165 shift registers) introduce
+~10-100 µs latency per access — fine for a few low-priority
+signals, but **prohibitive for 100+ lines that need cycle-accurate
+timing for bus arbitration and DMA**.
 
-The SBC firmware uses a 1000-iteration timeout loop on most AP
-I/F transactions (`#$3E8 = 1000` decimal — see `PanelSendAndWait`
-at `F056BA`). At an 8 MHz 68000 with ~125 ns per instruction and
-~5-10 instructions per loop iteration, that's roughly **5-10 ms
-total wait per transaction**. So the cable + chassis-side
-roundtrip can be slow (probably bus-master cycle ~750 ns, but
-acknowledgments may be hand-shaken across multiple cycles).
+### FPGA is required
 
-The handshake bit FN[14] (SWR-data-valid) is checked in tight
-loops that idle waiting for the AP to consume the previous SWR
-write — so cable bandwidth on programmed I/O is **< 200 kword/s**.
-DMA mode is much faster, Curington 1986 reports ~1.6 MW/s for
-AP-120B DMA, similar order for FPS-3000.
+The substitute card needs an FPGA with 150+ user I/O. Options:
 
-## What's left undetermined by inference alone
+| Board | I/O | Cost | Notes |
+|---|---|---|---|
+| **ULX3S 25F** | 108 | $155 | LFE5U-25F-6BG381C; 108 user I/O via 4 PMOD slots + GPIO + dedicated lines. *Tight* for 150 signals. |
+| **ULX3S 85F** | 108 | $235 | Same I/O count as 25F (limited by board breakout, not chip). Bigger fabric only. |
+| **OrangeCrab 85F** | ~100 | $129 | Compact form factor; might be tight on I/O |
+| **ECP5-5G-EVN** | ~150 | $99 | LFE5UM5G-85F-8BG756I; 150+ user I/O including high-speed serdes |
+| **Custom ECP5 PCB** | 150+ | $200+ design + fab | Form-factor-correct quad Q-bus card with ECP5 LFE5U-85F-6BG381C (130-160 user I/O) |
 
-Three things that **only LA captures (or finding the cable
-itself + visual ribbon-cable conductor count) can pin down**:
+**Recommendation: ECP5-5G-EVN dev board** ($99) for development,
+followed by a custom Q-bus quad card with the same chip family
+once the design is validated.
 
-1. **Exact pinout assignment** on the cable connector — which
-   wire is "address bit 0" vs "data bit 0" etc. The functional
-   signal set is determined; the physical mapping is not.
-2. **Whether the cable uses single-ended or differential signaling**.
-   For the cable lengths involved (typically 2-4 m chassis-to-host),
-   single-ended TTL is plausible but differential (e.g. 26LS31/32)
-   would be more reliable. FPS may have used either.
-3. **Frame format on multiplexed lines** — if the cable saves
-   pins by multiplexing address/data on the same wires (with a
-   strobe to distinguish), the exact framing of bits across
-   cycles. Most likely the design is *not* multiplexed (FPS
-   used parallel ribbon cables in this era), but worth checking.
+### Reference design exists
 
-## Implications for building a substitute host-side board
+`fletto2/ap120dg`'s `adapter.md` traces the **280B Nova/Eclipse
+I/O Adapter** schematic in detail (726 lines). That's the
+host-side counterpart for DG Nova hosts — exactly the pattern
+we need to adapt for Q-bus. Different host-bus signals, but
+the same architectural decomposition: bus interface →
+qualification gates → register file mux → cable transceivers.
 
-Given the inference, a substitute host-side card needs to:
+The host-side card's job is:
+1. Decode host-bus cycles into "register N read/write" events
+2. Forward to the chassis-side card via the cable's REGSEL +
+   data + handshake lines
+3. On DMA, become bus master on the host's bus and shuttle data
+   between host RAM and the chassis via the DMA bus
+4. Translate chassis-side interrupt sources into host-bus
+   interrupts at the correct priority level
 
-1. **Source/sink ~50 logical signal lines** matching the cable
-   protocol. FPGA approach: tens of GPIO pins, all bidirectional
-   with controlled directionality. Lattice ECP5, Cyclone IV, or
-   Spartan-6 dev boards all suffice (plenty of I/O).
-2. **Bus-master emulation on the host bus side** — for DMA mode.
-   The board must request bus mastership of the host's Q-bus,
-   drive addresses, and signal completion. This is where Q-bus
-   transceiver chips (or modern equivalents like 74LVCH16245A)
-   matter. Standard Q-bus dev kits (e.g., the recent open-source
-   Q-bus interface boards from CHDickman et al.) provide good
-   reference.
-3. **Implement irq translation** in the FPGA — chassis-side irq
-   lines come in, FPGA generates Q-bus IRQ4/5/6/7 with the right
-   timing.
-4. **Handle the simple host→AP irq** — one cable line, asserted
-   on a register write to the right address.
+This whole structure naturally fits an FPGA — interface
+decoders, state machines, mux logic, all classic FPGA work.
 
-## What to do without the cable
+## Mapping the cable into a working substitute
 
-If Lovett never gets the original cable, **build it**. The
-conductor count is ~50-80 depending on the design choice; flat
-ribbon cable + IDC connectors is cheap. The connector pinout
-*does* need LA captures (or visual examination of the
-chassis-side card's connector pads) to pin down which physical
-pin carries which logical signal. But the functional protocol is
-already understood.
+Phase 1 (cable-side validation only, no Q-bus integration yet):
 
-## Net take
+1. **FPGA mirrors the 4448 chassis-side card's exact pin
+   semantics** — every signal in `4448_APIF_netlist.txt` either
+   gets driven from the FPGA or read by the FPGA.
+2. **A modern PC** controls the FPGA over USB-C — register
+   pokes, status reads, IRQ event observation. Phase 1 testing
+   uses just the cable interface.
+3. **Validation**: power up FPS-3000 chassis with the FPGA
+   substitute attached, observe the SBC's panel-init sequence
+   (`0x276..0x27D`) — every poke should be visible across the
+   cable, every status read should return data.
 
-**The cable protocol is structurally a bus-extender carrying
-register pokes + bus-mastership + interrupts.** Number of
-conductors ~50-80. Bandwidth ~200 KW/s programmed-I/O, ~1.6 MW/s
-DMA. Designed to abstract over the host's specific bus
-electricals (Q-bus / UNIBUS / LSI-11) so the same cable works
-with multiple host-side cards.
+Phase 2 (Q-bus integration on the same FPGA):
 
-This is enough to **start designing the substitute host-side
-FPGA**. The remaining LA-capture work shifts from "figure out
-what the protocol is" (already done by inference) to "pin down
-the physical signal-to-pin mapping" — a much narrower question.
+1. Same FPGA, additional logic block decoding Q-bus cycles
+2. PDP-11/73 sees the substitute card as a Q-bus device
+3. End-to-end validation: /73 issues `XPSEL/XPRUN/XPWAIT` via
+   the substitute → cable → SBC → XP-32
+
+## Validation against Lovett's specific card
+
+Two physical-world checks remain (both ~1h bench tasks):
+
+1. **Connector count**: does Lovett's `612-4448-401-F` have
+   exactly J22 + J23 (= 199 pins) like the AP-120B-era 4448?
+   Visual inspection of the card.
+2. **Pin-name correspondence**: probe a few known signal pins
+   (e.g., A1 = +5V, A100 = +5V, B53 = HST10) with a multimeter
+   while the chassis is powered and the SBC is running. Confirm
+   the netlist's signal names match the FPS-3000-era card.
+
+These are *validation*, not *discovery* — the netlist gives us
+strong priors for the answer. Total bench time: hours, not
+days.
+
+## What stays open
+
+The netlist tells us **what the cable carries**, not **what
+each signal does over time** at the protocol level. We still
+need to characterize:
+
+- Bus-cycle timing: setup/hold relationships between REGSEL,
+  HD/DMA/HST, IOACK / DACK / IORDY
+- DMA arbitration sequence: which signals go in what order when
+  the AP becomes bus master
+- Interrupt-acknowledge protocol: how `INTPIN`/`INTPOUT` chain
+  works for priority arbitration
+
+These can be reverse-engineered from `nova_fps.c` (which models
+the host-side I/O state machine in detail) plus the SBC ROM's
+poke patterns. **No new bench captures needed for protocol
+characterization — only for validating that the FPS-3000-era
+card matches the AP-120B-era netlist.**
