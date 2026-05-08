@@ -180,6 +180,145 @@ After all this: an XP-32 emulator + assembler + (Q-bus) host
 substitute + working hardware path = end-to-end FP test
 runnable.
 
+## Detailed findings from a full read
+
+### `4448_APIF_netlist.txt` — the cable connector pinout
+
+Two connectors on the 4448 chassis-side AP I/F card:
+
+- **J22**: A1-A100 (100 pins) — primary signal connector
+- **J23**: B1-B99 (99 pins) — secondary signal connector
+
+Total ~200 pins per card, hex-card or quad-card form factor.
+
+**Signal categories visible** (from naming):
+
+| Class | Examples | Count |
+|---|---|---|
+| Data (host buffer) | HD00-HD15 | 16 lines |
+| Data (DMA path) | DMA00-DMA15 | 16 lines |
+| Status/strobe (host) | HST00-HST15 | 16 lines |
+| Panel data | PNL08-PNL15 | 8 lines |
+| Data buffers | DA08-DA15 | 8 lines |
+| S+D pad | SP+DP08-DP15, DPMBS12-27 | 24 lines |
+| **Register select** | **REGSEL00-REGSEL05** | **6 lines (= 64-reg select)** |
+| I/O bus | IO24-IO39 | ~16 lines |
+| Bus arbitration / DMA | APDMAACT, HDMAACT, DMASTB, HADRCLK1/2 | ~6 lines |
+| Interrupts | INTR, INTFN, INTPIN, HALTINT, CTL5INT, INT06, INT07 | ~7 lines |
+| Handshake | READY, IORDY, IOACK, CTLACK, DACK, DAVAL | ~6 lines |
+| Clocks | IOCLK, B0CLK, B1CLK, B2CLK, B3CLK, NUF2CLK, CTLCLK | ~7 lines |
+| Reset | HRSET, SYRST | 2 lines |
+| Power | +5V, GND | ~16 conductors |
+
+**The cable carries ~150 logical signals, not the ~50 I
+estimated.** That's because the 4448 family has separate H-data
+buses for register-poke vs DMA, plus a panel-data bus, plus the
+S-pad/Data-pad routing through the cable. My earlier inference
+was an *under-estimate* — the actual cable is wider and more
+parallel than I assumed.
+
+This **changes the substitute-card design** substantially:
+- A single Pi Pico 2 (30 GPIO) is way too small.
+- Two Pico 2s in tandem (60 GPIO) still falls way short.
+- **An FPGA dev board (Lattice ECP5 with 100+ I/O) becomes
+  necessary**, not just preferable.
+
+### `microcode.md` — confirms / refines our AP-120B knowledge
+
+323 lines of comprehensive AP-120B microinstruction reference.
+Cross-checks our `xp32_opcode_clues.md` AP-120B section:
+
+- **SOP=6**: "OR (logical OR via De Morgan's)" — confirms my
+  assumption (manual says OR; CLAUDE.md old draft was wrong
+  with NOR)
+- **SOP=7**: "EQV: ~(SPD ^ SPS)" = XNOR — confirms EQV (our
+  HSR decoder already uses EQV)
+- **A2=6**: MDPX, A2=7: EDPX — match
+- **All SOP1 / FADD / COND / DPBS / M1 / M2 / MA / DPA / TMA**
+  encodings match what we derived for the HSR corpus
+
+Plus **new detail we didn't have**:
+- **SOP=1, SPS=8 (JMP/JSR)**: SPD field encodes jump mode
+  (bit 0: JMP vs JSR; bits 1-2: target source — VALUE / PC+VALUE
+  / TMA / SWR)
+- **38-bit FP format**: 10-bit exponent (biased 512), 28-bit
+  2's-complement mantissa, normalized 0.25..0.5
+- **Pipeline depths exact**: S-pad=1, FADD=2-stage, FMUL=3-stage,
+  MD=2-3, TM=2
+
+### `nova_fps.c` — Phase 1 only (host I/O), microcode not executed
+
+Comment at top: *"Phase 1 implementation: host interface +
+memory + DMA + panel commands. No AP microcode execution yet
+(AP always halted unless START issued, then runs until explicit
+STOP)."*
+
+So the SimH module simulates everything **outside** the AP's
+microcode engine — useful for validating host-side software
+talks to a fake AP correctly, but you need `python-sim100`
+(roy20100's port) for actual microcode execution.
+
+`nova_fps.c` includes detailed FN-register bit definitions:
+- `FN_STOP` (0x8000), `FN_START` (0x4000), `FN_CONT`, `FN_STEP`,
+  `FN_RESET`, `FN_EXAM`, `FN_DEP`, `FN_BREAK`
+- `FN_INC_MASK`, `FN_WORD_MASK`, `FN_REGSEL_MASK`
+- `FN_HALTED` (0x8000 read), `FN_SWR_ACK` (0x4000 read)
+
+These are the FN-register write/read semantics for AP-120B host
+control — directly applicable to the FPS-3000's chassis-side
+register file (likely same protocol; just different cable
+electricals).
+
+### `python-sim100/asm2lm.py` — usable AP-120B assembler
+
+373 lines of Python. Takes:
+- **PS file** (microcode): one line per 64-bit instruction = 4
+  octal words. Same format as our `hsr_decoded/` per-routine
+  output.
+- **MD file** (data): three modes — integer (vtype=1), real
+  (vtype=2 IEEE→AP-38-bit via FPINPT), or IBM hex (vtype=4).
+
+Outputs APLOAD-format `.lm` binary that `python-sim100/sim100.py`
+can load and execute.
+
+**Implication**: we have a working pipeline today for **authoring
+AP-120B microcode in human-readable form, assembling, and
+executing in simulation**. End-to-end validated.
+
+## Revised hardware design impact
+
+The `4448_APIF_netlist.txt` finding **invalidates the dual-Pico
+plan** — 150 cable signals exceed even 2 Picos' combined GPIO
+budget by a wide margin.
+
+| Design option | Status post-netlist |
+|---|---|
+| Single Pi Pico 2 + expanders | **Not feasible** (30 GPIO + expanders can't reach 150 lines at usable speed) |
+| Dual Pi Pico 2 tandem | **Not feasible** (60 GPIO < 150 needed) |
+| Teensy 4.1 (55 GPIO) | **Not feasible** alone |
+| **Lattice ECP5 FPGA** (100-150 I/O) | **Required** for full cable interface |
+| Multiple FPGAs | Overkill but works |
+
+**Updated recommendation**: **single Lattice ECP5 dev board**
+(ULX3S 25F or larger, $155+) is now the only viable
+single-board option. It has enough I/O (100+) to drive every
+cable signal directly without expansion glue, plus enough fabric
+for the Q-bus interface state machine on the same chip.
+
+## Updated cable-protocol inferred document needs revision
+
+`cable_protocol_inferred.md` estimated ~50 logical signals + ~20
+ground = ~70-80 conductors. The 4448 netlist shows the actual
+cable is **~2× wider** than my inference. The protocol *shape*
+is still right (register pokes + DMA bus-master + irq), but the
+cable has parallel high-bandwidth paths (separate H-data /
+DMA-data / panel-data buses) that I collapsed into a single
+"data line" group.
+
+I should update `cable_protocol_inferred.md` and
+`host_substitute_hardware_plan.md` to reflect the actual cable
+width.
+
 ## Why this wasn't surfaced before
 
 The `ap120dg` repo is owned by the same GitHub user who's
