@@ -3,14 +3,25 @@
 FPS-100 .APO file decoder — produces APAL-style disassembly.
 
 The .APO format is the textual ASM100 object-file format consumed by
-LED100 (the link editor). This decoder reads .APO files and emits
-each CODE block's microinstructions decoded via the canonical SIM100
-SPLIT recipe (24 fields per 8-byte microinstruction).
+LED100 (the link editor). This decoder uses the explicit `***CODE`
+markers in the file to locate microinstruction records, then applies
+the canonical SIM100.FTN SPLIT recipe (24 fields per 8-byte
+microinstruction) to each one.
 
-Format derived from LED100.FTN's LOAD subroutine (line 3031). The
-file structure spec was produced by Council-of-Clankers (DeepSeek
-+ GLM) and consolidated here, with the SPLIT decoder fixed to
-match SIM100.FTN's canonical recipe.
+Each block is a header line ending in `***NAME` followed by some
+number of payload lines. The blocks we care about for microcode are:
+
+  `***TITLE`   — 1 payload line: routine name
+  `***CODE`    — header has 3 fields: relocation, RECCNT, address;
+                 followed by RECCNT records of 4 octal 16-bit words
+                 (= 8 bytes = 1 microinstruction each)
+  `***END`     — closes a routine; 1 payload line: name
+
+Other block types (`***LSB`, `***PB`, `***FPB`, `***AENTRY`,
+`***ENTRY`, `***EXT`, `***DBDB`, `***DBIB`, `***PARAM`, `***INDEX`,
+`***TASK`, `***ISR`) are surfaced in the block-counts summary but
+their payloads are not needed for microcode extraction — the
+`***CODE` marker is unambiguous so we never need to decode them.
 
 Usage:
     python3 apo_decode.py <file.APO> [--no-split] [--routine NAME]
@@ -18,64 +29,15 @@ Usage:
 import re, sys, argparse
 
 
-# Block type table from LED100.FTN line 3370-3376
-# (BLKTYP = STOI(SYM,RADIX) + 1)
-BLOCK_TYPES = {
-    1: 'CODE',          # microinstruction code records → label 1000
-    2: 'END',           # → label 3000
-    3: 'NU',            # not used → label 90020 (error)
-    4: 'TITLE',         # → label 4000
-    5: 'ENTRY',         # → label 4400
-    6: 'LIB_END',       # → label 5000
-    7: 'LIB_START',     # → label 5500
-    8: 'DBDB',          # data block declaration block → label 5600
-    9: 'DBIB',          # data block instance block → label 6000
-    10: 'PARAM',        # parameter description → label 7000
-    11: 'ALT_ENTRY',    # alternate entry point → label 8000
-    12: 'INDEX_ALT',    # → label 4380
-    13: 'INDEX',        # library index block → label 2000
-    14: 'TASK',         # → label 9000
-    15: 'ISR',          # interrupt service routine → label 10000
-}
-
-
 def split_sim100(reg):
     """
-    Canonical SIM100 SPLIT routine (line 3863 of SIM100.FTN), rewritten
-    in Python. Decodes 8 bytes into 24 named fields.
-
-      REG[0..7] = the 8 bytes (REG(1) high-byte in MACRO-11 sense)
-      Returns dict of {field_name: int_value} for all 24 fields.
-
-    Field meanings (per FPS-7319 AP-120B Programmer's Reference + the
-    SPLIT routine itself):
-       1  DF      DPX bit-reverse flag                   (1 bit)
-       2  SOPF    S-Pad operation                        (3 bits)
-       3  SHF     shift                                  (2 bits)
-       4  SPSF    S-Pad source register index            (4 bits)
-       5  SPDF    S-Pad dest register index              (4 bits)
-       6  FADDF   FALU function                          (3 bits)
-       7  A1F     FALU input-1 source                    (3 bits)
-       8  A2F     FALU input-2 source                    (3 bits)
-       9  CONDF   branch condition                       (4 bits)
-      10  DISPF   branch displacement / immediate        (5 bits)
-      11  DPXF    DPX function                           (2 bits)
-      12  DPYF    DPY function                           (2 bits)
-      13  DPBSF   DP-Bus select                          (3 bits)
-      14  XRF     DPX read addr                          (3 bits)
-      15  YRF     DPY read addr                          (3 bits)
-      16  XWF     DPX write addr                         (3 bits)
-      17  YWF     DPY write addr                         (3 bits)
-      18  FMF     FMUL fire                              (1 bit)
-      19  M1F     FMUL input-1 source                    (2 bits)
-      20  M2F     FMUL input-2 source                    (2 bits)
-      21  MIF     memory input                           (2 bits)
-      22  MAF     memory address function (MAF=1=INCMA)  (2 bits)
-      23  DPAF    DP address                             (2 bits)
-      24  TMAF    TM address                             (2 bits)
+    Canonical SIM100 SPLIT (line 3863 of SIM100.FTN). Decodes the
+    8 bytes of one AP-120B microinstruction into 24 named fields.
+    `reg` is REG[0..7] with REG[0] the high-byte (per the FORTRAN
+    indexing where REG(1) is high).
     """
     R = reg
-    fv = [0] * 25  # 1-indexed
+    fv = [0] * 25
     fv[1]  = (R[0] // 128) % 2
     fv[2]  = (R[0] // 16) % 8
     fv[3]  = (R[0] // 4) % 4
@@ -110,131 +72,124 @@ def split_sim100(reg):
     }
 
 
-def fmt_split(fields):
-    """Format a SPLIT result as a compact APAL-style mnemonic line."""
-    nonzero = [f'{k}={v}' for k, v in fields.items() if v != 0]
-    return ' '.join(nonzero) if nonzero else '(no-op)'
+def fmt_split(f):
+    """One-line APAL-style mnemonic showing nonzero fields."""
+    nz = [f'{k}={v}' for k, v in f.items() if v != 0]
+    return ' '.join(nz) if nz else '(no-op)'
 
 
-# ----- .APO format parser -----
-
-class ApoParser:
+def words_to_bytes(words):
     """
-    Read a .APO file as a stream of records. Each record is one line
-    of column-formatted decimal numbers possibly followed by a string
-    payload (TITLE name, etc.).
-
-    Per LED100 LOAD subroutine: each record's first integer is
-    BLKTYP-1 (zero-indexed), then per-block-type fields follow.
+    Convert a list of 16-bit words (octal) into a flat byte array,
+    high-byte first within each word. Per the AP-120B convention
+    matching SIM100's REG ordering.
     """
+    out = []
+    for w in words:
+        out.append((w >> 8) & 0xFF)
+        out.append(w & 0xFF)
+    return out
 
-    def __init__(self, path):
-        with open(path, errors='replace') as f:
-            text = f.read().replace('\r', '')
-        # Split on newlines, drop blanks
-        self.lines = [l for l in text.split('\n') if l.strip() != '']
-        self.idx = 0
-        self.radix = 8  # APAL default; can be overridden by ***RADIX
-        self.routines = []  # list of {name, code: [(addr, [bytes])]}
-        self.cur_routine = None
-        self.block_counts = {}
 
-    def _consume_line(self):
-        if self.idx >= len(self.lines):
-            return None
-        l = self.lines[self.idx]
-        self.idx += 1
-        return l
+def parse_apo(path, radix=8):
+    """
+    Walk the .APO file looking for explicit ***CODE markers. Each
+    ***CODE header is `<reloc> <RECCNT> <addr> ***CODE` and is
+    followed by exactly RECCNT records of microinstruction data
+    (each = 4 octal 16-bit words on one line).
 
-    def _parse_tokens(self, line):
-        """
-        Pull integer tokens out of a record line. Stops at any '***'
-        marker or string-payload section.
-        """
-        # Strip trailing comment-marker like "***LSB" if present
-        line = re.sub(r'\*\*\*.*$', '', line).strip()
+    Returns: list of routines, each a dict { 'name', 'code' }
+    where 'code' is a list of (addr, [8 bytes]) pairs.
+    """
+    with open(path, errors='replace') as f:
+        lines = f.read().replace('\r', '').split('\n')
+
+    # Strip blank lines, but keep their indices for diagnostics
+    routines = []
+    cur = None  # current routine in progress
+    block_counts = {}
+    i = 0
+    n = len(lines)
+    while i < n:
+        raw = lines[i]
+        line = raw.rstrip()
+        i += 1
+        if not line.strip():
+            continue
+
+        # Detect a block-type marker
+        m = re.search(r'\*\*\*([A-Z_]+)', line)
+        if not m:
+            continue  # not a block header — skip (shouldn't happen at top level)
+        marker = m.group(1)
+        block_counts[marker] = block_counts.get(marker, 0) + 1
+
+        # Tokens BEFORE the marker, parsed as integers in current radix
+        tokens_part = line[:m.start()].strip()
         toks = []
-        for tok in line.split():
+        for t in tokens_part.split():
             try:
-                toks.append(int(tok, self.radix))
+                toks.append(int(t, radix))
             except ValueError:
                 pass
-        return toks
 
-    def parse(self):
-        while self.idx < len(self.lines):
-            self._parse_one_block()
+        if marker == 'TITLE':
+            # next non-blank line is the routine name
+            while i < n and not lines[i].strip(): i += 1
+            if i < n:
+                name = lines[i].strip()
+                cur = {'name': name, 'code': []}
+                routines.append(cur)
+                i += 1
 
-    def _parse_one_block(self):
-        line = self._consume_line()
-        if line is None: return
-        # Detect block type from first token
-        toks = self._parse_tokens(line)
-        if not toks:
-            return  # skip blank/garbage
-        blktyp_field = toks[0]
-        # LED100: BLKTYP = STOI(SYM,RADIX) + 1
-        blktyp = blktyp_field + 1
-        block = BLOCK_TYPES.get(blktyp, f'UNK_{blktyp}')
-        self.block_counts[block] = self.block_counts.get(block, 0) + 1
-
-        if block == 'TITLE':
-            # Next line is the title string (the routine name)
-            name_line = self._consume_line()
-            if name_line is not None:
-                name = name_line.strip()
-                self.cur_routine = {'name': name, 'code': []}
-                self.routines.append(self.cur_routine)
-        elif block == 'CODE':
-            # Per LED100 line 1020-1100:
-            # next two tokens of *this* record are RECCNT, LOC
-            # then RECCNT data records follow, each one microinstr
+        elif marker == 'CODE':
+            # toks = [reloc, RECCNT, addr] — but tokens before *** can vary
             if len(toks) >= 3:
-                reccnt, loc = toks[1], toks[2]
+                reccnt, addr0 = toks[1], toks[2]
             elif len(toks) >= 2:
-                reccnt, loc = toks[1], 0
+                reccnt, addr0 = toks[0], toks[1]
             else:
-                # missing — try to read from next line
-                hdr2 = self._consume_line()
-                t2 = self._parse_tokens(hdr2 or '')
-                reccnt, loc = (t2[0], t2[1]) if len(t2) >= 2 else (0, 0)
+                # malformed — skip
+                continue
 
-            for i in range(reccnt):
-                data_line = self._consume_line()
-                if data_line is None: break
-                # Each record contains 8 bytes of one microinstruction
-                # The bytes are decimal integers in the file's RADIX
-                bytes_ = self._parse_tokens(data_line)
-                # Pad/truncate to exactly 8 bytes
-                while len(bytes_) < 8:
-                    extra = self._consume_line()
-                    if extra is None: break
-                    bytes_ += self._parse_tokens(extra)
-                bytes_ = bytes_[:8]
-                # Mask each to 0..255
-                bytes_ = [b & 0xFF for b in bytes_]
-                if self.cur_routine and len(bytes_) == 8:
-                    self.cur_routine['code'].append((loc + i, bytes_))
-        elif block == 'END':
-            # routine boundary; no payload to consume
-            pass
-        elif block in ('LIB_START', 'LIB_END', 'NU'):
-            pass  # informational
-        elif block in ('ENTRY', 'ALT_ENTRY'):
-            # Next line(s) usually contain symbol name + address
-            self._consume_line()
-        elif block in ('TASK', 'ISR'):
-            self._consume_line()
-        elif block == 'INDEX':
-            # j entries follow; skip data record + j entry records
-            if len(toks) >= 2:
-                j = toks[1]
-                self._consume_line()  # data record
-                for _ in range(j):
-                    self._consume_line()
-        else:
-            # Unknown block — skip its likely payload line if any
-            pass
+            # Read RECCNT non-blank lines, each is one microinstruction
+            reads = 0
+            while reads < reccnt and i < n:
+                rec = lines[i].strip()
+                i += 1
+                if not rec:
+                    continue
+                # Strip leading '*' if present (relocation marker)
+                rec = re.sub(r'^\*\s*', '', rec)
+                # Pull integer tokens
+                words = []
+                for t in rec.split():
+                    try:
+                        words.append(int(t, radix))
+                    except ValueError:
+                        pass
+                if not words:
+                    continue
+                # Take the first 4 words = 8 bytes; ignore extra
+                # (extra tokens are relocation triplets per LED100 label 2000)
+                w4 = (words + [0, 0, 0, 0])[:4]
+                bytes_ = words_to_bytes(w4)
+                if cur is not None:
+                    cur['code'].append((addr0 + reads, bytes_))
+                reads += 1
+
+        elif marker == 'END':
+            # next line is routine name; consume it
+            while i < n and not lines[i].strip(): i += 1
+            if i < n: i += 1
+            cur = None
+
+        # all other markers (LSB, PB, FPB, AENTRY, ENTRY, EXT, DBDB, DBIB,
+        # PARAM, INDEX, TASK, ISR, etc.) — we don't need their payloads
+        # for microcode extraction. The ***CODE marker is unambiguous
+        # and will resync us automatically. So skip silently.
+
+    return routines, block_counts
 
 
 def emit(routines, do_split=True, only_routine=None):
@@ -255,25 +210,31 @@ def emit(routines, do_split=True, only_routine=None):
 
 
 def main():
-    ap = argparse.ArgumentParser(description='FPS-100 .APO decoder')
-    ap.add_argument('apo_path', help='path to .APO file')
-    ap.add_argument('--no-split', action='store_true',
-                    help='skip SPLIT field decoding')
-    ap.add_argument('--routine', help='only emit named routine')
-    ap.add_argument('--summary', action='store_true',
-                    help='print block counts only')
+    ap = argparse.ArgumentParser()
+    ap.add_argument('apo_path')
+    ap.add_argument('--no-split', action='store_true')
+    ap.add_argument('--routine')
+    ap.add_argument('--summary', action='store_true')
+    ap.add_argument('--list', action='store_true',
+                    help='list routine names + sizes')
     args = ap.parse_args()
 
-    p = ApoParser(args.apo_path)
-    p.parse()
-    print(f'; FPS-100 .APO decode: {args.apo_path}', file=sys.stderr)
-    print(f'; Block counts: {p.block_counts}', file=sys.stderr)
-    print(f'; Routines: {len(p.routines)}', file=sys.stderr)
-    total_instr = sum(len(r['code']) for r in p.routines)
-    print(f'; Total microinstructions: {total_instr}', file=sys.stderr)
+    routines, counts = parse_apo(args.apo_path)
+    total = sum(len(r['code']) for r in routines)
+    code_routines = [r for r in routines if r['code']]
+    print(f'; APO: {args.apo_path}', file=sys.stderr)
+    print(f'; Block counts: {counts}', file=sys.stderr)
+    print(f'; Routines (with code): {len(code_routines)} / total {len(routines)}',
+          file=sys.stderr)
+    print(f'; Total microinstructions: {total}', file=sys.stderr)
+
+    if args.list:
+        for r in routines:
+            print(f'  {r["name"]:10s} {len(r["code"]):4d} microinstr')
+        return
 
     if not args.summary:
-        emit(p.routines, do_split=not args.no_split,
+        emit(routines, do_split=not args.no_split,
              only_routine=args.routine)
 
 
