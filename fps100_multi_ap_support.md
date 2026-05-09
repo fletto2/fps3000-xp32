@@ -136,16 +136,20 @@ sends separate command blocks to each.
 ## Bomem HPVP — what we can't see
 
 > **Erratum**: an earlier version of this doc claimed Bomem marketed
-> the FPS-100 as the "HPVP". That was unsupported and is wrong.
-> HPVP is treated by Bomem's installer as an *optional* add-on
-> distinct from the standard FPS-100. The most plausible reading is
-> that **HPVP is the FPS-3000** (or another XP-32-class machine):
-> the XP-32 is genuinely vector-oriented via XPMLIB (`ZVMUL`,
-> `ZVADD`, `ZRFFT` etc.) while the FPS-100 is a scalar-pipelined
-> 38-bit FP unit. Lovett's chassis having *both* an FPS-100 and an
-> FPS-3000 matches the "standard + HPVP upgrade" topology exactly.
-> If correct, this means the missing BOM* application disks contain
-> Bomem-customized FPS-3000 host code — significant for the project.
+> the FPS-100 as the "HPVP" (wrong, unsupported). A revised draft
+> then asserted HPVP is the FPS-3000 (also corrected by the project
+> owner — HPVP is NOT the FPS-3000). What HPVP actually is remains
+> open. The LOABOM evidence sustains:
+>   - HPVP is hardware (driver+config+register+test files)
+>   - HPVP is optional (gated on user yes/no)
+>   - HPVP is NOT the standard FPS-100 install (no APDRV present)
+>   - HPVP is NOT the FPS-3000 (per project owner)
+>
+> Likely candidates: a Bomem-built internal DSP/co-add board
+> (`hpcoad` matches FTIR-signature co-add operation), or a
+> different array-processor brand from the 1984-85 era. Pending
+> further evidence — likely from disassembling BOMICP.TSK and
+> other Bomem-customized task images.
 
 Bomem's installer (`LOABOM.CMD;2` in the recovered RSX-11M+ disks)
 references HPVP as an optional component with its own file set:

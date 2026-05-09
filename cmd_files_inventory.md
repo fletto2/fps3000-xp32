@@ -123,33 +123,40 @@ others don't — making it an **optional, customer-paid upgrade**.
   `hptest.*` looks like driver + register-config + test, all
   hardware-tied)
 
-### What HPVP plausibly IS (inferred)
+### What HPVP IS — UNKNOWN, narrowed by elimination
 
-Most plausible reading: **HPVP is the FPS-3000** (or another
-XP-32-class machine). Supporting:
+Per project owner: **HPVP is NOT the FPS-3000** (correction applied
+2026-05-09). Combined with the LOABOM evidence ruling out
+FPS-100-with-rebrand, this leaves:
 
-- "High-Performance Vector Processor" matches the XP-32's vector-
-  oriented XPMLIB API (`ZVMUL`, `ZVADD`, `ZRFFT`...) more cleanly
-  than the FPS-100's scalar pipeline
-- Lovett's chassis has both an FPS-100 *and* an FPS-3000 — exactly
-  the "standard + HPVP upgrade" topology
-- "VPtest" file in the deletion list points at "Vector Processor"
-- HPVP being optional matches FPS-3000 being a price-tier option
+- A different (non-FPS) array processor brand: Numerix MARS,
+  Mercury ZIP, CSPI MAP, Star Technologies ST-100, etc.
+- A Bomem-built internal DSP / co-add board — `hpcoad` matches
+  the FTIR-signature operation "co-add" (averaging interferograms
+  for SNR), so a purpose-built Bomem coprocessor would explain the
+  Bomem-specific naming
+- A specific FPS variant other than FPS-100 / FPS-3000 (possible
+  but unusual for a PDP-11-host DA3 system)
+- Some other 1984-85-era array processor not yet enumerated here
 
-Cannot be proven from the .CMD evidence alone — `loahpvp.cmd` and
-`hpvp.*` files would settle it. They are missing.
+The user has information narrowing this, not yet captured in the
+docs. Awaiting clarification + further evidence (most likely from
+disassembling BOMICP.TSK and other Bomem-customized task images)
+before committing to a positive identification.
 
-### What HPVP could alternately be (less likely)
+### Earlier (now-retracted) claim
 
-- A different (non-FPS) array processor brand Bomem also supported
-- A Bomem-built coprocessor — unlikely for a spectrometer vendor
-- A renamed FPS-100 with Bomem-customized driver (would explain
-  no APDRV but still requires HPVP install to bring its own driver)
+**Earlier draft of this doc claimed HPVP was most plausibly the
+FPS-3000.** That was retracted on the project owner's correction.
+The LOABOM evidence supports "HPVP is an optional, customer-paid,
+hardware-tied add-on" but does NOT support equating it specifically
+to the FPS-3000.
 
-## Project-impact reframing
+## Project-impact reframing (conditional on HPVP identification)
 
-If HPVP = FPS-3000, then **the missing BOM* application disks
-contain Bomem-customized FPS-3000 host software** — including:
+If HPVP turns out to be FPS-related, then **the missing BOM*
+application disks contain Bomem-customized array-processor host
+software** — possibly including:
 
 - `loahpvp.cmd` install script (driver build steps)
 - `hpvp.*` driver/runtime modules
