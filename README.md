@@ -65,6 +65,39 @@ Motorola **M68KVM02-3** VERSAmodule monoboard (MC68000 @ 8 MHz).
 - **`mc_xp32_debate_log.md`** — Council-of-Clankers debate on
   inferring the XP-32 microinstruction layout (4 rounds incl. strict
   bit-accounting verification).
+- **`mc_xp32_microcode_inference.md`** — three-round consensus
+  inference producing the proposed 128-bit XP-32 layout
+  (DeepSeek + GLM independent + cross-critique + synthesis).
+- **`mc_xp32_layout_stress.md`** — adversarial / cooperative /
+  paranoid stress test of that consensus layout, with and without
+  the assumption of a future EU PROM dump. 6 passes × 2 LLMs.
+- **`panel_codes_am29116_decoded.md`** — verified decoding of all
+  21 panel command codes as Am29116 TOR1 SUBRC instructions
+  (TORIA / TODRA operand patterns). Three live interpretations
+  remain; EU PROM read or bus trace required to disambiguate.
+- **`fps164_chip_identification.md`** — sequencer-chip identification
+  across the family. The Am29116 is **not** family-wide: only the
+  FPS-3000 EXEC card carries one. FPS-164 used Schottky-TTL MSI;
+  FPS-164/MAX uses ADSP-1401. No FPS-164 board photos exist online.
+- **`xpmlib_search_results.md`** — record of the search for an XPMLIB
+  binary kernel as a layout-validation artifact. Result: no public
+  XPMLIB exists. Pivot to the FPS-100 archive (62,130 AP-120B
+  microinstructions, 9 .APO files + matching .APS source) as the
+  ancestor-side validation corpus.
+- **`mc_doc_audit.md` / `mc_doc_audit_triage.md`** — Council-of-
+  Clankers audit of all curated docs followed by manual triage
+  separating 9 verified findings (G1–G9) from 5 hallucinated
+  citations (H1–H5). Lesson: LLM auditors fabricate plausible
+  citations; treat findings as hypotheses, not verdicts.
+- **`mc_fps3k_pass2_summary.md`** — second MC pass on the disassembly
+  with the updated context. 250 annotations, 99.6% YES, 77.2% BOTH-
+  agreement (highest of any pass to date). Identified
+  `ChannelConfigOffsetTable @ F046E0` (4 longwords of XLTR config
+  offsets) — now in `fps3k_clean.asm`.
+- **`mc_fps3k_adversarial_focus.md`** — focused 3-stage adversarial
+  pass on the 55 disagreed samples from pass 2. 100% revised — but
+  the pattern was vague-vs-specific not wrong-vs-right; debate
+  collapsed every disagreement to GLM's sharper formulation.
 - **`search_log_apal64_refs.md`** — negative-result search log for
   the APAL64 / XP-32 reference manuals (eBay/abebooks/bitsavers/
   Internet Archive).

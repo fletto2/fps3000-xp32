@@ -21,12 +21,21 @@ floating-point processors for minicomputers. The lineage:
 1976  AP-120B          first product, 12 Mflop/s, 38-bit FP, ~28 boards
                        horizontal microcode (64-bit microword), 167ns clock
 1978  FPS-100          AP-120B compressed onto 10 boards, 250ns clock
-1981  FPS-164          64-bit MSI VLSI, MIMD via /CAP arrays
+1981  FPS-164          64-bit, designed 1979 with Schottky-TTL MSI
+                       (~2000 chips, 7 boards, 760W per Charlesworth 1986)
 1983  XP-32 (FPS-5000) IEEE 754 32-bit, single-board AC, 6 MHz
-                       AMD 29500-series + Weitek FP chips + INMOS SRAMs
-1984  FPS-164/MAX      matrix accelerator boards (WEITEK pipelines)
+                       Am29116 EU sequencer + Weitek FP chips + Am2168 SRAMs
+1985  FPS-164/MAX      matrix accelerator boards: Weitek WTL 1264/1265
+                       + ADI ADSP-3210/3220, ADSP-1401 program sequencer
 1986  FPS-264          ECL FPS-164, 38 Mflop/s
 ```
+
+**Sequencer-chip identification differs by generation.** The original
+FPS-164 (1979/1981) and FPS-264 (1986) both predate or sidestep the
+Am29116 — they use Schottky-TTL MSI control logic. The FPS-164/MAX
+boards use ADSP-1401 as program sequencer. Only the FPS-3000 EXEC
+card (1983) carries an Am29116 in this family. See
+`fps164_chip_identification.md` for the full chain and references.
 
 The **FPS-3000** is an FPS-5000-class entry-level system: a single
 **Control Processor** (the M68KVM02 SBC running this ROM) plus 1–4

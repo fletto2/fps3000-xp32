@@ -14,9 +14,11 @@ The cable runs between the **host-side AP I/F card** (e.g.
 > or trivially mappable.
 >
 > The earlier "inference" estimate of ~50 logical signals was
-> off by ~3× — the actual cable carries ~150 logical signals
-> across two connectors. Substantial implications for the
-> substitute-card design (FPGA required, not MCU).
+> off by ~3× — the actual cable carries **169 distinct net names**
+> per the 4448 netlist table sum, of which ~150 are unique logical
+> signals after excluding ground/power returns. The headline figure
+> "~150" is approximate; the precise table sum is 169. Substantial
+> implications for the substitute-card design (FPGA required, not MCU).
 
 ## Source: `4448_APIF_netlist.txt`
 
@@ -267,9 +269,11 @@ Two physical-world checks remain (both ~1h bench tasks):
    while the chassis is powered and the SBC is running. Confirm
    the netlist's signal names match the FPS-3000-era card.
 
-These are *validation*, not *discovery* — the netlist gives us
-strong priors for the answer. Total bench time: hours, not
-days.
+These are *high-confidence-hypothesis verification*, not blind
+discovery. The 4448 netlist gives strong priors but is for a
+*related* card, not the actual host-side AP I/F. Pin
+correspondence remains a hypothesis pending bench probe. Total
+bench time: hours, not days.
 
 ## What stays open
 
