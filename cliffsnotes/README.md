@@ -43,5 +43,5 @@ documented AP-120B/FPS-164 evolution. The remaining 25 bits and the
 to the XP-32 EXEC card decode as Am29116 TOR1 SUBRC instructions but
 their semantic role (literal MMIO trigger vs dispatch index vs
 hybrid) is unresolved without an EU PROM dump or live bus trace.
-No public XPMLIB binary exists; the FPS-100 archive (62K AP-120B
+No public XPMLIB binary exists; the FPS-100 archive (11.5K AP-120B
 microinstructions) is the closest validation substitute.

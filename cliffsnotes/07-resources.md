@@ -9,7 +9,7 @@
 
 | File group | Count | Bytes | Purpose |
 |---|---:|---:|---|
-| `*LIB.APO` (BAA, BAB, AML, IPR, SIG, UTL, APF, DGN, SYM) | 9 | 494,580 | **62,130 AP-120B microinstructions** |
+| `*LIB.APO` (BAA, BAB, AML, IPR, SIG, UTL, APF, DGN, SYM) | 9 | 494,580 | **11,469 AP-120B microinstructions** |
 | `*SRC.APS` | 9 | — | matching APAL assembly source with comments + revision history |
 | `ASM100.FTN` / `LED100.FTN` / `SIM100.FTN` / `DBG100.FTN` | 4 | — | toolchain (assembler, linker, simulator, debugger) |
 | `KERNEL.{B,S}`, `IOQUE.{B,S}`, `HSVC.{B,S}` | 6 | — | host-side OS pieces |

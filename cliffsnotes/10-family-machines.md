@@ -64,7 +64,7 @@ Same instruction set, same microcode format — different packaging
 **What we have**: the full **FPS-100 RSX-11M v3.2 distribution** (Al
 Kossow's tape recovery from a damaged tape):
 
-- 9 binary math-library `.APO` files = **62,130 AP-120B
+- 9 binary math-library `.APO` files = **11,469 AP-120B
   microinstructions**
 - 9 matching APAL source `.APS` files
 - Toolchain in FORTRAN-77 source (`ASM100/LED100/SIM100/DBG100`)

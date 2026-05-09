@@ -58,6 +58,23 @@ Motorola **M68KVM02-3** VERSAmodule monoboard (MC68000 @ 8 MHz).
 - **`hsr_decoded/`** — **217 routines, 21,066 microinstructions**
   of FPS-100 production microcode disassembled with full APAL-style
   output. See `hsr_decoded/README.md` and `hsr_decoded/CORPUS_ANALYSIS.md`.
+- **`apo_decoded/`** — **313 routines, 11,469 microinstructions** of
+  FPS-100 / AP-120B production microcode decoded from the bitsavers
+  `*LIB.APO` files via `apo_decode.py`. Each routine emitted as
+  APAL-style listing with octal addresses, hex bytes, and canonical
+  SIM100 SPLIT field decode (24 fields per microinstruction). See
+  `apo_decoded/README.md` and `fps100_apo_format_spec.md`.
+- **`apo_decode.py`** — from-scratch Python decoder for the FPS-100
+  `.APO` (ASM100 object) text format. 180 lines, no dependencies.
+  Format reverse-engineered from `LED100.FTN` source via
+  Council-of-Clankers analysis.
+- **`fps100_dapex_annotated.md`** — Council-of-Clankers reference
+  annotation of `DAPEX.MAC`, the FPS-100 host-side dispatcher
+  library (the single chokepoint between user code and APDRV).
+  100 KB.
+- **`fps100_callers_inventory.md`** — 32-file inventory of every
+  source file in the FPS-100 archive that talks to APDRV, organized
+  in 8 tiers (kernel driver → APEX → HSR stubs → toolchain → tests).
 - **`RSX_v511/PDP11_DISASM_README.md`** — full PDP-11 disassembler
   for RSX-11M+ task images.
 - **`mc_results.md`** — Monte Carlo annotation pipeline results
@@ -81,7 +98,7 @@ Motorola **M68KVM02-3** VERSAmodule monoboard (MC68000 @ 8 MHz).
   FPS-164/MAX uses ADSP-1401. No FPS-164 board photos exist online.
 - **`xpmlib_search_results.md`** — record of the search for an XPMLIB
   binary kernel as a layout-validation artifact. Result: no public
-  XPMLIB exists. Pivot to the FPS-100 archive (62,130 AP-120B
+  XPMLIB exists. Pivot to the FPS-100 archive (11,469 AP-120B
   microinstructions, 9 .APO files + matching .APS source) as the
   ancestor-side validation corpus.
 - **`mc_doc_audit.md` / `mc_doc_audit_triage.md`** — Council-of-

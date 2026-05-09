@@ -23,7 +23,7 @@ extracted. Further progress requires either:
   recovered FFT identity-test microcode
 - Bomem-customized RSX-11M+ V5.1.1 disks extracted (4.6 MB OS files,
   but missing application disks)
-- Full FPS-100 archive accessible (62K AP-120B microinstructions
+- Full FPS-100 archive accessible (11.5K AP-120B microinstructions
   + matching APAL source)
 
 ## Open issues (from doc audit + stress test)
@@ -66,7 +66,7 @@ Subtasks:
 2. **Live bus trace** during a known XPMLIB call (requires
    booting the FPS-3000 with a host that can issue XPMLIB calls)
 3. **Inference-only** — refine the consensus layout further from
-   the FPS-100 archive's 62K AP-120B microinstructions
+   the FPS-100 archive's 11.5K AP-120B microinstructions
 
 Path A unblocks Path B.2 (need a working host first).
 
