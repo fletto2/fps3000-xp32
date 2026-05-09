@@ -157,3 +157,62 @@ protocol must be reverse-engineered from:
 
 That's the path the project is currently on. Recovering BOM*
 short-circuits a substantial fraction of it.
+
+## Appendix — full APEX-caller list with reference counts
+
+Comprehensive scan of the FPS-100 archive (binary-safe) for any
+file containing `APEX` as a symbol reference.
+
+### Tier 1 — kernel driver
+
+  `DRIVER.MAC` (1 ref) — the driver itself
+
+### Tier 2 — APEX library (sole `QIO$`-to-AP source)
+
+  `DAPEX.MAC` (8 refs)
+
+### Tier 3 — FORTRAN-callable APEX wrappers
+
+  `IAPEX.FTN` (37 refs) — integer-mode
+  `FDAPEX.FTN` (25 refs) — double-mode
+
+### Tier 4 — math library HSR stubs (217 routines)
+
+| File | APEX refs | Routines |
+|---|---:|---:|
+| `BAAHSR.MAC` | 176 | 88 |
+| `BABHSR.MAC` | 120 | 60 |
+| `SIGHSR.MAC` | 54 | 27 |
+| `AMLHSR.MAC` | 46 | 23 |
+| `IPRHSR.MAC` | 22 | 11 |
+| `DGNHSR.MAC` | 14 | 7 |
+| `UTLHSR.MAC` | 2 | 1 |
+
+### Tier 5 — toolchain
+
+  `MEM100.FTN` (34), `DBG100.FTN` (15), `UFT100.FTN` (10),
+  `LED100.FTN` (5), `ART100.FTN` (3), `APSTOP.FTN` (2),
+  `DGCOM.FTN` (6)
+
+### Tier 6 — FPS-100 internal supervisor (`*.S` files)
+
+AP-side code that calls back to host via APEX RPC:
+
+  `HSVC.S` (3), `HSVCM.S` (1), `HIRP.S` (15),
+  `UPEX.S` (5), `UPEXM.S` (1), `SYSSVC.S` (1)
+
+These run *inside* the FPS-100 (Super-100 / Mini-100 supervisor),
+using APEX as a cross-machine RPC. So the dependency on APEX is
+bidirectional — host code calls FPS-100 via APEX→APDRV→hardware,
+and FPS-100 code calls host via the reverse path.
+
+### Tier 7 — build scripts and install manual
+
+  `APX10.CMD` (14, builds APEX), `ART10.CMD` (2),
+  `DBG10.CMD` (3), `MEM10.CMD` (1), `UFT10.CMD` (2),
+  `UTL10.CMD` (1), `INSTAL.TXT` (29)
+
+### Tier 8 — data / overlay files
+
+  `FHOSTC.DAT` (2), `PATCH.DAT` (3), `SHORT.DAT` (3)
+
