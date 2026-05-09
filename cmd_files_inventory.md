@@ -123,11 +123,14 @@ others don't — making it an **optional, customer-paid upgrade**.
   `hptest.*` looks like driver + register-config + test, all
   hardware-tied)
 
-### What HPVP IS — UNKNOWN, narrowed by elimination
+### What HPVP IS — UNKNOWN, but FPS-100 is back on the table
 
 Per project owner: **HPVP is NOT the FPS-3000** (correction applied
-2026-05-09). Combined with the LOABOM evidence ruling out
-FPS-100-with-rebrand, this leaves:
+2026-05-09). My earlier "HPVP ≠ FPS-100" reasoning had a hole — see
+the dedicated section below. The FPS-100 candidacy is actually
+**still consistent with all available evidence**.
+
+Other plausible candidates:
 
 - A different (non-FPS) array processor brand: Numerix MARS,
   Mercury ZIP, CSPI MAP, Star Technologies ST-100, etc.
@@ -144,13 +147,59 @@ docs. Awaiting clarification + further evidence (most likely from
 disassembling BOMICP.TSK and other Bomem-customized task images)
 before committing to a positive identification.
 
-### Earlier (now-retracted) claim
+### Earlier claims and current state
 
-**Earlier draft of this doc claimed HPVP was most plausibly the
-FPS-3000.** That was retracted on the project owner's correction.
-The LOABOM evidence supports "HPVP is an optional, customer-paid,
-hardware-tied add-on" but does NOT support equating it specifically
-to the FPS-3000.
+Two retractions so far:
+- **HPVP = FPS-100 (Bomem marketing name)** — initially asserted in
+  CLAUDE.md. Later retracted as "unsupported"; that retraction was
+  itself overconfident. **Status: re-opened as still viable.**
+- **HPVP = FPS-3000** — proposed after the first retraction.
+  Project owner: **NOT the FPS-3000**. Status: ruled out.
+
+### Why my "HPVP ≠ FPS-100" argument was wrong
+
+I claimed: "No `APDRV` task in the Bomem RSX boot ⇒ HPVP isn't
+the FPS-100." The hole: the **missing `loahpvp.cmd` script could
+install the AP driver as part of the optional HPVP install**. The
+absence of the AP driver in the base RSX simply means the FPS-100
+isn't part of the standard DA3 install — it's optional. Which is
+exactly what HPVP-the-option describes.
+
+### What's consistent with HPVP = FPS-100
+
+- The FPS-100 is marketed as an array/vector processor → the
+  "High-Performance Vector Processor" name fits
+- `hpcoad.*` matches the FPS-100's SIGLIB **co-add** function
+  (heavily used for FTIR signal averaging — a DA3 core operation)
+- `hpregs.*` matches FPS-100's `FPSMC.MAC` + `DEVTAB.MAC` (CSR /
+  vector address definitions, set by the customer at sysgen)
+- `hptest.*` matches FPS-100's `DGN100` + `PDS100` test programs
+- The runtime question "Are you using the HPVP processor?" is
+  semantically equivalent to FPS-100 sysgen `$NOAP` (number-of-APs
+  configuration)
+- Bomem's pattern of customizing-and-renaming (`ICP.TSK` →
+  `BOMICP.TSK`) is consistent with rebranding the FPS-100 stack
+  with `hp*` prefixes for the application install
+
+### What's NOT in the recovered files
+
+A symmetric gap:
+- **Zero references** to `FPS-100`/`FPS100`/`AP120`/`APDRV`/`APX10`/
+  `HSR100`/`SUP100`/`DRV100`/`XPMLIB`/`MAXL` anywhere in the
+  Bomem RSX disks (CMD, TSK, MAC)
+- **Zero references** to `HPVP`/`HSVP`/`HPCOAD`/`HPREGS`/`HPTEST`/
+  `BOMEM` anywhere in the FPS-100 software archive
+
+Either direction would settle the question. Neither is present.
+
+### Bottom line
+
+The available evidence is **consistent with HPVP=FPS-100**, but
+doesn't prove it. It's also consistent with HPVP being a Bomem-
+built coprocessor or another array-processor brand. The decisive
+artifact is the missing `loahpvp.cmd` (which would name the
+hardware it installs for) or the `hpvp.*` driver source (which
+would identify the chip set it talks to).
 
 ## Project-impact reframing (conditional on HPVP identification)
 
