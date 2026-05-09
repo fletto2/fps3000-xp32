@@ -135,9 +135,20 @@ sends separate command blocks to each.
 
 ## Bomem HPVP — what we can't see
 
-Bomem marketed the FPS-100 as the "HPVP" (High-Performance Vector
-Processor) and their installer (`LOABOM.CMD;2` in the recovered
-RSX-11M+ disks) references HPVP-specific files:
+> **Erratum**: an earlier version of this doc claimed Bomem marketed
+> the FPS-100 as the "HPVP". That was unsupported and is wrong.
+> HPVP is treated by Bomem's installer as an *optional* add-on
+> distinct from the standard FPS-100. The most plausible reading is
+> that **HPVP is the FPS-3000** (or another XP-32-class machine):
+> the XP-32 is genuinely vector-oriented via XPMLIB (`ZVMUL`,
+> `ZVADD`, `ZRFFT` etc.) while the FPS-100 is a scalar-pipelined
+> 38-bit FP unit. Lovett's chassis having *both* an FPS-100 and an
+> FPS-3000 matches the "standard + HPVP upgrade" topology exactly.
+> If correct, this means the missing BOM* application disks contain
+> Bomem-customized FPS-3000 host code — significant for the project.
+
+Bomem's installer (`LOABOM.CMD;2` in the recovered RSX-11M+ disks)
+references HPVP as an optional component with its own file set:
 
 ```
 del bb0:hpvp.*;*4
