@@ -1,0 +1,96 @@
+# 02 — Hardware
+
+## Chassis
+
+14-slot **VersaBUS** chassis (FPS Model 821-9008-011), confirmed from
+`refs/FPS-3000/fps-3000.jpg`. Lovett's unit is populated as a
+**2-AC configuration**:
+
+| Slot | Card | Notes |
+|---:|---|---|
+| 14 | VBUS SBC | M68KVM02-3 — runs the 64 KB ROM |
+| 13 | VBUS XLTR | host↔XP32-bus translator |
+| 12 | FMT | Universal Format |
+| 11 | AP I/F | host computer interface (chassis side) |
+| **10** | **XP-32 EXEC (1)** | AC1 sequencer |
+| **9** | **XP-32 ARITH (1)** | AC1 FP pipes |
+| **8** | **XP-32 EXEC (2)** | AC2 sequencer |
+| **7** | **XP-32 ARITH (2)** | AC2 FP pipes |
+| 6 | MEM CTL | System Common Memory controller |
+| 5–1 | MEMORY ×5 | SCM banks |
+
+The MEM CTL + 5 MEMORY cards form **System Common Memory (SCM)**,
+shared between AC1 and AC2 — this is the **MIMD** part. Each AC = an
+ARITH card (FP pipelines) + an EXEC card (sequencer + control store).
+
+## SBC card (slot 14)
+
+- **CPU**: MC68000 @ 8 MHz, 24-bit address bus
+- **RAM**: 128 KB at `0x000000–0x01FFFF`
+- **ROM**: 64 KB at `0xF00000–0xF0FFFF` (the file we have)
+- **Reset overlay**: ROM aliased at `0x000000` for the first fetches
+- Memory map: see [03-firmware.md](03-firmware.md)
+
+## EXEC card (XP-32 sequencer)
+
+Per Nakazoto's photo (`refs/FPS-3000/cards/05_XP32_EXEC.JPG`), board
+612-4805-002 carries:
+
+- **AMD Am29116DCB** — 16-bit bipolar microprocessor (the EU
+  instruction processor; not a microprogram sequencer in the bit-slice
+  sense)
+- **Am2168-45PCB / CY7C168 SRAMs** in an array — likely the AU writable
+  control store (4K × 128-bit, host-uploaded)
+- **Bipolar PROMs** — likely the EU's fixed program store
+  (Hockney's "2K × 80")
+- **PALs** (DIP-24, custom-marked "29F52 SDC") — combinational decode
+- **74F-series TTL glue**
+
+Open question: which chips are which. The PROM-vs-SRAM identification
+on the EXEC card is not yet definitive — see audit triage G5 in
+`mc_doc_audit_triage.md`.
+
+## ARITH card (XP-32 FP pipes)
+
+Board 612-4806-002 carries:
+
+- A multiplier and two adders (Hockney "WTL-1032/1033"; bitsavers
+  has WTL-1232/1233 datasheets — likely the production parts)
+- Bipolar PROMs in DIP-20 — arithmetic-control fan-out PROMs
+- Am2168 SRAMs — additional buffers/registers
+
+## Sequencer-chip identification across the FPS family
+
+Critical finding ([fps164_chip_identification.md](../fps164_chip_identification.md)):
+
+| System | Year | EU/sequencer chip |
+|---|---|---|
+| AP-120B | 1976 | Schottky-TTL MSI |
+| FPS-100 | 1977 | Schottky-TTL MSI |
+| FPS-164 | 1981 | Schottky-TTL MSI (designed 1979, ~2000 chips) |
+| FPS-164/MAX | 1985 | ADSP-1401 (MAX boards only) |
+| **FPS-3000** | **1983** | **AMD Am29116** |
+| FPS-264 | 1986 | ECL refresh of FPS-164 |
+
+The Am29116 is **not** family-wide. Only the FPS-3000 EXEC card
+carries one. The FPS-164 layout-evolution chain is therefore not
+constrained by chip-level continuity.
+
+## Surviving units
+
+Per `Nakazoto/FloatingPointSystems/KnownSurviving.txt`:
+
+- FPS-3000: **1** (Lovett, Texas) — complete, healthy
+- AP-120B: 4 (LSSM, eBay, China; LSSM only powered)
+- AP-180V: 2
+- FPS-100: 2 (Cully MA powers up; "cw" undisclosed)
+- FPS-5100: 1 (Europe)
+- **FPS-164: 0** — none surviving in the public inventory
+
+## Where to read more
+
+- Full architecture writeup: [`architecture.md`](../architecture.md)
+- AP I/F card details: [`ap_if_card.md`](../ap_if_card.md)
+- Cable protocol: [`cable_protocol_inferred.md`](../cable_protocol_inferred.md)
+- Family chip identification: [`fps164_chip_identification.md`](../fps164_chip_identification.md)
+- Board photos: `refs/FPS-3000/cards/01..08*.JPG`
