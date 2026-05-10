@@ -1,5 +1,20 @@
 # Correction: EU control store is WRITABLE, not fixed PROM
 
+> **THIS DOCUMENT IS RETRACTED.** Re-extracting Hockney with `pdftotext
+> -raw` (preserving italics) shows the actual text says "EU PROM" not
+> "writable control store" for the EU. The italicized abbreviation
+> "e u   p r   o   m" was being dropped by the default pdftotext flow,
+> creating the false reading that EU is writable. Hockney unambiguously
+> describes:
+> - EU = EU PROM (fixed, mask-programmed)
+> - AU = writable WCS
+>
+> So the original project assumption ("EU = fixed PROM") was correct.
+> User caught this because the implications of writable EU did not fit
+> with the architectural evidence (why have RAMs if microcode is in PROMs?).
+> See `eu_storage_clarified.md` for the corrected analysis.
+
+
 Audit-triage item G5 (in `mc_doc_audit_triage.md`) marked the
 "EU control store: PROM vs SRAM" question as open. The answer was
 in Hockney's PDF the whole time.
