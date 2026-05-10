@@ -4,23 +4,26 @@
 
 | Unit | Storage | Width | Size | How filled |
 |---|---|---|---|---|
-| **Executive Unit** (Am29116-class controller) | **writable** WCS per Hockney (&Jesshope) — earlier "fixed PROM" assumption retracted via primary-source check | 80-bit | 2K words ≈ 20 KB | host-loaded (path in SBC ROM not yet traced) |
+| **Executive Unit** (Am29116-class controller) | **fixed bipolar PROM** ("EU PROM" per Hockney) | 80-bit | 2K words ≈ 20 KB | factory mask-programmed |
 | **Arithmetic Unit** (FP pipelines) | writable WCS | 128-bit | 4K × 4 banks ≈ 256 KB | uploaded by SBC from host |
 
 The 80-bit EU width = 16 bits Am29116 instruction + 64 bits side-
 channel control fan-out to the rest of the EXEC card.
 
 The SBC ROM **uploads AU microcode** via the 64 KB staging buffer at
-`0x10000–0x1FFFF` (= exactly one 4K × 128-bit AU bank). Whether the
-SBC also uploads EU microcode is **an open question** — the EU is
-writable per Hockney, so a load path must exist somewhere, but
-we have not yet traced it in the disassembly.
+`0x10000–0x1FFFF` (= exactly one 4K × 128-bit AU bank). It does
+NOT upload EU microcode — the EU is fixed factory-set PROM per
+Hockney's direct text (`pdftotext -raw refs/FPS-5000/FPS3000_fps.pdf`):
 
-> ✓ Resolved (was audit triage G5): EU control store is **writable**
-> per Hockney (`refs/FPS-5000/FPS3000_fps.pdf` direct quote in
-> `correction_eu_writable.md`). The earlier "EU = fixed mask PROM"
-> assumption was wrong. New open question: where in the SBC ROM
-> is the EU upload path?
+> "Microcode programs for the EU reside in EU PROM, which contains
+> 2K 80-bit microcode instructions. Similarly, microcode programs
+> for the AU reside in a writable control store (WCS)..."
+
+The "Similarly, ... writable" CONTRASTS AU's writability with the
+EU's fixed PROM. An earlier draft of this doc misread Hockney as
+saying both are writable; that misread was caused by `pdftotext`
+default mode dropping italicized inline abbreviations. See
+`../eu_storage_clarified.md`.
 
 ## Consensus 128-bit AU layout (inferred)
 

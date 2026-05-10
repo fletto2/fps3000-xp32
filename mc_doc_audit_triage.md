@@ -60,23 +60,33 @@ in the bit-slice sense (the way Am2910 is). It plays the role of
 **Fix:** rename "EU sequencer" → "EU controller" or "EU instruction
 processor" throughout, to avoid implying an Am2910-style architecture.
 
-### G5. EU control store: PROM vs SRAM — **RESOLVED 2026-05-09**
+### G5. EU control store: PROM vs SRAM — **RESOLVED 2026-05-09 (corrected)**
 
-**EU is WRITABLE** per Hockney's primary text. Direct quote from
-`refs/FPS-5000/FPS3000_fps.pdf`:
+**EU is fixed bipolar PROM ("EU PROM")** per Hockney's primary text,
+verified via `pdftotext -raw`:
 
-> "...reside in a writable control store, which contains 2K 80-bit
-> microcode instructions."
+> "Microcode programs for the EU reside in EU PROM, which contains
+> 2K 80-bit microcode instructions. Similarly, microcode programs
+> for the AU reside in a writable control store (WCS) of 4K
+> 128-bit microcode instructions, arranged in four banks."
 
-The original audit's hallucinated p.241 quote was rejected, but the
-underlying fact is correct: BOTH EU and AU control stores are
-writable. The "EU = fixed mask PROM" model in our docs was wrong.
+The "Similarly, ... writable" sentence is CONTRASTING AU writability
+with EU's fixed PROM, not asserting both are writable.
 
-See `correction_eu_writable.md` for full implications. The new
-follow-up question: where in the SBC ROM is the EU upload path?
-(separate from the AU upload at `0x10000-0x1FFFF` staging).
+A first attempt at resolving G5 (in `correction_eu_writable.md`,
+since RETRACTED) misread Hockney as saying EU is writable. That
+misread was caused by `pdftotext` default-mode stripping italicized
+inline abbreviations. User pushed back ("if microcode is in PROMs,
+why have RAMs at all?") which forced re-examination, and the
+corrected reading is settled.
 
-Status: this triage item is closed; a new task supersedes it.
+So the original project assumption ("EU = fixed mask PROM,
+factory-programmed") was correct. The bipolar PROMs visible on the
+EXEC card (Nakazoto photo) ARE the EU contents. The Am2168 SRAMs
+are the AU's writable WCS (one bank's worth, 4K × 128 = 64 KB).
+
+Status: closed. EU recovery path = dump the bipolar PROMs with
+universal PROM programmer.
 
 ### G6. UNIV FMT card role in microcode upload underexamined (DS A-4.1)
 

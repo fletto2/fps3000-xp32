@@ -54,16 +54,20 @@ Group A (`0x258..0x25F`, SRC/Dest=TORIA): `ACC ← I − RAM[R24..R31] − ¬c`
 Group B (`0x260..0x27D`, SRC/Dest=TODRA): `ACC ← RAM[N] − D − ¬c`
 **Semantic role** (instruction vs dispatch index vs hybrid) **remains open.**
 
-**EU and AU control stores are BOTH writable per Hockney.** Direct
-quote from `refs/FPS-5000/FPS3000_fps.pdf`:
-> "...reside in a writable control store, which contains 2K 80-bit
-> microcode instructions. Similarly, microcode programs for the [AU]
-> reside in a writable control store (WCS) of 4K 128-bit microcode
-> instructions, arranged in four banks."
-**This contradicts the long-running "EU = fixed mask PROM" assumption
-in CLAUDE.md, architecture.md, and earlier cliffsnotes.** See
-`correction_eu_writable.md` for full implications. Audit triage
-G5 marked this open; Hockney resolves it: BOTH writable.
+**EU control store is fixed bipolar PROM per Hockney; AU is writable WCS.**
+Direct quote from `refs/FPS-5000/FPS3000_fps.pdf` (extracted with
+`pdftotext -raw` to preserve italicized inline abbreviations):
+> "Microcode programs for the EU reside in EU PROM, which contains
+> 2K 80-bit microcode instructions. Similarly, microcode programs
+> for the AU reside in a writable control store (WCS) of 4K 128-bit
+> microcode instructions, arranged in four banks."
+
+The "Similarly, ... writable" CONTRASTS AU's writability with EU's
+fixed PROM. This **confirms** the long-running project assumption
+that EU = fixed mask PROM. An earlier "correction" claiming both
+are writable (now retracted in `correction_eu_writable.md`) was
+based on a `pdftotext` default-mode misread that dropped the
+italicized "EU PROM" text. See `eu_storage_clarified.md`.
 
 ### FPS-100 archive
 
@@ -179,7 +183,7 @@ These claims appeared in earlier project docs and are removed.
 | # | Retracted claim | Reason |
 |---|---|---|
 | R1 | "First 103 bits inherit cleanly from FPS-164" | Audit-verified: field widths differ significantly (SPAD 12→23, Adder 9→12, Data Pad 19→29, Multiplier 5→9). Names + ordering inherit; widths don't. |
-| R2 | "EU control store is fixed mask PROM" | Hockney explicitly says writable. Long-running mistake corrected. |
+| ~~R2~~ | ~~"EU control store is fixed mask PROM"~~ | **R2 IS ITSELF RETRACTED**. The Hockney "writable" reading was a `pdftotext` misread; with `-raw` flag the actual text says "EU PROM". The original project claim ("EU = fixed mask PROM") was correct all along. |
 | R3 | Detailed DMA sub-fields (specific 4-bit op + 4-bit src + 4-bit dst) | Pure LLM speculation — both DS and GLM proposed slightly different specifics, classic hallucination pattern |
 | R4 | Detailed EU coordination sub-fields (8-bit addr + 2-bit ctrl) | Same — speculative + mathematically inconsistent with claimed 2K PROM |
 | R5 | "Multiplier control too late for pipeline lead" objection | Wrong about FPS-164 — FPS-164 also places multiplier AFTER Data Pad. The objection assumed AP-120B convention. |
