@@ -4,22 +4,23 @@
 
 | Unit | Storage | Width | Size | How filled |
 |---|---|---|---|---|
-| **Executive Unit** (Am29116-class controller) | fixed PROM (likely) | 80-bit | 2K words ≈ 20 KB | mask-programmed at factory |
+| **Executive Unit** (Am29116-class controller) | **writable** WCS per Hockney (&Jesshope) — earlier "fixed PROM" assumption retracted via primary-source check | 80-bit | 2K words ≈ 20 KB | host-loaded (path in SBC ROM not yet traced) |
 | **Arithmetic Unit** (FP pipelines) | writable WCS | 128-bit | 4K × 4 banks ≈ 256 KB | uploaded by SBC from host |
 
 The 80-bit EU width = 16 bits Am29116 instruction + 64 bits side-
 channel control fan-out to the rest of the EXEC card.
 
-The SBC ROM **only uploads AU microcode**, not EU. Confirmed: the
-64 KB staging buffer at `0x10000–0x1FFFF` exactly equals one
-4K × 128-bit AU bank. The EU is opaque from the SBC side — it boots
-from its mask-ROM at power-on; without it the SBC couldn't even
-issue a panel command.
+The SBC ROM **uploads AU microcode** via the 64 KB staging buffer at
+`0x10000–0x1FFFF` (= exactly one 4K × 128-bit AU bank). Whether the
+SBC also uploads EU microcode is **an open question** — the EU is
+writable per Hockney, so a load path must exist somewhere, but
+we have not yet traced it in the disassembly.
 
-> ⚠️ Open question: PROM-vs-SRAM identification on the EXEC card is
-> not yet definitive. See audit triage G5 in
-> [`mc_doc_audit_triage.md`](../mc_doc_audit_triage.md). Photo
-> re-inspection of `refs/FPS-3000/cards/05_XP32_EXEC.JPG` needed.
+> ✓ Resolved (was audit triage G5): EU control store is **writable**
+> per Hockney (`refs/FPS-5000/FPS3000_fps.pdf` direct quote in
+> `correction_eu_writable.md`). The earlier "EU = fixed mask PROM"
+> assumption was wrong. New open question: where in the SBC ROM
+> is the EU upload path?
 
 ## Consensus 128-bit AU layout (inferred)
 
@@ -40,8 +41,12 @@ adversarially stress-tested (`mc_xp32_layout_stress.md`):
 | 116–125 | EU coordination (8-bit EU PROM addr + 2-bit ctrl) | 10 | low |
 | 126–128 | Special-Op + I/O-Op flags | 3 | medium |
 
-First 103 bits (~80%) inherit cleanly from documented FPS-100 →
-FPS-164 evolution. Last 25 bits are speculative.
+First 103 bits (~80%): **field NAMES and group ordering** inherit
+from documented AP-120B → FPS-164 evolution. **Field WIDTHS do NOT
+inherit** — they are XP-32-specific re-allocations. The earlier
+phrasing "first 103 bits inherit cleanly" was misleading and is
+retracted (see `../VERIFIED_CLAIMS.md` §R1). Last 25 bits (DMA, EU
+coord, Special) are pure speculation with no FPS-164 precedent.
 
 ## Adversarial objections to the layout (open)
 

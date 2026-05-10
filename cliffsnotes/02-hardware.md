@@ -41,7 +41,7 @@ Per Nakazoto's photo (`refs/FPS-3000/cards/05_XP32_EXEC.JPG`), board
   sense)
 - **Am2168-45PCB / CY7C168 SRAMs** in an array — likely the AU writable
   control store (4K × 128-bit, host-uploaded)
-- **Bipolar PROMs** — likely the EU's fixed program store
+- **Bipolar PROMs** — possibly a small boot ROM or decode logic; the EU control store is **writable** per Hockney (&Jesshope)
   (Hockney's "2K × 80")
 - **PALs** (DIP-24, custom-marked "29F52 SDC") — combinational decode
 - **74F-series TTL glue**
