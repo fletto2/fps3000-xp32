@@ -1,0 +1,5 @@
+fps3k_sbc
+*.o
+trace.log
+bus.log
+ramdump.bin
