@@ -149,3 +149,60 @@ Add channel-aware response logic to the BOARD_STATUS stub: only
 return "ready, no error" for CHANNEL_SELECT values matching the
 populated 2-AC config (ch 1 = 0x100..0x104, ch 2 = 0x200..0x204,
 others not populated → return error or no-ready).
+
+## Run 5 — channel-aware response attempt (regressed, reverted)
+Tried making BOARD_STATUS bit 4 reflect whether `XLTR.channel_select`
+was in a populated-channel range. Broke the early F08728 poll
+(channel_select = 0 at boot → bit 4 clear → infinite loop).
+Reverted. Lesson: bit 4 of F70019 is "board healthy", not
+"channel responding". The channel-population detection happens
+elsewhere — most likely via per-channel data ports at FF0048-FF00AE
+during RTOSKernelInit (which runs only AFTER HardwareInit completes).
+
+## Run 6 — back to baseline (5M cycles)
+- 188 unique PCs visited
+- 378K instructions executed
+- CHANNEL_SELECT scans 0x100..0x168 (group 1 CSR loopback test)
+- Then jumps to 0x200..0x201 (presumably test phase 2)
+- Stuck in HardwareInit's diagnostic loops — these are CPU self-tests
+  with bit-exact arithmetic checks (not.l/exg/add/asl/bset/bclr/bchg/
+  dbeq) that all pass through Musashi's ALU correctly, but the loop
+  eventually finds a state where d7 stays nonzero indefinitely.
+
+## What's actually happening
+HardwareInit at F08AC8-F08B7E is a comprehensive CPU+board self-test
+suite. It exercises:
+- not.l, exg.l, add.l with paired-register arithmetic
+- subi.l with overflow flag testing
+- asl.l with carry-flag detection
+- bset/bclr/bchg/dbeq bit-manipulation correctness
+
+These tests are designed to catch broken hardware, not to detect
+chassis state. The per-channel CHANNEL_SELECT write inside each
+test iteration is INCIDENTAL — used by hardware logic-analyzer
+probes to identify which test phase is running.
+
+The simulator's CHANNEL_SELECT 0x100..0x168 → 0x200..0x201 jump is
+the boundary between test phase 1 (group 1) and test phase 2 (group
+2). The infinite loop at F08B66 (bra .) is a "should never get
+here" trap — reachable only if the CPU's asl produces non-canonical
+flag state. The fact that we DO reach 0x200..0x201 suggests
+Musashi's flag handling differs from the original 68000 on a
+specific edge case in the asl test sequence.
+
+## Next iteration directions
+
+1. **Trace which exact instruction lands in F08B66.** Run with
+   `-trace`, find the transition `F08B5A → F08B5E → F08B60 →
+   F08B66`. Look at the d0/d6/d1 register state right before.
+   Compare against expected 68000 behavior.
+2. **Skip the diagnostic.** Patch the ROM in-memory at the JSR-
+   to-HardwareInit point (F0874E) to skip past it. Lets the
+   simulator advance to RTOSKernelInit + actual TCBRDHC operation.
+3. **Make HardwareInit pass.** Fix whatever Musashi flag-handling
+   subtlety triggers F08B66.
+4. **Keep iterating.** The current baseline already validates
+   correctness of: reset overlay, MainInit step 1 (VMOD_CTRL),
+   MainInit board-status poll, HardwareInit entry, channel-select
+   sequencing, PollBoardStatus, MC6840 PTM, NEC µPD7201 SIO. That's
+   significant ground covered.

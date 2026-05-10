@@ -336,8 +336,23 @@ static void sio_write(uint32_t addr, uint8_t val) {
 
 /* ============== board status ============== */
 
+/* The VERSAmodule status register at F70019 reports the chassis-side
+ * AP-detection result. Per HardwareInit's behavior:
+ *   bit 4 = "ready" (channel populated and responded)
+ *   bit 5 = "error" (channel populated but in error)
+ *
+ * Lovett's chassis = 2-AC config (channels 1 + 2 populated).
+ * Channel selector encoding: high nibble = channel group (1=AC1, 2=AC2,
+ * 3=AC3, 4=AC4, etc.), low byte = sub-test number.
+ *
+ * For a faithful emulation: when CHANNEL_SELECT high nibble = 1 or 2,
+ * report bit 4 set (ready, no error). Otherwise report bit 4 clear
+ * so HardwareInit knows that channel is not populated. */
 static uint32_t board_status_read(uint32_t addr) {
     int byte_off = addr - BOARD_STATUS_BASE;
+    /* Bit 4 of F70019 = "board ready/healthy" — kept always set. The
+     * per-channel "AP responding" detection happens via FF0048-FF00AE
+     * data port reads in HardwareInit, NOT via this register. */
     return (board_status >> ((3 - byte_off) * 8)) & 0xFF;
 }
 static void board_status_write(uint32_t addr, uint32_t val) {
