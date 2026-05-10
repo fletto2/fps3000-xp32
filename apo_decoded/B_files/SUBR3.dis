@@ -1,0 +1,12 @@
+; APO: fps100_archive/fps100sw/[327,010]SUBR3.B
+; Block counts: {'TITLE': 1, 'AENTRY': 1, 'CODE': 1, 'END': 1}
+; Routines (with code): 1 / total 1
+; Total microinstructions: 4
+
+; ============================================================
+; ROUTINE: SUBR3 (4 microinstructions)
+; ============================================================
+  0000: 00 03 84 00 04 00 1f c0
+  0001: 40 00 00 00 0c 00 00 d0
+  0002: 40 44 00 00 0c 00 00 d0
+  0003: 20 04 00 e0 0c 00 00 d0
