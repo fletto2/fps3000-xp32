@@ -1,5 +1,12 @@
 # EU upload path — corrected trace (v2)
 
+> **SUPERSEDED by `eu_upload_trace_v3.md`** — v2 promoted H2 to leading
+> hypothesis based on finding the 0x700000 region. v3 confirms via
+> exhaustive sweep that 0x700000 is just an 8-byte mailbox (not a
+> data buffer), so H2 is downgraded back to LOW. H1 (EU boots from
+> EXEC PROMs) returns as the leading hypothesis.
+
+
 **v1 finding was incomplete.** Previous trace concluded "EU upload
 is NOT in the SBC ROM" based on examining `SRecordDataHandler` /
 `SRecordFinalize` / `MainInit` / `HardwareInit` / `Phase2Init` /
