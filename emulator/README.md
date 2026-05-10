@@ -103,3 +103,49 @@ because the stubbed read returns inconsistent data. Iterating.
 The VersaBUS dispatch is one function (`versabus_read`/`_write`)
 that delegates to per-device handlers based on address range. Every
 access is logged with device class, size, value, and symbolic name.
+
+## Progress log
+
+### Run 1 — initial smoke test (50K cycles)
+PC reached F08728 (board status poll), bit-4 polling stuck because
+my BOARD_STATUS stub returned 0. Fixed by initializing bit 4 to 1.
+
+### Run 2 — board status fix (200K cycles)
+188 unique PCs visited, 13K instructions. Got past board-ready poll
+into HardwareInit. Started iterating CHANNEL_SELECT 0x100..0x107.
+
+### Run 3 — endurance (5M cycles)
+378K instructions. CHANNEL_SELECT now scans 0x100..0x168 (group 1
+channel test), then 0x200..0x201 (group 2). Still inside
+HardwareInit's CSR-loopback test phase. PollBoardStatus is being
+called many times per channel.
+
+### Run 4 — extended (10M cycles)
+756K instructions. Still in HardwareInit. PC oscillates between
+PollBoardStatus body (F0891C-F08956) and the CSR-loopback driver
+(F08AC2-F08C9C).
+
+### Stuck where, why
+HardwareInit's CSR-loopback test exercises every possible channel
+selector value. The test increments d6 (the channel selector) by
+one each iteration, calls PollBoardStatus to verify the chassis
+responds, then writes the next CHANNEL_SELECT value. With my stubs
+returning consistent "ready, no error" status, the test loops
+through values without finding a failure but also without
+identifying a "real" channel.
+
+### What would unstick it
+The actual chassis would have only specific channels populated
+(in Lovett's 2-AC config: channels 1 and 2 are populated, 3 and 4
+are not). HardwareInit probably terminates the scan when it finds
+a non-responsive channel. To progress, the BOARD_STATUS stub needs
+to alternate between bit-4-set (responsive) and bit-4-clear or
+bit-5-set (not responsive / error) based on which CHANNEL_SELECT
+value was last written. That requires the BOARD_STATUS stub to
+read from XLTR.channel_select state.
+
+### Iteration target
+Add channel-aware response logic to the BOARD_STATUS stub: only
+return "ready, no error" for CHANNEL_SELECT values matching the
+populated 2-AC config (ch 1 = 0x100..0x104, ch 2 = 0x200..0x204,
+others not populated → return error or no-ready).
