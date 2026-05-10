@@ -1,0 +1,965 @@
+Motorola M68KVM02
+VersaModule Monoboard Microcomputer
+
+
+
+
+                                                         In Stock
+
+                                                         Used and in Good Condition
+
+                                                           Open Web Page
+
+                                                         https://www.artisantg.com/62962-1
+
+                        Al
+                         lt
+                          rademar
+                                ks,br
+                                    andnames
+                                           ,andbr
+                                                andsappear
+                                                         ingher
+                                                              einar
+                                                                  ethepr
+                                                                       oper
+                                                                          tyoft
+                                                                              hei
+                                                                                rres
+                                                                                   pec
+                                                                                     ti
+                                                                                      veowner
+                                                                                            s.
+
+
+                           •Cri
+                              ti
+                               calandexpedi
+                                          tedser
+                                               vic
+                                                 es                    •Webuyyourexces
+                                                                                     s,under
+                                                                                           uti
+                                                                                             li
+                                                                                              zed,andi
+                                                                                                     dleequi
+                                                                                                           pment
+                           •I
+                            ns t
+                               ock/Ready-t
+                                         o-shi
+                                             p                         •Ful
+                                                                          l
+                                                                          -ser
+                                                                             vic
+                                                                               e,i
+                                                                                 ndependentr
+                                                                                           epai
+                                                                                              rc ent
+                                                                                                   er
+         Artisan Scientific Corporation dba Artisan Technology Group is not an affiliate, representative, or authorized distributor for any manufacturer listed herein.
+                                                                                                    M6810/11102-3
+   VERSAmodule                                                           —     I I
+
+   Monoboard
+   Microcomputer
+
+• MC68000 8 MHz 16-bit MPU
+   — 16 32-bit data, address and stack registers
+   — 14 addressing modes
+   —16 megabyte direct addressing range
+   — Memory mapped I/O
+   — 56 powerful instruction types
+   — Operations on five data types including bit, byte, word,
+       long word and BCD                                            • Two multiprotocol serial I/O ports with RS-232C interface
+                                                                      selectable for MODEM or terminal use. Asynchronous and
+   — Provides interlock instruction for multiprocessor systems        synchronous byte-oriented protocols (including IBM Bi-
+   — 256 multilevel vectored interrupts including exceptions,         sync) as well as SDLC and HDLC bit-oriented protocols
+       traps and external interrupts                                  are supported. Internal clock rates strappable from 50 bps
+   — Architecturally optimized for efficient support of high-         to 19.2 kbps. External clock rates to 600 kbps supported.
+       level languages.                                             • Three 16-bit programmable timer/counters. All three are
+• VERSAbus system bus compatibility with bus arbitration              cascadable. When not programmed to create an interrupt
+   logic.                                                             the timer may be programmed to issue an output to an
+                                                                      external device. By jumper selection, time/count inputs can
+• Local on-board bus for intercommunications between the
+                                                                      be connected to:
+   MPU, ROM, RAM, serial I/O and timer/counter resources
+   as well as interface to VERSAbus.                                  — Serial port baud rate clocks
+• I/O Channel for interfacing off-board resources such as             — 2 MHz clock
+   A/D, discrete I/O and parallel I/O to the monoboard                — VERSAbus ac line clock
+   microcomputer.                                                     — External input
+• 128K byte Dynamic RAM with shared memory access from              • 0° C-70° C operating temperature range
+   local bus and VERSAbus via a dual port controller. Byte
+   parity with automatic retry is a jumper option. RAM may             The VM02 VERSAmodule Monoboard Microcomputer is
+   be strapped to operate from VERSAbus +5 Vdc standby              a complete microcomputer system-on-a-board. At its heart
+   power for external battery backup. Power fail write inhibit      is the powerful microprocessor representing a significant
+   logic is included.                                               advance in 16-bit units — the MC68000. Its architecture is
+• Two 28-pin sockets for up to 64K bytes of user provided           optimized for high-level language support to foster rapid pro-
+   2, 4, 8, 16 or 32K byte ROM/PROM/EPROM devices.                  gram development.
+
+
+
+
+                      MOTOROLA 1 6 / 3 2 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                                             2-51
+M68KVM02-3
+
+
+   The Monoboard Microcomputer in combination with the                mation systems. For example, its shared RAM permits effi-
+VERSAmodule Chassis and Real-time Multitasking Software               cient DMA operation with VERSAbus Intelligent Peripheral
+(RMS68K) provides a complete design environment that                  Controller (IPC) Modules as well as intercommunications
+frees the system designer to develop the software required            between multiple monoboards and processors in complex
+for the unique I/O hardware of his application.                       systems. Figure 1 diagrams the major functional components
+   Many powerful features equip VM02 for application in a             of the Monoboard Microcomputer.
+wide spectrum of industrial automation and general infor-
+
+
+                                           FIGURE 1 — M68KVM02 Block Diagram
+
+                                            Reset                   Abort
+                                                                                                                  )
+              Board Fault ik { R u n / H a l
+                   Indic.                               System
+                                     Indic.            Controller                                Two Sockets for
+                                                        Select                                  ROM/PROM/EPROM
+                             System
+                              Test
+                             Control                                                                128K BYTE
+                                               Reset    Reset
+                                                        Control                                   Dynamic RAM
+                                                                                                  with Byte Panty
+
+             Status and
+              Control                      MC68000 MPU
+              Register                                                                               Dual Port
+                                                                                                     Controller
+
+                             Local Bus
+
+
+                                                                       L
+                                                                VERSAbus
+             I/O Channel        2 Serial          3 16-Bit       Interface                VERSAbus
+                                               Programmable • Address • Data               Interrupt       VERSAbus
+               Interface       I/O Ports                         • Control                                  Arbiter
+                                               Timer/Counters                              Handler
+                                                               • Interrupter
+
+
+
+      P2                                                                      VERSAbus                                 P1
+
+
+
+I/O Channel                                                           Serial I/O Ports
+   An I/O Channel lets small, single function, non-VERSAbus             The VM02 serial port 1 and serial port 2 are independent
+boards be easily added to enlarge the microcomputer func-             communication channels each comprising a parallel-to-serial
+tion. One such board can be directly connected to the                 conversion section using RS-232 serial drivers and a serial-
+monoboard itself. Other boards, externally mounted, can ac-           to-parallel section using RS-232 serial receivers.
+cess the I/O Channel from the VERSAbus backplane                         The Transmit Clock (TXC) input of each port can be con-
+connectors. These can be connected using up to 12' of                 nected by jumper selection to the port baud rate generator
+multidrop ribbon cable.                                               to obtain any of 16 data transmission rates. Or the input can
+
+
+
+
+                      MOTOROLA 1 6 / 3 2 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                                               2-52
+M68KVM02-3
+
+
+be synchronized with an external serial receiver via serial               base address is PROM configurable on 1K byte boundaries
+link. Similarly, jumper selected connection of the Receiver               within a 256K byte jumper selectable block of VERSAbus
+Clock (RXC) input to the baud rate generator can provide                  space. T h u s on-board RAM appears a s a separate R A M
+any o f 16 data reception rates. O r the rate can be set by               board to other modules on the VERSAbus.
+synchronization with an external transmitter via serial link                The 1K byte blocks can be individually configured as•
+   For interfacing a t high data rates over longer distances                — Local RAM
+than those provided by RS-232 devices, the TXC and RXC
+                                                                            — Shared Read/Write RAM
+inputs on port 2 are supported at TTL levels permitting use
+of a user-supplied TTL-to-RS-422 adapter board powered by                   — Shared Read-Only RAM
+VM02 via port 2.                                                            — Shared Program Write Protectable RAM
+   Both ports are software configurable to support asynchro-
+                                                                            RAM blocks configured as local are shielded from VERSAbus
+nous and synchronous protocols. Synchronous protocols in-
+                                                                          access. Blocks configured a s shared program-protectable
+clude monosync and bisync Character Oriented Protocols
+                                                                          can be write protected by the on-board processor under pro-
+(COP) and SDLC and HDLC Bit Oriented Protocols (BOP).
+                                                                          gram control via the control register. This feature can provide
+Parity checking is software selectable for a!I modes and CRC
+                                                                          protected operation following an initial bootstrap load.
+operations are supported for the COP and BOP procotols.
+   All interrupts from the serial ports are routed to the MPU
+                                                                          VERSAbus Interface
+over a single line the priority level of which can be strapped
+for level six or wire-wrapped for levels 1-5. A serial interrupt             VERSAbus is characterized by asynchronous, bidirectional
+cycle is completed by the MPU causing the dual-ported RAM                 operation a n d support o f Direct Memory Access (DMA),
+section to place a program supplied vector number on the                  multiprocessor operation and the full 16 megabyte address
+data lines.                                                               range of the MC68000 MPU. Design requiring an expanded
+   Several interrupt-causing modes can exist within each port.            microcomputer function can utilize the VERSAbus interface
+The condition-affects-vector mode can be enabled s o that                 to add other resources such as RAM and intelligent I/O con-
+the port status register can be read to determine the cause               trollers. Pins for all address, data, and control lines are pro-
+of an interrupt. When the mode is disabled, various registers             vided in the 140-pin VERSAbus connector, P1. The 120-pin
+ must be examined for the interrupt cause. Interrupt causing              connector P2 provides interface to the serial I/O and pro-
+conditions are cleared via software commands sent to the                  grammable timer functions and to monoboard microcomputer
+serial port control register.                                             support of the I/O Channel.
+
+
+Programmable Timer                                                        Local Bus
+                                                                             On board functional components are interconnected by a
+   Each o f the three separate programmable 1 6 -bit timers
+                                                                          local bus which is connected to the VERSAbus interface, the
+within an MC6840 Programmable Timer (PTM) device can
+                                                                          I/O Channel interface or one of the serial ports when the on-
+operate in any of four modes: 16-bit continuous, single shot,
+                                                                          board M P U accesses an o ff -board resource. This feature
+period measurement o r pulse width measurement. E a c h
+                                                                          allows monoboard microcomputer processing to proceed si-
+timer can be cascaded with another and programmed to use
+                                                                          multaneously with the activities of another bus master.
+the internal or external clock. This PTM versatility equips the
+VM02 for straightforward application in environments requir-
+ing pulse generation, interval and period measurement, in-
+                                                                          Bus Request
+dustrial timing control and programmable one-shot functions.                 Normal access to off-board VERSAbus resources is pro-
+   The timers appear in the VM02 memory map at locations                  vided the MPU by means of a five-priority-levels bus request
+F70001 t o F7000F. Only the lower bytes are used.                         method. The monoboard level is strap selectable.
+                                                                             For normal access, VERSAbus mastership is gained in one
+Local Memory                                                              of two ways:
+   Jumper selection allows the 28-pin ROM/PROM/EPROM                        Direct Request - A program can use the VM02 status
+sockets to be used for 24-pin 2716/2732 devices or 28-pin                   and control registers to insure bus mastership prior to per-
+16K byte and 32K byte devices. Jumper selection of VERSAbus                 forming a function requiring access t o a VERSAbus re-
+Data Acknowledge (DTACK) response time permits devices                      source. Bus mastership is retained until released by the
+of various speeds to be used. Device access times can range                 program via the status and control register. The direct re-
+from 0 to 500 ns.                                                           quest method permits a board to transfer blocks of data
+   The on-board RAM is fully accessible to the processor via                at the maximum rate.
+one port o f the dual port controller. F o r access from t h e               Indirect Request - A program can also access a VERSA-
+VERSAbus interface via the second controller port, the RAM                   bus resource without first insuring bus mastership through
+
+
+
+
+                         MOTOROLA 1 6 / 3 2 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                                                   2-53
+M68KVM02-3
+
+
+  use of the status and control register. In this case if the            feature allows user-provided firmware routines to take emer-
+  monoboard is not currently bus master, a BUS REQUEST                   gency measures. These might include saving critical data in
+  at the strap-selected priority level is automatically issued.          non-volatile VERSAbus RAM or local RAM powered from the
+  On completion of the access, the bus is automatically re-              5.0 V standby line on the VERSAbus (a jumper option).
+  leased by the monoboard. This software-transparent in-
+  direct method provides a means by which, in a multiple
+  processor-board system, each processor can access
+                                                                         System Controller Functions
+  memory on a cycle-by-cycle basis.                                         When configured by strap option as system controller,
+                                                                         VM02 provides the following system management and control
+VERSAbus Interrupter                                                     functions:
+   A VERSAbus interrupter function provides a means of com-              • VERSAbus Arbitration — The arbiter accepts bus requests
+munication between monoboard microcomputers in a multi-                     on five priority levels from other bus masters and grants
+processor environment or between a monoboard and other                      the bus to the highest priority requester. This function fa-
+interrupt-handling boards. Under program control, the                       cilitates orderly management of the contention for bus
+monoboard MPU can cause the VERSAbus interrupter to                         mastership on the VERSAbus.
+generate an interrupt request signal by writing a value in the           • System Clock — A 16 MHz clock signal is provided to other
+interrupt bits in the control register. The signal is placed on             VERSAbus devices for various counting and synchronizing
+the one of seven interrupt lines corresponding to the specified             tasks.
+priority level.                                                          • Reset — On entering the reset state, the monoboard
+                                                                            microcomputer additionally drives the reset line in the
+System Interrupt Handler                                                    VERSAbus low.
+   VM02 response to VERSAbus interrupts is configured by                 • Bus Timeout— Bus timeout generates a bus error (BERR)
+strap option. Any combination of the seven priority levels can              when a nonexistent bus address is placed on the
+be selected. In a multiple monoboard environment, this allows               VERSAbus. Timeout is selectable as 8, 16, 32, or 64
+a unique set of levels to be chosen for each monoboard on                   microseconds, or can be disabled.
+the VERSAbus.
+   On recognizing an interrupt of valid priority, the interrupt             System controller functions are normally provided by only
+handler requests control of the VERSAbus. When granted,                  one module plugged into the VERSAbus backplane. If more
+the handler initiates an interrupt acknowledge cycle then                than one VERSAmodule Monoboard Microcomputer is used
+passes to the MPU the vector number placed on the                        in a multiprocessor system, only one can be strapped as
+VERSAbus data lines by the interrupting board.                           system controller.
+
+Power-Down Monitor                                                       Memory Mapped I/O
+   VM02 monitors the VERSAbus AC Fail line which can be                    Memory addresses in the range of F70000 (Hex) through
+driven from an external power fail sense module. If the non-             F70019 are allocated to the status register, the serial I/O
+maskable interrupt priority level is strap selected, a low level         ports, and to the PTM modules. The memory map of the
+on the AC Fail line will cause the MPU to be interrupted. This           VM02 monoboard microcomputer is shown in Figure 2.
+
+
+
+
+                       MOTOROLA 1 6 / 3 2 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                                                  2-54
+M68KVM02-3
+
+
+                                        FIGURE 2 — Memory Map
+
+
+                             <—UPPER BYTE—> I <—LOWER BYTE—>
+                                                         I
+                              D15                    D8 I D 7                     DO
+                    FFFFFE                                                             FFFFFF
+                                                 VERSAbus
+                                               Short I/O Address
+                    FF0000                                                             FF0001
+                    FEFFFE                                                             FEFFFF
+                                                     VERSAbus
+                    F82000                                                             F82001
+                    F81FFE                                                             F81FFF
+                                     Illegal y        A       I / O Channel
+                    F80000                                                             F80001
+                    F7FFFE                                                             F7FFFF
+                                                     VERSAbus
+                    F7001A                                                             F7001B
+                    F70018          VERSAmodule Status Register                        F70019
+                    F70016                                                             F70017
+                                                                   Serial Ports
+                                     Illegal          -        -         - -      _    F70011
+                                                                                       F7000F
+                                                 A        —        P T M
+                    F70000                                                             F70001
+                    FFFFFE                                                             F6FFFF
+                                                  VERSAbus
+                    F10000                                                             F10001
+                /   FOFFFE                                                             FOFFFF
+                                                       ROM
+          64K F 0 0 0 0 8                                                              F00009
+         Bytes F 0 0 0 0 6                                             LSB              F00007 I n i t i a l
+           of                                                                                      program
+                                                                                                                 Used
+         ROM F 0 0 0 0 4              MSB                                               F00005 c o u n t e r
+                                                                                                                 during
+         space F 0 0 0 0 2                                             LSB             F00003 I n i t i a l r e s e t
+                                                                                                  stack
+                    F00000            MSB                                              F00001 p o i n t e r
+                    EFFFFE                                                             EFFFFF
+
+                    Top of                           VERSAbus                           Top of
+                    RAM+ 1                                                             RAM + 2
+                    01FFFE                                                             01FFFF
+
+
+                    01FFF0          VERSAmodule Control Registerl                      01FFF1
+
+                    000000                           128K RAM                          000001
+
+                             1. Control Register image only. Register not directly accessible.
+
+
+
+
+      MOTOROLA 1 6 / 3 2 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                               2-55
+M68KVM02-3
+
+
+                                     TA B L E 1 — V M 0 2 Specifications
+              Characteristics                                                      Description
+
+ Microprocessor                             MC68000
+  Clock Frequency                           32 MHz, crystal controlled, providing 8 MHz to the MPU, and 16 MHz
+                                            to the VERSAbus "System Clock" line
+  Data Bus Width                            16 Bits
+  Address Bus Width                         24 Bits
+  Instructions                              56 Variable Length Instructions (From 2 to 10 bytes)
+  Addressing Modes                          Fourteen Addressing Modes
+  Registers                                 19 Registers (Data, Address, Stack Pointer, Program Counter, Status)
+                                            See the MC68000 16-Bit Microprocessor User's Manual for additional
+                                            details
+ Memory Capabilities
+  Total Directly Addressable                16,777, 216 Bytes
+  (on-board and off-board)
+  ROM/PROM/EPROM                            Two 28-pin sockets are provided for 2K, 4K, 8K, 16K or 32K byte devices
+  (user-supplied)                           using + 5.0 Vdc only. Total ROM capacity is 64K bytes.
+    ROM Base Address                        F00000 (Fixed)
+   Dynamic RAM                              128K bytes with on-board refresh control circuitry.
+   (on-board)
+    Error Checking                          Byte parity generation and checking with automatic retry and generation
+                                            of bus error on fail may be activated or deactivated by user strap option.
+    Battery Backup                          Jumper option battery backup capability (user must provide + 5 . 0 volt
+                                            standby p o w e r a n d t h e s y s t e m r e q u i r e s t h e p o w e r f a i l m o n i t o r
+                                            M68KVMPM1).
+    Base Address                            PROM configurable on 1K byte boundaries within one jumper selectable
+                                            256K byte block of VERSAbus space.
+    Access Timing                           Number of MPU Wait Cycles for accessing the on-board RAM.
+    (on-board)
+                                                     8 MHz MPU                 No. of Wait Cycles                MPU Cycle Time
+                                                    Access Cycle                Typ. M a x                        Typ. M a x .
+                                                Write                               0              1            625 ns         750 ns
+                                                Read with panty                     2              3            750 ns         875 ns
+                                                 detection disabled
+                                                Read with parity                    3              4            875 ns        1000 ns
+                                                 detection enabled
+                                            NOTE Times shown assume no memory access contentions from the VERSAbus or the
+                                            efresh circuitry
+
+
+
+
+                     M O TO R O L A 1 6 / 3 2 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                                        2-56
+M68KVM02-3
+
+
+                                 TA B L E 1 — V M 0 2 Specifications ( c o n t i n u e d )
+               Characteristics                                                     Description
+
+
+    Access Timing                                Slave Board Access Times vs. Wait State Pairs
+    (off-board)
+                                                         Slave Board Access                        8 MHz MC68000
+                                                              Times (ns)                           Wait State Pairs
+                                                        Min.                Max.                 Read           Write
+                                                           0                 70                   1                   0
+                                                          71                195                   2                   1
+                                                         196                320                   3                   2
+                                                         321                445                   4                   3
+                                                         446                570                   5                   4
+                                                         571                695                   6                   5
+                                                         696                820                   7                   6
+                                                         821                945                   8                   7
+
+                                                 Assumptions:
+                                                  1 S l a v e board access time is referenced at the edge connector for that
+                                                     particular board. Access time is the time from a data strobe (DSO*
+                                                     or DS1*) low to DTACK* low.
+                                                  2 N o bus arbitration i s required (the MPU holds t h e bus between
+                                                     cycles). If the VM02 gives up the bus between access cycles, the
+                                                     numbers of wait states is indeterminate.
+                                                  3. VERSAbus propagation delay is assumed to be 10 ns.
+                                                  4. V M 0 2 provides the following delays from AS* to DS1*/DSO` low with
+                                                      an 8 MHz processor.
+                                                        0 ns min. to 50 ns max. (read cycle)
+                                                        0 ns min. to 85 ns max. (write cycle)
+ Serial I/O Ports                                Two NEC 7201-Implemented serial I/O ports selectable for terminal or
+                                                 MODEM use.
+   Interface                                     RS-232C Support inputs TXC and RXC of Port 2 at TTL levels
+   Protocols                                     Asynchronous and synchronous byte-oriented (including IBM Bisync)
+                                                 plus SDLC and HDLC bit-oriented protocols.
+   Baud Rates                                    Support external clock rate t o 600 kbps and sixteen strap-selectable
+                                                 rates:
+                                                                           Strap-Selectable Rates
+                                                                                50            1800
+                                                                                75            2000
+                                                                               110            2400
+                                                                               134.5          3600
+                                                                               150            4800
+                                                                               300            7200
+                                                                               600            9600
+                                                                              1200           19200
+
+
+
+
+                    MOTOROLA 1 6 / 3 2 -BIT MICROCOMPUTER SYSTEM C O M P O N E N T S
+
+                                                          2-57
+M68KVM02-3
+
+
+                               TABLE 1 — VM02 Specifications (continued)
+             Characteristics                                            Description
+ Programmable Timer/Counter (PTM)         Implemented using an MC6840 device which provides three 16-bit pro-
+                                          grammable binary counters. Each 16-bit section may be operated in-
+                                          dependently or sections may be cascaded to provide 32-bit or 48-bit
+                                          operation under control of the MPU.
+                                          Provides access to three lines from each of the 16-bit counter sections
+                                          (a total of nine lines) at the I/O connector, P2:
+                                             Gate Input
+                                             Clock Input
+                                             PTM Output
+                                          Strap options allow five clock functions to be provided to the PTM:
+                                             "AC Clock" (from VERSAbus)
+                                             Baud rate clocks from the on-board serial port baud rate generators
+                                             Address strobe from the local bus
+                                             2 MHz clock (derived from the on-board clock)
+                                             Externally-provided time/count source from I/O connector, P2.
+                                           Provide the PTM Interrupt output to the MPU on a user-selectable priority
+                                           level.
+                                           See MC6840 Fundamentals and Applications Manual (MC6840UM) for
+                                           further details.
+ Interrupts
+   VERSAbus Interrupts                     Permits any or all of the seven interrupt request lines from the VERSAbus
+                                           to be strapped to enable generation of an interrupt of corresponding
+                                           priority level that is sent to the on-board MPU. In responding to a
+                                           VERSAbus interrupt, the monoboard microcomputer must (a) request
+                                           and gain bus mastership, (b) acknowledge the VERSAbus interrupt re-
+                                           quest, and (c) accept the interrupt vector from the interrupting device.
+                                           In addition, the MPU responds to 12 "on-board" interrupts. When on-
+                                           board and off-board interrupts of the same level occur at the same time,
+                                           the on-board interrupt is serviced first.
+   Interrupter                             Permits a VERSAbus interrupt to be generated at a software selectable
+                                           level by writing to the status control register.
+ System Controller Functions               Activated only if the board is strap-selected as system controller.
+   VERSAbus Arbitration                    Accepts priority level requests from potential bus masters on the five
+                                           VERSAbus bus request lines.
+                                           Issues a bus clear signal to the current bus master if a bus request at
+                                           a higher priority level than that of current bus master is received.
+                                            Issues a bus grant signal back to the highest priority requester when the
+                                           bus is clear.
+   System Clock                             Drives VERSAbus system clock line with 16 MHz signal.
+   Reset                                    Drives VERSAbus system reset line low upon occurrence of either of the
+                                           following conditions:
+                                            Manual activation of the RESET button on the top board edge
+                                            Power-up
+
+
+
+
+                  MOTOROLA 1 6 / 3 2 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                                    2-58
+M68KVM02-3
+
+
+                               TABLE 1 — VM02 Specifications (continued)
+            Characteristics                                            Description
+ Power Down Provision                     If the board is configured as system controller, it monitors the AC Fail
+                                          line on the VERSAbus and, if the line is driven low by an external power
+                                          failure detector, 1. generates and sends a non-maskable interrupt to the
+                                          on-board MPU and, 2. generates and places a Bus Release signal on
+                                          the VERSAbus.
+ Board Status/Control Registers
+   Size                                   28 bits
+   Status Inputs                          System Controller
+   12 Bits                                VERSAbus Available
+                                          VERSAbus Interrupt Serviced
+                                          System Failure
+                                          VERSAbus Test
+                                          User-Defined (6)
+   Control Outputs                        VERSAbus Interrupt
+   16 Bits                                VERSAbus Interrupt Acknowledge Mask
+                                          System Controller VERSAbus Transfer Request
+                                          VERSAbus Block Transfer Request
+                                          Board Fail Status
+                                          Interrupt Mask
+                                          VERSAbus Available Mask
+                                          System Fail Interrupt Mask
+                                          Write Protect
+                                          I/O Channel Interrupt Mask
+                                          VERSAbus Resource Management (4)
+ VERSAbus Interface Functions             The following subset of the complete VERSAbus function set is
+                                          implemented.
+                                          See the VERSAbus Specification Manual (M68KVBS).
+   Data                                   16 Lines
+   Address                                23 Lines
+   Address Modifiers                      8 Lines, providing the following functions:
+                                             Short I/O Address Map Selection
+                                             Interrupt Acknowledge Map Selection
+                                             Supervisory Program Map Selection
+                                             Supervisory Data Map Selection
+                                             User Program Map Selection
+                                             User Data Map Selection
+                                             Special function user-defined maps
+
+
+
+
+                     MOTOROLA 1 6 / 3 2 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                                  2-59
+M68KVM02-3
+
+
+                               TABLE 1 — VM02 Specifications (continued)
+             Characteristics                                     Description
+  Data Transfer Control                   Data Strobes (2)
+                                          Write Line
+                                          Address Strobe
+                                          Data Transfer Acknowledge
+                                          Bus Error
+  System Control                          System Reset
+  Priority Interrupt Control              Interrupt Request (7 Priority Lines)
+                                          Acknowledge In (Daisy Chain)
+                                          Acknowledge Out (Daisy Chain)
+  Bus Arbitration Control                 Bus Busy
+                                          Bus Clear
+                                          Bus Release (Emergency Bus Request)
+                                          Bus Request (5 Priority Lines)
+                                          Bus Grant In (Daisy Chain — 5 Lines)
+                                          Bus Grant Out (Daisy Chain — 5 Lines)
+  System Test                             System Fail, 2 Test Lines
+  Power Monitor                           AC Failure
+  Misc. Functions                         System Clock (16 MHz — square wave)
+                                          AC CLock (50/60 Hz — square wave) receive only
+                                           +5 Vdc
+                                           +12 Vdc
+                                           —12 Vdc
+ Operating Temperature                    0° to 70°C
+ Humidity                                 0% to 95%, non-condensing
+ Physical Characteristics
+   Height                                 9.25 in. (32.5 cm)
+   Width                                  14.5 in (36.8 cm)
+  Thickness                               0.6 in. (1.5 cm)
+ Bus Mating Connector Types
+   VERSAbus Connector (P1)                Stanford Applied Eng'g CP1-17000-140ST
+                                          Micro Plastics, Inc. M P - 0 1 0 0 - 7 0 - D W - 5 H
+   I/O Connector (P2)                     Stanford Applied Eng'g CPH7000-120ST
+                                          Micro Plastics, Inc. M P - 0 1 0 0 - 6 0 - D W - 5 H
+ Power Requirements                                +5 Vdc        +    1     2     Vdc      —     1   2    Vdc
+   Current Requirements                       Typ. M a x .                Typ. M a x .           Typ.       Max.
+       Two MCM68764 with EPROMS
+                                              5.5 A 6 . 4 A             .045 A . 0 5 5 A         .035 A    .045 A
+
+ Dynamic RAM Current Requirements
+                                            Typ. M a x .
+   Active                                  430 mA 5 0 0 mA
+   Standby                                 320 mA 3 6 0 mA
+   Supply Voltages                         +5 V ±5%
+                                           +12 V ±5%
+                                           —12 V ±5%
+
+
+
+
+                    MOTOROLA 16/32 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                                   2-60
+M68KVM02-3
+
+
+                                       TA B L E 2 — Signal Characteristics, I / O C o n n e c t o r P 2
+
+   Connector                 Signal                                                                   Signal Characteristic
+     Pins                   Mnemonic                    Signal Name and Description                Input               Output
+
+  33,35-44,46           A00—A11                   I/O Channel address lines.                         —                    B
+         53             CLK                       CLOCK — I/O Channel 4-MHz clock.                   —                    B
+          72            CLOCK1*                   CLOCK 1 — May be used as an input                   A                  —
+                                                  clock for timer 1.
+          78            CLOCKT                    CLOCK 2 — May be used as an input                   A                  —
+                                                  clock for timer 2.
+          84            CLOCK3*                   CLOCK 3 — May be used as an input                   A                  —
+                                                  clock for timer 3.
+         79             CTS1                      CLEAR TO SEND — Indicates that                     C**                 C -
+        107             CTS2                      terminal may transmit data.                        C—                  C -
+     19,21-27           DO—D7                     I/O channel data bits.
+         85             DCD1                      DATA CARRIER DETECT — Indicates                    c-                  c-
+        113             DCD2                      to terminal that a suitable data carrier is        c-                  c"
+                                                  present.
+         81             DSR1                      DATA SET READY — Indicates that                    C**
+        109             DSR2                      the data set (modem) is ready.                     C"
+         87             DTR1                      DATA TERMINAL READY — Indicates                    C—                  C -
+        115             DTR2                      that data terminal is ready to transmit            c-                  C**
+                                                  or receive data. The on-to-off transition
+                                                  will signal the modem to "hang up" the
+                                                  line.
+          74            GATE1*                     GATE 1 — May be used to inhibit                    A                  —
+                                                   CLOCK1*.
+          80            GATE2*                     GATE 2 — May be used to inhibit                    A                   -
+                                                   CLOCKT.
+          86            GATE3*                     GATE 3 — May be used to inhibit                    A                   —
+                                                   CLOCK3*.
+    1-6,18,20,          GND                        GROUND                                            —                    —
+    27,30,32,
+    24,45,48,
+    50,52,54,
+    56,58,60,
+    62,64,66,
+    71,83,99,
+     111,117
+          59            INT1*                      INTERRUPT 1 — I/O channel                          B
+                                                   interrupt 1.
+          61            INTT                       INTERRUPT 2 — I/O channel                          B
+                                                   interrupt 2.
+          63            INT3*                      INTERRUPT 3 — I/O channel                          B
+                                                   interrupt 3.
+          65            INT4*                      INTERRUPT 4 — I/O channel                          B
+                                                   interrupt 4.
+•A, B, C, and D charactenshcs defined in Table 3
+**Signal charactenstics may vary according to whether this port is defined as terminal or modem
+
+
+
+
+                           M O TO R O L A 1 6 / 3 2 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                                                           2-61
+M68KVM02-3
+
+                TABLE 2 — Signal Characteristics, I/O Connector P2 (continued)
+ Connector       Signal                                                 Signal Characteristic
+   Pins        Mnemonic          Signal Name and Description            Input           Output
+    76       OUTPUT1         TIMER 1 OUTPUT — The Timer 1                —                 B
+                             output may be selected to appear on
+                             this pin.
+    82       OUTPUT2         TIMER 2 OUTPUT — The Timer 2                —                 B
+                             output may be selected to appear on
+                             this pin.
+    88       OUTPUT3         TIMER 3 OUTPUT — The Timer 3                —                 B
+                             output may be selected to appear on
+                             this pin.
+    57       RESET*          RESET — I/O channel reset (output)          —                 D
+                             signal.
+     77      RTS1            REQUEST TO SEND — Indicates that                             C"
+    105      RTS2            terminal wishes to send data. On a half                      C**
+                             duplex channel, this signal controls
+                             direction of data transmission.
+     89      RXC1            RECEIVE CLOCK — May be an output           C**               C**
+    117      RXC2            from baud rate generator or an input       C**               C**
+                             clock for transmitter or receiver.
+     75      RXD1            RECEIVE DATA — Used to receive             c**               c-*
+    103      RXD2            data as an input, or transmit data as an   c**               C"
+                             output.
+     31      STI3*           STROBE — I/O channel output signal.
+     91      TXC1            TRANSMIT CLOCK — May be an                 C"                C"
+    119      TXC2            output from baud rate generator or an      c--               C**
+                             input clock for transmitter or receiver.
+    73       TXD1            TRANSMIT DATA — Used to transmit           c—                c-
+   101       TXD2            data as an output, or receive data as      c—                c**
+                             an input.
+    29       WT*             WRITE — I/O channel output signal.          —                B
+    55       XACK*           TRANSFER ACKNOWLEDGE — I/O                  B                —
+                             channel data transfer acknowledge —
+                             input signal.
+   7-10      +5 V             +5 Vdc Power— Used by VM02 logic           —                —
+                             circuits.
+    93       + 5 VOUTB        +5 Vdc Power — Jumper selectable           —                —
+                             for I/O.
+   15,16     —12 V            —12 Vdc Power — Used by VM02               —                —
+                             logic and interface circuits.
+     95      —12 VOUTB        —12 Vdc Power — Jumper selectable          —                —
+                             for I/O.
+   11,12     +12 V            +12 Vdc Power — Used by VM02               —                —
+                             logic and interface circuits.
+     97      +12 VOUTB        +12 Vdc Power — Jumper selectable          —                —
+                             for I/O.
+   67,68     —15 V            —15 Vdc Power — Not Used.                  —                —
+   17,45,    +15 V            +15 Vdc Power— Not Used.                   —                —
+   69,70
+
+
+
+
+              MOTOROLA 1 6 / 3 2 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                               2-62
+M68KVM02-3
+
+
+                                   TABLE 3 — Signal Category Definitions
+                                                Signal Type "A"
+              Input                 Min.        Max.                     Output               Min.   Max.
+ Allowed Input Voltage               0V         7.0 V          Guaranteed High Voltage When   2.0     —
+                                                                Sourcing 14.6 mA
+ Allowed Input for "High"           2.0 V        —             Guaranteed Low Voltage When    —      0.5
+                   "Low"             —          0.8 V           Sinking 23.8 mA
+ Current Sinked When Driven          —          40 µA
+                          "High"     —         220 µA
+                          "Low"
+
+                                                  Signal Type "B"
+               Input                Min.        Max.                      Output              Min.   Max.
+ Allowed Input Voltage               0V         7.0 V          Guaranteed High Voltage When   2.0     —
+                                                                Sourcing 15 mA
+ Allowed Input for "High"           2.0 V        —             Guaranteed Low Voltage When    —      0.5 V
+                   "Low"             —          0.8 V           Sinking 24 mA
+ Current Sinked When Driven          —          20 µA
+                          "High"     —         690 µA
+                          "Low"
+
+                                          Signal Type "C' (RS-232C Levels)
+               Input                Min.        Max.                      Output              Min.   Max.
+ Allowed Input Voltage              —30 V       30 V           Guaranteed High Voltage         7.0    —
+                                                                 (Space) Across 3K Load
+ Allowed Input for "Space"          3.0 V        —             Low Voltage (Mark)             —7.0    —
+                   "Mark"          —3.0 V        —
+ Current Sinked When "Space"        —           8.3 mA
+    (Von = 25 V)
+ Current Sinked When "Mark"          —         —8.3 mA
+    (Voff = —25 V)
+
+                                    Signal Type "D" (Open Collector Output)
+              Input                 Min.        Max.                      Output              Min.   Max.
+ Allowed Input for "High"           20 V         —             Guaranteed Low Voltage When     —      0.5
+                   "Low"             —          0.8 V           Sinking 24 mA
+ Current Sinked When Driven          —          20 µA
+                          "High"     —         690 µA
+                          "Low"
+
+
+
+
+                      MOTOROLA 1 6 / 3 2 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                                        2-63
+M68KVM02-3
+
+VERSAdos — Real-Time Disk Operating System                            Multichannel Communications Module (MCCM) — Pro-
+• Provides all Software Features of the RMS68K Kernel                 vides four asynchronous serial ports, each with RS-232C
+                                                                      interface, plus an industry-standard parallel printer inter-
+• Device Independent I/O and Logical I/O                              face port.
+• Wait and Proceed Mode I/O                                            Universal Intelligent Peripheral Controller (UIPC) — Pro-
+• Standard Device Drivers                                             vides IPC architecture on a single board with a DMA chan-
+• Multi-Level File Directories                                        nel to global memory on the VERSAbus. A parallel interface
+                                                                      is provided to which a user may interface a special device
+• Shared File Access
+                                                                      such as tape, disk or high-speed communications controllers.
+• Dynamic or Contiguous File Space Allocation
+                                                                      Color Graphic Processor — In conjunction with a high-
+• Ramdon, Sequential, and Indexed Sequential File Access              resolution color monitor, the Color Graphic Processor adds
+VERSAbug — Debug/Monitor/Loader Firmware                              full color graphic display capabilities to any VERSAbus
+• Initialization                                                      compatible system. Provides a powerful set of graphic in-
+                                                                      structions to ease development of graphics application soft-
+• Display/Change Memory                                               ware. Contains standard VERSAmodule I/O Channel in-
+• Display/Change Registers                                            terface for connection to off-board graphics peripherals.
+• Set and Clear Breakpoints                                           The UDC, FDC, MCCM, UIPC and Color Graphic Proces-
+• Block Initialize                                                 sor modules each provide a consistent electrical and logical
+                                                                   interface to the VERSAbus, and to VERSAdos or RMS68K
+• Block Move
+                                                                   system software. This allows simplified device-independent
+• TRACE with optional instruction count                            I/O for the main application. In addition, the I/O Channel
+• Downline Load                                                    interface provides access to a growing family of 1/Omodules
+• Single Line Assembler/Disassembler                               which are system compatible with VM02.
+                                                                       Remote Intelligent Analog-To-Digital Conversion Module
+HARDWARE/SOFTWARE                                                      (RAD1) — Provides 32 single-ended or 16 differential ND
+DEVELOPMENT SUPPORT                                                    channels with a choice of parallel or serial I/O operation.
+  The recommended development system vehicle for de-
+                                                                     Four-Slot Card Cage — Mechanically and electrically ex-
+veloping•microcomputer systems based on the VERSAmodule
+                                                                     pandable to three units (12 Slots).
+Monoboard Microcomputer is the EXORmacs MC68000 De-
+velopment System. EXORmacs is a multiuser development                Four-Slot Chassis — Provides card cage, power supply,
+system (floppy disk or hard disk based) with advanced soft-          fans, enclosure, and rack-mount or tabletop usage capability.
+ware development tools including a macro assembler, pascal           Power Supplies — Low-Power (15 A @ 5 Vdc) and high-
+compiler, CRT editor, and linkage editor. Since EXORmacs             power (30 A @ 5 Vdc) versions are available. Each includes
+also provides the VERSAbus interconnect structure and the            an ac power failure detection capability with VERSAbus
+VERSAdos operating systems, VERSAmodule applications                 interface.
+can be easily developed and checked out in the EXORmacs               VERSAbus Adapter Module — A module for interfacing
+chassis and transferred to the target for final debug.               8-bit EXORbus boards to 16-bit VERSAbus systems.
+   Cross software support in the form of a macro assembler,
+pascal compiler, and linkage editor is also available for IBM         VERSAbus Extender Module — Extends VERSAbus mod-
+host computers.                                                       ules for serving, testing, troubleshooting, and debugging.
+                                                                      VERSAbus Wirewrap Module — Facilitates construction
+SYSTEM EXPANSION                                                      and incorporation of custom circuits into VERSAbus systems.
+  The VERSAmodule Monoboard Microcomputer is system-
+compatible with a growing family of VERSAmodule products:          Packaging and Accessories
+  Dynamic RAM Modules— available 128K, 256K and 512K                 VERSAmodule-based applications can be conveniently
+  byte versions. Includes byte parity with automatic retry on      packaged in and supported by a family of hardware acces-
+  parity error.                                                    sories. (For additional information on packaging options and
+  Universal Disk Controller (UDC) — A 2-board set that pro-        power supplies, refer to the chassis card cage data sheet
+  vides industry standard SMD interface to hard disk drives        MVMCH3-1.)
+  (up to two drives of 96 megabytes each) and floppy disk            Four-Slot Card Cage — Mechanically and electrically ex-
+  drives (up to four drives of 0.5 megabytes each).                  pandable to three units (12 Slots).
+  Floppy Disk Controller (FDC) — A single board that pro-            Four-Slot Chassis — Provides card cage, power supply,
+  vides an interface up to four double-sided single-density          fans, enclosure, and rack-mount or tabletop usage capa-
+  floppy disk drives of 0.5 megabyte each.                           bility. I/O Channel card cage optional.
+
+
+
+
+                      MOTOROLA 1 6 / 3 2 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                                            2-64
+M68KVM02-3
+
+ Power Supplies — Low-Power (15 A @ 5 Vdc) and high-                     Provide interface with line voltage ac for control of motors,
+ power (30 A @ 5 Vdc) versions are available Each includes               relays, contactors, and signal lamps.
+ an ac power failure detection capability with VERSAbus                  Opto Isolated 30 Vdc Input and Output Modules —Provide
+ interface.                                                              interface with dc operated devices such as motors, relays,
+ VERSAbus Adapter Module — A module for interfacing                      lamps, etc.
+ 8-bit EXORbus boards to 16-bit VERSAbus systems.
+                                                                         Remote Input/Output Module (RI01)— Provides mounting
+ VERSAbus Extender Module — Extends VERSAbus mod-                        for up to 16 solid-state-relay input or output modules.
+ ules for serving, testing, troubleshooting, and debugging
+                                                                         Dual Channel RS-232C Senal Port — Provides two inde-
+ VERSAbus Wirewrap Module — Facilitates construction                     pendent, f u l l duplex, multiprotocol serial communication
+ and incorporation of custom circuits into VERSAbus systems.             input/output ports with RS-232C interfaces.
+                                                                         Dual Channel 16-Bit Parallel Port — Provides four 8 -bit
+I/O Channel Components                                                   data ports with two handshake lines per port that are con-
+ Winchester Disk Controller 1/Omodules — Interface a n                   trolled b y a microcomputer I/O Channel interface.
+ I/O channel host to 51/2" or 8" Winchester and floppy disk              SASI" Peripheral Adapter— A single high Eurocard mod-
+ drive combinations.                                                     ule providing interface between a microcomputer I/O Chan-
+ Floppy Disk Controller 110module — Interfaces a n I / O                 nel interface and a Shugart Associates SASI bus for use
+ channel host to 51/2" or 8" floppy disk drives.                         of an SA1400 hard disk controller.
+ Analog Input and Output Modules — Provides a complete                   Buffered 9-Track Magnetic Tape Adapter — Provides an
+ multichannel, 12-bit, data acquisition system (input mod-               I/O Channel interface and an interface for up to two daisy
+ ule) Provides four independent, 12-bit analog signals (out-             chained industry standard 9-Track, 1/2" dual density mag-
+ put module).                                                            netic tape formatters capable of handling up to four drives
+ Opto Isolated 120 V/240 V Input and Output Modules —                    each. The adapter includes a 4K byte FIFO buffer.
+
+
+
+
+                                                   Ordering Information
+    Part Number                                                          Description
+  M68KVM02-3               VERSAmodule Monoboard Microcomputer. This module contains the MC68000 MPU, 128K
+                           bytes RAM, sockets for up to 64 bytes of ROM/EPROM, two multiprotocol serial ports, a triple
+                           programmable timer/counter, VERSAbus interface, system controller features and I/O Channel
+                           interface. Includes User's Manual, and an I/O Channel Specification Manual.
+  M68KVM10-3               128K Byte VERSAbus Dynamic RAM Module
+  M68KVM11-1               256K Byte VERSAbus Dynamic RAM Module with ECC
+  M68KVM11-2               512K Byte VERSAbus Dynamic RAM Module with ECC
+  M68KVM21                 Universal Disk Controller (UDC)
+  M68KVM20                 Floppy Disk Controller (FDC)
+  M68KVM30                 Multi-Channel Communications Module (MCCM)
+  M68KVM60                 Universal Intelligent Peripheral Controller (UIPC)
+  M68KORMS68K              Real-Time Multitasking Software
+  M68KOVDOS                Real-Time Disk Operating System
+  M68KVBUG2                Debug/Monitor/Loader Firmware
+  M68KVMCC1                4-Slot VERSAmodule Card Cage
+  M68KVMCH1-1              4-Slot VERSAmodule Chassis with 123 Watt Linear Power Supply
+  M68KVMCH1-2              4-Slot VERSAmodule Chassis with 228 Watt Switching Power Supply
+  MVMCH1-2                 Same as M68KVMCH1-2 with 5-Slot Card Cage for Single Width Eurocard Format I/O Cards
+
+
+
+
+                      M O T O R O L A 1 6 / 3 2 -BIT M I C R O C O M P U T E R S Y S T E M C O M P O N E N T S
+
+                                                               2-65
+M68KVM02-3
+
+                                   Ordering Information (continued)
+   Part Number                                              Description
+  M68KVAM            VERSAbus Adapter Module
+  M68KEXT            VERSAbus Extender Module
+  M68K1NW            VERSAbus Wirewrap Module
+  MVME400            Dual Channel RS-232C Serial Port
+  MVME410            Dual Channel 16-bit Parallel Port
+  MVME420            SASI'" Peripheral Adapter
+  MVME435            Buffered 9-Track Magnetic Tape Adapter
+  M68RWIN1-1,2       Winchester Disk Controller 1/Omodule
+  M68RFDC1           Floppy Disk Controller 1/Omodule
+  MVME600,605        VMEmodule Analog Input and Output
+  MVME610,615,616    VMEmodule Opto Isolated 120 V/240 V Input and Output
+  MME620,625         VMEmodule Opto Isolated 30 Vdc Input and Output
+
+Related Documentation
+  M68RIOCS           I/O Channel Specification Manual
+  M68KVBS            VERSAbus Specification Manual
+  MC68000UM (AD-3)   MC68000 Microprocessor User's Manual
+  MC6840UM           MC6840 Fundamentals and Applications Manual
+
+
+
+
+                 MOTOROLA 16/32 -BIT MICROCOMPUTER SYSTEM COMPONENTS
+
+                                                     2-66
+Artisan Technology Group is an independent supplier of quality pre-owned equipment
+
+
+
+  Gold-standard solutions                                                  We buy equipment                                                         Learn more!
+  Extend the life of your critical industrial,                             Planning to upgrade your current                                         Visit us at artisantg.com for more info
+  commercial, and military systems with our                                equipment? Have surplus equipment taking                                 on price quotes, drivers, technical
+  superior service and support.                                            up shelf space? We'll give it a new home.                                specifications, manuals, and documentation.
+
+
+
+
+  Artisan Scientific Corporation dba Artisan Technology Group is not an affiliate, representative, or authorized distributor for any manufacturer listed herein.
+
+
+
+
+  We're here to make your life easier. How can we help you today?
+  (217) 352-9330 I sales@artisantg.com I artisantg .com
+
