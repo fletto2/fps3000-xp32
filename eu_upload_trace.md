@@ -1,5 +1,11 @@
 # EU upload path in the SBC ROM — trace result
 
+> **SUPERSEDED by `eu_upload_trace_v2.md`** — v1 missed the second
+> dispatch path (loc_F05E56) and the 0x700000 shared memory region
+> used by TCBIO1I. The EU upload path IS in the SBC ROM, just not
+> via the S-record/TCBRDHC route that v1 examined.
+
+
 **The EU upload path is NOT in the SBC ROM.** The SBC ROM exclusively
 handles AU microcode staging. EU initialization must happen via a
 mechanism outside the SBC's purview.
