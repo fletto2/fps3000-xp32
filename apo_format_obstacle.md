@@ -1,5 +1,14 @@
 # `.APO` files are NOT raw binary microcode — obstacle for option 1
 
+> **Status: SOLVED.** This document is historical. The .APO format
+> was successfully reverse-engineered (`fps100_apo_format_spec.md`)
+> and a working Python decoder (`apo_decode.py`) was built. All 9
+> .APO math-library files plus 34 .B AP-side supervisor files have
+> been decoded — see `apo_decoded/` and `apo_decoded/B_files/`. SIM100
+> compiles cleanly with proper flags (see `sim100_build/`). Kept for
+> historical record of the obstacle and how it was resolved.
+
+
 Started option 1 (deep-mine the FPS-100 archive — disassemble all 9
 `.APO` library files via SIM100's SPLIT decoder) and hit an
 unexpected obstacle: **`.APO` files are not raw 8-byte-per-instruction
@@ -30,7 +39,7 @@ AP-120B/FPS-100 program memory.
 ## Earlier (now-corrected) project assumption
 
 `CLAUDE.md` claimed "9 binary `.APO` math-library files totalling
-**62,130 AP-120B microinstructions** with matching APAL `.APS`
+**11,469 AP-120B microinstructions** with matching APAL `.APS`
 source." This bytes-divided-by-8 calculation assumed binary; the
 files are text. The actual microinstruction count requires running
 the .APO files through the linker first.
@@ -75,7 +84,7 @@ Then SIM100's SPLIT decoder is straightforward to port.
 `ap120b_ffttest_ucode.bin` (1816 bytes, 227 instructions) is already
 recovered from the AP120B FFT test PDF and is in canonical 8-byte
 binary form. SPLIT decoder can run on it today. Smaller corpus
-(227 vs ~62K) but immediately usable.
+(227 vs ~11,469 from libraries; 1971 from AP-side; 13,440 total) but immediately usable.
 
 ### Option D — recover LM-format binaries (load modules)
 

@@ -41,23 +41,31 @@ one.
 files. Critical contents:
 
 **9 binary math-library files (`.APO`)** — production AP-120B
-microcode kernels:
+microcode kernels (now decoded — see `../apo_decoded/`):
 
-| File | Bytes | Microinstructions | Purpose |
-|---|---:|---:|---|
-| `BAALIB.APO` | 102,102 | 12,762 | Basic math library, part 1 |
-| `BABLIB.APO` | 102,258 | 12,782 | Basic math library, part 2 |
-| `SIGLIB.APO` | 86,122 | 10,765 | Signal-processing library |
-| `AMLLIB.APO` | 69,528 | 8,691 | Applied-math library |
-| `IPRLIB.APO` | 52,238 | 6,529 | Integer pre-processor library |
-| `UTLLIB.APO` | 39,950 | 4,993 | Utility library |
-| `APFLIB.APO` | 23,812 | 2,976 | APF library |
-| `DGNLIB.APO` | 10,972 | 1,371 | Diagnostic library |
-| `SYMLIB.APO` | 7,598 | 949 | Symbol library |
-| `VADD.APO` | 2,498 | 312 | Vector-add (standalone) |
-| **Total** | **497,078** | **62,130** | |
+| File | Bytes | Microinstructions | Routines | Purpose |
+|---|---:|---:|---:|---|
+| `BAALIB.APO` | 102,102 | 1847 | 88 | Basic math library, part A |
+| `BABLIB.APO` | 102,258 | 2273 | 60 | Basic math library, part B |
+| `SIGLIB.APO` | 86,122 | 2129 | 32 | Signal-processing library |
+| `AMLLIB.APO` | 69,528 | 1925 | 33 | Applied-math library |
+| `IPRLIB.APO` | 52,238 | 1486 | 13 | Image-processing library |
+| `UTLLIB.APO` | 39,950 | 1022 | 39 | Utility library |
+| `APFLIB.APO` | 23,812 | 456 | 34 | APF auxiliary library |
+| `DGNLIB.APO` | 10,972 | 282 | 11 | Diagnostic library |
+| `SYMLIB.APO` | 7,598 | 0 | 0 | Symbol library (symbols only) |
+| `VADD.APO` | 2,498 | 49 | 3 | Vector-add (standalone) |
+| **Total** | **497,078** | **11,469** | **313** | |
 
-That's **62,130 AP-120B microinstructions of real production kernels**
+**Earlier draft** of this table claimed 62,130 microinstructions
+total — that was bytes/8 of the text-format `.APO` files, treating
+them as raw binary. They are not. The actual binary microinstruction
+count after decoding is 11,469. Plus 1,971 microinstructions across
+69 routines in the AP-side `.B` supervisor files (`KERNEL.B`,
+`MINI.B`, `SYSSVC.B`, etc. — see `../apo_decoded/B_files/`). Grand
+total: **13,440 microinstructions across 382 routines**.
+
+That's **11,469 AP-120B microinstructions of real production kernels**
 with documented header conventions (`$LIB` directive, revision
 history comments, conditional-assembly switches).
 
@@ -85,14 +93,14 @@ with matching source code and documented format. It enables:
    each `.APO` using `SIM100.FTN`'s `SPLIT` routine, compare the
    decode against the `.APS` source — that proves we read the AP-120B
    format correctly. We had the recovered FFT identity-test microcode
-   already, but 62K microinstructions with source ≫ 227 microinstructions
+   already, but 11,469 microinstructions with source ≫ 227 microinstructions
    without.
 
 2. **Bracket the XP-32 layout from below.** The AP-120B → FPS-164 →
    XP-32 layout-evolution arc that the consensus 128-bit layout
    inherits is now grounded in a much larger sample. Any XP-32
    microinstruction must (per APAL compatibility) carry every field
-   exercised by these 62K AP-120B kernels.
+   exercised by these 11,469 AP-120B kernels.
 
 3. **Run real workloads in the AP-120B simulator.** SIM100 + the
    `BAALIB` kernels gives a working "FFT/multiply/etc. on simulated

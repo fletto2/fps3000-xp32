@@ -48,7 +48,7 @@ library entry points.
 | `UTLHSR.MAC` | `UTLLIB` (Utility, just `APNOP`) | 1 |
 | **Total** | | **217** |
 
-All 9 matching `*LIB.APO` binary microcode files (62,130 AP-120B
+All 9 matching `*LIB.APO` binary microcode files (11,469 AP-120B
 microinstructions) are present. No matching HSR file for `APFLIB`
 or `SYMLIB`.
 

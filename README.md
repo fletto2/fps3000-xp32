@@ -75,6 +75,33 @@ Motorola **M68KVM02-3** VERSAmodule monoboard (MC68000 @ 8 MHz).
 - **`fps100_callers_inventory.md`** — 32-file inventory of every
   source file in the FPS-100 archive that talks to APDRV, organized
   in 8 tiers (kernel driver → APEX → HSR stubs → toolchain → tests).
+- **`fps100_mac_files_audit.md`** — Council-of-Clankers analysis of
+  all 12 host-side `.MAC` files in the FPS-100 archive (28K lines).
+- **`fps100_sim100_annotated.md`** — Council-of-Clankers reference
+  annotation of `SIM100.FTN` (4910 lines, the canonical AP-120B
+  simulator). 251 KB authoritative microarchitecture reference
+  derived from the simulator source itself.
+- **`fps100_s_files_annotated.md`** — Council-of-Clankers analysis
+  of all 36 AP-side supervisor `.S` files (7055 lines of APAL
+  source for Super-100 / Mini-100 modes). 334 KB. Subsystem groups:
+  kernel core, supervisor body, syssvc, I/O queue + RPC, RTC, boot
+  + UPEX + tables, tests.
+- **`apo_decoded/B_files/`** — 34 AP-side supervisor `.B` files
+  decoded with `apo_decode.py` — same `.APO` format. 1,971
+  microinstructions across 69 routines (KERNEL/SYSSVC/MINI/IOQUE/
+  HIRP/HSVC/RTC/etc.). Combined with `apo_decoded/` math libraries:
+  **382 routines, 13,440 microinstructions** of decoded AP-120B
+  production microcode total.
+- **`sim100_build/`** — working modern Linux build of SIM100 (the
+  AP-120B simulator). Compiles cleanly with gfortran given
+  `iutil_stubs.f`; runs to its interactive `*` prompt. Currently
+  segfaults on input due to a documented COMMON-block size bug.
+- **`mc_tsk_analysis.md`** — Council-of-Clankers analysis of 7
+  Bomem-customized RSX-11M task images (BOMICP/RSX11M/EXCOM/etc.).
+- **`cmd_files_inventory.md`** — inventory of all 42 `.CMD` files
+  in both datasets, plus the HPVP-identity analysis from LOABOM.CMD.
+- **`fps100_multi_ap_support.md`** — does the FPS-100 driver support
+  a slave/secondary FPS-100? Multi-AP yes (peers); master-slave no.
 - **`RSX_v511/PDP11_DISASM_README.md`** — full PDP-11 disassembler
   for RSX-11M+ task images.
 - **`mc_results.md`** — Monte Carlo annotation pipeline results

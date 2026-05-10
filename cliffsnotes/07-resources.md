@@ -7,17 +7,30 @@
 `fps100_archive/fps100sw/[327,010]*` — 183 files extracted from
 `fps100sw.zip` (originally `fps100flxDamaged.tap` on bitsavers).
 
-| File group | Count | Bytes | Purpose |
-|---|---:|---:|---|
-| `*LIB.APO` (BAA, BAB, AML, IPR, SIG, UTL, APF, DGN, SYM) | 9 | 494,580 | **11,469 AP-120B microinstructions** |
-| `*SRC.APS` | 9 | — | matching APAL assembly source with comments + revision history |
-| `ASM100.FTN` / `LED100.FTN` / `SIM100.FTN` / `DBG100.FTN` | 4 | — | toolchain (assembler, linker, simulator, debugger) |
-| `KERNEL.{B,S}`, `IOQUE.{B,S}`, `HSVC.{B,S}` | 6 | — | host-side OS pieces |
-| `INSTAL.TXT` | 1 | 162 KB | installation manual |
+| File group | Count | Purpose |
+|---|---:|---|
+| `*LIB.APO` math libraries | 9 | **11,469 AP-120B microinstructions** across 313 routines (decoded — see `../apo_decoded/`) |
+| `*SRC.APS` | 9 | matching APAL source with comments + revision history |
+| `*HSR.MAC` (host service routines) | 7 | 217 routines wrapping math libraries for FORTRAN |
+| `DRIVER.MAC` / `DAPEX.MAC` / `DEVTAB.MAC` / `FPSMC.MAC` | 4 | host-side AP driver + dispatcher |
+| `*.S` AP-side supervisor source | 36 | 7055 lines APAL: KERNEL/MINI/SYSSVC/IOQUE/HIRP/HSVC/RTC/etc. |
+| `*.B` AP-side compiled supervisor | 34 | **1,971 microinstructions across 69 routines** (decoded — see `../apo_decoded/B_files/`) |
+| `ASM100/LED100/SIM100/DBG100/...FTN` | 27 | full toolchain in FORTRAN-77 source (~54K lines) |
+| `*.DAT` data + `*.NAM` symbol tables + `*.INP` test inputs | 27 | system definitions, link scripts, test vectors |
+| `INSTAL.TXT` | 1 | 162 KB installation manual |
 
-This is the **most useful single resource** in the project for
-validating the AP-120B layout and the layout-evolution chain. See
-[`xpmlib_search_results.md`](../xpmlib_search_results.md).
+**Combined preservation totals**: 382 routines, 13,440 AP-120B
+microinstructions (= 107 KB of decoded production microcode), plus
+~70K lines of FORTRAN source covering the full FPS-100 toolchain
+(assembler, linker, simulator, debugger). To my knowledge the largest
+publicly preserved corpus of FPS-100 / AP-120B software.
+
+Working modern Linux build of SIM100 in `../sim100_build/` (compiles
+cleanly with gfortran).
+
+See `../xpmlib_search_results.md`, `../apo_decoded/README.md`,
+`../apo_decoded/B_files/README.md`, `../fps100_sim100_annotated.md`,
+`../fps100_s_files_annotated.md`, `../fps100_dapex_annotated.md`.
 
 ### AP-120B FFT/IFFT identity-test microcode
 

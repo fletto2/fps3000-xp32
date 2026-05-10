@@ -56,9 +56,12 @@ Cheaper variant of the AP-120B intended for embedding in OEM systems.
 Same instruction set, same microcode format — different packaging
 (10 boards, 250 ns clock).
 
-- Used by **Bomem as the array processor in the DA3 FTIR
-  spectrometer** (Bomem marketed it as "HPVP" = High-Performance
-  Vector Processor)
+- Possibly used by **Bomem in the DA3 FTIR spectrometer** as the
+  optional "HPVP" (High-Performance Vector Processor) upgrade.
+  **Identification unproven** — see `../cmd_files_inventory.md` and
+  `../fps100_multi_ap_support.md` for the HPVP-identity analysis.
+  Earlier confident "Bomem marketed FPS-100 as HPVP" claims have
+  been retracted as unsupported.
 - Documented in bitsavers `pdf/floatingPointSystems/FPS100/`
 
 **What we have**: the full **FPS-100 RSX-11M v3.2 distribution** (Al
