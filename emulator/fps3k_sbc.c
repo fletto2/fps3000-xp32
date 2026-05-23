@@ -39,12 +39,27 @@
 #include <signal.h>
 #include "musashi/m68k.h"
 #include "versabus.h"
+#include "host_sim.h"
+
+static host_sim_t host_sim;
+static void on_apif_consumed(void *ctx) { host_sim_byte_consumed((host_sim_t *)ctx); }
 
 #define RAM_SIZE  (128 * 1024)        /* 0x000000-0x01FFFF */
 #define ROM_SIZE  (64  * 1024)        /* 0xF00000-0xF0FFFF */
 #define ROM_BASE  0xF00000
 
 static uint8_t  ram[RAM_SIZE];
+uint8_t *host_sim_get_ram_ptr(void) { return ram; }
+
+/* Chassis-side memory backing for $400000-$4FFFFF (1 MB).  When
+ * XLTR_DATA_HI selects an active page (e.g. 0, 0x40), reads and
+ * writes round-trip to this buffer.  Phase 0x1900 (F09776) writes
+ * a long pattern and reads it back; later phases use it for the
+ * panel-bus DMA path.  Sized small (1 MB) since the test only
+ * touches the first few words. */
+#define CHASSIS_MEM_BASE  0x400000
+#define CHASSIS_MEM_SIZE  (1u << 20)        /* 1 MB */
+static uint8_t  chassis_mem[CHASSIS_MEM_SIZE];
 static uint8_t  rom[ROM_SIZE];
 
 static int      reset_overlay = 1;     /* ROM aliased at 0x000000 until first stack-pop */
@@ -77,11 +92,70 @@ static uint8_t bus_read8(uint32_t a) {
         reset_overlay = 0;
     }
 
+    /* AP I/F BERRs when chassis DMA is in progress.  Phase 0x1A00
+     * (F09832) verifies: arm XLTR via STATUS_IRQ=0x400, then
+     * intentionally read $FF000E to trigger BERR. */
+    if (a >= 0xFF0000 && a < 0xFF0100 && versabus_apif_dma_busy()) {
+        if (verbose) fprintf(stderr, "[bus] R8 BERR (DMA busy) %06X\n", a);
+        m68k_pulse_bus_error();
+        return 0xFF;
+    }
+
+    /* Device check FIRST — VMOD_CTRL at $1FFF0 lives inside the RAM
+     * range but is a device, so it must intercept before the RAM read. */
+    if (versabus_is_device(a)) {
+        return versabus_read(a, 1) & 0xFF;
+    }
+
     if (a < RAM_SIZE) return ram[a];
     if (a >= ROM_BASE && a < ROM_BASE + ROM_SIZE) return rom[a - ROM_BASE];
 
-    if (versabus_is_device(a)) {
-        return versabus_read(a, 1) & 0xFF;
+    /* Chassis-routed memory: backed by chassis_mem when not BERR'd.
+     * BERR is gated by XLTR_DATA_HI bit 5 (see below). */
+    if (a >= CHASSIS_MEM_BASE && a < CHASSIS_MEM_BASE + CHASSIS_MEM_SIZE) {
+        if (!(versabus_xltr_data_hi() & 0x20)) {
+            return chassis_mem[a - CHASSIS_MEM_BASE];
+        }
+    }
+
+    /* Per M68KVM02 manual Figure 2, anything outside the populated
+     * regions bus-errors:
+     *   - $020000-$EFFFFF: VERSAbus long I/O (no devices in our chassis
+     *     except $700000-$70003F mailbox)
+     *   - $F10000-$F6FFFF: VERSAbus (long I/O extension)
+     *   - $F80000-$F81FFF: I/O Channel (no boards)
+     *   - $F82000-$FEFFFF: VERSAbus short I/O (off-board peripherals)
+     *   - $F7001B: illegal high byte of status reg
+     *
+     * The two MemBusProbe walks (chsel 0x700 and 0x1000) expect to hit
+     * BERR somewhere in these ranges. */
+    int berr = 0;
+    if (a == 0xF7001B) berr = 1;
+    else if (a >= 0xF80000 && a < 0xF82000) berr = 1;
+    else if (a >= 0xF10000 && a < 0xF70000) berr = 1;
+    else if (a >= 0x020000 && a < 0xF00000) {
+        /* Long I/O: mailbox at $700000 is always populated.  The
+         * $400000-$4FFFFF chassis-routed window is gated by
+         * XLTR_DATA_HI: phase 0x1700 (F09602) verifies that with
+         * DATA_HI=0 the address routes to a chassis device (no BERR),
+         * and with DATA_HI != 0 the chassis denies access (BERR). */
+        if (a >= MAILBOX_BASE && a < MAILBOX_END) {
+            /* mailbox: never BERR */
+        } else if (a >= 0x400000 && a < 0x500000) {
+            /* Chassis-routed page: bit 5 of XLTR_DATA_HI selects an
+             * unpopulated page (BERR).  Other DATA_HI values (0, 0x40,
+             * etc.) route to populated chassis memory (no BERR).
+             * Established by phase 0x1700 (BERR on DATA_HI=0x20) and
+             * phase 0x1800 (no BERR on DATA_HI=0 or 0x40). */
+            berr = (versabus_xltr_data_hi() & 0x20) ? 1 : 0;
+        } else {
+            berr = 1;
+        }
+    }
+    if (berr) {
+        if (verbose) fprintf(stderr, "[bus] R8  bus-error %06X\n", a);
+        m68k_pulse_bus_error();
+        return 0xFF;
     }
 
     if (verbose) fprintf(stderr, "[bus] R8  unmapped %06X\n", a);
@@ -91,6 +165,11 @@ static uint8_t bus_read8(uint32_t a) {
 static void bus_write8(uint32_t a, uint8_t v) {
     a &= 0xFFFFFFu;
 
+    /* Device check FIRST — VMOD_CTRL at $1FFF0 lives inside RAM range. */
+    if (versabus_is_device(a)) {
+        versabus_write(a, v, 1);
+        return;
+    }
     if (a < RAM_SIZE) {
         ram[a] = v;
         return;
@@ -99,24 +178,71 @@ static void bus_write8(uint32_t a, uint8_t v) {
         if (verbose) fprintf(stderr, "[bus] W8 ROM-write %06X <- %02X (ignored)\n", a, v);
         return;
     }
-    if (versabus_is_device(a)) {
-        versabus_write(a, v, 1);
+
+    /* Chassis memory: write through when not BERR'd */
+    if (a >= CHASSIS_MEM_BASE && a < CHASSIS_MEM_BASE + CHASSIS_MEM_SIZE) {
+        if (!(versabus_xltr_data_hi() & 0x20)) {
+            chassis_mem[a - CHASSIS_MEM_BASE] = v;
+            return;
+        }
+    }
+
+    /* BERR for unmapped/denied addresses (mirror of bus_read8 logic) */
+    int berr = 0;
+    if (a == 0xF7001B) berr = 1;
+    else if (a >= 0xF80000 && a < 0xF82000) berr = 1;
+    else if (a >= 0xF10000 && a < 0xF70000) berr = 1;
+    else if (a >= 0x020000 && a < 0xF00000) {
+        if (a >= MAILBOX_BASE && a < MAILBOX_END) {
+            /* mailbox: never BERR */
+        } else if (a >= 0x400000 && a < 0x500000) {
+            berr = (versabus_xltr_data_hi() & 0x20) ? 1 : 0;
+        } else {
+            berr = 1;
+        }
+    }
+    if (berr) {
+        if (verbose) fprintf(stderr, "[bus] W8 bus-error %06X <- %02X\n", a, v);
+        m68k_pulse_bus_error();
         return;
     }
     if (verbose) fprintf(stderr, "[bus] W8  unmapped %06X <- %02X\n", a, v);
 }
 
-/* Musashi memory access entry points */
+/* Musashi memory access entry points.  Word and long accesses might
+ * span device-vs-RAM boundaries (e.g. VMOD_CTRL is just 2 bytes at
+ * $1FFF0-1; a long write at $1FFF0 covers RAM at $1FFF2-3 too).
+ * To avoid mishandling, word/long accesses go byte-by-byte through
+ * bus_read8/bus_write8 except when the entire range is a single
+ * device that benefits from atomic access (we keep the optimization
+ * for fully-aligned device accesses). */
 unsigned int m68k_read_memory_8 (unsigned int a) {
-    if (versabus_is_device(a)) return versabus_read(a, 1) & 0xFF;
     return bus_read8(a);
 }
 unsigned int m68k_read_memory_16(unsigned int a) {
-    if (versabus_is_device(a)) return versabus_read(a, 2) & 0xFFFF;
+    /* AP I/F BERR when XLTR DMA is in progress (chassis owns AP I/F bus).
+     * Phase 0x1A00 (F09832) deliberately reads while armed to verify. */
+    if (a >= 0xFF0000 && a < 0xFF0100 && versabus_apif_dma_busy()) {
+        m68k_pulse_bus_error();
+        return 0xFFFF;
+    }
+    /* Chassis shadow: with XLTR_DATA_HI=0, word reads at $400002 of
+     * the chassis-routed window return XLTR_DATA_LO regardless of
+     * what was written to chassis memory.  Phase 0x1900 stage 4
+     * (F097F4+) verifies this. */
+    if (a == 0x400002 && (versabus_xltr_data_hi() == 0)) {
+        return versabus_xltr_data_lo() & 0xFFFF;
+    }
+    if (versabus_is_device(a) && versabus_is_device(a+1)) {
+        return versabus_read(a, 2) & 0xFFFF;
+    }
     return ((unsigned)bus_read8(a) << 8) | bus_read8(a+1);
 }
 unsigned int m68k_read_memory_32(unsigned int a) {
-    if (versabus_is_device(a)) return versabus_read(a, 4);
+    if (versabus_is_device(a) && versabus_is_device(a+1)
+        && versabus_is_device(a+2) && versabus_is_device(a+3)) {
+        return versabus_read(a, 4);
+    }
     return ((unsigned)bus_read8(a)   << 24)
          | ((unsigned)bus_read8(a+1) << 16)
          | ((unsigned)bus_read8(a+2) <<  8)
@@ -133,16 +259,26 @@ unsigned int m68k_read_disassembler_32(unsigned int a) {
          |  (unsigned)bus_read8(a+3);
 }
 void m68k_write_memory_8 (unsigned int a, unsigned int v) {
-    if (versabus_is_device(a)) { versabus_write(a, v, 1); return; }
     bus_write8(a, v);
 }
 void m68k_write_memory_16(unsigned int a, unsigned int v) {
-    if (versabus_is_device(a)) { versabus_write(a, v, 2); return; }
+    /* With XLTR_DATA_HI=0, word writes to chassis-window word $400000
+     * are ignored (long writes still go through).  Phase 0x1900 stage 2
+     * verifies this. */
+    if (a == 0x400000 && (versabus_xltr_data_hi() == 0)) {
+        return;
+    }
+    if (versabus_is_device(a) && versabus_is_device(a+1)) {
+        versabus_write(a, v, 2); return;
+    }
     bus_write8(a,   (v >> 8) & 0xFF);
     bus_write8(a+1, v & 0xFF);
 }
 void m68k_write_memory_32(unsigned int a, unsigned int v) {
-    if (versabus_is_device(a)) { versabus_write(a, v, 4); return; }
+    if (versabus_is_device(a) && versabus_is_device(a+1)
+        && versabus_is_device(a+2) && versabus_is_device(a+3)) {
+        versabus_write(a, v, 4); return;
+    }
     bus_write8(a,   (v >> 24) & 0xFF);
     bus_write8(a+1, (v >> 16) & 0xFF);
     bus_write8(a+2, (v >>  8) & 0xFF);
@@ -152,9 +288,44 @@ void m68k_write_memory_32(unsigned int a, unsigned int v) {
 /* ============== misc Musashi callbacks ============== */
 
 int m68k_irq_callback(int level) {
-    /* No external IRQs from stubs — autovector if any */
+    /* Level 5: TCBIO1I host-link interrupt — vector $128 = #74,
+     * handler F05DD6.  Set up by RTOSKernelInit at task creation. */
+    extern host_sim_t host_sim;
+    if (level == 5 && host_sim.pending) {
+        host_sim_byte_consumed(&host_sim);
+        return 0x4A;   /* vec #74, byte addr $128 */
+    }
+
+    /* Two level-4 IRQ sources on this board:
+     *   - MC6840 PTM (system tick post-RTOS, or phase-9 self-test)
+     *   - Panel-bus chassis interrupter (phase 0x1300/0x1400)
+     *
+     * For PTM: phase 9 installs a vectored handler at vector 0x54
+     * ($150 = F0911E).  The RTOS, on the other hand, uses auto-
+     * vectoring for its system tick — at init time it overwrites
+     * vector $150 with F0A27A (panic catch-all).
+     *
+     * Heuristic: peek at vector $150 — if it still points to F0911E
+     * we're in self-test mode (return vectored 0x54).  Otherwise
+     * the RTOS is running and PTM should auto-vector to its level-4
+     * handler at vec $70 = F00EC8. */
+    if (level >= 4 && versabus_chassis_irq_pending()) {
+        int v = versabus_chassis_irq_ack();
+        if (!versabus_ptm_irq_pending()) m68k_set_irq(0);
+        /* Same heuristic for chassis: vector 0x50 ($140) becomes a
+         * panic post-RTOS-init.  Auto-vector instead. */
+        uint32_t vec140 = ((uint32_t)ram[0x140] << 24) | ((uint32_t)ram[0x141] << 16)
+                        | ((uint32_t)ram[0x142] << 8)  |  (uint32_t)ram[0x143];
+        if (vec140 == 0xF0A27A) return M68K_INT_ACK_AUTOVECTOR;
+        return v;
+    }
+    if (level >= 4 && versabus_ptm_irq_pending()) {
+        uint32_t vec150 = ((uint32_t)ram[0x150] << 24) | ((uint32_t)ram[0x151] << 16)
+                        | ((uint32_t)ram[0x152] << 8)  |  (uint32_t)ram[0x153];
+        if (vec150 == 0xF0911E) return 0x54;          /* phase-9 test */
+        return M68K_INT_ACK_AUTOVECTOR;                /* RTOS system tick */
+    }
     m68k_set_irq(0);
-    (void)level;
     return M68K_INT_ACK_AUTOVECTOR;
 }
 
@@ -217,6 +388,10 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "-cycles") && i+1 < argc)    max_cycles   = strtoull(argv[++i], NULL, 0);
         else if (!strcmp(argv[i], "-breakpc") && i+1 < argc)   breakpc      = (uint32_t)strtoul(argv[++i], NULL, 0);
         else if (!strcmp(argv[i], "-dump-ram") && i+1 < argc)  dump_ram_path = argv[++i];
+        else if (!strcmp(argv[i], "-host-srec") && i+1 < argc) {
+            const char *p = argv[++i];
+            host_sim_init(&host_sim, p, NULL);
+        }
         else if (!strcmp(argv[i], "-v"))                       verbose      = 1;
         else { usage(); return 1; }
     }
@@ -245,6 +420,10 @@ int main(int argc, char **argv) {
     }
 
     versabus_init(bus_fp, verbose);
+    if (host_sim.enabled) {
+        host_sim.log_fp = bus_fp;
+        versabus_set_apif_consumed_cb(on_apif_consumed, &host_sim);
+    }
 
     /* Set up Musashi */
     m68k_set_cpu_type(M68K_CPU_TYPE_68000);
@@ -264,6 +443,16 @@ int main(int argc, char **argv) {
         int n = m68k_execute(1024);
         total_cycles += n;
         versabus_tick(n);
+        host_sim_tick(&host_sim, n);
+        /* Highest pending interrupt wins.  Host attention (L5) is
+         * AP-I/F vectored — takes priority over chassis/PTM (L4). */
+        if (host_sim.pending) {
+            m68k_set_irq(5);
+        } else if (versabus_chassis_irq_pending() || versabus_ptm_irq_pending()) {
+            m68k_set_irq(4);
+        } else {
+            m68k_set_irq(0);
+        }
     }
 
     fprintf(stderr, "\n[done] %llu cycles, %llu instructions\n",
@@ -282,6 +471,7 @@ int main(int argc, char **argv) {
         else perror(dump_ram_path);
     }
 
+    host_sim_close(&host_sim);
     if (trace_fp && trace_fp != stderr) fclose(trace_fp);
     if (bus_fp   && bus_fp   != stderr) fclose(bus_fp);
     versabus_close();

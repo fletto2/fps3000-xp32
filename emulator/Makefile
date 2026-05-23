@@ -24,11 +24,11 @@ endif
 CFLAGS += -I$(MUSASHI_DIR)
 
 TARGET = fps3k_sbc
-SRC    = fps3k_sbc.c versabus.c mc6840.c upd7201.c
+SRC    = fps3k_sbc.c versabus.c mc6840.c upd7201.c host_sim.c
 
 all: $(TARGET)
 
-$(TARGET): $(SRC) versabus.h mc6840.h upd7201.h $(MUSASHI_SRC)
+$(TARGET): $(SRC) versabus.h mc6840.h upd7201.h host_sim.h $(MUSASHI_SRC)
 	$(CC) $(CFLAGS) -o $@ $(SRC) $(MUSASHI_SRC) $(LDFLAGS)
 
 clean:

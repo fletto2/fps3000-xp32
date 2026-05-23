@@ -91,6 +91,36 @@ int      versabus_is_device(uint32_t addr);
 /* Tick — drives any time-based device state (PTM, UART) */
 void     versabus_tick(uint32_t cycles);
 
+/* IRQ inquiry — non-zero if PTM IRQ pending */
+int      versabus_ptm_irq_pending(void);
+/* As above, gated by bit 7 of $1FFF1 (chassis-level enable) */
+int      versabus_ptm_irq_gated(void);
+
+/* Chassis-side vectored IRQ: pending when SBC has just written
+ * a control bit that arms the panel-bus interrupter (phase 0x1300).
+ * Ack returns the vector and clears the pending flag. */
+int      versabus_chassis_irq_pending(void);
+int      versabus_chassis_irq_ack(void);
+
+/* Returns the current XLTR_DATA_HI value — used by the SBC bus
+ * subsystem to gate BERR for chassis-routed long I/O addresses. */
+unsigned versabus_xltr_data_hi(void);
+unsigned versabus_xltr_data_lo(void);
+
+/* Non-zero when XLTR is armed for DMA — AP I/F belongs to chassis */
+int      versabus_apif_dma_busy(void);
+
+/* Host-simulator hooks — host_sim drives these to push bytes into the
+ * AP I/F state from the chassis side, and gets notified when the SBC
+ * has consumed (read) the byte. */
+void     versabus_inject_apif_byte(uint8_t a, uint8_t b, uint8_t status);
+void     versabus_set_apif_consumed_cb(void (*cb)(void *ctx), void *ctx);
+
+/* Queue a byte for delivery via the panel-command pull path
+ * (PCMD_HOST_GET_BYTE = 0x281).  Called by host_sim. */
+void     versabus_chassis_queue_byte(uint8_t b);
+int      versabus_chassis_byte_queued(void);
+
 /* For introspection / display */
 void     versabus_dump_state(FILE *out);
 

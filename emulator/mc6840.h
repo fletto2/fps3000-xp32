@@ -34,6 +34,7 @@ typedef struct {
     uint8_t  cr[3];         /* control register per timer */
     uint8_t  status;        /* shared status; bit 0..2 = T1..T3 IRQ; bit 7 = composite */
     uint8_t  msb_buffer;    /* MSB write latch (timers are written MSB first, then LSB triggers load) */
+    uint8_t  lsb_out[3];    /* MSB read latches LSB into output buffer (per datasheet) */
     int      cr2_select_cr1; /* if true, register 0 is CR1; else CR3 */
     /* Internal: count of ticks elapsed since last reset for each timer */
     uint64_t ticks[3];

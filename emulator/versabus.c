@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* From Musashi — assert IRQ level synchronously when chassis fires */
+extern void m68k_set_irq(unsigned int level);
+
 static FILE *log_fp = NULL;
 static int   verbose = 0;
 static mc6840_t  ptm_dev;
@@ -35,6 +38,11 @@ static struct {
     uint16_t irq_mask;
     uint16_t ch_config[4];     /* CH1..CH4 config regs */
     uint16_t arm_pending;      /* set when 0x400 written to status_irq; auto-completes next read */
+    uint32_t busy_ticks;       /* decrements on each versabus_tick; while >0 chassis is "engaged" */
+    /* Generic backing store for the whole XLTR window.  The phase
+     * 0x1600 self-test walks $210..$24E writing patterns and reading
+     * back, so every register in the block must round-trip. */
+    uint16_t raw[0x30];        /* 48 words covering $200..$25F */
 } xltr;
 
 /* 0x700000 mailbox state */
@@ -51,6 +59,13 @@ static uint32_t board_status;
 
 /* VERSAmodule control register */
 static uint16_t vmod_ctrl;
+
+/* Chassis-side IRQ source: phase 0x1300 panel-bus interrupt test fires
+ * a vectored IRQ when SBC writes bits 0..2 of $1FFF1 with bit 7 set.
+ * Cleared on IACK. */
+static int      chassis_irq_pending;
+static int      chassis_irq_vector;
+static int      chassis_irq_level = 4;
 
 /* ============== logging helpers ============== */
 
@@ -100,7 +115,7 @@ static const char *device_class(uint32_t addr) {
 }
 
 /* Pretty-print panel-command codes */
-static const char *panel_cmd_name(uint16_t cmd) {
+static const char *chassis_panel_cmd_name(uint16_t cmd) {
     switch (cmd) {
         case 0x258: return "PCMD_CH1_RESET";
         case 0x259: return "PCMD_CH1_INIT";
@@ -151,7 +166,7 @@ static void log_access(const char *op, uint32_t addr, uint32_t val, int size) {
     if ((addr == APIF_CMD_ARG_HI ||
          addr == APIF_CMD_ARG_LO ||
          addr == XLTR_CHANNEL_SELECT) && size == 2) {
-        const char *pn = panel_cmd_name((uint16_t)val);
+        const char *pn = chassis_panel_cmd_name((uint16_t)val);
         if (pn) fprintf(log_fp, "  ; %s", pn);
     }
     if (addr == APIF_CMD_STATUS && size == 2) {
@@ -170,10 +185,15 @@ void versabus_init(FILE *trace_log, int verb) {
     memset(&mailbox, 0, sizeof mailbox);
     mc6840_init(&ptm_dev, log_fp);
     upd7201_init(&sio_dev, log_fp);
-    /* Default board-status: bit 4 (offset F70019) = 1 (ready),
-     * bit 5 = 0 (no error). The MainInit polls F70019 bit 4 in a
-     * tight loop; if bit 5 is set it takes the error path. */
-    board_status = 0x00100000;  /* byte at F70019 = 0x10 → bit 4 set, bit 5 clear */
+    /* Default board-status, derived from ROMChecksumTest's expected
+     * pattern: (F70018 word) & 0x3F31 == 0x3F11, plus the F08728
+     * poll requires bit 4 of F70019 set + bit 5 clear:
+     *   F70018 = 0x3F (bits 0..5 set, bits 6..7 clear)
+     *   F70019 = 0x11 (bit 0 set, bit 4 set, others clear)
+     * Mask 0x3F31 doesn't probe bit 4, but the F08728 poll does.
+     * In big-endian uint32: bytes [F70018, F70019, F7001A, F7001B]
+     * → board_status = 0x3F11_xx_xx (xx = unused upper bytes set 0). */
+    board_status = 0x3F110000;
     vmod_ctrl = 0;
     /* AP I/F: start with ready=1 (bit 14) so first read shows ready */
     apif.cmd_status = (1u << 14);
@@ -193,6 +213,105 @@ int versabus_is_device(uint32_t addr) {
 
 /* ============== AP I/F handler ============== */
 
+/* Host-side injection state */
+static void  (*apif_consumed_cb)(void *ctx) = NULL;
+static void   *apif_consumed_ctx = NULL;
+static uint8_t apif_inj_status = 0;
+
+void versabus_inject_apif_byte(uint8_t a, uint8_t b, uint8_t status) {
+    apif.ch_data[0][0] = a;        /* surfaces at $FF0048 (CH1 data A) */
+    apif.ch_data[0][1] = b;        /* surfaces at $FF004E (CH1 data B) */
+    apif_inj_status    = status;   /* surfaces at $FF004A read */
+    /* Indicate "host has data" via cmd_status bit 14 (ready flag) */
+    apif.cmd_status   |= (1u << 14);
+    /* TCBIO1I ISR (F05DD6) reads $70001C and tests bit 29 ("host
+     * needs attention").  Set it so the ISR proceeds into the byte-
+     * receive path. */
+    mailbox.host_status |= (1u << 29);
+}
+
+void versabus_set_apif_consumed_cb(void (*cb)(void *ctx), void *ctx) {
+    apif_consumed_cb  = cb;
+    apif_consumed_ctx = ctx;
+}
+
+static void apif_notify_consumed(void) {
+    if (apif_consumed_cb) apif_consumed_cb(apif_consumed_ctx);
+}
+
+/* Last panel command written to $FF000E by the SBC — the chassis
+ * uses this to decide what response to produce when the SBC kicks
+ * off the operation by writing 0x8004 to $FF0000. */
+static uint16_t last_panel_cmd;
+
+/* Pending byte from host_sim to deliver via panel-cmd response.
+ * When the chassis is asked "give me next byte" (panel cmd 0x281
+ * after a host-attention IRQ), the byte is loaded into the channel
+ * data ports as part of the chassis ack. */
+static int      panel_byte_queued;
+static uint8_t  panel_byte_value;
+
+void versabus_chassis_queue_byte(uint8_t b) {
+    panel_byte_value  = b;
+    panel_byte_queued = 1;
+}
+int  versabus_chassis_byte_queued(void) {
+    return panel_byte_queued;
+}
+
+static void chassis_process_panel_cmd(uint16_t cmd) {
+    if (log_fp) fprintf(log_fp, "[CHASSIS] panel cmd 0x%03X (%s)\n",
+                        cmd, chassis_panel_cmd_name(cmd));
+
+    switch (cmd) {
+    case 0x276: case 0x277: case 0x278: case 0x279:
+    case 0x27A: case 0x27B: case 0x27D:
+        /* Init steps — chassis just acks success. */
+        break;
+
+    case 0x269: case 0x26C:
+        /* RELEASE / ABORT — chassis releases its lock, acks. */
+        break;
+
+    case 0x281:
+        /* SBC asking for next host byte.  If we have one queued from
+         * host_sim, deliver it via channel-1 data ports. */
+        if (panel_byte_queued) {
+            apif.ch_data[0][0] = panel_byte_value;        /* $FF0048 */
+            apif.ch_data[0][1] = panel_byte_value;        /* $FF004E */
+            apif_inj_status    = 0x4F;                    /* $FF004A */
+            /* Advance the host-side queue — apif_notify_consumed
+             * is called from the channel-data read paths. */
+        } else {
+            apif.ch_data[0][0] = 0;
+            apif.ch_data[0][1] = 0;
+            apif_inj_status    = 0;
+        }
+        break;
+
+    case 0x282:
+        /* "Re-sync" / "give me byte again" — same as 0x281 but
+         * doesn't advance the host's stream pointer.  We deliver
+         * the same byte without consuming. */
+        if (panel_byte_queued) {
+            apif.ch_data[0][0] = panel_byte_value;
+            apif.ch_data[0][1] = panel_byte_value;
+            apif_inj_status    = 0x4F;
+        }
+        break;
+
+    default:
+        if (cmd >= 0x258 && cmd <= 0x260) {
+            /* TORIA/TODRA dispatch — ack only, no data side-effect */
+        }
+        break;
+    }
+    /* All commands ack via cmd_status: bit 14 = ready, bit 13 = error.
+     * For now nothing produces an error. */
+    apif.cmd_status |= (1u << 14);
+    apif.cmd_status &= ~(1u << 13);
+}
+
 static uint16_t apif_read(uint32_t addr) {
     if (addr == APIF_CMD_STATUS || addr == APIF_CMD_STATUS+1) {
         /* When the ROM polls after writing 0x8004/0x8005, we automatically
@@ -204,9 +323,20 @@ static uint16_t apif_read(uint32_t addr) {
         }
         return v;
     }
+    if (addr == APIF_CMD_ARG_LO) return apif.cmd_arg_lo;
+    if (addr == APIF_CMD_ARG_HI) return apif.cmd_arg_hi;
+    /* CH1 status word at $FF004A — used by host_sim to flag "byte ready" */
+    if (addr == 0xFF004A) return apif_inj_status;
     if (addr == APIF_CH1_DATA_A || addr == APIF_CH1_DATA_B) {
         int bx = (addr - APIF_CH1_DATA_A) / 6;
-        return apif.ch_data[0][bx & 1];
+        uint16_t v = apif.ch_data[0][bx & 1];
+        /* SBC has consumed the byte — clear our queued byte and let
+         * host_sim post the next one. */
+        if (addr == APIF_CH1_DATA_A) {
+            panel_byte_queued = 0;
+            apif_notify_consumed();
+        }
+        return v;
     }
     /* Per-channel data ports */
     for (int c = 0; c < 4; c++) {
@@ -217,17 +347,39 @@ static uint16_t apif_read(uint32_t addr) {
     return 0;
 }
 
+/* True when the XLTR has been armed for DMA AND chassis is gated
+ * to deny SBC access (DATA_HI != 0).  Phase 0x1A00 verifies the
+ * full truth table:
+ *   stage 0 (DATA_HI=0x80, armed)   → BERR
+ *   stage 1 (DATA_HI=0x80, !armed)  → no BERR (mem access)
+ *   stage 2 (DATA_HI=0,    armed)   → no BERR (chassis idle)
+ * So the BERR condition is "armed AND DATA_HI != 0". */
+int versabus_apif_dma_busy(void) {
+    return xltr.arm_pending && xltr.data_hi != 0;
+}
+
 static void apif_write(uint32_t addr, uint16_t val) {
     if (addr == APIF_CMD_STATUS || addr == APIF_CMD_STATUS+1) {
         apif.last_opcode = val;
         apif.cmd_count++;
-        /* On REQUEST-TRANSFER (0x8004) or CONTINUE-TRANSFER (0x8005),
-         * mark not-ready momentarily so the poll loop sees one not-ready
-         * before we set ready. */
         apif.cmd_status &= ~((1u << 14) | (1u << 13));  /* clear ready+error */
+        /* REQUEST-TRANSFER (0x8004) — chassis processes the panel
+         * cmd queued at $FF000E and produces an ack. */
+        if (val == 0x8004) {
+            chassis_process_panel_cmd(last_panel_cmd);
+        }
+        /* CONTINUE-TRANSFER (0x8005) — re-fire current cmd with the
+         * same args (used to fetch successive bytes in a stream). */
+        if (val == 0x8005) {
+            chassis_process_panel_cmd(last_panel_cmd);
+        }
         return;
     }
-    if (addr == APIF_CMD_ARG_LO) { apif.cmd_arg_lo = val; return; }
+    if (addr == APIF_CMD_ARG_LO) {
+        apif.cmd_arg_lo = val;
+        last_panel_cmd  = val;        /* SBC stages panel cmd here */
+        return;
+    }
     if (addr == APIF_CMD_ARG_HI) { apif.cmd_arg_hi = val; return; }
     /* Per-channel data ports — writes ignored (these are read-only status from AP) */
 }
@@ -235,57 +387,69 @@ static void apif_write(uint32_t addr, uint16_t val) {
 /* ============== XLTR handler ============== */
 
 static uint16_t xltr_read(uint32_t addr) {
-    switch (addr) {
-        case XLTR_MODE0:          return xltr.mode0;
-        case XLTR_MODE1:          return xltr.mode1;
-        case XLTR_CHANNEL_SELECT: return xltr.channel_select;
-        case XLTR_COUNTER:        return xltr.counter;
-        case XLTR_MODE2:          return xltr.mode2;
-        case XLTR_DATA_LO:        return xltr.data_lo;
-        case XLTR_DATA_HI:        return xltr.data_hi;
-        case XLTR_STATUS_IRQ:
-            /* If 0x400 was written (arm), automatically signal completion
-             * by setting bit 15 (ready/done) on the next read. */
-            if (xltr.arm_pending) {
-                xltr.status_irq |= (1u << 15);
-                xltr.arm_pending = 0;
-            }
-            return xltr.status_irq;
-        case XLTR_IRQ_MASK:       return xltr.irq_mask;
-        case XLTR_CH1_CONFIG:     return xltr.ch_config[0];
-        case XLTR_CH2_CONFIG:     return xltr.ch_config[1];
-        case XLTR_CH3_CONFIG:     return xltr.ch_config[2];
-        case XLTR_CH4_CONFIG:     return xltr.ch_config[3];
+    /* Special-case the registers with side effects */
+    if (addr == XLTR_STATUS_IRQ) {
+        if (xltr.arm_pending) {
+            xltr.status_irq |= (1u << 15);
+            xltr.arm_pending = 0;
+        }
+        xltr.raw[(addr - XLTR_BASE) / 2] = xltr.status_irq;
+        return xltr.status_irq;
+    }
+    /* Default: return raw backing store (handles $200..$25F uniformly) */
+    int idx = (addr - XLTR_BASE) / 2;
+    if (idx >= 0 && idx < (int)(sizeof xltr.raw / sizeof xltr.raw[0])) {
+        return xltr.raw[idx];
     }
     return 0;
 }
 
 static void xltr_write(uint32_t addr, uint16_t val) {
+    int idx = (addr - XLTR_BASE) / 2;
+    if (idx < 0 || idx >= (int)(sizeof xltr.raw / sizeof xltr.raw[0])) return;
+
+    /* Update raw backing first so subsequent reads round-trip */
+    xltr.raw[idx] = val;
+
+    /* Track the named-register shadow state used by the dump_state
+     * pretty-printer and external IRQ logic */
     switch (addr) {
-        case XLTR_MODE0:          xltr.mode0 = val; return;
-        case XLTR_MODE1:          xltr.mode1 = val; return;
-        case XLTR_CHANNEL_SELECT: xltr.channel_select = val; return;
-        case XLTR_COUNTER:        xltr.counter = val; return;
-        case XLTR_MODE2:          xltr.mode2 = val; return;
-        case XLTR_DATA_LO:        xltr.data_lo = val; return;
-        case XLTR_DATA_HI:        xltr.data_hi = val; return;
+        case XLTR_MODE0:          xltr.mode0 = val; break;
+        case XLTR_MODE1:
+            /* Setting bit 15 (0x8000) arms a chassis operation —
+             * the chassis becomes "engaged" for a short window
+             * before reporting ready.  Phase 0x1A00 handshake at
+             * F087C2 wants to see bit 4 of board status drop, while
+             * F08846 wants it to come back up after engage completes. */
+            if ((val & 0x8000) && !(xltr.mode1 & 0x8000)) {
+                xltr.busy_ticks = 4096;
+            }
+            xltr.mode1 = val;
+            break;
+        case XLTR_CHANNEL_SELECT: xltr.channel_select = val; break;
+        case XLTR_COUNTER:        xltr.counter = val; break;
+        case XLTR_MODE2:          xltr.mode2 = val; break;
+        case XLTR_DATA_LO:        xltr.data_lo = val; break;
+        case XLTR_DATA_HI:        xltr.data_hi = val; break;
         case XLTR_STATUS_IRQ:
             if (val == 0x0000) {
-                /* Clear */
                 xltr.status_irq = 0;
                 xltr.arm_pending = 0;
             } else if (val == 0x0400) {
-                /* Arm — next read returns ready/done */
+                /* Store the arm bit in status_irq so subsequent
+                 * reads can show it alongside the auto-set ready bit
+                 * (phase 0x1600 self-test verifies status & 0x610 == 0x400) */
+                xltr.status_irq = 0x0400;
                 xltr.arm_pending = 1;
             } else {
                 xltr.status_irq = val;
             }
-            return;
-        case XLTR_IRQ_MASK:       xltr.irq_mask = val; return;
-        case XLTR_CH1_CONFIG:     xltr.ch_config[0] = val; return;
-        case XLTR_CH2_CONFIG:     xltr.ch_config[1] = val; return;
-        case XLTR_CH3_CONFIG:     xltr.ch_config[2] = val; return;
-        case XLTR_CH4_CONFIG:     xltr.ch_config[3] = val; return;
+            break;
+        case XLTR_IRQ_MASK:       xltr.irq_mask = val; break;
+        case XLTR_CH1_CONFIG:     xltr.ch_config[0] = val; break;
+        case XLTR_CH2_CONFIG:     xltr.ch_config[1] = val; break;
+        case XLTR_CH3_CONFIG:     xltr.ch_config[2] = val; break;
+        case XLTR_CH4_CONFIG:     xltr.ch_config[3] = val; break;
     }
 }
 
@@ -336,24 +500,123 @@ static void sio_write(uint32_t addr, uint8_t val) {
 
 /* ============== board status ============== */
 
-/* The VERSAmodule status register at F70019 reports the chassis-side
- * AP-detection result. Per HardwareInit's behavior:
- *   bit 4 = "ready" (channel populated and responded)
- *   bit 5 = "error" (channel populated but in error)
+/* The VERSAmodule Status Register at F70018-F7001A reports chassis
+ * state.  IOChannelDiagnostic (ROM phase 8, F08F70+) walks 4 stages
+ * of (bit7 of $1FFF1, bit1 of $1FFF0) ∈ {(0,0),(0,1),(1,0),(1,1)}
+ * and expects bit 3 of $F70019 to be 1 in the first three cases and
+ * 0 in the fourth — i.e.,
  *
- * Lovett's chassis = 2-AC config (channels 1 + 2 populated).
- * Channel selector encoding: high nibble = channel group (1=AC1, 2=AC2,
- * 3=AC3, 4=AC4, etc.), low byte = sub-test number.
+ *      bit3 of board status = NOT (bit7 of VMOD+1  AND  bit1 of VMOD)
  *
- * For a faithful emulation: when CHANNEL_SELECT high nibble = 1 or 2,
- * report bit 4 set (ready, no error). Otherwise report bit 4 clear
- * so HardwareInit knows that channel is not populated. */
+ * This matches FPS-100/FPS-164-style chassis-busy semantics where two
+ * control lines (a "request enable" + a "go strobe") AND together to
+ * assert chassis-busy.  Compare DRIVER.MAC (FPS-100): host raises
+ * HDMAST (bit 0 of CTRL) AND a transfer-direction bit, chassis pulls
+ * a "ready" line LOW until the transfer completes.  Same shape, two
+ * inputs feed an AND-NOT to produce the "ready" line.
+ *
+ * Per Motorola M68KVM02 manual: VMOD_CTRL at 0x01FFF0 is "Control
+ * Register image only — register not directly accessible."  Writes
+ * go through chassis-mediated VERSAbus interrupter logic.  The
+ * chassis exposes its handshake state via bit 3 of board status. */
 static uint32_t board_status_read(uint32_t addr) {
     int byte_off = addr - BOARD_STATUS_BASE;
-    /* Bit 4 of F70019 = "board ready/healthy" — kept always set. The
-     * per-channel "AP responding" detection happens via FF0048-FF00AE
-     * data port reads in HardwareInit, NOT via this register. */
-    return (board_status >> ((3 - byte_off) * 8)) & 0xFF;
+
+    /* F7001B is ILLEGAL per Motorola Figure 2 — handled in bus_read8 */
+    if (addr == 0xF7001B) {
+        if (log_fp) fprintf(log_fp, "[BOARD_STATUS] illegal access at F7001B\n");
+        return 0xFF;
+    }
+
+    uint32_t live = board_status;
+
+    if (byte_off == 1) {
+        /* F70019 bit 4 — chassis "idle/ready" line.
+         *
+         * The chassis goes "engaged" (bit 4 = 0) briefly when the SBC
+         * writes XLTR_MODE1 = 0x8000 (transition to bit 15 set).
+         * After a short window (busy_ticks decrements to 0) the
+         * chassis reports "ready" (bit 4 = 1) again.
+         *
+         * Phase 9 wait at F087C2 reads bit 4 immediately after the
+         * write — sees 0 (busy) and advances.  Phase 0x1A00 wait at
+         * F08846 reads after the busy window expires — sees 1 (done).
+         *
+         * Also held LOW while mode1 bit 15 is set (operation outstanding). */
+        if ((xltr.mode1 & 0x8000) && xltr.busy_ticks > 0) {
+            live &= ~0x00100000;  /* engaged → bit 4 clear */
+        } else {
+            live |=  0x00100000;  /* ready → bit 4 set */
+        }
+    }
+    if (byte_off == 1) {
+        /* F70019 chassis-state bits.  vmod_ctrl is big-endian:
+         *   $1FFF0 = HIGH byte, $1FFF1 = LOW byte
+         *
+         * The chassis publishes inverted images of VMOD_CTRL+1
+         * control bits in the low nibble of board status:
+         *
+         *   bit 1 of $F70019 = NOT (bit 4 of $1FFF1)
+         *   bit 2 of $F70019 = NOT (bit 5 of $1FFF1)   [presumed]
+         *   bit 3 of $F70019 = NOT (bit 6 of $1FFF1
+         *                           OR (bit 7 of $1FFF1
+         *                               AND bit 1 of $1FFF0))
+         *
+         * Phase 0x1100 (PanelBusDiagnostic at F0918C) confirms the
+         * bit 4 → bit 1 mapping: F091EC tests bit 1 of $F70019
+         * after `bset bit 4 of $1FFF1`, expects 0; F09224 tests bit 1
+         * after `bclr bit 4 of $1FFF1`, expects 1.
+         *
+         * Phase 0x800 (IOChannelDiagnostic at F08F70) confirms the
+         * bit 3 NAND-style logic: see truth table comment in CL.
+         *
+         * The two-input AND form (bit7+bit1) matches FPS-100 driver
+         * pattern (DRIVER.MAC: HDMAST + WRTHOST gating). */
+        uint8_t byte_1FFF0 = (vmod_ctrl >> 8) & 0xFF;
+        uint8_t byte_1FFF1 =  vmod_ctrl       & 0xFF;
+        int b0_1FFF1 = (byte_1FFF1 >> 0) & 1;
+        int b3_1FFF1 = (byte_1FFF1 >> 3) & 1;
+        int b4_1FFF1 = (byte_1FFF1 >> 4) & 1;
+        int b5_1FFF1 = (byte_1FFF1 >> 5) & 1;
+        int b6_1FFF1 = (byte_1FFF1 >> 6) & 1;
+        int b7_1FFF1 = (byte_1FFF1 >> 7) & 1;
+        int b0_1FFF0 = (byte_1FFF0 >> 0) & 1;
+        int b1_1FFF0 = (byte_1FFF0 >> 1) & 1;
+
+        /* Bit 5 of $F70019: tracks bit 6 of $1FFF1 directly (not inverted).
+         * Phase boundary uses bit 5 to signal "end of test" — F088EE
+         * checks bit 5 to decide Phase2Init vs loop-back.  After all
+         * MainInit phases the SBC writes 0xD0 to $1FFF0 (high byte),
+         * which sets bit 6 of $1FFF1 (= 0xD0 high nibble bit 6 = 1)
+         * — this is the chassis "tests done, advance" indicator. */
+        /* Note: bit 6 of $1FFF1 is the same line that drives the
+         * inverted bit 3 of $F70019 — they are the same chassis
+         * signal observed at two different bit positions. */
+        if (b6_1FFF1) live |=  0x00200000;
+        else          live &= ~0x00200000;
+
+        /* Bit 1: NOT(bit4) OR (bit5 AND NOT bit0_of_1FFF0).
+         * Phase 0x1100 tests bit 4 alone (bit 5 = bit 0 of $1FFF0 = 0):
+         *   bit 1 = NOT(bit 4).
+         * Phase 0x1200 stage 0 sets bit 5 with bit 4 set, bit 0 = 0:
+         *   bit 1 = NOT(1) OR (1 AND 1) = 1.  ✓
+         * Phase 0x1200 stage 3 also sets bit 0 of $1FFF0:
+         *   bit 1 = NOT(1) OR (1 AND 0) = 0.  ✓
+         * Three-input combinational logic — same shape as bit-3 NAND. */
+        int b1_drive = (!b4_1FFF1) | (b5_1FFF1 & !b0_1FFF0);
+        if (b1_drive) live |= 0x00020000; else live &= ~0x00020000;
+        /* Bit 2: NOT(bit5) OR (bit3 AND bit0) of $1FFF1.
+         * Phase 0x1400 stage 3 (F09480, chsel 0x1403) verifies the
+         * second term: with bit 5 still set from earlier phases, bit 2
+         * is clear unless bit 3 AND bit 0 of $1FFF1 are both asserted.
+         * Same FPS-100 "primary line + override" pattern as bit 1. */
+        int b2_drive = (!b5_1FFF1) | (b3_1FFF1 & b0_1FFF1);
+        if (b2_drive) live |= 0x00040000; else live &= ~0x00040000;
+        /* Bit 3: NAND-style chassis-busy from bit 6 OR (bit 7 AND bit 1) */
+        int chassis_busy = b6_1FFF1 | (b7_1FFF1 & b1_1FFF0);
+        if (!chassis_busy) live |= 0x00080000; else live &= ~0x00080000;
+    }
+    return (live >> ((3 - byte_off) * 8)) & 0xFF;
 }
 static void board_status_write(uint32_t addr, uint32_t val) {
     int byte_off = addr - BOARD_STATUS_BASE;
@@ -386,10 +649,23 @@ uint32_t versabus_read(uint32_t addr, int size) {
         val = sio_read(addr) & 0xFF;
     }
     else if (addr >= BOARD_STATUS_BASE && addr < BOARD_STATUS_END) {
-        val = board_status_read(addr);
+        if (size == 1) {
+            val = board_status_read(addr);
+        } else if (size == 2) {
+            val = (board_status_read(addr) << 8) | board_status_read(addr+1);
+        } else {
+            val = (board_status_read(addr) << 24) | (board_status_read(addr+1) << 16)
+                | (board_status_read(addr+2) << 8) | board_status_read(addr+3);
+        }
     }
     else if (addr == VMOD_CTRL || addr == VMOD_CTRL+1) {
-        val = (addr == VMOD_CTRL) ? (vmod_ctrl >> 8) : (vmod_ctrl & 0xFF);
+        if (size == 2 && addr == VMOD_CTRL) {
+            val = vmod_ctrl;                       /* full word */
+        } else if (size == 1 && addr == VMOD_CTRL) {
+            val = (vmod_ctrl >> 8) & 0xFF;         /* high byte */
+        } else {
+            val = vmod_ctrl & 0xFF;                /* low byte */
+        }
     }
 
     log_access("RD", addr, val, size);
@@ -419,14 +695,73 @@ void versabus_write(uint32_t addr, uint32_t val, int size) {
         board_status_write(addr, val);
     }
     else if (addr == VMOD_CTRL || addr == VMOD_CTRL+1) {
-        if (addr == VMOD_CTRL) vmod_ctrl = (vmod_ctrl & 0xFF) | ((val & 0xFF) << 8);
-        else                   vmod_ctrl = (vmod_ctrl & 0xFF00) | (val & 0xFF);
+        uint8_t prev_lo = vmod_ctrl & 0xFF;        /* byte at $1FFF1 */
+        if (addr == VMOD_CTRL && size == 2) {
+            vmod_ctrl = val & 0xFFFF;
+        } else if (addr == VMOD_CTRL) {
+            vmod_ctrl = (vmod_ctrl & 0x00FF) | ((val & 0xFF) << 8);
+        } else {
+            vmod_ctrl = (vmod_ctrl & 0xFF00) | (val & 0xFF);
+        }
+        uint8_t new_lo = vmod_ctrl & 0xFF;
+        /* nothing */
+        /* Phase 0x1300 (F09338, PanelBusInterruptDiagnostic): writing
+         * any of bits 0..2 of $1FFF1 with bit 7 set triggers a level-4
+         * vectored IRQ at vector $50 (handler $140 = F093BE).
+         * Edge-triggered on transitions of bits 0..2.  This matches
+         * FPS-100 driver where setting CTRL register bits arms the
+         * interrupter and the chassis pulses an interrupt to the SBC. */
+        if ((new_lo & 0x80) && ((new_lo ^ prev_lo) & 0x07) && (new_lo & 0x07)) {
+            /* Vector dispatch by bit 3 of $1FFF1.  Phase 0x1400
+             * (F093CE) tests both code paths:
+             *   stage 1 (chsel 0x1401): bit 3=0 → expects vector 0x50
+             *     (handler F094CC sets d2 bit 0 only)
+             *   stage 2 (chsel 0x1402): bit 3=1 → expects vector 0x52
+             *     (handler F094E4 sets d2 bit 1 directly)
+             * The chassis routes the panel-bus interrupt to one of two
+             * vectors based on whether bit 3 is asserted. */
+            chassis_irq_vector = (new_lo & 0x08) ? 0x52 : 0x50;
+            chassis_irq_pending = 1;
+            m68k_set_irq(chassis_irq_level);
+        }
     }
 }
 
 void versabus_tick(uint32_t cycles) {
     mc6840_tick(&ptm_dev, cycles);
     upd7201_tick(&sio_dev, cycles);
+    if (xltr.busy_ticks > cycles) xltr.busy_ticks -= cycles;
+    else                          xltr.busy_ticks = 0;
+}
+
+int versabus_ptm_irq_pending(void) {
+    return mc6840_irq_pending(&ptm_dev);
+}
+
+int versabus_chassis_irq_pending(void) {
+    return chassis_irq_pending;
+}
+int versabus_chassis_irq_ack(void) {
+    int v = chassis_irq_vector;
+    chassis_irq_pending = 0;
+    return v;
+}
+
+unsigned versabus_xltr_data_hi(void) {
+    return xltr.data_hi;
+}
+unsigned versabus_xltr_data_lo(void) {
+    return xltr.data_lo;
+}
+
+/* PTM IRQ propagation gate: bit 7 of $1FFF1 (VMOD_CTRL+1).
+ * Phase 9 (F0905A in ROM) sets bit 7 before arming the PTM IRQ
+ * test, and clears it before exiting.  Treating this bit as the
+ * chassis-level PTM IRQ enable matches what the ROM assumes. */
+int versabus_ptm_irq_gated(void) {
+    if (!mc6840_irq_pending(&ptm_dev)) return 0;
+    uint8_t byte_1FFF1 = vmod_ctrl & 0xFF;
+    return (byte_1FFF1 & 0x80) ? 1 : 0;
 }
 
 void versabus_dump_state(FILE *out) {

@@ -1963,8 +1963,13 @@ static inline void m68ki_exception_bus_error(void)
 
 	uint sr = m68ki_init_exception();
 
-	/* Note: This is implemented for 68010 only! */
-	m68ki_stack_frame_1000(REG_PPC, sr, EXCEPTION_BUS_ERROR);
+	/* FPS-3000 SBC patch: M68KVM02 board uses 68000, so push 68000
+	 * 7-word bus-error frame instead of the 68010 format-1000 frame. */
+	if (CPU_TYPE & CPU_TYPE_000) {
+		m68ki_stack_frame_buserr(sr);
+	} else {
+		m68ki_stack_frame_1000(REG_PPC, sr, EXCEPTION_BUS_ERROR);
+	}
 
 	m68ki_jump_vector(EXCEPTION_BUS_ERROR);
 

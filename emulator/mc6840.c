@@ -16,27 +16,36 @@ void mc6840_reset(mc6840_t *p) {
 }
 
 uint8_t mc6840_read(mc6840_t *p, int reg) {
+    /* MC6840 register layout (per datasheet):
+     *   0  (read) — undefined / 0
+     *   1  (read) — Status register
+     *   2/4/6 (read) — Tn counter MSB; latches LSB into output buffer
+     *   3/5/7 (read) — Tn LSB output buffer (last latched LSB)
+     *   2/4/6 (write) — Tn MSB latch buffer
+     *   3/5/7 (write) — Tn LSB latch (and write to counter/latch)
+     *   0    (write) — CR1 (if CR2[0]=1) else CR3
+     *   1    (write) — CR2
+     */
     reg &= 7;
     switch (reg) {
-        case 0: case 1:
-            /* Reading CR returns 0 per datasheet (CR registers are write-only) */
+        case 0:
             return 0;
-        case 2: {
-            /* Status register read */
-            uint8_t s = p->status;
-            /* Reading status doesn't clear it — that requires read-status
-             * followed by read-counter per chip semantics */
-            return s;
-        }
-        case 3: case 5: case 7: {
-            /* Timer counter MSB read (1, 2, 3) */
-            int t = (reg - 3) / 2;
+        case 1:
+            return p->status;
+        case 2: case 4: case 6: {
+            int t = (reg - 2) / 2;
+            p->lsb_out[t] = p->counter[t] & 0xFF;
+            /* Per datasheet: reading counter MSB after status read
+             * clears the corresponding IRQ flag.  We approximate by
+             * always clearing on counter-MSB read. */
+            p->status &= ~(1u << t);
+            /* Recompute composite IRQ */
+            if (!(p->status & 0x07)) p->status &= ~0x80;
             return (p->counter[t] >> 8) & 0xFF;
         }
-        case 4: case 6: {
-            /* Timer counter LSB read (1, 2 — placement varies) */
-            int t = (reg - 4) / 2;
-            return p->counter[t] & 0xFF;
+        case 3: case 5: case 7: {
+            int t = (reg - 3) / 2;
+            return p->lsb_out[t];
         }
     }
     return 0;
@@ -63,11 +72,12 @@ void mc6840_write(mc6840_t *p, int reg, uint8_t val) {
             p->msb_buffer = val;
             break;
         case 3: {
-            /* LSB write — triggers loading of timer 1 latch (or counter, per CR) */
+            /* LSB write — completes the 16-bit latch write (MSB+LSB).
+             * Counter is always loaded from latch on this write (per
+             * datasheet: timer is in preset state during init, counter
+             * loaded; in run state, counter is loaded on next clock). */
             p->latch[0] = ((uint16_t)p->msb_buffer << 8) | val;
-            if (p->cr[0] & 0x10) {  /* preset mode bit */
-                p->counter[0] = p->latch[0];
-            }
+            p->counter[0] = p->latch[0];
             if (p->log_fp) fprintf(p->log_fp, "[PTM] T1 latch <- %04X\n", p->latch[0]);
             break;
         }
@@ -76,7 +86,7 @@ void mc6840_write(mc6840_t *p, int reg, uint8_t val) {
             break;
         case 5:
             p->latch[1] = ((uint16_t)p->msb_buffer << 8) | val;
-            if (p->cr[1] & 0x10) p->counter[1] = p->latch[1];
+            p->counter[1] = p->latch[1];
             if (p->log_fp) fprintf(p->log_fp, "[PTM] T2 latch <- %04X\n", p->latch[1]);
             break;
         case 6:
@@ -84,17 +94,20 @@ void mc6840_write(mc6840_t *p, int reg, uint8_t val) {
             break;
         case 7:
             p->latch[2] = ((uint16_t)p->msb_buffer << 8) | val;
-            if (p->cr[2] & 0x10) p->counter[2] = p->latch[2];
+            p->counter[2] = p->latch[2];
             if (p->log_fp) fprintf(p->log_fp, "[PTM] T3 latch <- %04X\n", p->latch[2]);
             break;
     }
 }
 
 void mc6840_tick(mc6840_t *p, uint32_t cpu_cycles) {
-    /* Tick down each running timer */
+    /* Per MC6840 datasheet, CR2 bit 0 is the reg-0 address select
+     * (1 = CR1 visible at reg 0, 0 = CR3) — NOT a master reset.
+     * Each timer's internal reset is its OWN CRn bit 0.  Default
+     * "halted" state (CRn = 0x01) means that timer is held in
+     * preset state and does not count. */
     for (int t = 0; t < 3; t++) {
-        if (p->cr[t] & 0x01) continue;          /* CR bit 0 = halt */
-        /* Use prescaler if CR bit 1 set; otherwise tick on every cycle */
+        if (p->cr[t] & 0x01) continue;           /* CRn bit 0 = reset → halted */
         uint32_t to_decr = cpu_cycles;
         if (p->cr[t] & 0x02) to_decr /= 8;       /* very rough prescale */
         if (p->counter[t] >= to_decr) {
