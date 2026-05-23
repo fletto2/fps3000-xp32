@@ -58,8 +58,8 @@ Same instruction set, same microcode format — different packaging
 
 - Possibly used by **Bomem in the DA3 FTIR spectrometer** as the
   optional "HPVP" (High-Performance Vector Processor) upgrade.
-  **Identification unproven** — see `../cmd_files_inventory.md` and
-  `../fps100_multi_ap_support.md` for the HPVP-identity analysis.
+  **Identification unproven** — see `../notes/cmd_files_inventory.md` and
+  `../notes/fps100_multi_ap_support.md` for the HPVP-identity analysis.
   Earlier confident "Bomem marketed FPS-100 as HPVP" claims have
   been retracted as unsupported.
 - Documented in bitsavers `pdf/floatingPointSystems/FPS100/`
@@ -235,7 +235,7 @@ behavior.
 
 ## Where to read more
 
-- Family chip-id chain: [`fps164_chip_identification.md`](../fps164_chip_identification.md)
+- Family chip-id chain: [`fps164_chip_identification.md`](../notes/fps164_chip_identification.md)
 - Curington FPS-5000 papers: `refs/FPS-5000/`
 - Hockney chapter: `refs/FPS-5000/FPS3000_fps.pdf`
 - Charlesworth FPS-164 paper: `refs/FPS-164/Charlesworth_..._1986.pdf`

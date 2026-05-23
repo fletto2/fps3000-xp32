@@ -52,6 +52,22 @@ extinct in the wild — see [02-hardware.md](02-hardware.md)).
 Both goals depend on the same underlying knowledge: how the SBC ROM
 talks to the rest of the chassis, and how the chassis talks back.
 
+## What we've built so far
+
+- **Stand-alone M68000 emulator** that boots the ROM cleanly through
+  MainInit's 16+ self-test phases, Phase2Init, RTOSKernelInit, and
+  TDTI task creation — all 6 expected RTOS tasks instantiated. See
+  `emulator/` and [09-status.md](09-status.md).
+- **In-ROM monitor / debugger / host interface** in 22.4 KB of free
+  ROM (`F0A826`+), talking over the on-board SIO Channel A (which
+  the factory firmware never uses). Includes an S-record loader
+  that bypasses the chassis-side panel-command dispatch entirely
+  and writes bytes directly into target addresses. See `monitor/`.
+
+These let us interact with the SBC firmware without needing the
+missing host-side AP I/F card and without resolving every open
+question about the chassis state machine first.
+
 ## Where to read more
 
 - [Hockney & Jesshope chapter](../refs/FPS-5000/FPS3000_fps.pdf)

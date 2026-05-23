@@ -104,5 +104,5 @@ fix the COMMON-block issue, we can:
   (XP-32 inherits ~90% of AP-120B mnemonics)
 
 For now: SIM100 source is also valuable as **read-only reference**.
-That's what `../fps100_sim100_annotated.md` (Council-of-Clankers
+That's what `../notes/fps100_sim100_annotated.md` (Council-of-Clankers
 analysis, see when generated) is for.

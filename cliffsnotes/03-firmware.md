@@ -10,7 +10,7 @@
 | `0x01FFF0–0x01FFF1` | VERSAmodule control register |
 | `0xF00000–0xF0FFFF` | ROM (this firmware) |
 | `0xF70001–0xF7000F` | MC6840 PTM (odd bytes, `movep`) |
-| `0xF70010–0xF70017` | NEC µPD7201 dual UART (unused by this ROM) |
+| `0xF70010–0xF70017` | NEC µPD7201 dual UART (unused by factory ROM; co-opted by our in-ROM monitor at `F0A826` for serial console + S-record loader) |
 | `0xF70018–0xF7001A` | Board status/control register (PAL-decoded) |
 | `0xFF0000–0xFF00FF` | **AP I/F** command/data interface (host-visible) |
 | `0xFF0200–0xFF025F` | **VersaBUS XLTR** control register block (SBC-private) |
@@ -56,7 +56,7 @@ ASQ name pattern: `A`+name = AC-side queue, `H`+name = host-side queue.
 | `F05256` | `SRecordFinalize` | End-of-record handler |
 | `F05688` | `PanelIOConfigure_25A` | Panel-command-sender (called with 21 distinct codes) |
 | `F056BA` | `PanelSendAndWait` | Panel-command kernel |
-| `F05BA4` | `PanelStatusDispatchTable` | 20-entry status dispatch (data) |
+| `F05BA4` | `PanelStatusDispatchTable` | 42-entry × 4-byte dispatch (4 handler classes: POLL/D1_SEND/BLK_XFR/D2_FIN + RTS noop) — fully reverse-engineered, see `refs_extracted/panel_status_dispatch_table.md` |
 | `F05C4C` | `PanelErrorMaskTable` | Error-mask table (data) |
 | `F05D36` | `TCBIO1I_Entry` | Host I/O channel task |
 | `F05F4A` | `TCBXP4I_Entry` | XP-32 channel 4 task |
@@ -74,6 +74,6 @@ remainder is data tables, padding, and some misdecoded data.
 ## Where to read more
 
 - [`architecture.md`](../architecture.md) — RMS68K marker inventory §10, 4-letter context tags §11
-- [`xltr_protocol.md`](../xltr_protocol.md)
-- [`host_to_sbc_communication.md`](../host_to_sbc_communication.md)
-- [`mc_results.md`](../mc_results.md), [`mc_fps3k_pass2_summary.md`](../mc_fps3k_pass2_summary.md)
+- [`xltr_protocol.md`](../notes/xltr_protocol.md)
+- [`host_to_sbc_communication.md`](../notes/host_to_sbc_communication.md)
+- [`mc_results.md`](../notes/mc_results.md), [`mc_fps3k_pass2_summary.md`](../notes/mc_fps3k_pass2_summary.md)

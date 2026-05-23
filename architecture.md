@@ -35,7 +35,7 @@ FPS-164 (1979/1981) and FPS-264 (1986) both predate or sidestep the
 Am29116 — they use Schottky-TTL MSI control logic. The FPS-164/MAX
 boards use ADSP-1401 as program sequencer. Only the FPS-3000 EXEC
 card (1983) carries an Am29116 in this family. See
-`fps164_chip_identification.md` for the full chain and references.
+`notes/fps164_chip_identification.md` for the full chain and references.
 
 The **FPS-3000** is an FPS-5000-class entry-level system: a single
 **Control Processor** (the M68KVM02 SBC running this ROM) plus 1–4
@@ -67,7 +67,7 @@ engineering P/N, where read):
 but the **host-side AP I/F card and its cable are missing**. So
 the chassis can boot and run its self-tests but cannot
 communicate with any host computer until the host-side card is
-sourced or substituted. See `ap_if_card.md` for the three
+sourced or substituted. See `notes/ap_if_card.md` for the three
 realistic paths forward.
 
 ## 2. System block diagram (the layout webp)

@@ -11,7 +11,7 @@ PDP-11 host  ──cable──  AP I/F card  ──VersaBUS──  SBC  ──XL
 
 The cable carries **169 distinct net names** per the 4448 netlist
 (reverse-engineered from a related card; see
-[`upstream_repos.md`](../upstream_repos.md)). Of those, ~150 are
+[`upstream_repos.md`](../notes/upstream_repos.md)). Of those, ~150 are
 unique logical signals after excluding ground/power returns.
 
 Key signal groups (per `cable_protocol_inferred.md`):
@@ -23,7 +23,7 @@ Key signal groups (per `cable_protocol_inferred.md`):
 **Implication for substitute hardware**: a microcontroller with
 ~50 GPIO is insufficient. An FPGA with ≥150 user I/O is required —
 recommended: Lattice ECP5 (ULX3S or ECP5-5G-EVN). See
-[`host_substitute_hardware_plan.md`](../host_substitute_hardware_plan.md).
+[`host_substitute_hardware_plan.md`](../notes/host_substitute_hardware_plan.md).
 
 The actual host-side AP I/F card is **missing** from Lovett's chassis.
 Pin correspondence between the 4448 netlist and the host card is a
@@ -99,9 +99,9 @@ maps to ROM functions:
 
 ## Where to read more
 
-- [`xltr_protocol.md`](../xltr_protocol.md)
-- [`host_to_sbc_communication.md`](../host_to_sbc_communication.md)
-- [`host_to_fps100_full_protocol.md`](../host_to_fps100_full_protocol.md)
-- [`panel_codes_am29116_decoded.md`](../panel_codes_am29116_decoded.md)
-- [`cable_protocol_inferred.md`](../cable_protocol_inferred.md)
-- [`ap_if_card.md`](../ap_if_card.md)
+- [`xltr_protocol.md`](../notes/xltr_protocol.md)
+- [`host_to_sbc_communication.md`](../notes/host_to_sbc_communication.md)
+- [`host_to_fps100_full_protocol.md`](../notes/host_to_fps100_full_protocol.md)
+- [`panel_codes_am29116_decoded.md`](../notes/panel_codes_am29116_decoded.md)
+- [`cable_protocol_inferred.md`](../notes/cable_protocol_inferred.md)
+- [`ap_if_card.md`](../notes/ap_if_card.md)

@@ -41,27 +41,47 @@ Per Nakazoto's photo (`refs/FPS-3000/cards/05_XP32_EXEC.JPG`), board
   sense)
 - **Am2168-45PCB / CY7C168 SRAMs** in an array — likely the AU writable
   control store (4K × 128-bit, host-uploaded)
-- **Bipolar PROMs** — possibly a small boot ROM or decode logic; the EU control store is **writable** per Hockney (&Jesshope)
-  (Hockney's "2K × 80")
+- **Bipolar PROMs** — these are the **EU PROM** per Hockney's
+  Figure 2.53 + p. 241 text: "Microcode programs for the EU reside
+  in EU PROM, which contains 2K 80-bit microinstructions." The EU
+  store is **fixed factory mask**, NOT writable. Only the AU WCS is
+  writable. (Earlier drafts of this doc had this backward; see
+  `../notes/correction_eu_writable.md` for the retraction.)
 - **PALs** (DIP-24, custom-marked "29F52 SDC") — combinational decode
 - **74F-series TTL glue**
 
-Open question: which chips are which. The PROM-vs-SRAM identification
-on the EXEC card is not yet definitive — see audit triage G5 in
-`mc_doc_audit_triage.md`.
+Open question: chip-to-function mapping on the EXEC card.
+Hockney + the architecture diagram tell us *what* should be on the
+card (Am29116-class sequencer + 80-bit EU PROM + 128-bit AU WCS +
+PALs), but matching each physical chip to its role still needs
+audit-G5 photo re-inspection.
 
 ## ARITH card (XP-32 FP pipes)
 
 Board 612-4806-002 carries:
 
-- A multiplier and two adders (Hockney "WTL-1032/1033"; bitsavers
-  has WTL-1232/1233 datasheets — likely the production parts)
+- One **WEITEK WTL-1032** floating-point multiplier (64-pin DIP or
+  68-pin LCC) — IEEE 754 32-bit single-precision, 3-stage internal
+  pipeline. Datasheet in `refs/Weitek/WeitekDatasheet.pdf`.
+- Two **WEITEK WTL-1033** floating-point ALUs (same package as
+  WTL-1032; common pinout). Both chips do add/subtract/abs and FP↔
+  fixed-point conversion. The "WTL-1232/1233" guess in earlier
+  drafts (assumed production-part successor) was wrong — the
+  WTL-1032/1033 datasheet identifies these as the parts Hockney
+  refers to.
 - Bipolar PROMs in DIP-20 — arithmetic-control fan-out PROMs
 - Am2168 SRAMs — additional buffers/registers
 
+Hockney p. 240 describes the AU as having "a five-stage floating-
+point multiplier pipeline and two five-stage floating-point adder
+pipelines." The WTL chips themselves have a 3-stage internal pipe
+per the datasheet; the system-level "5-stage" pipe is 3 chip stages
++ 2 stages of external register staging (input mux + output
+capture).
+
 ## Sequencer-chip identification across the FPS family
 
-Critical finding ([fps164_chip_identification.md](../fps164_chip_identification.md)):
+Critical finding ([fps164_chip_identification.md](../notes/fps164_chip_identification.md)):
 
 | System | Year | EU/sequencer chip |
 |---|---|---|
@@ -90,7 +110,7 @@ Per `Nakazoto/FloatingPointSystems/KnownSurviving.txt`:
 ## Where to read more
 
 - Full architecture writeup: [`architecture.md`](../architecture.md)
-- AP I/F card details: [`ap_if_card.md`](../ap_if_card.md)
-- Cable protocol: [`cable_protocol_inferred.md`](../cable_protocol_inferred.md)
-- Family chip identification: [`fps164_chip_identification.md`](../fps164_chip_identification.md)
+- AP I/F card details: [`ap_if_card.md`](../notes/ap_if_card.md)
+- Cable protocol: [`cable_protocol_inferred.md`](../notes/cable_protocol_inferred.md)
+- Family chip identification: [`fps164_chip_identification.md`](../notes/fps164_chip_identification.md)
 - Board photos: `refs/FPS-3000/cards/01..08*.JPG`

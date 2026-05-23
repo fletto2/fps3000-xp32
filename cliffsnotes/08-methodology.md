@@ -87,5 +87,5 @@ inference and getting the same wrong answer treated as new evidence.
 ## Where to read more
 
 - Council methodology: `~/src/claude/libs/MONTECARLO.md`
-- Audit + triage: [`mc_doc_audit.md`](../mc_doc_audit.md), [`mc_doc_audit_triage.md`](../mc_doc_audit_triage.md)
-- Past inference rounds: [`mc_xp32_debate_log.md`](../mc_xp32_debate_log.md), [`mc_panel_code_inference.md`](../mc_panel_code_inference.md)
+- Audit + triage: [`mc_doc_audit.md`](../notes/mc_doc_audit.md), [`mc_doc_audit_triage.md`](../notes/mc_doc_audit_triage.md)
+- Past inference rounds: [`mc_xp32_debate_log.md`](../notes/mc_xp32_debate_log.md), [`mc_panel_code_inference.md`](../notes/mc_panel_code_inference.md)

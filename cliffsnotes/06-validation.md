@@ -26,13 +26,12 @@ LLM-inferred details  ─── LOW confidence ────── (need bench ch
 
 - **128-bit XP-32 AU microinstruction layout**, first 103 bits
   HIGH confidence by inheritance (`mc_xp32_microcode_inference.md`)
-- **EU = fixed PROM, AU = writable WCS** — chip identification not
-  yet definitive (audit G5)
+- **EU = fixed PROM, AU = writable WCS** — confirmed by Hockney
+  p. 241 text. Chip-to-role mapping on the actual EXEC card still
+  needs photo re-inspection (audit G5 — partial)
 - **Cable pin correspondence** to 4448 netlist — strong hypothesis,
   not yet bench-probed
 - **Bomem DA3 chain-of-custody** for the FPS-3000 (audit G3)
-- **Hockney's "WTL-1032/1033"** likely refer to production parts
-  WTL-1232/1233 (bitsavers has only the latter)
 
 ## What's genuinely unknown
 
@@ -75,7 +74,7 @@ if XPMLIB binary kernels can be obtained or bus traces taken.
 
 ## Where to read more
 
-- Audit + triage: [`mc_doc_audit.md`](../mc_doc_audit.md), [`mc_doc_audit_triage.md`](../mc_doc_audit_triage.md)
-- Stress test: [`mc_xp32_layout_stress.md`](../mc_xp32_layout_stress.md)
-- XPMLIB search: [`xpmlib_search_results.md`](../xpmlib_search_results.md)
-- Project plan: [`project_plan.md`](../project_plan.md)
+- Audit + triage: [`mc_doc_audit.md`](../notes/mc_doc_audit.md), [`mc_doc_audit_triage.md`](../notes/mc_doc_audit_triage.md)
+- Stress test: [`mc_xp32_layout_stress.md`](../notes/mc_xp32_layout_stress.md)
+- XPMLIB search: [`xpmlib_search_results.md`](../notes/xpmlib_search_results.md)
+- Project plan: [`project_plan.md`](../notes/project_plan.md)

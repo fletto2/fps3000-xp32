@@ -40,8 +40,15 @@ microinstruction layout has a Council-of-Clankers consensus
 the first 103 bits at HIGH/MEDIUM confidence by inheritance from
 documented AP-120B/FPS-164 evolution. The remaining 25 bits and the
 80-bit EU side are speculative. The 21 panel commands the SBC sends
-to the XP-32 EXEC card decode as Am29116 TOR1 SUBRC instructions but
-their semantic role (literal MMIO trigger vs dispatch index vs
+to the XP-32 EXEC card decode as Am29116 TOR1 SUBRC instructions
+but their semantic role (literal MMIO trigger vs dispatch index vs
 hybrid) is unresolved without an EU PROM dump or live bus trace.
-No public XPMLIB binary exists; the FPS-100 archive (11.5K AP-120B
-microinstructions) is the closest validation substitute.
+The `PanelStatusDispatchTable` is fully reverse-engineered (42
+entries, 4 handler classes — POLL/D1_SEND/BLK_XFR/D2_FIN).
+The WEITEK WTL-1032/1033 datasheet is in `refs/Weitek/` and
+settles the FP format as plain IEEE 754 single precision. A
+working M68000 emulator boots the ROM cleanly into the RTOS
+scheduler, and an in-ROM monitor in 22.4 KB of free ROM lets us
+talk to the SBC over the on-board SIO. No public XPMLIB binary
+exists; the FPS-100 archive (11.5K AP-120B microinstructions) is
+the closest validation substitute.

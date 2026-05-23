@@ -25,6 +25,21 @@ extracted. Further progress requires either:
   but missing application disks)
 - Full FPS-100 archive accessible (11.5K AP-120B microinstructions
   + matching APAL source)
+- **PanelStatusDispatchTable reverse-engineered** (42-entry, 4
+  handler classes — see `refs_extracted/panel_status_dispatch_table.md`)
+- **WEITEK WTL-1032/1033 datasheet acquired** — FP format settled
+  as plain IEEE 754 32-bit single precision (Hockney's "33-bit
+  mantissa" is a typo for "23-bit")
+- **Stand-alone M68000 emulator** that boots the ROM cleanly
+  through MainInit's 16+ self-test phases, Phase2Init,
+  RTOSKernelInit, and TDTI task creation — all 6 expected RTOS
+  tasks instantiated. Settles in the scheduler idle loop. See
+  `emulator/`
+- **In-ROM monitor / debugger / host interface** in 22.4 KB of free
+  ROM (`F0A826`+), talks over the on-board SIO Channel A. Includes
+  S-record loader, memory dump/write, register display. Lets us
+  bypass the chassis-side panel-cmd dispatch and load microcode
+  directly into the staging buffer. See `monitor/`
 
 ## Open issues (from doc audit + stress test)
 
@@ -34,7 +49,7 @@ extracted. Further progress requires either:
 | G2 | Cable count 150 vs 169 reconciled | ✓ Done (cable_protocol_inferred.md) |
 | G3 | Bomem DA3 chain-of-custody for FPS-3000 | Open — ask Lovett |
 | G4 | "Am29116 sequencer" terminology | ✓ Documented as "controller" in fps164_chip_identification.md |
-| G5 | EU control store: PROM vs SRAM | Open — photo re-inspection |
+| G5 | EU control store: PROM vs SRAM | **Mostly closed** — Hockney p. 241 text + WEITEK datasheet confirm EU=PROM, AU=WCS. Chip-to-role mapping on the physical card still needs photo re-inspection. |
 | G6 | UNIV FMT card role | Open — investigation |
 | G7 | AP I/F variant suffix convention | Open — read Board Revision List |
 | G8 | VersaBUS bandwidth analysis | Open — low priority |
@@ -50,7 +65,7 @@ extracted. Further progress requires either:
 
 **Bottleneck**: missing host-side AP I/F card. Substitute requires
 FPGA with ≥150 user I/O. Plan in
-[`host_substitute_hardware_plan.md`](../host_substitute_hardware_plan.md).
+[`host_substitute_hardware_plan.md`](../notes/host_substitute_hardware_plan.md).
 
 Subtasks:
 
@@ -93,6 +108,6 @@ Long shots, in roughly decreasing probability:
 
 ## Where to read more
 
-- Project plan: [`project_plan.md`](../project_plan.md)
-- Audit triage: [`mc_doc_audit_triage.md`](../mc_doc_audit_triage.md)
-- Hardware substitute plan: [`host_substitute_hardware_plan.md`](../host_substitute_hardware_plan.md)
+- Project plan: [`project_plan.md`](../notes/project_plan.md)
+- Audit triage: [`mc_doc_audit_triage.md`](../notes/mc_doc_audit_triage.md)
+- Hardware substitute plan: [`host_substitute_hardware_plan.md`](../notes/host_substitute_hardware_plan.md)

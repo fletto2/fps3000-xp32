@@ -36,23 +36,23 @@ Motorola **M68KVM02-3** VERSAmodule monoboard (MC68000 @ 8 MHz).
 - **`architecture.md`** — system-level writeup: VersaBUS chassis,
   XLTR/AP-I-F register block, RMS68K marker inventory, panel-command
   protocol, S-record upload path.
-- **`xltr_protocol.md`** — XLTR / AP-I-F command protocol decoded
+- **`notes/xltr_protocol.md`** — XLTR / AP-I-F command protocol decoded
   from the disassembly (`0x8004`/`0x8005` opcodes, `0x258..0x27D`
   command codes, panel-send-and-wait kernel at `F056BA`).
-- **`xp32_eu_command_protocol.md`** — inferred EU panel-command
+- **`notes/xp32_eu_command_protocol.md`** — inferred EU panel-command
   alphabet and three-register transaction protocol.
-- **`xp32_opcode_clues.md`** — XP-32 microinstruction format
+- **`notes/xp32_opcode_clues.md`** — XP-32 microinstruction format
   inferred from AP-120B (FPS-7319 manual) + FPS-164 (Touzeau 1984
   fig 2 + APSIM64 appendix A) + Curington 1986. The bit-level FPS-
   164 layout is now pinned; XP-32 is a structured widening of it.
-- **`xp32_microcode_format_inferred.md`** — older companion analysis
+- **`notes/xp32_microcode_format_inferred.md`** — older companion analysis
   focused on the AMD Am29116 sequencer side. Some claims here predate
   the Hockney fig 2.53 confirmation that the EU has a fixed PROM
   (not SRAM); the EU portion is pinned mask-PROM, the AU is the
   writable target.
-- **`fps_library_uniformity.md`** — how `VMUL`/`ZVMUL`/`DVMUL` are
+- **`notes/fps_library_uniformity.md`** — how `VMUL`/`ZVMUL`/`DVMUL` are
   the same operation across AP-120B/FPS-100/FPS-3000-5000/FPS-164.
-- **`host_to_fps100_protocol.md`** — full host-side protocol:
+- **`notes/host_to_fps100_protocol.md`** — full host-side protocol:
   6 UNIBUS registers, 3 RSX event flags, RUNDMA function dispatch,
   recovered from the FPS-100 `DRIVER.MAC` source.
 - **`hsr_decoded/`** — **217 routines, 21,066 microinstructions**
@@ -63,25 +63,25 @@ Motorola **M68KVM02-3** VERSAmodule monoboard (MC68000 @ 8 MHz).
   `*LIB.APO` files via `apo_decode.py`. Each routine emitted as
   APAL-style listing with octal addresses, hex bytes, and canonical
   SIM100 SPLIT field decode (24 fields per microinstruction). See
-  `apo_decoded/README.md` and `fps100_apo_format_spec.md`.
+  `apo_decoded/README.md` and `notes/fps100_apo_format_spec.md`.
 - **`apo_decode.py`** — from-scratch Python decoder for the FPS-100
   `.APO` (ASM100 object) text format. 180 lines, no dependencies.
   Format reverse-engineered from `LED100.FTN` source via
   Council-of-Clankers analysis.
-- **`fps100_dapex_annotated.md`** — Council-of-Clankers reference
+- **`notes/fps100_dapex_annotated.md`** — Council-of-Clankers reference
   annotation of `DAPEX.MAC`, the FPS-100 host-side dispatcher
   library (the single chokepoint between user code and APDRV).
   100 KB.
-- **`fps100_callers_inventory.md`** — 32-file inventory of every
+- **`notes/fps100_callers_inventory.md`** — 32-file inventory of every
   source file in the FPS-100 archive that talks to APDRV, organized
   in 8 tiers (kernel driver → APEX → HSR stubs → toolchain → tests).
-- **`fps100_mac_files_audit.md`** — Council-of-Clankers analysis of
+- **`notes/fps100_mac_files_audit.md`** — Council-of-Clankers analysis of
   all 12 host-side `.MAC` files in the FPS-100 archive (28K lines).
-- **`fps100_sim100_annotated.md`** — Council-of-Clankers reference
+- **`notes/fps100_sim100_annotated.md`** — Council-of-Clankers reference
   annotation of `SIM100.FTN` (4910 lines, the canonical AP-120B
   simulator). 251 KB authoritative microarchitecture reference
   derived from the simulator source itself.
-- **`fps100_s_files_annotated.md`** — Council-of-Clankers analysis
+- **`notes/fps100_s_files_annotated.md`** — Council-of-Clankers analysis
   of all 36 AP-side supervisor `.S` files (7055 lines of APAL
   source for Super-100 / Mini-100 modes). 334 KB. Subsystem groups:
   kernel core, supervisor body, syssvc, I/O queue + RPC, RTC, boot
@@ -96,53 +96,53 @@ Motorola **M68KVM02-3** VERSAmodule monoboard (MC68000 @ 8 MHz).
   AP-120B simulator). Compiles cleanly with gfortran given
   `iutil_stubs.f`; runs to its interactive `*` prompt. Currently
   segfaults on input due to a documented COMMON-block size bug.
-- **`mc_tsk_analysis.md`** — Council-of-Clankers analysis of 7
+- **`notes/mc_tsk_analysis.md`** — Council-of-Clankers analysis of 7
   Bomem-customized RSX-11M task images (BOMICP/RSX11M/EXCOM/etc.).
-- **`cmd_files_inventory.md`** — inventory of all 42 `.CMD` files
+- **`notes/cmd_files_inventory.md`** — inventory of all 42 `.CMD` files
   in both datasets, plus the HPVP-identity analysis from LOABOM.CMD.
-- **`fps100_multi_ap_support.md`** — does the FPS-100 driver support
+- **`notes/fps100_multi_ap_support.md`** — does the FPS-100 driver support
   a slave/secondary FPS-100? Multi-AP yes (peers); master-slave no.
 - **`RSX_v511/PDP11_DISASM_README.md`** — full PDP-11 disassembler
   for RSX-11M+ task images.
-- **`mc_results.md`** — Monte Carlo annotation pipeline results
+- **`notes/mc_results.md`** — Monte Carlo annotation pipeline results
   (15 rounds, 644 annotations on 576 unique addresses).
-- **`mc_xp32_debate_log.md`** — Council-of-Clankers debate on
+- **`notes/mc_xp32_debate_log.md`** — Council-of-Clankers debate on
   inferring the XP-32 microinstruction layout (4 rounds incl. strict
   bit-accounting verification).
-- **`mc_xp32_microcode_inference.md`** — three-round consensus
+- **`notes/mc_xp32_microcode_inference.md`** — three-round consensus
   inference producing the proposed 128-bit XP-32 layout
   (DeepSeek + GLM independent + cross-critique + synthesis).
-- **`mc_xp32_layout_stress.md`** — adversarial / cooperative /
+- **`notes/mc_xp32_layout_stress.md`** — adversarial / cooperative /
   paranoid stress test of that consensus layout, with and without
   the assumption of a future EU PROM dump. 6 passes × 2 LLMs.
-- **`panel_codes_am29116_decoded.md`** — verified decoding of all
+- **`notes/panel_codes_am29116_decoded.md`** — verified decoding of all
   21 panel command codes as Am29116 TOR1 SUBRC instructions
   (TORIA / TODRA operand patterns). Three live interpretations
   remain; EU PROM read or bus trace required to disambiguate.
-- **`fps164_chip_identification.md`** — sequencer-chip identification
+- **`notes/fps164_chip_identification.md`** — sequencer-chip identification
   across the family. The Am29116 is **not** family-wide: only the
   FPS-3000 EXEC card carries one. FPS-164 used Schottky-TTL MSI;
   FPS-164/MAX uses ADSP-1401. No FPS-164 board photos exist online.
-- **`xpmlib_search_results.md`** — record of the search for an XPMLIB
+- **`notes/xpmlib_search_results.md`** — record of the search for an XPMLIB
   binary kernel as a layout-validation artifact. Result: no public
   XPMLIB exists. Pivot to the FPS-100 archive (11,469 AP-120B
   microinstructions, 9 .APO files + matching .APS source) as the
   ancestor-side validation corpus.
-- **`mc_doc_audit.md` / `mc_doc_audit_triage.md`** — Council-of-
+- **`notes/mc_doc_audit.md` / `notes/mc_doc_audit_triage.md`** — Council-of-
   Clankers audit of all curated docs followed by manual triage
   separating 9 verified findings (G1–G9) from 5 hallucinated
   citations (H1–H5). Lesson: LLM auditors fabricate plausible
   citations; treat findings as hypotheses, not verdicts.
-- **`mc_fps3k_pass2_summary.md`** — second MC pass on the disassembly
+- **`notes/mc_fps3k_pass2_summary.md`** — second MC pass on the disassembly
   with the updated context. 250 annotations, 99.6% YES, 77.2% BOTH-
   agreement (highest of any pass to date). Identified
   `ChannelConfigOffsetTable @ F046E0` (4 longwords of XLTR config
   offsets) — now in `fps3k_clean.asm`.
-- **`mc_fps3k_adversarial_focus.md`** — focused 3-stage adversarial
+- **`notes/mc_fps3k_adversarial_focus.md`** — focused 3-stage adversarial
   pass on the 55 disagreed samples from pass 2. 100% revised — but
   the pattern was vague-vs-specific not wrong-vs-right; debate
   collapsed every disagreement to GLM's sharper formulation.
-- **`search_log_apal64_refs.md`** — negative-result search log for
+- **`notes/search_log_apal64_refs.md`** — negative-result search log for
   the APAL64 / XP-32 reference manuals (eBay/abebooks/bitsavers/
   Internet Archive).
 
@@ -248,7 +248,7 @@ gave a specific, keyword-rich answer with no contradiction.
 15 rounds of 40-50 samples each across cooperative and adversarial
 modes produced **644 annotations on 576 unique addresses** (~9% of
 the 6,485 custom-code instructions). Round-by-round details and
-notable findings are in `mc_results.md`.
+notable findings are in `notes/mc_results.md`.
 
 ## References
 

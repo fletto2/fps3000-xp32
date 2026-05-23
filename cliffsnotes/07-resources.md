@@ -28,9 +28,9 @@ publicly preserved corpus of FPS-100 / AP-120B software.
 Working modern Linux build of SIM100 in `../sim100_build/` (compiles
 cleanly with gfortran).
 
-See `../xpmlib_search_results.md`, `../apo_decoded/README.md`,
-`../apo_decoded/B_files/README.md`, `../fps100_sim100_annotated.md`,
-`../fps100_s_files_annotated.md`, `../fps100_dapex_annotated.md`.
+See `../notes/xpmlib_search_results.md`, `../apo_decoded/README.md`,
+`../apo_decoded/B_files/README.md`, `../notes/fps100_sim100_annotated.md`,
+`../notes/fps100_s_files_annotated.md`, `../notes/fps100_dapex_annotated.md`.
 
 ### AP-120B FFT/IFFT identity-test microcode
 
@@ -43,7 +43,7 @@ Vision-transcribed from a 52-page PDF listing in `AP120B_fast_mem_ucode.pdf`:
   BITREV, FFT2, FFT4
 
 **To my knowledge the first publicly recovered binary FPS microcode image.**
-See [`ap120b_ffttest_ucode.md`](../ap120b_ffttest_ucode.md).
+See [`ap120b_ffttest_ucode.md`](../notes/ap120b_ffttest_ucode.md).
 
 ### Bomem-customized RSX-11M+ V5.1.1 disks
 
@@ -76,7 +76,7 @@ aren't in the dataset.
 | **EU PROM contents** | Never read | Desolder + read on Lovett's chassis (risky) |
 | **Host-side AP I/F card** | Missing from chassis | Build FPGA substitute (ECP5 recommended) |
 | **APMATH64/MAX manual Vol 1** | Not on bitsavers | Asking the community |
-| **APAL64 reference manual** | Never publicly archived | Long shot — see [`search_log_apal64_refs.md`](../search_log_apal64_refs.md) |
+| **APAL64 reference manual** | Never publicly archived | Long shot — see [`search_log_apal64_refs.md`](../notes/search_log_apal64_refs.md) |
 | **Bomem application disks (BOM1..BOM13)** | Lost | Contact Bomem retirees / Claude Lafond if findable |
 | **`LNK100` / `LOD100`** | Tape damage on bitsavers FPS-100 archive | `LED100` (present) may be their replacement |
 | **FPS-164 board photos** | No public archive has any | Ask CHM (has at least one FPS-164 in collection) |
@@ -100,4 +100,4 @@ aren't in the dataset.
 ## Where to read more
 
 - [`README.md`](../README.md) — full file inventory
-- [`upstream_repos.md`](../upstream_repos.md) — fletto2/ap120dg + roy20100/python-sim100
+- [`upstream_repos.md`](../notes/upstream_repos.md) — fletto2/ap120dg + roy20100/python-sim100

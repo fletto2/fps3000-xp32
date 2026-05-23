@@ -23,7 +23,7 @@ The "Similarly, ... writable" CONTRASTS AU's writability with the
 EU's fixed PROM. An earlier draft of this doc misread Hockney as
 saying both are writable; that misread was caused by `pdftotext`
 default mode dropping italicized inline abbreviations. See
-`../eu_storage_clarified.md`.
+`../notes/eu_storage_clarified.md`.
 
 ## Consensus 128-bit AU layout (inferred)
 
@@ -48,7 +48,7 @@ First 103 bits (~80%): **field NAMES and group ordering** inherit
 from documented AP-120B → FPS-164 evolution. **Field WIDTHS do NOT
 inherit** — they are XP-32-specific re-allocations. The earlier
 phrasing "first 103 bits inherit cleanly" was misleading and is
-retracted (see `../VERIFIED_CLAIMS.md` §R1). Last 25 bits (DMA, EU
+retracted (see `../notes/VERIFIED_CLAIMS.md` §R1). Last 25 bits (DMA, EU
 coord, Special) are pure speculation with no FPS-164 precedent.
 
 ## Adversarial objections to the layout (open)
@@ -71,7 +71,7 @@ From the stress test (`mc_xp32_layout_stress.md`):
 
 The 21 panel codes the SBC sends to the EU all decode as Am29116
 TOR1 SUBRC instructions. See [04-protocols.md](04-protocols.md) for
-the table and [`panel_codes_am29116_decoded.md`](../panel_codes_am29116_decoded.md)
+the table and [`panel_codes_am29116_decoded.md`](../notes/panel_codes_am29116_decoded.md)
 for the verification.
 
 Three interpretations remain live. Disambiguation requires either
@@ -92,8 +92,8 @@ incompatibility, not the firmware.
 
 ## Where to read more
 
-- Inference: [`mc_xp32_microcode_inference.md`](../mc_xp32_microcode_inference.md)
-- Stress test: [`mc_xp32_layout_stress.md`](../mc_xp32_layout_stress.md)
-- AP-120B field-by-field: [`ap120b_ffttest_ucode.md`](../ap120b_ffttest_ucode.md)
-- Older companion: [`xp32_microcode_format_inferred.md`](../xp32_microcode_format_inferred.md), [`xp32_opcode_clues.md`](../xp32_opcode_clues.md)
-- Inference write-up: [`inferring_xp32_microcode.md`](../inferring_xp32_microcode.md)
+- Inference: [`mc_xp32_microcode_inference.md`](../notes/mc_xp32_microcode_inference.md)
+- Stress test: [`mc_xp32_layout_stress.md`](../notes/mc_xp32_layout_stress.md)
+- AP-120B field-by-field: [`ap120b_ffttest_ucode.md`](../notes/ap120b_ffttest_ucode.md)
+- Older companion: [`xp32_microcode_format_inferred.md`](../notes/xp32_microcode_format_inferred.md), [`xp32_opcode_clues.md`](../notes/xp32_opcode_clues.md)
+- Inference write-up: [`inferring_xp32_microcode.md`](../notes/inferring_xp32_microcode.md)

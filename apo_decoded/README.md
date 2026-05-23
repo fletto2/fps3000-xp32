@@ -110,7 +110,7 @@ file format produced by `ASM100` (the AP-120B assembler) and consumed
 by `LED100` (the link editor). Format spec was derived from
 `LED100.FTN`'s `LOAD` subroutine (line 3031) via Council-of-Clankers
 analysis (DeepSeek + GLM-4.5-air, cooperative + adversarial passes).
-Spec captured in `../fps100_apo_format_spec.md`.
+Spec captured in `../notes/fps100_apo_format_spec.md`.
 
 Each block has the form:
 
@@ -151,7 +151,7 @@ The microinstruction-count claim has gone through three revisions:
 
 The FPS-3000 inherits its 128-bit microinstruction format from the
 AP-120B's 64-bit (24-field) format via the FPS-100 → FPS-164 → XP-32
-evolution chain (see `../mc_xp32_microcode_inference.md`). Having
+evolution chain (see `../notes/mc_xp32_microcode_inference.md`). Having
 11,469 real production AP-120B microinstructions with field-decoded
 output:
 
