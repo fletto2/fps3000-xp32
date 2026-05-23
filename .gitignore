@@ -10,3 +10,13 @@ __pycache__/
 *.pyc
 *.swp
 .DS_Store
+
+# Local artifacts not for the repo
+a.out
+fps.pdf
+emulator/*.log
+emulator/test.s19
+emulator/trace.log
+emulator/bus.log
+emulator/ramdump.bin
+*.o
