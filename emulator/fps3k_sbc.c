@@ -292,7 +292,12 @@ int m68k_irq_callback(int level) {
      * handler F05DD6.  Set up by RTOSKernelInit at task creation. */
     extern host_sim_t host_sim;
     if (level == 5 && host_sim.pending) {
-        host_sim_byte_consumed(&host_sim);
+        /* Do NOT clear host_sim.pending here.  The host's byte is consumed
+         * when the SBC *reads* the data port, which versabus.c already
+         * reports via apif_notify_consumed() on a read of $FF0048.  Clearing
+         * it at interrupt-acknowledge time was premature in two ways: it let
+         * host_sim queue the next byte before the ISR had read the current
+         * one, and it de-asserted a level-triggered line early. */
         return 0x4A;   /* vec #74, byte addr $128 */
     }
 
@@ -370,6 +375,8 @@ static void usage(void) {
         "  -cycles <n>        Stop after n cycles (default: run forever)\n"
         "  -breakpc <addr>    Halt when PC hits this address (hex 0x..)\n"
         "  -dump-ram <file>   On exit, dump SBC RAM (128 KB) to file\n"
+        "  -host-srec <file>  Feed an S-record file to the simulated host,\n"
+        "                     which pushes it in over the AP I/F byte path\n"
         "  -v                 Verbose\n"
     );
 }

@@ -114,18 +114,76 @@ The status register reports:
 - Bus interrupt select
 - Possibly: VERSAbus AC Fail line state
 
-### Serial ports at `0xF70010-0xF70017`
+### Serial ports at `0xF70011-0xF70017` (ODD bytes only)
 
-Four word slots:
-- `F70010` = channel A data
-- `F70012` = channel A control/status
-- `F70014` = channel B data
-- `F70016` = channel B control/status
+**Corrected 2026-07-25.** An earlier version of this file listed four
+*word* slots at `F70010/12/14/16` and labelled them A-data / A-ctrl /
+B-data / B-ctrl. Both halves of that were wrong, and the monitor was
+written from it — see the post-mortem in `monitor/README.md`.
+
+Authoritative source: Motorola's own VERSAdos chip description for this
+board, `verdos06/SDLCPRI/NEC7201.EQ`
+(`~/src/claude/versados/extracted/verdos06/SDLCPRI/NEC7201.EQ`, also
+concatenated into `rms68k_source.SA`):
+
+```
+NEC7201  EQU  $F70011              <- ODD base
+NECWRDA / NECRDDA = base+0 = $F70011   ch A data
+NECWRDB / NECRDDB = base+2 = $F70013   ch B data
+NECWR0A / NECRD0A = base+4 = $F70015   ch A control/status
+NECWR0B / NECRD0B = base+6 = $F70017   ch B control/status
+```
+
+| Byte address | Register |
+|---|---|
+| `F70011` | channel A data |
+| `F70013` | channel B data |
+| `F70015` | channel A control / status |
+| `F70017` | channel B control / status |
+
+Two things to keep straight:
+
+1. **Odd addresses only.** The chip sits on D0–D7 and answers `LDS`, so
+   a byte access to an even address in this block asserts `UDS` only,
+   nothing responds, and the board's bus timeout raises BERR. Same
+   convention as the MC6840 below (the ROM drives it at odd `F70001` /
+   `F70003`) and as the board status register (the ROM bit-tests odd
+   `F70019`). The MVME101 map in the Motorola handbook states the rule
+   outright: "On-board I/O Registers (Only odd addresses used)."
+2. **Grouped by function, not by channel** — both data registers, then
+   both control registers. Corroborated by the second copy of the file,
+   `verdos06/_root/NEC7201.EQ`, which gives the layout relatively as
+   `CREG/SREG = 0`, `DREG = -4` (data sits four below control).
 
 Implemented via NEC µPD7201 Multiprotocol Serial Communications
-Controller (Z80-SIO/i8274 register-compatible). Internal clock
-rates strappable from 50 bps to 19.2 kbps; external clock rates
-to 600 kbps.
+Controller (Z80-SIO/i8274 register-compatible), driven under VERSAdos
+by **MPSCDRV** (per `verdos03/_root/BOARDS.NW`: "VM02 — 1 7201 —
+VERSAdos driver: MPSCDRV").
+
+#### Baud rate is strap-selected, not programmable
+
+The datasheet lists sixteen strap-selectable rates — 50, 75, 110,
+134.5, 150, 300, 600, 1200, 1800, 2000, 2400, 3600, 4800, 7200, 9600,
+19200 — plus external clock to 600 kbps, with a jumper choosing between
+the on-board baud-rate generator and an external clock.
+
+`MPSCDRV.SA` (`~/src/claude/versados/SR07/U9993/MPSCDRV.SA`) confirms
+there is **no software baud control on the VM02**: it defines
+`VM03_BRCR EQU $F80071  Address of the baud rate control register on
+VM03` and nothing equivalent for VM02, and its changelog notes
+"10/9/84 Added baud rate support for VM03". The only software lever on
+a VM02 is the 7201's WR4 clock divisor — per the driver's `CLOCK_64`
+flag, "if it is nonzero (true), then we're using the x64 clock, which
+effectively divides the baud rate by 4."
+
+So WR4 = x16 runs at exactly the strapped rate, and x64 gives
+strapped/4. Nothing else is reachable in software.
+
+Note for anyone reading the same disks: the `Baud Rate Jmprs`,
+`RED_LED` and `WRT_LED` PIA bits that appear near this material belong
+to **`MVME400.EQ`**, a different board. `MPSCDRV.SA` marks its
+`PIA_ASAV` field "Used only for MVME 400 boards". Do not attribute them
+to the VM02.
 
 ### PTM at `0xF70001-0xF7000F`
 

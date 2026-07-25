@@ -301,9 +301,13 @@ static void chassis_process_panel_cmd(uint16_t cmd) {
         break;
 
     default:
-        if (cmd >= 0x258 && cmd <= 0x260) {
-            /* TORIA/TODRA dispatch — ack only, no data side-effect */
-        }
+        /* The Am29116 SUBRC panel codes run $258-$27D (38 codes: TORIA
+         * $258-$25F, TODRA $260-$27D).  None of them has a data
+         * side-effect we model, so they need no case here — they fall
+         * through to the common ack below, same as any other code.  An
+         * earlier version had an empty `if (cmd >= 0x258 && cmd <= 0x260)`
+         * block here, which did nothing and implied a 9-code range that
+         * matched neither the comment nor the hardware. */
         break;
     }
     /* All commands ack via cmd_status: bit 14 = ready, bit 13 = error.
@@ -481,20 +485,73 @@ static void ptm_write(uint32_t addr, uint8_t val) {
 
 /* ============== SIO (NEC µPD7201) handler — delegated to upd7201.c ============== */
 
+/* Register layout, per Motorola's own VERSAdos source for this board —
+ * verdos06/SDLCPRI/NEC7201.EQ (~/src/claude/versados/rms68k_source.SA:6963):
+ *
+ *     NEC7201 EQU $F70011        <- ODD base: chip sits on D0-D7 / LDS
+ *     ch A data    = base+0 = $F70011      (NECWRDA / NECRDDA)
+ *     ch B data    = base+2 = $F70013      (NECWRDB / NECRDDB)
+ *     ch A control = base+4 = $F70015      (NECWR0A / NECRD0A)
+ *     ch B control = base+6 = $F70017      (NECWR0B / NECRD0B)
+ *
+ * Corroborated by verdos06/_root/NEC7201.EQ (same file, line 12156), which
+ * states the layout relatively: CREG/SREG = 0, DREG = -4, i.e. data sits
+ * four below control.  Cross-checked against the board's other 8-bit
+ * peripheral: the ROM drives the MC6840 PTM at $F70001/$F70003 (F09176
+ * PTMInit), also odd, and bit-tests board status at odd $F70019.  The
+ * MVME101 map in the Motorola handbook spells the convention out:
+ * "On-board I/O Registers (Only odd addresses used)".
+ *
+ * Two consequences the previous version of this function got wrong, and
+ * which made the emulator agree with an unrunnable monitor:
+ *
+ *   1. Registers are grouped by FUNCTION (both data, then both control),
+ *      NOT interleaved per channel.  Old code computed chan = slot/2,
+ *      is_data = !(slot&1), which is the interleaved layout.
+ *   2. Only ODD addresses decode.  Old code did slot = (addr-base)/2 with
+ *      an even base, so integer division silently accepted both lanes.
+ *      A byte access to an even address asserts UDS only, this chip never
+ *      answers, and the board's bus timeout raises BERR.  Modelling that
+ *      strictly is what turns a wrong-lane bug into a visible failure
+ *      instead of a silent pass. */
+#define SIO_REG_BASE  0xF70011u
+
+/* From Musashi — raise BERR when no device answers the cycle. */
+extern void m68k_pulse_bus_error(void);
+
+static int sio_decode(uint32_t addr, int *chan, int *is_data) {
+    if (!(addr & 1)) return 0;                        /* even byte: UDS only */
+    if (addr < SIO_REG_BASE || addr > SIO_REG_BASE + 6) return 0;
+    int slot = (int)((addr - SIO_REG_BASE) / 2);      /* 0..3 */
+    *chan    = slot & 1;                              /* 0 = A, 1 = B */
+    *is_data = (slot < 2);
+    return 1;
+}
+
+static void sio_no_dtack(const char *op, uint32_t addr) {
+    if (log_fp)
+        fprintf(log_fp, "[SIO] BERR: no DTACK on %s at %06X — the uPD7201 "
+                        "decodes odd bytes only ($F70011/13/15/17)\n", op, addr);
+    if (verbose)
+        fprintf(stderr, "[SIO] BERR: no DTACK on %s at %06X\n", op, addr);
+    m68k_pulse_bus_error();
+}
+
 static uint8_t sio_read(uint32_t addr) {
-    /* 4 byte slots in 8-byte region: A-data, A-ctrl, B-data, B-ctrl
-     * mapped at 0xF70010, 0xF70012, 0xF70014, 0xF70016 (word-aligned).
-     * The SBC uses word reads so each register is one 16-bit slot. */
-    int slot = (addr - UART_BASE) / 2;        /* 0..3 */
-    int chan = slot / 2;                       /* 0..1 */
-    int is_data = !(slot & 1);
+    int chan, is_data;
+    if (!sio_decode(addr, &chan, &is_data)) {
+        sio_no_dtack("read", addr);
+        return 0xFF;                                  /* floating bus */
+    }
     return upd7201_read(&sio_dev, chan, is_data);
 }
 
 static void sio_write(uint32_t addr, uint8_t val) {
-    int slot = (addr - UART_BASE) / 2;
-    int chan = slot / 2;
-    int is_data = !(slot & 1);
+    int chan, is_data;
+    if (!sio_decode(addr, &chan, &is_data)) {
+        sio_no_dtack("write", addr);
+        return;
+    }
     upd7201_write(&sio_dev, chan, is_data, val);
 }
 

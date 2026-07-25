@@ -12,16 +12,16 @@
 | 13 | VBUS XLTR | host↔XP32-bus translator |
 | 12 | FMT | Universal Format |
 | 11 | AP I/F | host computer interface (chassis side) |
-| **10** | **XP-32 EXEC (1)** | AC1 sequencer |
+| **10** | **XP-32 EXEC (1)** | AC1 EU controller |
 | **9** | **XP-32 ARITH (1)** | AC1 FP pipes |
-| **8** | **XP-32 EXEC (2)** | AC2 sequencer |
+| **8** | **XP-32 EXEC (2)** | AC2 EU controller |
 | **7** | **XP-32 ARITH (2)** | AC2 FP pipes |
 | 6 | MEM CTL | System Common Memory controller |
 | 5–1 | MEMORY ×5 | SCM banks |
 
 The MEM CTL + 5 MEMORY cards form **System Common Memory (SCM)**,
 shared between AC1 and AC2 — this is the **MIMD** part. Each AC = an
-ARITH card (FP pipelines) + an EXEC card (sequencer + control store).
+ARITH card (FP pipelines) + an EXEC card (EU controller + control store).
 
 ## SBC card (slot 14)
 
@@ -31,7 +31,7 @@ ARITH card (FP pipelines) + an EXEC card (sequencer + control store).
 - **Reset overlay**: ROM aliased at `0x000000` for the first fetches
 - Memory map: see [03-firmware.md](03-firmware.md)
 
-## EXEC card (XP-32 sequencer)
+## EXEC card (XP-32 EU controller)
 
 Per Nakazoto's photo (`refs/FPS-3000/cards/05_XP32_EXEC.JPG`), board
 612-4805-002 carries:
@@ -52,7 +52,7 @@ Per Nakazoto's photo (`refs/FPS-3000/cards/05_XP32_EXEC.JPG`), board
 
 Open question: chip-to-function mapping on the EXEC card.
 Hockney + the architecture diagram tell us *what* should be on the
-card (Am29116-class sequencer + 80-bit EU PROM + 128-bit AU WCS +
+card (Am29116 EU controller + 80-bit EU PROM + 128-bit AU WCS +
 PALs), but matching each physical chip to its role still needs
 audit-G5 photo re-inspection.
 
@@ -83,7 +83,7 @@ capture).
 
 Critical finding ([fps164_chip_identification.md](../notes/fps164_chip_identification.md)):
 
-| System | Year | EU/sequencer chip |
+| System | Year | EU control chip |
 |---|---|---|
 | AP-120B | 1976 | Schottky-TTL MSI |
 | FPS-100 | 1977 | Schottky-TTL MSI |

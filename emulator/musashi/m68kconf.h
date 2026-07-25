@@ -125,7 +125,7 @@
 /* If ON, the CPU will monitor the trace flags and take trace exceptions
  */
 #ifndef M68K_EMULATE_TRACE
-#define M68K_EMULATE_TRACE          M68K_OPT_OFF
+#define M68K_EMULATE_TRACE          M68K_OPT_ON   /* needed for the monitor's single-step (t) command */
 #endif
 
 

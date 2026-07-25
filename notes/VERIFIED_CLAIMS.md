@@ -191,7 +191,7 @@ These claims appeared in earlier project docs and are removed.
 | R7 | HPVP = FPS-100 (Bomem marketing name) | Original assertion was unsourced; remains as Tier-3 speculation |
 | R8 | HPVP = FPS-3000 | Project owner correction |
 | R9 | "62,130 AP-120B microinstructions" | Was bytes/8 of text-format files; corrected to 11,469 (math) + 1,971 (.B) = 13,440 |
-| R10 | LLM-fabricated Hockney p.240/241 quotes (Am2910A + Am2901/2903; "EU's writable control store" attributed to p.241) | Hockney text doesn't include the cited content at those locations; the **claim** that EU is writable IS correct, but cite Hockney generally not specific page |
+| R10 | LLM-fabricated Hockney p.240/241 quotes (Am2910A + Am2901/2903; "EU's writable control store" attributed to p.241) | Hockney text doesn't include the cited content at those locations; the fabricated quotes are correctly retracted, but note the accompanying assertion that "EU is writable" is ALSO wrong — see the Tier-1 body above and R2. Cite Hockney generally, not a specific page |
 
 ### Auditor LLM hallucinations to NOT apply
 
@@ -202,20 +202,25 @@ auditor errors that I have NOT applied to the project:
 |---|---|
 | "May 2026" date is fabricated/typo | Current date IS 2026-05-09 per system clock; audit was wrong about this being a future date |
 | Hockney "zero hits for 2910/2901/29116" claim is unverifiable | I directly ran `pdftotext` on the local PDF and confirmed zero hits — the claim is verifiable, just not by the LLM at audit time |
-| EU control store is "fixed PROM" with MEDIUM confidence | Both DS and GLM converged on this wrong reading. Direct primary-source check (Hockney text) says writable. |
+| ~~EU control store is "fixed PROM" with MEDIUM confidence~~ | **This row was itself wrong and is withdrawn (2026-07-25).** DS and GLM converged on fixed PROM because fixed PROM is CORRECT. `pdftotext -raw` on `FPS3000_fps.pdf` gives: "Microcode programs for the e u reside in e u p r o m , which contains 2K 80-bit microcode instructions. Similarly, microcode programs for the a u reside in a writable control store (wcs)..." The default-mode extraction that appeared to say "writable" had dropped the italicised "EU PROM" run. |
 | "Field names inherit but widths don't" framed as catastrophic | Real point worth addressing (R1) but not as severe as audit framing — much of the field-by-field semantics still carry over |
 
 ---
 
 ## Open questions (acknowledged unknowns)
 
-1. **EU control-store storage type** on the FPS-3000 EXEC card —
-   Hockney says writable but the specific chips on the card (bipolar
-   PROMs vs Am2168 SRAMs) need photo re-examination given the
-   updated reading.
-2. **EU microcode upload path** in the SBC ROM — if EU is writable,
-   how is it loaded? Currently we trace only AU upload via the 64KB
-   staging buffer.
+1. **Which parts on the EXEC card are which store** — Hockney fixes the
+   architecture (EU = 2K x 80-bit PROM, AU = 4K x 128-bit writable WCS in
+   four banks), but mapping that onto the physical card still needs photo
+   re-examination: the bipolar PROMs should be the EU program store and
+   the Am2168/CY7C168 SRAM array the AU WCS, and that assignment is
+   inferred from part type, not confirmed.
+2. ~~**EU microcode upload path** in the SBC ROM~~ — **question
+   withdrawn (2026-07-25).** It only existed because of the "EU is
+   writable" misreading. The EU boots from mask PROM, so there is no
+   upload path to find; the AU upload via the 64 KB staging buffer, which
+   we already trace, is the only one this ROM implements. Recovering EU
+   contents needs a physical read of the parts.
 3. **Per-panel-code semantics** — which of the 21 panel codes maps
    to which AP-side handler? Three interpretations remain open;
    disambiguation requires EU contents.
@@ -284,8 +289,9 @@ These are the rules the project should now operate under:
 The audit and primary-source verification PROMOTED several claims
 to higher tiers:
 
-- **EU control store is writable** moved from "open question (G5)"
-  to Tier-1 (Hockney primary source)
+- **EU control store is fixed PROM, AU is writable WCS** moved from
+  "long-standing assumption" to Tier-1 (Hockney primary source, read with
+  `pdftotext -raw`)
 - **Panel codes are HSVC-style RPC dispatch** strengthened from
   "speculation" to Tier-2 strong inference (FPS-100 archive
   parallel is robust)
@@ -300,8 +306,9 @@ to higher tiers:
   to Tier-4 retraction — field WIDTHS don't inherit
 - **DMA + EU-coord detailed sub-fields** moved from "low confidence"
   to Tier-4 retraction — pure speculation
-- **EU = fixed PROM** moved from "long-standing assumption" to
-  Tier-4 retraction (Hockney contradicts)
+- **"EU is writable"** moved from "primary-source finding" to Tier-4
+  retraction — it was a `pdftotext` default-mode artefact; Hockney says
+  EU PROM (see R2, and the withdrawn row above)
 - **"Multiplier control too late"** moved from "open adversarial
   objection" to Tier-4 retraction (FPS-164 places it the same way)
 
@@ -310,12 +317,15 @@ to higher tiers:
 | Goal | Status before audit | Status after audit |
 |---|---|---|
 | Connect FPS-3000 to PDP-11/73 | active line | active line |
-| Devise XP-32 microcode | blocked on EU PROM | partially unblocked: EU is writable, so we need to find the upload path in the SBC ROM (new task) |
+| Devise XP-32 microcode | blocked on EU PROM | still blocked on EU PROM. The AU WCS is host-uploadable (that is what this ROM does); the EU is mask PROM and its contents need a physical read |
 | Recover BOM* application disks | open lead | still open |
 | Recover XPMLIB binary | open lead | still open |
 | Validate 128-bit layout | needed primary source | constraints sharpened (R1, R3, R4, R5, R6 retractions) |
 
-The biggest practical change: **the EU is writable**, which means
-recovering the EU contents at runtime is theoretically much easier
-than the long-assumed PROM-desolder approach. Memory dump while AP
-is powered would suffice.
+Note on an earlier version of this section: it concluded that "the EU
+is writable", and therefore that EU contents could be recovered with a
+runtime memory dump instead of reading the PROMs physically. That was
+wrong, and it had propagated into the project plan as a partially
+unblocked goal. Hockney is explicit that the EU runs from EU PROM and
+only the AU has a writable control store, so recovering EU microcode
+still requires reading the physical parts. Corrected 2026-07-25.

@@ -40,8 +40,8 @@ adversarially stress-tested (`mc_xp32_layout_stress.md`):
 | 57–85 | Data Pad (DPX/DPY/DPBS + 4-bit XR/YR/XW/YW + XE/YE) | 29 | medium |
 | 86–94 | Multiplier (FM, M1, M2, FM1, FM0) | 9 | **HIGH** |
 | 95–103 | Memory (MI, MA, DPA, TMA, MEMX) | 9 | **HIGH** |
-| 104–115 | DMA (4-op + 4-src + 4-dst) | 12 | low |
-| 116–125 | EU coordination (8-bit EU PROM addr + 2-bit ctrl) | 10 | low |
+| 104–115 | DMA (sub-fields unknown) | 12 | low |
+| 116–125 | EU coordination (sub-fields unknown) | 10 | low |
 | 126–128 | Special-Op + I/O-Op flags | 3 | medium |
 
 First 103 bits (~80%): **field NAMES and group ordering** inherit
@@ -49,7 +49,9 @@ from documented AP-120B → FPS-164 evolution. **Field WIDTHS do NOT
 inherit** — they are XP-32-specific re-allocations. The earlier
 phrasing "first 103 bits inherit cleanly" was misleading and is
 retracted (see `../notes/VERIFIED_CLAIMS.md` §R1). Last 25 bits (DMA, EU
-coord, Special) are pure speculation with no FPS-164 precedent.
+coord, Special) are pure speculation with no FPS-164 precedent — and the
+specific sub-field splits once shown for DMA and EU coordination are
+themselves retracted as unsupported (§R3, §R4).
 
 ## Adversarial objections to the layout (open)
 
@@ -59,13 +61,13 @@ From the stress test (`mc_xp32_layout_stress.md`):
    space. Either widen, or reinterpret as a dispatch-class index.
 2. **No pipeline-stall / wait / hold bit.** FPS-164 and AP-120B
    have explicit synchronization controls; absence here is suspicious.
-3. **`DF` flag may be 2 bits**, encoding a "parcel class" rather
-   than a binary primary/secondary toggle.
-4. **Adder #2 symmetry unverified** — FPS-3000 may have asymmetric
+3. **Adder #2 symmetry unverified** — FPS-3000 may have asymmetric
    adders (one FP + one integer/address).
-5. **Multiplier control too late**? Bits 86–94 sit *after* the
-   Data Pad (57–85). FPS pipeline convention puts multiplier control
-   earlier so the multiply pipeline starts one cycle ahead.
+
+**Retracted objections** (were items 3 and 5): `DF` may be 2 bits
+encoding a "parcel class" — unsupported, and the FPS-164 uses a 1-bit
+DF (§R6). "Multiplier control too late" — assumed AP-120B ordering; the
+FPS-164 also places the multiplier after the Data Pad (§R5).
 
 ## Panel commands (Am29116 instruction layer)
 

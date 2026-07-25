@@ -1,6 +1,6 @@
 # FPS-3000 SBC Monitor / Debugger / Host Interface
 
-A small, self-contained M68K monitor that fits in the **22.4 KB of
+A small, self-contained M68K monitor that fits in the **21.9 KB of
 free ROM** at `F0A826` (just past the panic catch-all table).
 Communicates over the on-board NEC µPD7201 SIO Channel A — which the
 factory firmware never touches, so we have it all to ourselves.
@@ -19,7 +19,7 @@ cd ../emulator
 For a non-interactive demo:
 
 ```sh
-echo -e "i\nL\nS208010000DEADBEEFEC\nS804000000FB\nm 010000 8\n" \
+echo -e "i\nL\nS208010000DEADBEEFBE\nS804000000FB\nm 010000 8\n" \
   | ./fps3k_sbc -rom ../monitor/FPS3K_with_monitor.bin -cycles 50000000
 ```
 
@@ -28,21 +28,27 @@ echo -e "i\nL\nS208010000DEADBEEFEC\nS804000000FB\nm 010000 8\n" \
 ```
 ==================================
  FPS-3000 SBC Monitor / Debugger
- Lives in 22.4 KB free ROM @F0A825
- Talks via SIO chA (F70010/F70012)
+ Lives in 21.9 KB free ROM @F0A826
+ Talks via SIO chA (F70011/F70015)
 ==================================
 entered at PC=$00000000  SR=$2700
 fps3k> i
-Free ROM: 22489 bytes (F0A825-F0FFFF)
 RAM:      128 KB (000000-01FFFF)
 ROM:      64 KB (F00000-F0FFFF)
+WCS buf:  010000-01FFFF (fully loadable via L)
+mon work: 00F800-00FEFF + stack top 00FF00
 AP I/F:   FF0000-FF00FF
 XLTR:     FF0200-FF025F
-Mailbox:  700000-70003F
+SIO chA:  F70011 data / F70015 ctrl (odd bytes)
+PTM:      F70001-F7000F (odd bytes)
+board status F70019 = $1F
+VMOD ctrl   1FFF0  = $0000
+monitor_end        = $00F0B444
+grp0/nest/txfail   = $FF/00/00
 fps3k> L
 send S-records, S8/S9 ends:
-S208010000CAFEBABEEC
-S208010008DEADBEEFD8
+S208010000CAFEBABEB6
+S208010008DEADBEEFB6
 S804000000FB
 ..
 
@@ -64,7 +70,10 @@ fps3k>
 - **Memory write** for RAM patching (`w`)
 - **Register display** for post-panic diagnostics (`r`)
 - **S-record loader** as a makeshift host interface (`L`)
-- **Resume execution** to continue from where the panic happened (`g`)
+- **Resume or start execution** (`g`) — resumes a panic, or starts code
+  at an address from cold entry
+- **Breakpoints** (`b`) — up to 8, via TRAP #14
+- **Single step** (`t`) — via the SR trace bit
 - **Help / banner / chassis info** commands
 
 ## Files
@@ -72,7 +81,7 @@ fps3k>
 | File             | What it is                                             |
 |------------------|---------------------------------------------------------|
 | `monitor.s`      | M68K assembly source (vasm Motorola syntax)            |
-| `monitor.bin`    | Assembled blob (2,340 bytes)                            |
+| `monitor.bin`    | Assembled blob (4,042 bytes)                            |
 | `monitor.lst`    | Symbol map / listing produced by vasm                  |
 | `patch_rom.py`   | Patches the FPS-3000 ROM with monitor.bin + entry vec  |
 | `FPS3K_with_monitor.bin` | Patched ROM (cold-boot + panic-vector hooked)  |
@@ -120,10 +129,16 @@ recommended for interactive use).
 | `m AAAA [NN]`      | Hex/ASCII dump NN bytes (hex, default 16) at AAAA      |
 | `d AAAA [NN]`      | Same as `m`                                            |
 | `w AAAA BB BB ...` | Write hex bytes to AAAA                                |
-| `g [AAAA]`         | Restore regs and RTE — optionally jump to AAAA first   |
+| `g [AAAA]`         | Resume from a saved frame, or — from cold entry —      |
+|                    | **start** execution at AAAA by synthesizing a frame    |
+| `b [ADDR]`         | Set a breakpoint (TRAP #14). Bare `b` lists slots;     |
+|                    | `b -ADDR` clears one, `b -` clears all. 8 slots        |
+| `t`                | Single step one instruction (SR trace bit)             |
 | `L`                | Receive Motorola S-records over SIO (S0/S1/S2/S3,     |
 |                    | terminator S7/S8/S9)                                   |
-| `i`                | Print chassis-info dump (memory map, ROM/RAM sizes)    |
+| `i`                | Memory map plus **live** board status (`F70019`),      |
+|                    | VMOD ctrl image (`1FFF0`), `monitor_end`, and the     |
+|                    | grp0/nest/txfail diagnostic bytes                     |
 | `!`                | Reprint banner                                         |
 
 `m` advances the display address each call, so `m AAAA` followed by
@@ -137,7 +152,7 @@ records can be streamed at line rate — typical workflow:
 ```
 fps3k> L
 send S-records, S8/S9 ends:
-S208010000DEADBEEFEC
+S208010000DEADBEEFBE
 S804000000FB
 
 loaded $00000001 records, $00000004
@@ -158,6 +173,72 @@ record — including the **AU WCS staging buffer at `$10000-$1FFFF`**.
 This is the same path the factory firmware uses internally; the
 monitor just bypasses the chassis-side dispatch (which we haven't
 fully reverse-engineered yet) and goes straight to RAM.
+
+### Refused ranges, and a layout collision to be aware of
+
+`srec_check` rejects any record whose write range touches:
+
+- `$000000-$0003FF` — the exception vector table
+- `$00F800-$00FEFF` — `MON_*` workspace, breakpoint table, and the
+  cold-entry supervisor stack
+- anything at or above `$020000` — ROM and peripherals. A stray S2/S3
+  record pointed there is not harmlessly ignored: a write to `$F70011`
+  would **transmit a byte over the SIO**, and writes to the XLTR or AP
+  I/F blocks would poke the chassis. Deliberate peripheral pokes are
+  what `w` is for.
+- any record whose *end* runs past `$01FFFF`
+
+Each record's **checksum is verified** (sum of count + address + data
+bytes, plus the checksum byte, must be `$FF`). A bad record is reported
+as `!checksum error @$ADDR`. Note the data is written before the
+checksum can be computed, so a failing record may have been partially
+applied — re-send it.
+
+Refused records are reported and skipped, and the load continues (the
+scanner resyncs on the next `S`; hex digits can't be mistaken for a
+record start). Straddling records are caught too — a record starting at
+`$1EFFE` with 4 data bytes is refused because its tail reaches `$1F001`.
+
+**The whole staging buffer is now loadable.** Earlier versions kept the
+workspace at `$1F000`, i.e. *inside* the WCS staging buffer, so a full
+64 KB bank load — the documented use case — would have destroyed the
+monitor partway through and the top 4 KB had to be refused. The
+workspace now lives at `$0F800`, below the buffer, so `$10000-$1FFFF`
+is writable end to end. Verified by loading records at `$1FFE0` and
+`$1FFF0` (the very top) with no refusals.
+
+## Debugging a target: worked example
+
+Cold-entry monitor, no firmware running. Write a short program, break in
+it, inspect, and step:
+
+```
+fps3k> w 002000 30 3C 12 34 32 3C AB CD 4E 71 4E 71 60 FE
+ok
+fps3k> b 002008
+bp set @$00002008
+fps3k> g 002000
+resume @$00002000
+
+entered at PC=$0000200A  SR=$2708      <- breakpoint hit
+fps3k> r
+D0=00001234  D1=0000ABCD  D2=00000000  D3=00000000
+...
+fps3k> t
+step from $0000200A
+entered at PC=$0000200C  SR=$A708      <- one instruction later, T set
+```
+
+Note `PC=$200A`, one word *past* the `$2008` breakpoint: TRAP pushes the
+address after the trap word, so `g` resumes past it and the original
+instruction is **not** re-executed. Clear the breakpoint and `g ADDR` if
+you need to run that instruction.
+
+`b` arms vector 46 (`$B8`) and `t` arms vector 9 (`$24`) at the moment
+they are first used. On the cold path `cold_init` has already filled
+every vector, but on the `--panic` path the firmware owns the table, so
+arming writes them explicitly — those two longwords are the only writes
+these commands make outside the target word and the slot table.
 
 ## Connecting a USB-serial adapter to real hardware
 
@@ -194,9 +275,16 @@ hardware flow control — the firmware doesn't.
 
 | P2 pin | Direction | Signal     | USB-serial side                |
 |-------:|-----------|------------|--------------------------------|
-| **75** | SBC OUT   | **TXD1**   | RX of the USB-serial adapter   |
-| **73** | SBC IN    | **RXD1**   | TX of the USB-serial adapter   |
+| **73** | SBC OUT   | **TXD1**   | RX of the USB-serial adapter   |
+| **75** | SBC IN    | **RXD1**   | TX of the USB-serial adapter   |
 | **1-6** | —        | **GND**    | GND of the USB-serial adapter  |
+
+> **Corrected 2026-07-25.** An earlier revision of this table had 73 and
+> 75 swapped, contradicting the 8-wire table further down and
+> `CLAUDE.md`. The authority is `refs_extracted/versabus_pinout.md`
+> (extracted from the Motorola P2/J2 pin map): **73 = TXD1**,
+> **75 = RXD1**. If you wired from the old table, TX and RX are reversed
+> and you will see nothing — swap them before suspecting anything else.
 
 (The original M68KVM02 docs label TXD1 as "transmit data — output"
 and RXD1 as "receive data — input" relative to the SBC. So **SBC
@@ -266,8 +354,8 @@ banner within a second:
 ```
 ==================================
  FPS-3000 SBC Monitor / Debugger
- Lives in 22.4 KB free ROM @F0A825
- Talks via SIO chA (F70010/F70012)
+ Lives in 21.9 KB free ROM @F0A826
+ Talks via SIO chA (F70011/F70015)
 ==================================
 entered at PC=$00000000  SR=$2700
 fps3k>
@@ -323,28 +411,117 @@ Channel A configured for **9600 8-N-1, no IRQs, RX+TX enabled**:
 ```
 $F0A826  monitor_cold       ; entry from reset PC
 $F0A840  monitor_entry      ; entry from panic / exception
-$F0A856  monitor_common     ; merge point — banner + cmd loop
+$F0A874  grp0_entry         ; entry for vectors 2/3 (7-word frame)
+$F0A8AA  mon_dead           ; nested-fault trap (no I/O, STOP)
+$F0A8BE  monitor_common     ; merge point — banner + cmd loop
 $F0A8..  command implementations
 $F0AC..  helpers (puts, putchar, getchar, hex print, parse, ...)
 $F0AE..  SIO init + string table
-$F0B188  monitor_end        ; ~2,340 bytes total
+$F0B7F0  monitor_end        ; ~4,042 bytes total (18.4 KB ROM left)
 ```
 
 Workspace in high RAM (above the staging buffer, below VMOD_CTRL):
 
 ```
-$1F000   MON_REGS    saved D0-D7/A0-A6 (60 bytes)
-$1F03C   MON_SPC     saved PC (long)
-$1F040   MON_SSR     saved SR (word)
-$1F050   MON_LINEBUF cmd line buffer (64 bytes, NUL-term)
-$1F090   MON_LASTADDR  last `m` address
-$1FFD0   supervisor stack top (cold-entry sets SP here)
+$0F800   MON_REGS    saved D0-D7/A0-A6 (60 bytes)
+$0F83C   MON_SPC     saved PC (long)
+$0F840   MON_SSR     saved SR (word)
+$0F850   MON_LINEBUF cmd line buffer (64 bytes, NUL-term)
+$0F890   MON_LASTADDR  last `m` address
+$0F894   MON_GRP0    frame kind: 0=short, 1=group-0, $FF=none
+$0F895   MON_NEST    re-entry guard: 0=idle, 1=reporting, 2=died
+$0F896   MON_TXFAIL  set once putchar has timed out waiting for TX
+$0F8A0   MON_BPT     8 breakpoint slots, 6 bytes each {addr.l, orig.w}
+$0FF00   supervisor stack top (cold entry only; the panic path keeps
+         the firmware's SP so the exception frame stays where it is)
+
+Everything is inside `$01200-$0FFFF`, which a RAM dump after a full
+stock-firmware boot shows to be **completely untouched** (60,928 bytes).
+That puts the workspace below the WCS staging buffer *and* out of the
+firmware's way — see the header comment in `monitor.s` for why the old
+`$1F000` placement was wrong on both counts.
 ```
+
+## Post-mortem: why the first real-hardware attempt halted
+
+The first burn onto David's SBC came up with the **FAIL and HALTED LEDs
+lit and no serial output**. Cause, found by deduction (no hardware
+access) and reproduced in the emulator:
+
+1. `SIO_A_DATA`/`SIO_A_CTRL` were `$F70010`/`$F70012`. The µPD7201 sits
+   on D0–D7 at **odd** addresses, and its registers are grouped by
+   function, so channel A control is `$F70015`. The old `$F70012` was
+   wrong on both counts — its odd byte, `$F70013`, is channel *B's* data
+   register. Even-address byte accesses assert `UDS` only, nothing
+   answers, and the bus timeout raises BERR. See
+   `refs_extracted/M68KVM02_memory_map.md` for the sourcing.
+2. With `--reset`, `MainInit` never runs, so **nothing fills the
+   exception vector table**. The 68000 has no VBR; the table lives in
+   DRAM at `$000000` and is garbage at power-on (only the first 8 bytes
+   of ROM are mapped to address 0, for the first four bus cycles, to
+   supply reset SSP/PC). The stock firmware installs `$8`/`$C` as its
+   2nd and 3rd instructions precisely because of this.
+
+BERR + garbage vector = double bus fault = `HALT`. FAIL was simply never
+cleared by anything, so it carried no information.
+
+Both are fixed. `cold_init` now fills all 256 vectors before touching
+any I/O, vectors 2 and 3 get a group-0-aware stub, and a re-entry guard
+stops a fault in the monitor's own I/O path from recursing forever.
+
+### Diagnosing a dead board from RAM
+
+If it dies again, `MON_NEST = 2` at `$1F095` means "faulted while
+reporting a fault" — and `MON_GRP0`/`MON_SPC`/`MON_SSR` still hold the
+**first** fault's kind, PC and SR, because the guard checks before
+overwriting them. `mon_dead` touches no I/O and re-anchors SP each pass,
+so RAM stays intact for a post-mortem dump.
+
+## Baud rate: strapped in hardware, not programmable
+
+Worth knowing before chasing a silent link. The VM02's rate is set by
+**straps**, one of sixteen: 50, 75, 110, 134.5, 150, 300, 600, 1200,
+1800, 2000, 2400, 3600, 4800, 7200, 9600, 19200. A separate jumper
+selects the on-board baud-rate generator **versus an external clock** —
+if that is set to external with no clock present, the 7201 never raises
+Tx-buffer-empty and `putchar` spins silently forever.
+
+Motorola's own driver confirms there is no software control:
+`MPSCDRV.SA` defines `VM03_BRCR EQU $F80071` as "the baud rate control
+register on VM03" with no VM02 equivalent, and its changelog reads
+"10/9/84 Added baud rate support for VM03". The only software lever on a
+VM02 is WR4's clock divisor — the driver's `CLOCK_64` flag notes that
+x64 "effectively divides the baud rate by 4".
+
+So WR4 = `$44` (x16) runs at **exactly whatever the strap says**, and
+x64 would give strapped/4. "9600" in this document is therefore an
+assumption about strap position, not a fact. If output is garbage, walk
+the terminal through the sixteen rates.
 
 ## Limitations / TODO
 
-- **Resume from cold entry** doesn't make sense (no exception frame).
-  `g` only works correctly when entered via the panic vector.
+- **Resume from cold entry** doesn't make sense (no exception frame),
+  and a 68000 group-0 frame is not restartable. `g` now detects both via
+  `MON_GRP0` and refuses with `?no resumable frame` instead of RTE'ing
+  into the weeds.
+- **`getchar` still spins unboundedly** — deliberately. Waiting
+  indefinitely for a human at a prompt is correct, and a timeout there
+  would just spin the prompt. `putchar` *is* bounded now
+  (`TX_SPIN_LIMIT`, ~2.5 s at 8 MHz, longer than one character time even
+  at 50 baud): it drops the character and sets `MON_TXFAIL` rather than
+  hanging before any output exists. That distinguishes "TX never became
+  ready" — wrong clock jumper, dead chip — from "nobody typed".
+- **`t` needs trace emulation** if you are testing in the emulator.
+  Musashi ships with `M68K_EMULATE_TRACE` set to `M68K_OPT_OFF`, which
+  makes the trace exception silently never fire; it is now switched
+  `M68K_OPT_ON` in `emulator/musashi/m68kconf.h`. Real hardware was never
+  affected.
+- **No breakpoint set/clear, no single-step, no disassembler** (below).
+- **No board-fail LED beacon.** Clearing Board Fail Status would give a
+  liveness signal that needs no serial link, but the bit position in the
+  board control register is not sourced yet — the `RED_LED`/`WRT_LED`
+  bits in the VERSAdos sources belong to the MVME400, not the VM02. Not
+  guessing at a hardware write.
 - **No breakpoint set/clear** — would need to write
   `0x4E4E` (TRAP #14) into target instruction and chain the trap
   vector to `monitor_entry`. ~50 lines of asm to add.

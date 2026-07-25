@@ -48,12 +48,13 @@ extracted. Further progress requires either:
 | G1 | Memory-map row split AP I/F vs XLTR | ✓ Done (fixed in CLAUDE.md, 03-firmware.md) |
 | G2 | Cable count 150 vs 169 reconciled | ✓ Done (cable_protocol_inferred.md) |
 | G3 | Bomem DA3 chain-of-custody for FPS-3000 | Open — ask Lovett |
-| G4 | "Am29116 sequencer" terminology | ✓ Documented as "controller" in fps164_chip_identification.md |
+| G4 | "Am29116 sequencer" terminology | ✓ **Applied 2026-07-25** across CLAUDE.md + cliffsnotes: the chip is the "EU controller", not a microprogram sequencer. Remaining "sequencer" uses are contrastive (Am2910 / ADSP-1401, which genuinely are) |
 | G5 | EU control store: PROM vs SRAM | **Mostly closed** — Hockney p. 241 text + WEITEK datasheet confirm EU=PROM, AU=WCS. Chip-to-role mapping on the physical card still needs photo re-inspection. |
 | G6 | UNIV FMT card role | Open — investigation |
 | G7 | AP I/F variant suffix convention | Open — read Board Revision List |
 | G8 | VersaBUS bandwidth analysis | Open — low priority |
 | G9 | Cable doc "validation" overclaim | ✓ Done (softened to "high-confidence-hypothesis verification") |
+| **New 2026-07-25** | `0x26E` panel code is named `CH1_TCB_FAIL` but appears at F05F92 in code attributed to TCBXP4I; `0x26F`/`0x270` unnamed. Either the channel label or the function attribution is wrong — channel numbers in the `0x26E-0x271` block are unreliable. Also a gap at `0x27C` where `INIT_STEP7` would sit. |
 | stress-1 | EU_ADDR width: 8 vs 11 bits needed | Open — design refinement |
 | stress-2 | Missing pipeline-stall bit | Open — design refinement |
 | stress-3 | DF flag: 1-bit vs 2-bit | Open — design refinement |

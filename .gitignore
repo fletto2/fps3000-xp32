@@ -11,6 +11,9 @@ __pycache__/
 *.swp
 .DS_Store
 
+# Cross-file audit scratch (external reviewer output, not project docs)
+ds/
+
 # Local artifacts not for the repo
 a.out
 fps.pdf
