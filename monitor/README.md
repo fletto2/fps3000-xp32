@@ -43,7 +43,7 @@ SIO chA:  F70011 data / F70015 ctrl (odd bytes)
 PTM:      F70001-F7000F (odd bytes)
 board status F70019 = $1F
 VMOD ctrl   1FFF0  = $0000
-monitor_end        = $00F0B444
+monitor_end        = $00F0B802
 grp0/nest/txfail   = $FF/00/00
 fps3k> L
 send S-records, S8/S9 ends:
@@ -81,7 +81,7 @@ fps3k>
 | File             | What it is                                             |
 |------------------|---------------------------------------------------------|
 | `monitor.s`      | M68K assembly source (vasm Motorola syntax)            |
-| `monitor.bin`    | Assembled blob (4,042 bytes)                            |
+| `monitor.bin`    | Assembled blob (4,060 bytes)                            |
 | `monitor.lst`    | Symbol map / listing produced by vasm                  |
 | `patch_rom.py`   | Patches the FPS-3000 ROM with monitor.bin + entry vec  |
 | `FPS3K_with_monitor.bin` | Patched ROM (cold-boot + panic-vector hooked)  |
@@ -100,7 +100,7 @@ Patches applied:
 
 - `--reset` — overwrites the reset PC (`F00004`) so the SBC boots
   *directly* into the monitor instead of running normal init. SP is
-  set to `$1FFD0` by the cold-entry path.
+  set to `$0FF00` by the cold-entry path (below the WCS staging buffer).
 - `--panic` — overwrites the panic catch-all at `F0A27A` with
   `JMP $F0A840` (= `monitor_entry`). Whenever the firmware would
   panic into `bra .` at `F0A57E`, it now drops into the monitor with
@@ -241,6 +241,16 @@ arming writes them explicitly — those two longwords are the only writes
 these commands make outside the target word and the slot table.
 
 ## Connecting a USB-serial adapter to real hardware
+
+> ### ⚠ Prerequisite: the RS-232 drivers have no power
+>
+> The SBC's serial port goes through 1488/1489 RS-232 line drivers that
+> need **±12V**. The FPS-3000 backplane has the ±12V pins marked but the
+> machine **has no ±12V supply fitted** — so as delivered those drivers
+> are dead and the port cannot swing RS-232 levels at all, no matter what
+> the firmware does. Feed them from an external supply (a small MeanWell
+> is enough) before concluding anything about the code. Reported by the
+> machine's owner, 2026-07-24.
 
 To use the monitor on a real FPS-3000 chassis (not just the
 emulator), you need to wire a USB-to-serial adapter into the SBC
@@ -417,7 +427,7 @@ $F0A8BE  monitor_common     ; merge point — banner + cmd loop
 $F0A8..  command implementations
 $F0AC..  helpers (puts, putchar, getchar, hex print, parse, ...)
 $F0AE..  SIO init + string table
-$F0B7F0  monitor_end        ; ~4,042 bytes total (18.4 KB ROM left)
+$F0B802  monitor_end        ; ~4,060 bytes total (18.4 KB ROM left)
 ```
 
 Workspace in high RAM (above the staging buffer, below VMOD_CTRL):

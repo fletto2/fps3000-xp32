@@ -28,7 +28,7 @@
 ;   F0891C–F08A5B  PollBoardStatus
 ;   F08A5C–F08D5D  HardwareInit
 ;   F08D5E–F08DF7  RAMAddressingTest
-;   F08DF8–F08EAB  ROMChecksumTest
+;   F08DF8–F08EAB  BoardStatusPoll_3F11
 ;   F08EAC–F08F71  MemBusProbe
 ;   F08F72–F09175  IOChannelDiagnostic
 ;   F09176–F0919B  PTMInit
@@ -7861,14 +7861,14 @@ ROMChecksumTest:
   f08e08:  30 3c 3f 11             move.w     #$3f11, d0
   f08e0c:  49 f9 00 f7 00 18       lea.l      $f70018.l, a4
 
-loc_F08E12:                            ; in ROMChecksumTest (0xF08E12)
+loc_F08E12:                            ; in BoardStatusPoll_3F11 (0xF08E12)
   f08e12:  32 14                   move.w     (a4), d1
   f08e14:  c2 42                   and.w      d2, d1
   f08e16:  b2 40                   cmp.w      d0, d1
   f08e18:  67 06                   beq.b      loc_F08E20
   f08e1a:  2e 3c f0 f0 f0 f0       move.l     #loc_F0F0F0f0, d7
 
-loc_F08E20:                            ; in ROMChecksumTest (0xF08E20)
+loc_F08E20:                            ; in BoardStatusPoll_3F11 (0xF08E20)
   f08e20:  61 00 fa fa             bsr.w      PollBoardStatus
   f08e24:  4a 87                   tst.l      d7
   f08e26:  66 ea                   bne.b      loc_F08E12
@@ -7876,7 +7876,7 @@ loc_F08E20:                            ; in ROMChecksumTest (0xF08E20)
   f08e28:  4c df 10 07             movem.l    (a7)+, d0-d2/a4
   f08e2c:  4e 75                   rts       
 
-loc_F08E2E:                            ; in ROMChecksumTest (0xF08E2E)
+loc_F08E2E:                            ; in BoardStatusPoll_3F11 (0xF08E2E)
   f08e2e:  48 e7 d0 7c             movem.l    d0-d1/d3/a1-a5, -(a7)
   f08e32:  4b f9 00 01 ff f0       lea.l      $1fff0.l, a5
   f08e38:  49 f9 00 f0 8e 8c       lea.l      loc_F08E8C.l, a4
@@ -7886,7 +7886,7 @@ loc_F08E2E:                            ; in ROMChecksumTest (0xF08E2E)
   f08e4c:  45 f8 00 10             lea.l      $10.w, a2
   f08e50:  43 f8 04 00             lea.l      $400.w, a1 ; g__sched_save_d0
 
-loc_F08E54:                            ; in ROMChecksumTest (0xF08E54)
+loc_F08E54:                            ; in BoardStatusPoll_3F11 (0xF08E54)
   f08e54:  24 cb                   move.l     a3, (a2)+
   f08e56:  b5 c9                   cmpa.l     a1, a2
   f08e58:  66 fa                   bne.b      loc_F08E54
@@ -7895,18 +7895,18 @@ loc_F08E54:                            ; in ROMChecksumTest (0xF08E54)
   f08e60:  42 87                   clr.l      d7
   f08e62:  42 06                   clr.b      d6
 
-loc_F08E64:                            ; in ROMChecksumTest (0xF08E64)
+loc_F08E64:                            ; in BoardStatusPoll_3F11 (0xF08E64)
   f08e64:  3d 46 02 04             move.w     d6, $204(a6) ; → XLTR_CHANNEL_SELECT
   f08e68:  20 1c                   move.l     (a4)+, d0
 
-loc_F08E6A:                            ; in ROMChecksumTest (0xF08E6A)
+loc_F08E6A:                            ; in BoardStatusPoll_3F11 (0xF08E6A)
   f08e6a:  2a 80                   move.l     d0, (a5)
   f08e6c:  22 15                   move.l     (a5), d1
   f08e6e:  b2 80                   cmp.l      d0, d1
   f08e70:  67 06                   beq.b      loc_F08E78
   f08e72:  2e 3c f0 f0 f0 f0       move.l     #loc_F0F0F0f0, d7
 
-loc_F08E78:                            ; in ROMChecksumTest (0xF08E78)
+loc_F08E78:                            ; in BoardStatusPoll_3F11 (0xF08E78)
   f08e78:  61 00 fa a2             bsr.w      PollBoardStatus
   f08e7c:  4a 87                   tst.l      d7
   f08e7e:  66 ea                   bne.b      loc_F08E6A
@@ -7915,7 +7915,7 @@ loc_F08E78:                            ; in ROMChecksumTest (0xF08E78)
   f08e86:  4c df 3e 0b             movem.l    (a7)+, d0-d1/d3/a1-a5
   f08e8a:  4e 75                   rts       
 
-loc_F08E8C:                            ; in ROMChecksumTest (0xF08E8C)
+loc_F08E8C:                            ; in BoardStatusPoll_3F11 (0xF08E8C)
   f08e8c:  00 10 ff ff             ori.b      #$ff, (a0)
   f08e90:  00 9f 00 ff 0f 1f       ori.l      #$ff0f1f, (a7)+
   f08e96:  0f 0f 33 13             movep.w    $3313(a7), d7
