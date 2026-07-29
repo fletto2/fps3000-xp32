@@ -1389,6 +1389,48 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The task descriptor is the whole prologue's parameter block
+
+Reading past `+$14` shows the header is not just an interrupt declaration —
+it is a contiguous parameter-block region holding the arguments for every call
+the prologue makes:
+
+| offset | field | XP1I |
+|---|---|---|
+| `+$00` | task name | `XP1I` |
+| `+$08` | interrupt vector | `$45` |
+| `+$0C` | ISR entry | `$F07EE6` |
+| `+$10` | ISR exit stub | `$F07F08` |
+| `+$14` | **directive `$01` PB starts** — task name | `XP1I` |
+| `+$1C` | flags | `$20000000` |
+| `+$20` | stack tag | `STCK` |
+| `+$28` | stack size | `$190` |
+| `+$2C` | **ASQ entry 1** — name, zero, `$0002` (10 bytes) | `AXP1` |
+| `+$36` | **ASQ entry 2** — same shape | `HXP1` |
+
+So `$F07D14`, which this document identified earlier as "the parameter block
+for directive `$01`", is simply `base+$14`, and the two ASQ names the prologue
+copies onto the stack are two 10-byte entries at `+$2C` and `+$36`. Every
+argument the five prologue calls need sits in one 64-byte header.
+
+**The ASQ layout confirms the documented assignments independently:**
+
+| task | ASQ entries |
+|---|---|
+| XP1I…XP4I | `AXP1`/`HXP1` … `AXP4`/`HXP4` — **two each** |
+| IO1I | `HIO1` — **one**, with code beginning right after |
+
+That is exactly what CLAUDE.md records from the TDTI table — `TCBIO1I`
+(ASQ "HIO1"), `TCBXP1I` (ASQ "AXP1"/"HXP1") — reached here from the header
+layout instead. It also explains why the XP prologue makes **two** `$2D` calls
+and TCBIO1I makes one.
+
+**RDHC's header has a different profile entirely.** Its `+$14` is `USER`, and
+where the other five carry `STCK`, a stack size and ASQ entries it has
+`$6464`, `$08000001`, `$00003000` and a second `USER`. It declares no ASQ and
+no `STCK` block — consistent with its role as the master task, and with it
+being the only task using directives `$0B`, `$0D`, `$12`, `$29` and `$2A`.
+
 ### The descriptor's `+$10` field is the ISR **exit stub**
 
 Six `trap #1` sites resisted directive recovery, and they turn out to be the

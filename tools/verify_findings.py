@@ -96,6 +96,20 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- descriptor holds the whole prologue's parameter block -----------
+    for b, nm, a1, a2_ in [(0xF07D00,b'XP1I',b'AXP1',b'HXP1'),
+                           (0xF07300,b'XP2I',b'AXP2',b'HXP2'),
+                           (0xF06900,b'XP3I',b'AXP3',b'HXP3'),
+                           (0xF05F00,b'XP4I',b'AXP4',b'HXP4')]:
+        o = b - B
+        check('%s header: name/STCK/$190 and two ASQ entries' % nm.decode(),
+              d[o+0x14:o+0x18] == nm and d[o+0x20:o+0x24] == b'STCK' and
+              struct.unpack('>I', d[o+0x28:o+0x2C])[0] == 0x190 and
+              d[o+0x2C:o+0x30] == a1 and d[o+0x36:o+0x3A] == a2_)
+    check('IO1I declares one ASQ (HIO1); RDHC declares none and has no STCK',
+          d[0x5D2C:0x5D30] == b'HIO1' and
+          d[0x4620:0x4624] != b'STCK' and d[0x4614:0x4618] == b'USER')
+
     # --- descriptor +$10 is the ISR exit stub ----------------------------
     STUBS = [0xF050FC, 0xF05E4C, 0xF060F0, 0xF06B08, 0xF07508, 0xF07F08]
     check("descriptor +$10 points at a 'move #$0C,ccr / trap #1' exit stub",
