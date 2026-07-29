@@ -1193,10 +1193,58 @@ Decoding the displacements gives every reachable code:
 | `$08`, `$09` | BLK_XFR (`F05B0E`) | `$11`-`$13` | no-op |
 | | | `$14` | D2_FIN (`F05738`) |
 
-Counts within the range check are POLL 9, D1_SEND 10, BLK_XFR 9, D2_FIN 1
-and **13 no-ops**. Earlier notes give 12/10/11 and omit the no-ops. The
-range check stops at `$14`, so 21 of the 42 slots are unreachable by this
-path.
+Counts over all 42 slots are POLL 9, D1_SEND 10, BLK_XFR 9, D2_FIN 1 and
+13 no-ops. Earlier notes give 12/10/11 and omit the no-ops.
+
+**Those are not the counts that matter, and an earlier revision of this
+paragraph labelled them "within the range check", which was wrong.** The
+check stops at `$14`, so only 21 slots are reachable and the reachable
+distribution is quite different:
+
+| Class | reachable (0..`$14`) | all 42 |
+|---|---|---|
+| D1_SEND | 10 | 10 |
+| no-op | 6 | 13 |
+| POLL | 2 | 9 |
+| BLK_XFR | 2 | 9 |
+| D2_FIN | 1 | 1 |
+
+Reachable layout, in order:
+
+```
+ $0 noop     $1 POLL     $2-$7 D1_SEND      $8-$9 BLK_XFR
+ $A POLL     $B-$C noop  $D-$10 D1_SEND     $11-$13 noop    $14 D2_FIN
+```
+
+### Twenty-one opcodes, four behaviours — the discrimination is the chassis's
+
+The SBC does only four distinct things across the whole reachable set,
+and the three that move anything map onto the three parts of a DMA
+descriptor:
+
+| Class | What the SBC does | Descriptor part |
+|---|---|---|
+| D1_SEND | push `d1` to the channel port as two words | **address** |
+| BLK_XFR | copy a word between the channel port and `$FF0008` | **data** |
+| D2_FIN | push `d2`, CONTINUE-TRANSFER, then `PCMD_RELEASE` | **count**, and finish |
+| POLL | wait on `$FF0004` bit 0 and `STATUS_IRQ` bit 15 | — |
+
+Ten opcodes all perform the identical SBC-side action of handing over the
+address. They cannot be distinguished by anything this ROM does. What
+distinguishes them is that `PanelSendAndWait` also **delivers the opcode
+to the chassis**: F056C6 writes `d0` to `$2(a1)`, which is the channel's
+status port (`$FF004A` for channel 1, `$FF006A`/`$FF008A`/`$FF00AA` for
+the others).
+
+That is a **principled limit on what ROM analysis can establish here**.
+The SBC is a conduit: it latches an opcode, marshals address, count and
+data, hands all four to the chassis, and performs whichever of its four
+transfer behaviours the table selects. The opcodes' *meanings* live in
+the XLTR and the XP-32 boards, not in this firmware. No amount of further
+static or emulator work on the ROM will recover them — that needs the
+chassis, a bus trace, or host-side software that issues them.
+
+
 
 ## Measured behaviour per code
 
