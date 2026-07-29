@@ -131,6 +131,7 @@ loc_F044D6:
   f044fe: 00 00                   DC.W     0x0000
 ;### PanelIOConfigure copy 1/7 - pre-task init. Seven BYTE-IDENTICAL copies of
   f04500: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
+;###   stash d0 at $E6E, cmd -> $FF000E, MODE1 b14 clr / b12 set, MODE0 b10 clr,
   f04506: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
   f0450c: 31 40 00 0e             move.w   d0, $e(a0)
   f04510: 32 28 02 02             move.w   $202(a0)  [XLTR_MODE1], d1
@@ -328,6 +329,7 @@ loc_F04630:
   f0467c: 00 00                   DC.W     0x0000
 
 loc_F0467E:
+;### 6-entry x 8-byte NAME TABLE: XP1I XP2I XP3I XP4I USER USER. Used by directive $12.
   f0467e: 58 50                   addq.w   #$4, (a0)
   f04680: 31 49 00 00             move.w   a1, $0(a0)
   f04684: 00 00                   DC.W     0x0000
@@ -361,6 +363,7 @@ loc_F046A6:
   f046ae: 00 00                   DC.W     0x0000
 
 loc_F046B0:
+;### RDHC's directive-$01 block (NOT base+$14 as the other five tasks use).
   f046b0: 52 44                   addq.w   #$1, d4
   f046b2: 48 43                   swap     d3
   f046b4: 00 00 00 00             ori.b    #$0, d0
@@ -410,6 +413,7 @@ loc_F046E0:
 ; ============================================================
 TCBRDHC_Entry:
 ;>>>> [R5/BOTH] This instruction (`moveq #$1, d0`) sets the RMS68K trap function code to 1 (TCB lookup by name) at the `TCBRDHC_Entry` entry point, initiating the search for the RDHC (Remote Diagnostic Host Channel) task control block in the TCB definition table.
+;### RDHC ENTRY (TDTI +$1C). Prologue is 3 calls: $01, $4C, then $13 -- no ASQ attach.
   f046f0: 70 01                   moveq    #$1, d0
   f046f2: 41 f9 00 f0 46 b0       lea.l    loc_F046B0.l, a0
   f046f8: 4e 41                   trap     #$1
@@ -437,9 +441,11 @@ loc_F0472A:
 ; TCBRDHC_MainLoop
 ; ============================================================
 TCBRDHC_MainLoop:
+;### RDHC enables its OWN BIM at LEVEL 6 ($5E). This is why it can never preempt a
   f04730: 3b 7c 00 5e 02 30       move.w   #$5e, $230(a5)  [BIM0_CR0]
 
 loc_F04736:
+;###   level-7 channel ISR -- the deadlock behind the $281 stall. Set by the ROM, not straps.
   f04736: 67 04                   beq.b    loc_F0473C
   f04738: 67 00 01 f6             beq.w    loc_F04930
 
@@ -460,6 +466,7 @@ loc_F0473C:
   f04766: 67 00 00 bc             beq.w    loc_F04824
   f0476a: 0c 6d 00 00 02 04       cmpi.w   #$0, $204(a5)  [XLTR_CHANNEL_SELECT]
   f04770: 66 00 00 78             bne.w    loc_F047EA
+;### directive $0B, PB at $F04614 (RDHC header +$14). RDHC-exclusive.
   f04774: 70 0b                   moveq    #$b, d0
 ;>>>> [R1/BOTH] This `lea loc_F04614.l, a0` loads the address of a TCB definition table entry (part of the TCBDefinitionTable at 0xF0A57E) for a `trap #1` call, which performs an RMS68K TCB lookup or validation before deciding whether to send panel command 0x278 or 0x279.
 ;>>>> [R1/BOTH] This `lea.l` loads the address of a TCB (!TCB) structure at `loc_F04614` for an RMS68K trap #1 call to check the task status in the RDHC channel's dispatch loop.
@@ -496,6 +503,7 @@ loc_F047B8:
   f047b8: 0c 80 00 00 00 08       cmpi.l   #$8, d0
   f047be: 6f f2                   ble.b    loc_F047B2
 ;>>>> [R3/BOTH] This instruction loads immediate value 0x0D (13 decimal) into d0, which is the RMS68K trap number for a system service call (likely TCB creation or task dispatch); it precedes a TRAP #1 call to the RTOS kernel, part of the RDHC master task initialization.
+;### directive $0D, PB at $F04630 (RDHC header +$30). RDHC-exclusive.
   f047c0: 70 0d                   moveq    #$d, d0
   f047c2: 41 f9 00 f0 46 30       lea.l    loc_F04630.l, a0
 ;>>>> [R10/BOTH] This instruction invokes an RMS68K RTOS system service call (trap #1 with d0=0x0D) to create or dispatch the RDHC master task during initialization.
@@ -555,6 +563,7 @@ loc_F0484E:
 ;>>>> [R5/BOTH] Checks if channel number d1 equals 4, and if so dispatches via trap #1 to the TCB entry point at loc_F04696 (TCBRDHC_Entry), selecting the RDHC (Read/Display/Help/Control) master/dispatch task.
   f0484e: 0c 01 00 04             cmpi.b   #$4, d1
   f04852: 66 0c                   bne.b    loc_F04860
+;### directive $12 x5 from the name table above: XP4I, XP3I, XP2I, XP1I, then USER.
   f04854: 70 12                   moveq    #$12, d0
   f04856: 41 f9 00 f0 46 96       lea.l    loc_F04696.l, a0
   f0485c: 4e 41                   trap     #$1
@@ -578,6 +587,7 @@ loc_F04872:
   f04882: 60 0a                   bra.b    loc_F0488E
 
 loc_F04884:
+;###   RDHC is the ONLY code in this ROM that addresses the XP tasks by name.
   f04884: 70 12                   moveq    #$12, d0
   f04886: 41 f9 00 f0 46 7e       lea.l    loc_F0467E.l, a0
   f0488c: 4e 41                   trap     #$1
@@ -1407,7 +1417,9 @@ loc_F050EC:
 ChannelConfigDispatch:
 ;### code $F: return from interrupt - the only slot that unwinds the frame
   f050f8: 4c df ff ff             movem.l  (a7)+, d0-d7/a0-a7
+;### ISR EXIT STUB (task descriptor +$10): move #$0C,ccr / trap #1. Identical in all 6
   f050fc: 44 fc 00 0c             move.w   #$c, ccr
+;###   tasks. NOT directive-numbered -- the CCR is the argument; d0 is never loaded.
   f05100: 4e 41                   trap     #$1
 
 loc_F05102:
@@ -2927,6 +2939,7 @@ TCBIO1I_ASQHandler:
   f05dea: 3b 7c 00 0f 02 10       move.w   #$f, $210(a5)  [XLTR_MODE2_PAGE]
   f05df0: 22 2c 00 1c             move.l   $1c(a4), d1
   f05df4: 08 01 00 1d             btst.b   #$1d, d1
+;###   bit 29 SET -> $F05DFA, issues $281 PCMD_HOST_REQUEST and DEADLOCKS in the spin.
   f05df8: 67 18                   beq.b    loc_F05E12
 ;>>>> [R13/DS] The instruction at `f05dfa` (`move.l #$281, d0`) loads the panel command code `0x281` into `d0` for a subsequent call to `PanelIOConfigure_25A` (via `loc_F05E56`), which sends a panel command to the XP-32 to request a specific operation—likely a channel reset or configuration command—when bit 29 (`0x1d`) of the word at `$1c(a4)` is set, indicating a pending condition on the host I/O channel (TCBIO1I).
   f05dfa: 20 3c 00 00 02 81       move.l   #$281, d0
@@ -2938,6 +2951,7 @@ loc_F05E00:
   f05e0c: 4e b9 00 f0 5e 56       jsr      loc_F05E56.l
 
 loc_F05E12:
+;###   bit 29 CLEAR -> dispatch on $10AA: 0 -> $282 PCMD_HOST_NULL, 2 -> reply path.
   f05e12: 24 39 00 00 10 aa       move.l   $10aa.l  [g_io1_gate], d2
   f05e18: 66 08                   bne.b    loc_F05E22
   f05e1a: 20 3c 00 00 02 82       move.l   #$282, d0
@@ -2946,6 +2960,7 @@ loc_F05E12:
 loc_F05E22:
   f05e22: 0c 82 00 00 00 02       cmpi.l   #$2, d2
   f05e28: 66 00 00 1a             bne.w    loc_F05E44
+;###   reply path: swap + andi #3 on the mailbox word. Class bits 16-17 must read 1;
   f05e2c: 24 01                   move.l   d1, d2
 ;>>>> [R12/GLM] Swaps d2 to isolate the high byte (masked with 3) for XP-32 channel configuration indexing in the host I/O task.
   f05e2e: 48 42                   swap     d2
@@ -2966,6 +2981,7 @@ loc_F05E44:
 ; TCBIO1I_ISRExit
 ; ============================================================
 TCBIO1I_ISRExit:
+;### TCBIO1I ISR exit stub (descriptor +$10).
   f05e4c: 44 fc 00 0c             move.w   #$c, ccr
   f05e50: 4e 41                   trap     #$1
 
@@ -2988,6 +3004,7 @@ loc_F05E56:
   f05e82: 31 40 02 04             move.w   d0, $204(a0)  [XLTR_CHANNEL_SELECT]
 
 loc_F05E86:
+;###   THE SPIN. At level 7 the level-6 responder F04930 can never break it: measured
   f05e86: 60 fe                   bra.b    loc_F05E86
   f05e88: 00 00                   DC.W     0x0000
   f05e8a: 00 00                   DC.W     0x0000
@@ -6177,6 +6194,7 @@ TCBXP1I_Data:
 ; ============================================================================
 ; $F07D00-$F086FF   TCBXP1I  - XP-32 channel 1  (the template the other three copy)
 ; ============================================================================
+;### TASK DESCRIPTOR = the whole prologue's parameter block. +$08 vector, +$0C ISR
   f07d00: 58 50                   addq.w   #$4, (a0)
 ;>>>> [R11/BOTH] This instruction stores the address register `a1` into memory at offset `$0(a0)`, but within the `TCBXP1I_Data` section (starting at `f07d00`), this is actually data (likely part of a TCB or configuration table) rather than executable code, as the preceding `addq.w #$4, (a0)` and subsequent `ori.b` instructions are misaligned data fields.
   f07d02: 31 49 00 00             move.w   a1, $0(a0)
@@ -6185,6 +6203,7 @@ TCBXP1I_Data:
   f07d0e: 7e e6                   moveq    #$e6, d7
   f07d10: 00 f0                   DC.W     0x00f0
   f07d12: 7f 08                   DC.W     0x7f08
+;###   entry, +$10 ISR exit stub (directive $4C); +$14 directive-$01 block (name,
   f07d14: 58 50                   DC.W     0x5850  ; 'XP'
   f07d16: 31 49                   DC.W     0x3149  ; '1I'
   f07d18: 00 00                   DC.W     0x0000
@@ -6199,6 +6218,7 @@ TCBXP1I_Data:
   f07d2a: 01 90                   DC.W     0x0190
 
 loc_F07D2C:
+;###   flags, STCK, $190 stack); +$2C and +$36 two 10-byte ASQ entries (AXP1/HXP1).
   f07d2c: 41 58                   DC.W     0x4158  ; 'AX'
   f07d2e: 50 31                   DC.W     0x5031  ; 'P1'
   f07d30: 00 00                   DC.W     0x0000
@@ -6293,6 +6313,7 @@ loc_F07DF0:
   f07df0: 2a 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a5
 ;###   $11 and $0F. Only $0F is identified: 15 = TERM, terminate task, per the
   f07df6: 0c 79 00 01 00 00 10 5e  cmpi.w   #$1, $105e.l  [g_ac_count]
+;###   channels the chassis presents, written by the CPU at $F0A224. Task n runs if count>=n.
   f07dfe: 6d 06                   blt.b    loc_F07E06
 ;###   RMS68K source. Note this confirms $26E-$271 are per-STEP, not per-channel.
   f07e00: 3b 7c 00 00 00 44       move.w   #$0, $44(a5)
@@ -6316,12 +6337,14 @@ loc_F07E0C:
   f07e36: 08 02 00 07             btst.b   #$7, d2
   f07e3a: 67 10                   beq.b    loc_F07E4C
   f07e3c: 24 3c 00 00 ff f0       move.l   #$fff0, d2
+;### jsr to the channel scan at $F08616.
   f07e42: 4e b9 00 f0 86 16       jsr      loc_F08616.l
   f07e48: 70 11                   moveq    #$11, d0
   f07e4a: 4e 41                   trap     #$1
 
 loc_F07E4C:
 ;>>>> [R14/GLM] Tests channel activation flag from global system table entry $1066.
+;### command-word dispatch, bit 15 (on $1066 = the ISR's snapshot of $FF004E).
   f07e4c: 08 39 00 0f 00 00 10 66  btst.b   #$f, $1066.l  [g_ch_block]
   f07e54: 66 30                   bne.b    loc_F07E86
   f07e56: 26 7c 00 ff 02 44       movea.l  #$ff0244  [BIM1_CR2_XP1], a3
@@ -6339,6 +6362,7 @@ loc_F07E82:
   f07e82: 60 00 00 5e             bra.w    loc_F07EE2
 
 loc_F07E86:
+;###   bit 14. Reaching the $8000 path needs bits 15, 14 AND 11 -- verified by sweep.
   f07e86: 08 39 00 0e 00 00 10 66  btst.b   #$e, $1066.l  [g_ch_block]
   f07e8e: 67 48                   beq.b    loc_F07ED8
   f07e90: 08 39 00 0b 00 00 10 66  btst.b   #$b, $1066.l  [g_ch_block]
@@ -6353,11 +6377,14 @@ loc_F07E86:
   f07eb0: 4e b9 00 f0 86 c0       jsr      loc_F086C0.l
 
 loc_F07EB6:
+;###   bit 11, the last gate.
   f07eb6: 08 39 00 0b 00 00 10 66  btst.b   #$b, $1066.l  [g_ch_block]
   f07ebe: 67 14                   beq.b    loc_F07ED4
+;### $8000 PATH: data pair <- $0000001B, then $8000 to the command port. Present in
   f07ec0: 20 7c 00 ff 00 4e       movea.l  #$ff004e  [APIF_CH1_CMD], a0
   f07ec6: 32 bc 00 00             move.w   #$0, (a1)
   f07eca: 33 7c 00 1b 00 02       move.w   #$1b, $2(a1)
+;###   XP1I/2/3 only -- 3 sites in the whole ROM. XP4I has no bit-11 test and no $8000.
   f07ed0: 30 bc 80 00             move.w   #$8000, (a0)
 
 loc_F07ED4:
@@ -6371,12 +6398,15 @@ loc_F07EE2:
   f07ee2: 60 00 ff 22             bra.w    loc_F07E06
 
 loc_F07EE6:
+;### XP1I CHANNEL ISR. Snapshots the channel into its 6-byte RAM block:
   f07ee6: 2f 0d                   move.l   a5, -(a7)
   f07ee8: 2a 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a5
   f07eee: 33 ed 00 4e 00 00 10 66  move.w   $4e(a5), $1066.l  [g_ch_block]
+;###   $4E->$1066, $48->$1068, $4A->$106A. NOTE: $FF0048 IS READ, here, as $48(a5).
   f07ef6: 33 ed 00 48 00 00 10 68  move.w   $48(a5), $1068.l
   f07efe: 33 ed 00 4a 00 00 10 6a  move.w   $4a(a5), $106a.l
   f07f06: 2a 5f                   movea.l  (a7)+, a5
+;### XP1I ISR exit stub (descriptor +$10).
   f07f08: 44 fc 00 0c             move.w   #$c, ccr
   f07f0c: 4e 41                   trap     #$1
 
@@ -6390,6 +6420,7 @@ loc_F07F12:
   f07f18: 32 bc 00 00             move.w   #$0, (a1)
   f07f1c: 3e 00                   move.w   d0, d7
   f07f1e: 33 40 00 02             move.w   d0, $2(a1)
+;###   then BIM CR $4F (IRE clear), data pair, $8004 REQUEST-TRANSFER, poll.
   f07f22: 30 bc 80 04             move.w   #$8004, (a0)
   f07f26: 2a 3c 00 00 03 e8       move.l   #$3e8, d5
 
@@ -7112,8 +7143,10 @@ loc_F08608:
   f08614: 4e 75                   rts      
 
 loc_F08616:
+;### CHANNEL SCAN: move.w $4E(a2,d4.l),d2 / btst #15 / btst #14 / add $20 to d4 /
   f08616: 42 84                   clr.l    d4
   f08618: 18 39 00 00 10 7e       move.b   $107e.l, d4
+;###   loop while d3 <= $105E. Confirms $20 stride and $105E as the channel count.
   f0861e: 52 04                   addq.b   #$1, d4
   f08620: 3a 10                   move.w   (a0), d5
 ;>>>> [R5/BOTH] Checking board control register bit (e.g., FF0202) to validate XP-32 channel presence/configuration during self-test.
@@ -9516,6 +9549,7 @@ loc_F09B9E:
   f09bb4: 4e 75                   rts      
 
 loc_F09BB6:
+;### diagnostics RAM-pattern table: 00000000 FFFFFFFF 55555555 AAAAAAAA.
   f09bb6: 00 00 00 00             ori.b    #$0, d0
   f09bba: ff ff                   dc.w     $ffff
   f09bbc: ff ff                   dc.w     $ffff
@@ -10213,6 +10247,7 @@ loc_F0A1FE:
 ;>>>> [R12/GLM] Clears the XLTR_MODE2 register at 0xFF0210 during RTOS kernel initialization.
   f0a1fe: 42 68 02 10             clr.w    $210(a0)  [XLTR_MODE2_PAGE]
 ;>>>> [R8/BOTH] This `clr.w d1` clears the channel counter register before iterating through the four XP-32 channel data ports (CH1-CH4) to count active channels during RTOS kernel initialization.
+;### CHANNEL-PRESENT PROBE: read $FF004E/$6E/$8E/$AE, count the nonzero ones,
   f0a202: 42 41                   clr.w    d1
   f0a204: 30 28 00 4e             move.w   $4e(a0), d0
   f0a208: 67 02                   beq.b    loc_F0A20C
@@ -10235,6 +10270,7 @@ loc_F0A21C:
   f0a222: 52 41                   addq.w   #$1, d1
 
 loc_F0A224:
+;###   store to $105E. This is the CPU writing $105E -- it is not chassis DMA.
   f0a224: 33 c1 00 00 10 5e       move.w   d1, $105e.l  [g_ac_count]
   f0a22a: 31 7c 00 c0 02 16       move.w   #$c0, $216(a0)  [XLTR_DATA_HI]
   f0a230: 31 7c 80 00 02 02       move.w   #$8000, $202(a0)  [XLTR_MODE1]
@@ -10669,6 +10705,7 @@ loc_F0A54A:
 ; TCBDefinitionTable
 ; ============================================================
 TCBDefinitionTable:
+;### panel-command issuer, copy 8 of 8. NOT the TCB table (that is $F0A600).
   f0a57e: 33 c0                   DC.W     0x33c0
   f0a580: 00 00                   DC.W     0x0000
   f0a582: 0e 6e                   DC.W     0x0e6e
@@ -10738,6 +10775,7 @@ TCBDefinitionTable:
 ; ============================================================================
 ; $F0A600-$F0A825   TDTI task definition table, $C0 per entry
 ; ============================================================================
+;### TDTI TABLE. Per entry: name +$04, entry point +$1C, region start/end high words
   f0a600: 21 54                   DC.W     0x2154
   f0a602: 43 42                   DC.W     0x4342
   f0a604: 52 44                   DC.W     0x5244
@@ -10754,6 +10792,7 @@ TCBDefinitionTable:
   f0a61a: a0 00                   DC.W     0xa000
   f0a61c: 00 f0                   DC.W     0x00f0
   f0a61e: 46 f0                   DC.W     0x46f0
+;###   at +$20/+$22, PROG marker +$40. The six regions partition $F04600-$F086FF exactly.
   f0a620: f0 46                   DC.W     0xf046
   f0a622: f0 5c                   DC.W     0xf05c
   f0a624: 00 00                   DC.W     0x0000

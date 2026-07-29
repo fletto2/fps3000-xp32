@@ -96,6 +96,16 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- the consolidated asm carries this session's findings ------------
+    try:
+        asm = open('fps3k.asm').read()
+        check('fps3k.asm carries >=140 ;### finding notes',
+              asm.count('\n;### ') >= 140)
+        check('fps3k.asm annotates the $FF0048 read and the presence gate',
+              'FF0048 IS READ' in asm and 'PRESENCE GATE' in asm)
+    except FileNotFoundError:
+        check('fps3k.asm present', False)
+
     # --- RDHC's $12 name table -------------------------------------------
     check('$F0467E holds a 6-entry 8-byte name table, XP1I..XP4I then USER x2',
           [d[0x467E+8*i:0x467E+8*i+8] for i in range(6)] ==
