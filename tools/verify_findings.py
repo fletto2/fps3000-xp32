@@ -153,6 +153,17 @@ else:
               0xA240 + 8*i + struct.unpack('>H', d[0xA240+8*i:0xA242+8*i])[0]
               == 0xA57E for i in range(9)))
 
+    # --- the $400000 window is exercised, and the bus log misses it ------
+    import subprocess as _s2
+    out = _s2.run([EMU, '-rom', ROM, '-cycles', '400000000'],
+                  capture_output=True, text=True).stderr
+    m3 = re.search(r'chassis window \$400000: (\d+) reads, (\d+) writes', out)
+    check('a full boot makes >130k accesses to the $400000 paged window',
+          m3 and int(m3.group(1)) > 130000 and int(m3.group(2)) > 130000)
+    check('$400000 is referenced from 9 sites in the init/test region',
+          sum(1 for a2 in range(0x8700, 0x9C00, 2)
+              if 0x400000 <= struct.unpack('>I', d[a2:a2+4])[0] <= 0x4FFFFF) == 9)
+
     # --- two-trap architecture; TRAP #2-#15 unused ------------------------
     tr_sites = {}
     for a2 in range(0, 0xA600, 2):

@@ -60,7 +60,7 @@ y=tbl(y,["beacon","what it was testing when it stopped"],[M,M+70],
   ("$20xx-$23xx","RAM test, FIRST pass: $000400-$01F000"),
   ("$24xx-$27xx","RAM test, SECOND pass: $010000-$01F000 = the WCS staging buffer"),
   ("$28xx  (26)","short XLTR check"),
-  ("$29xx  (32768)","PTM-timed test - see the note below")],rowh=9.2)
+  ("$29xx  (32768)","CHASSIS MEMORY test via the $400000 paged window (131k accesses), PTM alongside")],rowh=9.2)
 y=note(y,"(n) = number of subtests in that phase, measured. 30 phases exist: $01-$09, $10-$1A, $20-$29 (BCD, plus $1A).")
 y=note(y,"PHASE $29 IS 99.4% OF THE RUN (32,768 of 32,967 beacon writes). The beacon SITTING in $29xx is NORMAL, not a hang.")
 y=note(y,"Reaching $24xx but hanging in $25xx-$27xx = good low RAM, bad WCS staging RAM. That split is the useful one.")

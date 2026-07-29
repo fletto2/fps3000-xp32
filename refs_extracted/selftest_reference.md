@@ -50,7 +50,7 @@ registers it touches:
 | `$26` | `$F099FA` | *identical to `$22`* | second pass |
 | `$27` | `$F09A84` | *identical to `$23`* | second pass |
 | `$28` | `$F09ADE` | board status ×26, `$FF0210` ×2 | short |
-| `$29` | `$F09B54` | board status ×65,536, **`$F70003` ×7,211, `$F7000D` ×7,209**, `$F70018` ×82 | **PTM-timed** test |
+| `$29` | `$F09B54` | board status ×65,536, **`$F70003` ×7,211, `$F7000D` ×7,209**, `$F70018` ×82 | **chassis-memory** test — see the correction below |
 
 **`$20`-`$23` and `$24`-`$27` are the same four routines run twice**, which the
 identical entry PCs make unambiguous. The block-3 setup says what differs:
@@ -74,9 +74,27 @@ board that reaches `$24` but hangs in `$25`-`$27` has good low RAM and bad
 staging RAM, which is a directly useful split for a bench session.
 
 **Phase `$29` is the only test that touches the MC6840 PTM** (`$F70003` and
-`$F7000D`, ~7,200 accesses each), alongside 65,536 board-status reads. That
-identifies it as the timed test, and explains why it dominates the beacon: it
-is counting real time, not iterations of a data pattern.
+`$F7000D`, ~7,200 accesses each), alongside 65,536 board-status reads.
+
+**Correction — it is primarily a chassis-memory test, not merely a timed one.**
+The table above was built from the bus log, and **the bus log does not record
+the `$400000` paged window at all** — it only counts it. A full boot makes
+**131,144 reads and 131,148 writes** to that window, and bounding by cycle
+count places essentially all of them in phases `$28`-`$29`: 20 reads / 24
+writes by 80M cycles, 131,144 / 131,148 by 200M. The window is referenced from
+`$F09AE8`, `$F09B32`, `$F09B38` (`$404000`) and `$F09BA2` (`$403FFC`), all
+inside those two phases.
+
+131,072 is 32,768 × 4, matching phase `$29`'s 32,768 iterations at four window
+accesses each. So `$29` walks chassis memory through the paged window and uses
+the PTM alongside it — most likely to time or bound the walk.
+
+**Tooling note worth carrying forward:** any per-phase analysis built from the
+bus log is blind to `$400000-$4FFFFF`. That is why the table above shows only
+board-status reads for phases `$20`-`$29`, and it is the reason this correction
+was needed. The other `$400000` sites — `$F09620`, `$F096E2`, `$F096EA`
+(`$400216`), `$F09730` (`$400216`), `$F0978A` — put the window in phases `$17`,
+`$18` and `$19` too, which the register table also could not show.
 
 Note these readings come from *which registers each phase touches*, not from
 decoding each routine. The register evidence is strong for `$18`-`$1A` and
