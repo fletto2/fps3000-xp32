@@ -1455,6 +1455,36 @@ original was right in substance and my re-verification of it was wrong in
 method. Both were caught by doing the arithmetic or the decode rather than
 trusting a summary.*
 
+### Definitive panel-code census: 41 codes
+
+Tracing every site that loads `d0` and then reaches one of the **eight issuer
+copies** — by `jsr` *or* by branch — gives the complete set:
+
+```
+$258 $259 $25A $25B $25C $25D $25E $25F $260 $262 $263 $264
+$269 $26A $26B $26C $26D $26E $270 $271
+$276 $277 $278 $279 $27A $27B $27D $27E $27F $280 $281
+$29E $29F $2A0 $2A1 $2A2 $2A3 $2A4 $2A5 $2A6   $2B2
+```
+
+**41 distinct codes.** Nine of them — the whole exception block `$29E`-`$2A6` —
+are reachable **only by branch**, which is exactly why a `jsr`-only scan misses
+them and why they went undocumented. Each `bra.w`s to `$F0A57E`, and that
+confirms both halves of the previous finding: the exception codes really do
+reach `$FF000E`, and **issuer copy 8 exists to serve the panic path**. The
+issuer census could say copy 8 was there but not what for; now it can.
+
+Two codes in this project's tables are *not* confirmed by this census:
+
+- **`$282`** (`PCMD_HOST_NULL`) is loaded at `$F05E1A` but the following branch
+  does not land on an issuer. It may reach the port by falling into shared
+  code; this census does not show it, so treat the identification as
+  unconfirmed rather than wrong.
+- **`$261`, `$265`-`$268`, `$26F`, `$272`-`$275`, `$27C`** never appear at all,
+  which is consistent with the gaps already noted for `$26F` and `$27C`.
+
+The census also adds **`$25B`**, which the earlier per-region count missed.
+
 ### The panel port reports which CPU exception killed the board
 
 Nine panel codes were undocumented. They form one table at `$F0A23A`, eight

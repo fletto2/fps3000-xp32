@@ -148,6 +148,11 @@ else:
           d[0xA14A:0xA158].hex().upper() == '207C00000124B1FC000002306706'
           and vec(0x8C) == 0xF00896)
 
+    check('all nine exception handlers bra.w to issuer copy 8 at $F0A57E',
+          all(struct.unpack('>H', d[0xA23E+8*i:0xA240+8*i])[0] == 0x6000 and
+              0xA240 + 8*i + struct.unpack('>H', d[0xA240+8*i:0xA242+8*i])[0]
+              == 0xA57E for i in range(9)))
+
     # --- the exception-code table at $F0A23A -----------------------------
     check('9-entry exception table at $F0A23A: codes $29E-$2A6, 8 bytes apart',
           [struct.unpack('>H', d[0xA23A+8*i+2:0xA23C+8*i+2])[0] for i in range(9)]

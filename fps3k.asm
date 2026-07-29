@@ -10725,7 +10725,10 @@ loc_F0A54A:
 ; TCBDefinitionTable
 ; ============================================================
 TCBDefinitionTable:
-;### panel-command issuer, copy 8 of 8. NOT the TCB table (that is $F0A600).
+;### panel-command issuer, copy 8 of 8 -- THE PANIC PATH. All nine CPU-exception
+;###   handlers at $F0A23A bra.w here with their code in d0, so the last value at
+;###   $FF000E names the exception: $29E bus error .. $2A6 catch-all. NOT the TCB
+;###   table -- that is $F0A600.
   f0a57e: 33 c0                   DC.W     0x33c0
   f0a580: 00 00                   DC.W     0x0000
   f0a582: 0e 6e                   DC.W     0x0e6e
