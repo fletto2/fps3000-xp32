@@ -40,6 +40,31 @@
 #define XLTR_BASE      0xFF0200
 #define XLTR_END       0xFF0260
 
+/* Three MC68153-style BIMs inside the XLTR window.  Per the MC68153
+ * datasheet: 8 registers selected by A1-A3 (so 2-byte spacing), CR0..CR3
+ * then VR0..VR3, CRn controls INTn.  CR bits 0-2 = interrupt request
+ * level (0 = disabled), bit 4 = IRE (interrupt enable).
+ * See refs_extracted/versabus_access_map.md. */
+#define BIM_BASE       0xFF0230
+#define BIM_END        0xFF0260
+#define BIM_COUNT      3
+#define BIM_CH         4
+/* Channel that owns the host link: BIM2 ch2 (CR $FF0254, VR $FF025C). */
+#define BIM_HOST_UNIT  2
+#define BIM_HOST_CH    2
+
+/* Assert a channel's device-interrupt input.  Returns the IRQ level the
+ * BIM will request (CR bits 0-2), or 0 if that channel is disabled. */
+int      versabus_bim_assert(int unit, int ch);
+void     versabus_bim_clear(int unit, int ch);
+/* IACK: find the highest-priority pending channel requesting `level` and
+ * return its vector register.  Returns -1 if none matches. */
+int      versabus_bim_iack(int level);
+/* Level currently requested by any pending channel, 0 if none. */
+int      versabus_bim_pending_level(void);
+/* Has the firmware enabled this channel (IRE set and level != 0)? */
+int      versabus_bim_enabled(int unit, int ch);
+
 #define XLTR_MODE0          0xFF0200
 #define XLTR_MODE1          0xFF0202
 #define XLTR_CHANNEL_SELECT 0xFF0204

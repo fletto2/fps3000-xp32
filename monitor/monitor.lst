@@ -1,6 +1,6 @@
 Sections:
 00: "segf0a826" (F0A826-F0A838)
-01: "segf0a840" (F0A840-F0B802)
+01: "segf0a840" (F0A840-F0B82E)
 
 
 Source: "monitor.s"
@@ -122,7 +122,7 @@ Source: "monitor.s"
 00:00F0A826 007C2700        	   116:                 ori.w   #$2700,sr               ; supervisor, IPL=7
 00:00F0A82A 2E7C0000FF00    	   117:                 movea.l #MON_STACK,sp           ; supervisor stack (below
                             	   118:                                                 ;   the WCS staging buffer)
-00:00F0A830 610008D6        	   119:                 bsr.w   cold_init               ; vectors + workspace
+00:00F0A830 610008EA        	   119:                 bsr.w   cold_init               ; vectors + workspace
 00:00F0A834 60000088        	   120:                 bra.w   monitor_common
                             	   121: 
                             	   122: ; monitor_entry MUST stay at $F0A840: patch_rom.py hardcodes
@@ -199,30 +199,30 @@ Source: "monitor.s"
                             	   193: 
                             	   194: monitor_common:
                             	   195: 
-01:00F0A8BE 610008CC        	   196:                 bsr.w   sio_init
-01:00F0A8C2 61000952        	   197:                 bsr.w   put_crlf
-01:00F0A8C6 6100094E        	   198:                 bsr.w   put_crlf
-01:00F0A8CA 41FA099A        	   199:                 lea     banner_msg(pc),a0
-01:00F0A8CE 6100093A        	   200:                 bsr.w   puts
-01:00F0A8D2 41FA0A47        	   201:                 lea     entry_msg(pc),a0
-01:00F0A8D6 61000932        	   202:                 bsr.w   puts
+01:00F0A8BE 610008E0        	   196:                 bsr.w   sio_init
+01:00F0A8C2 61000976        	   197:                 bsr.w   put_crlf
+01:00F0A8C6 61000972        	   198:                 bsr.w   put_crlf
+01:00F0A8CA 41FA09BE        	   199:                 lea     banner_msg(pc),a0
+01:00F0A8CE 6100095E        	   200:                 bsr.w   puts
+01:00F0A8D2 41FA0A6B        	   201:                 lea     entry_msg(pc),a0
+01:00F0A8D6 61000956        	   202:                 bsr.w   puts
 01:00F0A8DA 20390000F83C    	   203:                 move.l  MON_SPC,d0
-01:00F0A8E0 61000978        	   204:                 bsr.w   puthex_long
-01:00F0A8E4 41FA0A45        	   205:                 lea     sr_msg(pc),a0
-01:00F0A8E8 61000920        	   206:                 bsr.w   puts
+01:00F0A8E0 6100099C        	   204:                 bsr.w   puthex_long
+01:00F0A8E4 41FA0A69        	   205:                 lea     sr_msg(pc),a0
+01:00F0A8E8 61000944        	   206:                 bsr.w   puts
 01:00F0A8EC 30390000F840    	   207:                 move.w  MON_SSR,d0
-01:00F0A8F2 6100095A        	   208:                 bsr.w   puthex_word
-01:00F0A8F6 6100091E        	   209:                 bsr.w   put_crlf
+01:00F0A8F2 6100097E        	   208:                 bsr.w   puthex_word
+01:00F0A8F6 61000942        	   209:                 bsr.w   put_crlf
                             	   210: 
                             	   211: cmd_loop:
                             	   212:                 ; We reached the prompt, so the I/O path works: re-arm the
                             	   213:                 ; guard so a later fault is reportable too.
 01:00F0A8FA 13FC00000000F895	   214:                 move.b  #0,MON_NEST
-01:00F0A902 41FA0A2E        	   215:                 lea     prompt_msg(pc),a0
-01:00F0A906 61000902        	   216:                 bsr.w   puts
-01:00F0A90A 610006C2        	   217:                 bsr.w   read_line               ; reads into MON_LINEBUF, term=0
+01:00F0A902 41FA0A52        	   215:                 lea     prompt_msg(pc),a0
+01:00F0A906 61000926        	   216:                 bsr.w   puts
+01:00F0A90A 610006D6        	   217:                 bsr.w   read_line               ; reads into MON_LINEBUF, term=0
 01:00F0A90E 4DF90000F850    	   218:                 lea     MON_LINEBUF,a6          ; a6 = parse pointer
-01:00F0A914 61000716        	   219:                 bsr.w   skip_ws
+01:00F0A914 6100072A        	   219:                 bsr.w   skip_ws
 01:00F0A918 1016            	   220:                 move.b  (a6),d0
 01:00F0A91A 67DE            	   221:                 beq.b   cmd_loop                ; empty line
                             	   222: 
@@ -241,34 +241,34 @@ Source: "monitor.s"
 01:00F0A94C 0C000067        	   235:                 cmpi.b  #'g',d0
 01:00F0A950 67000172        	   236:                 beq.w   cmd_go
 01:00F0A954 0C00004C        	   237:                 cmpi.b  #'L',d0
-01:00F0A958 67000494        	   238:                 beq.w   cmd_load_srec
+01:00F0A958 670004A8        	   238:                 beq.w   cmd_load_srec
 01:00F0A95C 0C000069        	   239:                 cmpi.b  #'i',d0
-01:00F0A960 67000404        	   240:                 beq.w   cmd_info
+01:00F0A960 67000418        	   240:                 beq.w   cmd_info
 01:00F0A964 0C000021        	   241:                 cmpi.b  #'!',d0
 01:00F0A968 6700002A        	   242:                 beq.w   cmd_about
 01:00F0A96C 0C000062        	   243:                 cmpi.b  #'b',d0
 01:00F0A970 6700020C        	   244:                 beq.w   cmd_bp
 01:00F0A974 0C000074        	   245:                 cmpi.b  #'t',d0
-01:00F0A978 67000398        	   246:                 beq.w   cmd_trace
+01:00F0A978 670003AC        	   246:                 beq.w   cmd_trace
                             	   247: 
-01:00F0A97C 41FA09BC        	   248:                 lea     unknown_msg(pc),a0
-01:00F0A980 61000888        	   249:                 bsr.w   puts
+01:00F0A97C 41FA09E0        	   248:                 lea     unknown_msg(pc),a0
+01:00F0A980 610008AC        	   249:                 bsr.w   puts
 01:00F0A984 6000FF74        	   250:                 bra.w   cmd_loop
                             	   251: 
                             	   252: ;----------------------------------------------------------------
                             	   253: ; Help — print command list
                             	   254: ;----------------------------------------------------------------
                             	   255: cmd_help:
-01:00F0A988 41FA09C8        	   256:                 lea     help_msg(pc),a0
-01:00F0A98C 6100087C        	   257:                 bsr.w   puts
+01:00F0A988 41FA09EC        	   256:                 lea     help_msg(pc),a0
+01:00F0A98C 610008A0        	   257:                 bsr.w   puts
 01:00F0A990 6000FF68        	   258:                 bra.w   cmd_loop
                             	   259: 
                             	   260: ;----------------------------------------------------------------
                             	   261: ; About / Banner
                             	   262: ;----------------------------------------------------------------
                             	   263: cmd_about:
-01:00F0A994 41FA08D0        	   264:                 lea     banner_msg(pc),a0
-01:00F0A998 61000870        	   265:                 bsr.w   puts
+01:00F0A994 41FA08F4        	   264:                 lea     banner_msg(pc),a0
+01:00F0A998 61000894        	   265:                 bsr.w   puts
 01:00F0A99C 6000FF5C        	   266:                 bra.w   cmd_loop
                             	   267: 
                             	   268: ;----------------------------------------------------------------
@@ -293,40 +293,40 @@ Source: "monitor.s"
                             	   287: .is_d:
 01:00F0A9B4 103C0044        	   288:                 move.b  #'D',d0
                             	   289: .show:
-01:00F0A9B8 61000814        	   290:                 bsr.w   putchar
+01:00F0A9B8 61000828        	   290:                 bsr.w   putchar
 01:00F0A9BC 1003            	   291:                 move.b  d3,d0
 01:00F0A9BE 06000030        	   292:                 addi.b  #'0',d0
-01:00F0A9C2 6100080A        	   293:                 bsr.w   putchar
+01:00F0A9C2 6100081E        	   293:                 bsr.w   putchar
 01:00F0A9C6 103C003D        	   294:                 move.b  #'=',d0
-01:00F0A9CA 61000802        	   295:                 bsr.w   putchar
+01:00F0A9CA 61000816        	   295:                 bsr.w   putchar
                             	   296:                 ; load reg from MON_REGS[d2*4]
 01:00F0A9CE 3002            	   297:                 move.w  d2,d0
 01:00F0A9D0 E548            	   298:                 lsl.w   #2,d0
 01:00F0A9D2 41F90000F800    	   299:                 lea     MON_REGS,a0
 01:00F0A9D8 20300000        	   300:                 move.l  (a0,d0.w),d0
-01:00F0A9DC 6100087C        	   301:                 bsr.w   puthex_long
+01:00F0A9DC 610008A0        	   301:                 bsr.w   puthex_long
 01:00F0A9E0 103C0020        	   302:                 move.b  #' ',d0
-01:00F0A9E4 610007E8        	   303:                 bsr.w   putchar
-01:00F0A9E8 610007E4        	   304:                 bsr.w   putchar
+01:00F0A9E4 610007FC        	   303:                 bsr.w   putchar
+01:00F0A9E8 610007F8        	   304:                 bsr.w   putchar
 01:00F0A9EC 5202            	   305:                 addq.b  #1,d2
                             	   306:                 ; new line every 4 regs
 01:00F0A9EE 1002            	   307:                 move.b  d2,d0
 01:00F0A9F0 02000003        	   308:                 andi.b  #3,d0
 01:00F0A9F4 6604            	   309:                 bne.b   .nonl
-01:00F0A9F6 6100081E        	   310:                 bsr.w   put_crlf
+01:00F0A9F6 61000842        	   310:                 bsr.w   put_crlf
                             	   311: .nonl:
 01:00F0A9FA 0C02000F        	   312:                 cmpi.b  #15,d2
 01:00F0A9FE 6DA2            	   313:                 blt.b   .loop
-01:00F0AA00 61000814        	   314:                 bsr.w   put_crlf
-01:00F0AA04 41FA0DF0        	   315:                 lea     pcmsg(pc),a0
-01:00F0AA08 61000800        	   316:                 bsr.w   puts
+01:00F0AA00 61000838        	   314:                 bsr.w   put_crlf
+01:00F0AA04 41FA0E1C        	   315:                 lea     pcmsg(pc),a0
+01:00F0AA08 61000824        	   316:                 bsr.w   puts
 01:00F0AA0C 20390000F83C    	   317:                 move.l  MON_SPC,d0
-01:00F0AA12 61000846        	   318:                 bsr.w   puthex_long
-01:00F0AA16 41FA0DE3        	   319:                 lea     srmsg(pc),a0
-01:00F0AA1A 610007EE        	   320:                 bsr.w   puts
+01:00F0AA12 6100086A        	   318:                 bsr.w   puthex_long
+01:00F0AA16 41FA0E0F        	   319:                 lea     srmsg(pc),a0
+01:00F0AA1A 61000812        	   320:                 bsr.w   puts
 01:00F0AA1E 30390000F840    	   321:                 move.w  MON_SSR,d0
-01:00F0AA24 61000828        	   322:                 bsr.w   puthex_word
-01:00F0AA28 610007EC        	   323:                 bsr.w   put_crlf
+01:00F0AA24 6100084C        	   322:                 bsr.w   puthex_word
+01:00F0AA28 61000810        	   323:                 bsr.w   put_crlf
 01:00F0AA2C 6000FECC        	   324:                 bra.w   cmd_loop
                             	   325: 
                             	   326: ;----------------------------------------------------------------
@@ -337,19 +337,19 @@ Source: "monitor.s"
                             	   331: ;----------------------------------------------------------------
                             	   332: cmd_mem:
 01:00F0AA30 528E            	   333:                 addq.l  #1,a6
-01:00F0AA32 610005F8        	   334:                 bsr.w   skip_ws
+01:00F0AA32 6100060C        	   334:                 bsr.w   skip_ws
 01:00F0AA36 1016            	   335:                 move.b  (a6),d0
 01:00F0AA38 6710            	   336:                 beq.b   .use_last
-01:00F0AA3A 61000604        	   337:                 bsr.w   parse_hex
+01:00F0AA3A 61000618        	   337:                 bsr.w   parse_hex
 01:00F0AA3E 4A01            	   338:                 tst.b   d1
 01:00F0AA40 6700003E        	   339:                 beq.w   cmd_err
 01:00F0AA44 23C00000F890    	   340:                 move.l  d0,MON_LASTADDR
                             	   341: .use_last:
-01:00F0AA4A 610005E0        	   342:                 bsr.w   skip_ws
+01:00F0AA4A 610005F4        	   342:                 bsr.w   skip_ws
 01:00F0AA4E 7410            	   343:                 moveq   #16,d2                  ; default count
 01:00F0AA50 1016            	   344:                 move.b  (a6),d0
 01:00F0AA52 6718            	   345:                 beq.b   .do
-01:00F0AA54 610005EA        	   346:                 bsr.w   parse_hex
+01:00F0AA54 610005FE        	   346:                 bsr.w   parse_hex
 01:00F0AA58 4A01            	   347:                 tst.b   d1
 01:00F0AA5A 67000024        	   348:                 beq.w   cmd_err
 01:00F0AA5E 2400            	   349:                 move.l  d0,d2
@@ -359,14 +359,14 @@ Source: "monitor.s"
 01:00F0AA6A 4482            	   353:                 neg.l   d2
                             	   354: .do:
 01:00F0AA6C 28790000F890    	   355:                 move.l  MON_LASTADDR,a4
-01:00F0AA72 610004C6        	   356:                 bsr.w   hexdump
+01:00F0AA72 610004DA        	   356:                 bsr.w   hexdump
                             	   357:                 ; advance LASTADDR by count
 01:00F0AA76 D5B90000F890    	   358:                 add.l   d2,MON_LASTADDR
 01:00F0AA7C 6000FE7C        	   359:                 bra.w   cmd_loop
                             	   360: 
                             	   361: cmd_err:
-01:00F0AA80 41FA0AA2        	   362:                 lea     hex_err(pc),a0
-01:00F0AA84 61000784        	   363:                 bsr.w   puts
+01:00F0AA80 41FA0AC6        	   362:                 lea     hex_err(pc),a0
+01:00F0AA84 610007A8        	   363:                 bsr.w   puts
 01:00F0AA88 6000FE70        	   364:                 bra.w   cmd_loop
                             	   365: 
                             	   366: ;----------------------------------------------------------------
@@ -380,23 +380,23 @@ Source: "monitor.s"
                             	   374: ;----------------------------------------------------------------
                             	   375: cmd_write:
 01:00F0AA90 528E            	   376:                 addq.l  #1,a6
-01:00F0AA92 61000598        	   377:                 bsr.w   skip_ws
-01:00F0AA96 610005A8        	   378:                 bsr.w   parse_hex
+01:00F0AA92 610005AC        	   377:                 bsr.w   skip_ws
+01:00F0AA96 610005BC        	   378:                 bsr.w   parse_hex
 01:00F0AA9A 4A01            	   379:                 tst.b   d1
 01:00F0AA9C 6700FFE2        	   380:                 beq.w   cmd_err
 01:00F0AAA0 2840            	   381:                 move.l  d0,a4
                             	   382: .wloop:
-01:00F0AAA2 61000588        	   383:                 bsr.w   skip_ws
+01:00F0AAA2 6100059C        	   383:                 bsr.w   skip_ws
 01:00F0AAA6 1016            	   384:                 move.b  (a6),d0
 01:00F0AAA8 670E            	   385:                 beq.b   .done
-01:00F0AAAA 61000594        	   386:                 bsr.w   parse_hex
+01:00F0AAAA 610005A8        	   386:                 bsr.w   parse_hex
 01:00F0AAAE 4A01            	   387:                 tst.b   d1
 01:00F0AAB0 6700FFCE        	   388:                 beq.w   cmd_err
 01:00F0AAB4 18C0            	   389:                 move.b  d0,(a4)+
 01:00F0AAB6 60EA            	   390:                 bra.b   .wloop
                             	   391: .done:
-01:00F0AAB8 41FA0A65        	   392:                 lea     ok_msg(pc),a0
-01:00F0AABC 6100074C        	   393:                 bsr.w   puts
+01:00F0AAB8 41FA0A89        	   392:                 lea     ok_msg(pc),a0
+01:00F0AABC 61000770        	   393:                 bsr.w   puts
 01:00F0AAC0 6000FE38        	   394:                 bra.w   cmd_loop
                             	   395: 
                             	   396: ;----------------------------------------------------------------
@@ -410,10 +410,10 @@ Source: "monitor.s"
                             	   404: ; able to run and then debug something, rather than only look at memory.
                             	   405: cmd_go:
 01:00F0AAC4 528E            	   406:                 addq.l  #1,a6
-01:00F0AAC6 61000564        	   407:                 bsr.w   skip_ws
+01:00F0AAC6 61000578        	   407:                 bsr.w   skip_ws
 01:00F0AACA 1016            	   408:                 move.b  (a6),d0
 01:00F0AACC 6728            	   409:                 beq.b   .noaddr
-01:00F0AACE 61000570        	   410:                 bsr.w   parse_hex
+01:00F0AACE 61000584        	   410:                 bsr.w   parse_hex
 01:00F0AAD2 4A01            	   411:                 tst.b   d1
 01:00F0AAD4 6700FFAA        	   412:                 beq.w   cmd_err
 01:00F0AAD8 0C3900FF0000F894	   413:                 cmpi.b  #$FF,MON_GRP0
@@ -427,11 +427,11 @@ Source: "monitor.s"
 01:00F0AAFC 66000074        	   421:                 bne.w   .no_frame
 01:00F0AB00 4DD6            	   422:                 bra.b   .resume
                             	   423: .resume:
-01:00F0AB02 41FA0AEE        	   424:                 lea     resume_msg(pc),a0
-01:00F0AB06 61000702        	   425:                 bsr.w   puts
+01:00F0AB02 41FA0B1A        	   424:                 lea     resume_msg(pc),a0
+01:00F0AB06 61000726        	   425:                 bsr.w   puts
 01:00F0AB0A 20390000F83C    	   426:                 move.l  MON_SPC,d0
-01:00F0AB10 61000748        	   427:                 bsr.w   puthex_long
-01:00F0AB14 61000700        	   428:                 bsr.w   put_crlf
+01:00F0AB10 6100076C        	   427:                 bsr.w   puthex_long
+01:00F0AB14 61000724        	   428:                 bsr.w   put_crlf
                             	   429:                 ; rebuild stack frame and RTE
 01:00F0AB18 08B900070000F840	   430:                 bclr.b  #SR_TRACE_BIT-8,MON_SSR ; stop tracing on a plain g
 01:00F0AB20 2F790000F83C0002	   431:                 move.l  MON_SPC,2(sp)
@@ -444,19 +444,19 @@ Source: "monitor.s"
                             	   438:                 ; the T bit stays clear; every vector already points at the
                             	   439:                 ; monitor, so a fault in the target lands back here.
 01:00F0AB38 23C00000F83C    	   440:                 move.l  d0,MON_SPC
-01:00F0AB3E 41FA0AB2        	   441:                 lea     resume_msg(pc),a0
-01:00F0AB42 610006C6        	   442:                 bsr.w   puts
+01:00F0AB3E 41FA0ADE        	   441:                 lea     resume_msg(pc),a0
+01:00F0AB42 610006EA        	   442:                 bsr.w   puts
 01:00F0AB46 20390000F83C    	   443:                 move.l  MON_SPC,d0
-01:00F0AB4C 6100070C        	   444:                 bsr.w   puthex_long
-01:00F0AB50 610006C4        	   445:                 bsr.w   put_crlf
+01:00F0AB4C 61000730        	   444:                 bsr.w   puthex_long
+01:00F0AB50 610006E8        	   445:                 bsr.w   put_crlf
 01:00F0AB54 33FC27000000F840	   446:                 move.w  #$2700,MON_SSR
 01:00F0AB5C 2F390000F83C    	   447:                 move.l  MON_SPC,-(sp)           ; PC
 01:00F0AB62 3F390000F840    	   448:                 move.w  MON_SSR,-(sp)           ; SR
 01:00F0AB68 4CF97FFF0000F800	   449:                 movem.l MON_REGS,d0-d7/a0-a6
 01:00F0AB70 4E73            	   450:                 rte
                             	   451: .no_frame:
-01:00F0AB72 41FA0A45        	   452:                 lea     nogo_msg(pc),a0
-01:00F0AB76 61000692        	   453:                 bsr.w   puts
+01:00F0AB72 41FA0A71        	   452:                 lea     nogo_msg(pc),a0
+01:00F0AB76 610006B6        	   453:                 bsr.w   puts
 01:00F0AB7A 6000FD7E        	   454:                 bra.w   cmd_loop
                             	   455: 
                             	   456: ;================================================================
@@ -480,1112 +480,1132 @@ Source: "monitor.s"
                             	   474: ;================================================================
                             	   475: cmd_bp:
 01:00F0AB7E 528E            	   476:                 addq.l  #1,a6
-01:00F0AB80 610004AA        	   477:                 bsr.w   skip_ws
+01:00F0AB80 610004BE        	   477:                 bsr.w   skip_ws
 01:00F0AB84 1016            	   478:                 move.b  (a6),d0
-01:00F0AB86 67000134        	   479:                 beq.w   bp_list                 ; bare "b" -> list
+01:00F0AB86 67000148        	   479:                 beq.w   bp_list                 ; bare "b" -> list
 01:00F0AB8A 0C00002D        	   480:                 cmpi.b  #'-',d0
 01:00F0AB8E 6712            	   481:                 beq.b   .clear
-01:00F0AB90 610004AE        	   482:                 bsr.w   parse_hex
+01:00F0AB90 610004C2        	   482:                 bsr.w   parse_hex
 01:00F0AB94 4A01            	   483:                 tst.b   d1
 01:00F0AB96 6700FEE8        	   484:                 beq.w   cmd_err
 01:00F0AB9A 61000032        	   485:                 bsr.w   bp_set
 01:00F0AB9E 6000FD5A        	   486:                 bra.w   cmd_loop
                             	   487: .clear:
 01:00F0ABA2 528E            	   488:                 addq.l  #1,a6                   ; skip '-'
-01:00F0ABA4 61000486        	   489:                 bsr.w   skip_ws
+01:00F0ABA4 6100049A        	   489:                 bsr.w   skip_ws
 01:00F0ABA8 1016            	   490:                 move.b  (a6),d0
 01:00F0ABAA 6712            	   491:                 beq.b   .clr_all
-01:00F0ABAC 61000492        	   492:                 bsr.w   parse_hex
+01:00F0ABAC 610004A6        	   492:                 bsr.w   parse_hex
 01:00F0ABB0 4A01            	   493:                 tst.b   d1
 01:00F0ABB2 6700FECC        	   494:                 beq.w   cmd_err
-01:00F0ABB6 6100009A        	   495:                 bsr.w   bp_clr_one
+01:00F0ABB6 610000AE        	   495:                 bsr.w   bp_clr_one
 01:00F0ABBA 6000FD3E        	   496:                 bra.w   cmd_loop
                             	   497: .clr_all:
-01:00F0ABBE 610000D4        	   498:                 bsr.w   bp_clr_all
-01:00F0ABC2 41FA095B        	   499:                 lea     ok_msg(pc),a0
-01:00F0ABC6 61000642        	   500:                 bsr.w   puts
+01:00F0ABBE 610000E8        	   498:                 bsr.w   bp_clr_all
+01:00F0ABC2 41FA097F        	   499:                 lea     ok_msg(pc),a0
+01:00F0ABC6 61000666        	   500:                 bsr.w   puts
 01:00F0ABCA 6000FD2E        	   501:                 bra.w   cmd_loop
                             	   502: 
                             	   503: ; ---- bp_set: arm a breakpoint at d0 ----
                             	   504: bp_set:
 01:00F0ABCE 48E7F0C0        	   505:                 movem.l d0-d3/a0-a1,-(sp)
 01:00F0ABD2 2600            	   506:                 move.l  d0,d3                   ; target address
-01:00F0ABD4 6700006E        	   507:                 beq.w   .odd                    ; 0 is not a target
+01:00F0ABD4 67000082        	   507:                 beq.w   .odd                    ; 0 is not a target
 01:00F0ABD8 08030000        	   508:                 btst.l  #0,d3
-01:00F0ABDC 66000066        	   509:                 bne.w   .odd                    ; must be word-aligned
-                            	   510:                 ; find a free slot, and reject a duplicate
-01:00F0ABE0 41F90000F8A0    	   511:                 lea     MON_BPT,a0
-01:00F0ABE6 7207            	   512:                 moveq   #MON_BPN-1,d1
-01:00F0ABE8 93C9            	   513:                 suba.l  a1,a1                   ; a1 = first free slot, or 0
-                            	   514: .scan:
-01:00F0ABEA 2410            	   515:                 move.l  (a0),d2
-01:00F0ABEC 6708            	   516:                 beq.b   .isfree
-01:00F0ABEE B483            	   517:                 cmp.l   d3,d2
-01:00F0ABF0 6700003E        	   518:                 beq.w   .dup
-01:00F0ABF4 6006            	   519:                 bra.b   .next
-                            	   520: .isfree:
-01:00F0ABF6 2409            	   521:                 move.l  a1,d2
-01:00F0ABF8 6602            	   522:                 bne.b   .next                   ; already have a free slot
-01:00F0ABFA 2248            	   523:                 move.l  a0,a1
-                            	   524: .next:
-01:00F0ABFC 5C88            	   525:                 lea     MON_BP_SZ(a0),a0
-01:00F0ABFE 51C9FFEA        	   526:                 dbra    d1,.scan
-01:00F0AC02 2409            	   527:                 move.l  a1,d2
-01:00F0AC04 67000034        	   528:                 beq.w   .full
-                            	   529:                 ; point the TRAP #14 vector at the monitor, then patch
-01:00F0AC08 21FC00F0A84000B8	   530:                 move.l  #monitor_entry,BP_VECTOR
-01:00F0AC10 2043            	   531:                 move.l  d3,a0
-01:00F0AC12 33500004        	   532:                 move.w  (a0),4(a1)              ; save original word
-01:00F0AC16 30BC4E4E        	   533:                 move.w  #BP_OPCODE,(a0)
-01:00F0AC1A 2283            	   534:                 move.l  d3,(a1)                 ; mark slot in use
-01:00F0AC1C 41FA090D        	   535:                 lea     bp_set_msg(pc),a0
-01:00F0AC20 610005E8        	   536:                 bsr.w   puts
-01:00F0AC24 2003            	   537:                 move.l  d3,d0
-01:00F0AC26 61000632        	   538:                 bsr.w   puthex_long
-01:00F0AC2A 610005EA        	   539:                 bsr.w   put_crlf
-01:00F0AC2E 601C            	   540:                 bra.b   .out
-                            	   541: .dup:
-01:00F0AC30 41FA0903        	   542:                 lea     bp_dup_msg(pc),a0
-01:00F0AC34 610005D4        	   543:                 bsr.w   puts
-01:00F0AC38 6012            	   544:                 bra.b   .out
-                            	   545: .full:
-01:00F0AC3A 41FA0908        	   546:                 lea     bp_full_msg(pc),a0
-01:00F0AC3E 610005CA        	   547:                 bsr.w   puts
-01:00F0AC42 6008            	   548:                 bra.b   .out
-                            	   549: .odd:
-01:00F0AC44 41FA090F        	   550:                 lea     bp_odd_msg(pc),a0
-01:00F0AC48 610005C0        	   551:                 bsr.w   puts
-                            	   552: .out:
-01:00F0AC4C 4CDF030F        	   553:                 movem.l (sp)+,d0-d3/a0-a1
-01:00F0AC50 4E75            	   554:                 rts
-                            	   555: 
-                            	   556: ; ---- bp_clr_one: disarm the breakpoint at d0, restoring its word ----
-                            	   557: bp_clr_one:
-01:00F0AC52 48E7E0C0        	   558:                 movem.l d0-d2/a0-a1,-(sp)
-01:00F0AC56 2400            	   559:                 move.l  d0,d2
-01:00F0AC58 6700002C        	   560:                 beq.w   .nf                     ; 0 never matches a slot
-01:00F0AC5C 41F90000F8A0    	   561:                 lea     MON_BPT,a0
-01:00F0AC62 7207            	   562:                 moveq   #MON_BPN-1,d1
-                            	   563: .scan:
-01:00F0AC64 2010            	   564:                 move.l  (a0),d0
-01:00F0AC66 B082            	   565:                 cmp.l   d2,d0
-01:00F0AC68 6616            	   566:                 bne.b   .next
-01:00F0AC6A 2240            	   567:                 move.l  d0,a1
-01:00F0AC6C 32A80004        	   568:                 move.w  4(a0),(a1)              ; put the original back
-01:00F0AC70 20BC00000000    	   569:                 move.l  #0,(a0)                 ; free the slot
-01:00F0AC76 41FA08A7        	   570:                 lea     ok_msg(pc),a0
-01:00F0AC7A 6100058E        	   571:                 bsr.w   puts
-01:00F0AC7E 600E            	   572:                 bra.b   .out
-                            	   573: .next:
-01:00F0AC80 5C88            	   574:                 lea     MON_BP_SZ(a0),a0
-01:00F0AC82 51C9FFE0        	   575:                 dbra    d1,.scan
-                            	   576: .nf:
-01:00F0AC86 41FA08F4        	   577:                 lea     bp_none_msg(pc),a0
-01:00F0AC8A 6100057E        	   578:                 bsr.w   puts
-                            	   579: .out:
-01:00F0AC8E 4CDF0307        	   580:                 movem.l (sp)+,d0-d2/a0-a1
-01:00F0AC92 4E75            	   581:                 rts
-                            	   582: 
-                            	   583: ; ---- bp_clr_all: disarm every armed slot ----
-                            	   584: bp_clr_all:
-01:00F0AC94 48E7C0C0        	   585:                 movem.l d0-d1/a0-a1,-(sp)
-01:00F0AC98 41F90000F8A0    	   586:                 lea     MON_BPT,a0
-01:00F0AC9E 7207            	   587:                 moveq   #MON_BPN-1,d1
-                            	   588: .scan:
-01:00F0ACA0 2010            	   589:                 move.l  (a0),d0
-01:00F0ACA2 670C            	   590:                 beq.b   .next
-01:00F0ACA4 2240            	   591:                 move.l  d0,a1
-01:00F0ACA6 32A80004        	   592:                 move.w  4(a0),(a1)
-01:00F0ACAA 20BC00000000    	   593:                 move.l  #0,(a0)
-                            	   594: .next:
-01:00F0ACB0 5C88            	   595:                 lea     MON_BP_SZ(a0),a0
-01:00F0ACB2 51C9FFEC        	   596:                 dbra    d1,.scan
-01:00F0ACB6 4CDF0303        	   597:                 movem.l (sp)+,d0-d1/a0-a1
-01:00F0ACBA 4E75            	   598:                 rts
-                            	   599: 
-                            	   600: ; ---- bp_list: show armed slots ----
-                            	   601: bp_list:
-01:00F0ACBC 41FA08CC        	   602:                 lea     bp_list_msg(pc),a0
-01:00F0ACC0 61000548        	   603:                 bsr.w   puts
-01:00F0ACC4 49F90000F8A0    	   604:                 lea     MON_BPT,a4
-01:00F0ACCA 7607            	   605:                 moveq   #MON_BPN-1,d3
-01:00F0ACCC 7A00            	   606:                 moveq   #0,d5                   ; count
-                            	   607: .scan:
-01:00F0ACCE 2014            	   608:                 move.l  (a4),d0
-01:00F0ACD0 6728            	   609:                 beq.b   .next
-01:00F0ACD2 5285            	   610:                 addq.l  #1,d5
-01:00F0ACD4 103C0020        	   611:                 move.b  #' ',d0
-01:00F0ACD8 610004F4        	   612:                 bsr.w   putchar
-01:00F0ACDC 610004F0        	   613:                 bsr.w   putchar
-01:00F0ACE0 2014            	   614:                 move.l  (a4),d0
-01:00F0ACE2 61000576        	   615:                 bsr.w   puthex_long
-01:00F0ACE6 41FA08BC        	   616:                 lea     bp_was_msg(pc),a0
-01:00F0ACEA 6100051E        	   617:                 bsr.w   puts
-01:00F0ACEE 302C0004        	   618:                 move.w  4(a4),d0
-01:00F0ACF2 6100055A        	   619:                 bsr.w   puthex_word
-01:00F0ACF6 6100051E        	   620:                 bsr.w   put_crlf
-                            	   621: .next:
-01:00F0ACFA 5C8C            	   622:                 lea     MON_BP_SZ(a4),a4
-01:00F0ACFC 51CBFFD0        	   623:                 dbra    d3,.scan
-01:00F0AD00 4A85            	   624:                 tst.l   d5
-01:00F0AD02 6600FBF6        	   625:                 bne.w   cmd_loop
-01:00F0AD06 41FA0891        	   626:                 lea     bp_empty_msg(pc),a0
-01:00F0AD0A 610004FE        	   627:                 bsr.w   puts
-01:00F0AD0E 6000FBEA        	   628:                 bra.w   cmd_loop
-                            	   629: 
-                            	   630: ;================================================================
-                            	   631: ; Single step:  t
-                            	   632: ;
-                            	   633: ; Sets the T bit in the saved SR and resumes.  The 68000 then takes a
-                            	   634: ; trace exception after one instruction, which lands back in the monitor
-                            	   635: ; (vector 9 at $24).  Needs a resumable frame, same as `g`.  The T bit
-                            	   636: ; stays set in the restored SR, so `t` repeats naturally; `g` clears it
-                            	   637: ; on the way out so a resume does not keep tracing.
+01:00F0ABDC 6600007A        	   509:                 bne.w   .odd                    ; must be word-aligned
+                            	   510:                 ; Target must be on-board RAM.  A breakpoint writes $4E4E to
+                            	   511:                 ; the address: in ROM that is silently lost, but in
+                            	   512:                 ; peripheral space it would poke the AP I/F or XLTR, and
+                            	   513:                 ; $F70011 would transmit a byte over the SIO.
+01:00F0ABE0 0C8300000400    	   514:                 cmpi.l  #$400,d3
+01:00F0ABE6 65000070        	   515:                 bcs.w   .odd                    ; vector table
+01:00F0ABEA 0C8300020000    	   516:                 cmpi.l  #$20000,d3
+01:00F0ABF0 64000066        	   517:                 bcc.w   .odd                    ; not on-board RAM
+                            	   518:                 ; find a free slot, and reject a duplicate
+01:00F0ABF4 41F90000F8A0    	   519:                 lea     MON_BPT,a0
+01:00F0ABFA 7207            	   520:                 moveq   #MON_BPN-1,d1
+01:00F0ABFC 93C9            	   521:                 suba.l  a1,a1                   ; a1 = first free slot, or 0
+                            	   522: .scan:
+01:00F0ABFE 2410            	   523:                 move.l  (a0),d2
+01:00F0AC00 6708            	   524:                 beq.b   .isfree
+01:00F0AC02 B483            	   525:                 cmp.l   d3,d2
+01:00F0AC04 6700003E        	   526:                 beq.w   .dup
+01:00F0AC08 6006            	   527:                 bra.b   .next
+                            	   528: .isfree:
+01:00F0AC0A 2409            	   529:                 move.l  a1,d2
+01:00F0AC0C 6602            	   530:                 bne.b   .next                   ; already have a free slot
+01:00F0AC0E 2248            	   531:                 move.l  a0,a1
+                            	   532: .next:
+01:00F0AC10 5C88            	   533:                 lea     MON_BP_SZ(a0),a0
+01:00F0AC12 51C9FFEA        	   534:                 dbra    d1,.scan
+01:00F0AC16 2409            	   535:                 move.l  a1,d2
+01:00F0AC18 67000034        	   536:                 beq.w   .full
+                            	   537:                 ; point the TRAP #14 vector at the monitor, then patch
+01:00F0AC1C 21FC00F0A84000B8	   538:                 move.l  #monitor_entry,BP_VECTOR
+01:00F0AC24 2043            	   539:                 move.l  d3,a0
+01:00F0AC26 33500004        	   540:                 move.w  (a0),4(a1)              ; save original word
+01:00F0AC2A 30BC4E4E        	   541:                 move.w  #BP_OPCODE,(a0)
+01:00F0AC2E 2283            	   542:                 move.l  d3,(a1)                 ; mark slot in use
+01:00F0AC30 41FA091D        	   543:                 lea     bp_set_msg(pc),a0
+01:00F0AC34 610005F8        	   544:                 bsr.w   puts
+01:00F0AC38 2003            	   545:                 move.l  d3,d0
+01:00F0AC3A 61000642        	   546:                 bsr.w   puthex_long
+01:00F0AC3E 610005FA        	   547:                 bsr.w   put_crlf
+01:00F0AC42 601C            	   548:                 bra.b   .out
+                            	   549: .dup:
+01:00F0AC44 41FA0913        	   550:                 lea     bp_dup_msg(pc),a0
+01:00F0AC48 610005E4        	   551:                 bsr.w   puts
+01:00F0AC4C 6012            	   552:                 bra.b   .out
+                            	   553: .full:
+01:00F0AC4E 41FA0918        	   554:                 lea     bp_full_msg(pc),a0
+01:00F0AC52 610005DA        	   555:                 bsr.w   puts
+01:00F0AC56 6008            	   556:                 bra.b   .out
+                            	   557: .odd:
+01:00F0AC58 41FA091F        	   558:                 lea     bp_odd_msg(pc),a0
+01:00F0AC5C 610005D0        	   559:                 bsr.w   puts
+                            	   560: .out:
+01:00F0AC60 4CDF030F        	   561:                 movem.l (sp)+,d0-d3/a0-a1
+01:00F0AC64 4E75            	   562:                 rts
+                            	   563: 
+                            	   564: ; ---- bp_clr_one: disarm the breakpoint at d0, restoring its word ----
+                            	   565: bp_clr_one:
+01:00F0AC66 48E7E0C0        	   566:                 movem.l d0-d2/a0-a1,-(sp)
+01:00F0AC6A 2400            	   567:                 move.l  d0,d2
+01:00F0AC6C 6700002C        	   568:                 beq.w   .nf                     ; 0 never matches a slot
+01:00F0AC70 41F90000F8A0    	   569:                 lea     MON_BPT,a0
+01:00F0AC76 7207            	   570:                 moveq   #MON_BPN-1,d1
+                            	   571: .scan:
+01:00F0AC78 2010            	   572:                 move.l  (a0),d0
+01:00F0AC7A B082            	   573:                 cmp.l   d2,d0
+01:00F0AC7C 6616            	   574:                 bne.b   .next
+01:00F0AC7E 2240            	   575:                 move.l  d0,a1
+01:00F0AC80 32A80004        	   576:                 move.w  4(a0),(a1)              ; put the original back
+01:00F0AC84 20BC00000000    	   577:                 move.l  #0,(a0)                 ; free the slot
+01:00F0AC8A 41FA08B7        	   578:                 lea     ok_msg(pc),a0
+01:00F0AC8E 6100059E        	   579:                 bsr.w   puts
+01:00F0AC92 600E            	   580:                 bra.b   .out
+                            	   581: .next:
+01:00F0AC94 5C88            	   582:                 lea     MON_BP_SZ(a0),a0
+01:00F0AC96 51C9FFE0        	   583:                 dbra    d1,.scan
+                            	   584: .nf:
+01:00F0AC9A 41FA090C        	   585:                 lea     bp_none_msg(pc),a0
+01:00F0AC9E 6100058E        	   586:                 bsr.w   puts
+                            	   587: .out:
+01:00F0ACA2 4CDF0307        	   588:                 movem.l (sp)+,d0-d2/a0-a1
+01:00F0ACA6 4E75            	   589:                 rts
+                            	   590: 
+                            	   591: ; ---- bp_clr_all: disarm every armed slot ----
+                            	   592: bp_clr_all:
+01:00F0ACA8 48E7C0C0        	   593:                 movem.l d0-d1/a0-a1,-(sp)
+01:00F0ACAC 41F90000F8A0    	   594:                 lea     MON_BPT,a0
+01:00F0ACB2 7207            	   595:                 moveq   #MON_BPN-1,d1
+                            	   596: .scan:
+01:00F0ACB4 2010            	   597:                 move.l  (a0),d0
+01:00F0ACB6 670C            	   598:                 beq.b   .next
+01:00F0ACB8 2240            	   599:                 move.l  d0,a1
+01:00F0ACBA 32A80004        	   600:                 move.w  4(a0),(a1)
+01:00F0ACBE 20BC00000000    	   601:                 move.l  #0,(a0)
+                            	   602: .next:
+01:00F0ACC4 5C88            	   603:                 lea     MON_BP_SZ(a0),a0
+01:00F0ACC6 51C9FFEC        	   604:                 dbra    d1,.scan
+01:00F0ACCA 4CDF0303        	   605:                 movem.l (sp)+,d0-d1/a0-a1
+01:00F0ACCE 4E75            	   606:                 rts
+                            	   607: 
+                            	   608: ; ---- bp_list: show armed slots ----
+                            	   609: bp_list:
+01:00F0ACD0 41FA08E4        	   610:                 lea     bp_list_msg(pc),a0
+01:00F0ACD4 61000558        	   611:                 bsr.w   puts
+01:00F0ACD8 49F90000F8A0    	   612:                 lea     MON_BPT,a4
+01:00F0ACDE 7607            	   613:                 moveq   #MON_BPN-1,d3
+01:00F0ACE0 7A00            	   614:                 moveq   #0,d5                   ; count
+                            	   615: .scan:
+01:00F0ACE2 2014            	   616:                 move.l  (a4),d0
+01:00F0ACE4 6728            	   617:                 beq.b   .next
+01:00F0ACE6 5285            	   618:                 addq.l  #1,d5
+01:00F0ACE8 103C0020        	   619:                 move.b  #' ',d0
+01:00F0ACEC 610004F4        	   620:                 bsr.w   putchar
+01:00F0ACF0 610004F0        	   621:                 bsr.w   putchar
+01:00F0ACF4 2014            	   622:                 move.l  (a4),d0
+01:00F0ACF6 61000586        	   623:                 bsr.w   puthex_long
+01:00F0ACFA 41FA08D4        	   624:                 lea     bp_was_msg(pc),a0
+01:00F0ACFE 6100052E        	   625:                 bsr.w   puts
+01:00F0AD02 302C0004        	   626:                 move.w  4(a4),d0
+01:00F0AD06 6100056A        	   627:                 bsr.w   puthex_word
+01:00F0AD0A 6100052E        	   628:                 bsr.w   put_crlf
+                            	   629: .next:
+01:00F0AD0E 5C8C            	   630:                 lea     MON_BP_SZ(a4),a4
+01:00F0AD10 51CBFFD0        	   631:                 dbra    d3,.scan
+01:00F0AD14 4A85            	   632:                 tst.l   d5
+01:00F0AD16 6600FBE2        	   633:                 bne.w   cmd_loop
+01:00F0AD1A 41FA08A9        	   634:                 lea     bp_empty_msg(pc),a0
+01:00F0AD1E 6100050E        	   635:                 bsr.w   puts
+01:00F0AD22 6000FBD6        	   636:                 bra.w   cmd_loop
+                            	   637: 
                             	   638: ;================================================================
-                            	   639: cmd_trace:
-01:00F0AD12 4A390000F894    	   640:                 tst.b   MON_GRP0
-01:00F0AD18 66000040        	   641:                 bne.w   trace_noframe
-01:00F0AD1C 21FC00F0A8400024	   642:                 move.l  #monitor_entry,TRACE_VECTOR
-01:00F0AD24 08F900070000F840	   643:                 bset.b  #SR_TRACE_BIT-8,MON_SSR ; high byte of the saved SR
-01:00F0AD2C 41FA087F        	   644:                 lea     trace_msg(pc),a0
-01:00F0AD30 610004D8        	   645:                 bsr.w   puts
-01:00F0AD34 20390000F83C    	   646:                 move.l  MON_SPC,d0
-01:00F0AD3A 6100051E        	   647:                 bsr.w   puthex_long
-01:00F0AD3E 610004D6        	   648:                 bsr.w   put_crlf
-01:00F0AD42 2F790000F83C0002	   649:                 move.l  MON_SPC,2(sp)
-01:00F0AD4A 3EB90000F840    	   650:                 move.w  MON_SSR,(sp)
-01:00F0AD50 4CF97FFF0000F800	   651:                 movem.l MON_REGS,d0-d7/a0-a6
-01:00F0AD58 4E73            	   652:                 rte
-                            	   653: trace_noframe:
-01:00F0AD5A 41FA085D        	   654:                 lea     nogo_msg(pc),a0
-01:00F0AD5E 610004AA        	   655:                 bsr.w   puts
-01:00F0AD62 6000FB96        	   656:                 bra.w   cmd_loop
-                            	   657: 
-                            	   658: ;----------------------------------------------------------------
-                            	   659: ; Info — chassis state, ROM version, free RAM, etc.
-                            	   660: ;----------------------------------------------------------------
-                            	   661: cmd_info:
-01:00F0AD66 41FA08C9        	   662:                 lea     info_msg(pc),a0
-01:00F0AD6A 6100049E        	   663:                 bsr.w   puts
-                            	   664: 
-                            	   665:                 ; Live board status.  Byte read at ODD $F70019 — the board
-                            	   666:                 ; status/control register is an 8-bit device on D0-D7, and
-                            	   667:                 ; the ROM bit-tests this same odd byte (F08728 etc).
-01:00F0AD6E 41FA09E9        	   668:                 lea     bstat_msg(pc),a0
-01:00F0AD72 61000496        	   669:                 bsr.w   puts
-01:00F0AD76 103900F70019    	   670:                 move.b  $F70019,d0
-01:00F0AD7C 610004C2        	   671:                 bsr.w   puthex_byte
-01:00F0AD80 61000494        	   672:                 bsr.w   put_crlf
-                            	   673: 
-                            	   674:                 ; VERSAmodule control register image at $1FFF0.  Per the
-                            	   675:                 ; manual this is "control register image only — register
-                            	   676:                 ; not directly accessible", so read-back is mediated by
-                            	   677:                 ; external logic and may not reflect what was written.
-01:00F0AD84 41FA09EB        	   678:                 lea     vmod_msg(pc),a0
-01:00F0AD88 61000480        	   679:                 bsr.w   puts
-01:00F0AD8C 30390001FFF0    	   680:                 move.w  $1FFF0,d0
-01:00F0AD92 610004BA        	   681:                 bsr.w   puthex_word
-01:00F0AD96 6100047E        	   682:                 bsr.w   put_crlf
-                            	   683: 
-                            	   684:                 ; Where this build actually ends, rather than a hardcoded
-                            	   685:                 ; number that goes stale every time the monitor grows.
-01:00F0AD9A 41FA09EC        	   686:                 lea     mend_msg(pc),a0
-01:00F0AD9E 6100046A        	   687:                 bsr.w   puts
-01:00F0ADA2 203C00F0B802    	   688:                 move.l  #monitor_end,d0
-01:00F0ADA8 610004B0        	   689:                 bsr.w   puthex_long
-01:00F0ADAC 61000468        	   690:                 bsr.w   put_crlf
+                            	   639: ; Single step:  t
+                            	   640: ;
+                            	   641: ; Sets the T bit in the saved SR and resumes.  The 68000 then takes a
+                            	   642: ; trace exception after one instruction, which lands back in the monitor
+                            	   643: ; (vector 9 at $24).  Needs a resumable frame, same as `g`.  The T bit
+                            	   644: ; stays set in the restored SR, so `t` repeats naturally; `g` clears it
+                            	   645: ; on the way out so a resume does not keep tracing.
+                            	   646: ;================================================================
+                            	   647: cmd_trace:
+01:00F0AD26 4A390000F894    	   648:                 tst.b   MON_GRP0
+01:00F0AD2C 66000040        	   649:                 bne.w   trace_noframe
+01:00F0AD30 21FC00F0A8400024	   650:                 move.l  #monitor_entry,TRACE_VECTOR
+01:00F0AD38 08F900070000F840	   651:                 bset.b  #SR_TRACE_BIT-8,MON_SSR ; high byte of the saved SR
+01:00F0AD40 41FA0897        	   652:                 lea     trace_msg(pc),a0
+01:00F0AD44 610004E8        	   653:                 bsr.w   puts
+01:00F0AD48 20390000F83C    	   654:                 move.l  MON_SPC,d0
+01:00F0AD4E 6100052E        	   655:                 bsr.w   puthex_long
+01:00F0AD52 610004E6        	   656:                 bsr.w   put_crlf
+01:00F0AD56 2F790000F83C0002	   657:                 move.l  MON_SPC,2(sp)
+01:00F0AD5E 3EB90000F840    	   658:                 move.w  MON_SSR,(sp)
+01:00F0AD64 4CF97FFF0000F800	   659:                 movem.l MON_REGS,d0-d7/a0-a6
+01:00F0AD6C 4E73            	   660:                 rte
+                            	   661: trace_noframe:
+01:00F0AD6E 41FA0875        	   662:                 lea     nogo_msg(pc),a0
+01:00F0AD72 610004BA        	   663:                 bsr.w   puts
+01:00F0AD76 6000FB82        	   664:                 bra.w   cmd_loop
+                            	   665: 
+                            	   666: ;----------------------------------------------------------------
+                            	   667: ; Info — chassis state, ROM version, free RAM, etc.
+                            	   668: ;----------------------------------------------------------------
+                            	   669: cmd_info:
+01:00F0AD7A 41FA08E1        	   670:                 lea     info_msg(pc),a0
+01:00F0AD7E 610004AE        	   671:                 bsr.w   puts
+                            	   672: 
+                            	   673:                 ; Live board status.  Byte read at ODD $F70019 — the board
+                            	   674:                 ; status/control register is an 8-bit device on D0-D7, and
+                            	   675:                 ; the ROM bit-tests this same odd byte (F08728 etc).
+01:00F0AD82 41FA0A01        	   676:                 lea     bstat_msg(pc),a0
+01:00F0AD86 610004A6        	   677:                 bsr.w   puts
+01:00F0AD8A 103900F70019    	   678:                 move.b  $F70019,d0
+01:00F0AD90 610004D2        	   679:                 bsr.w   puthex_byte
+01:00F0AD94 610004A4        	   680:                 bsr.w   put_crlf
+                            	   681: 
+                            	   682:                 ; VERSAmodule control register image at $1FFF0.  Per the
+                            	   683:                 ; manual this is "control register image only — register
+                            	   684:                 ; not directly accessible", so read-back is mediated by
+                            	   685:                 ; external logic and may not reflect what was written.
+01:00F0AD98 41FA0A03        	   686:                 lea     vmod_msg(pc),a0
+01:00F0AD9C 61000490        	   687:                 bsr.w   puts
+01:00F0ADA0 30390001FFF0    	   688:                 move.w  $1FFF0,d0
+01:00F0ADA6 610004CA        	   689:                 bsr.w   puthex_word
+01:00F0ADAA 6100048E        	   690:                 bsr.w   put_crlf
                             	   691: 
-                            	   692:                 ; Fault / link state: frame kind, nest guard, TX-timeout
-                            	   693:                 ; flag.  MON_NEST = 2 means a previous run died while
-                            	   694:                 ; reporting a fault; MON_TXFAIL = 1 means putchar gave up
-                            	   695:                 ; waiting for the SIO at some point.
-01:00F0ADB0 41FA09ED        	   696:                 lea     fault_msg(pc),a0
-01:00F0ADB4 61000454        	   697:                 bsr.w   puts
-01:00F0ADB8 10390000F894    	   698:                 move.b  MON_GRP0,d0
-01:00F0ADBE 61000480        	   699:                 bsr.w   puthex_byte
-01:00F0ADC2 103C002F        	   700:                 move.b  #'/',d0
-01:00F0ADC6 61000406        	   701:                 bsr.w   putchar
-01:00F0ADCA 10390000F895    	   702:                 move.b  MON_NEST,d0
-01:00F0ADD0 6100046E        	   703:                 bsr.w   puthex_byte
-01:00F0ADD4 103C002F        	   704:                 move.b  #'/',d0
-01:00F0ADD8 610003F4        	   705:                 bsr.w   putchar
-01:00F0ADDC 10390000F896    	   706:                 move.b  MON_TXFAIL,d0
-01:00F0ADE2 6100045C        	   707:                 bsr.w   puthex_byte
-01:00F0ADE6 6100042E        	   708:                 bsr.w   put_crlf
-01:00F0ADEA 6000FB0E        	   709:                 bra.w   cmd_loop
-                            	   710: 
-                            	   711: ;----------------------------------------------------------------
-                            	   712: ; Load S-record over the SIO (channel A).
-                            	   713: ; Each line consumed and validated; bytes go to addresses inside.
-                            	   714: ; Terminator: S8 / S9 record.
-                            	   715: ;----------------------------------------------------------------
-                            	   716: cmd_load_srec:
-01:00F0ADEE 41FA080C        	   717:                 lea     load_msg(pc),a0
-01:00F0ADF2 61000416        	   718:                 bsr.w   puts
-01:00F0ADF6 7800            	   719:                 clr.l   d4                      ; record count
-01:00F0ADF8 7A00            	   720:                 clr.l   d5                      ; byte count
-                            	   721: .scan_S:
-01:00F0ADFA 610003FC        	   722:                 bsr.w   getchar
-01:00F0ADFE 0C000053        	   723:                 cmpi.b  #'S',d0
-01:00F0AE02 66F6            	   724:                 bne.b   .scan_S                  ; skip until 'S'
-01:00F0AE04 610003F2        	   725:                 bsr.w   getchar                  ; record type
-01:00F0AE08 0C000038        	   726:                 cmpi.b  #'8',d0
-01:00F0AE0C 670000F2        	   727:                 beq.w   .terminator
-01:00F0AE10 0C000039        	   728:                 cmpi.b  #'9',d0
-01:00F0AE14 670000EA        	   729:                 beq.w   .terminator
-01:00F0AE18 0C000037        	   730:                 cmpi.b  #'7',d0
-01:00F0AE1C 670000E2        	   731:                 beq.w   .terminator
-01:00F0AE20 0C000030        	   732:                 cmpi.b  #'0',d0
-01:00F0AE24 670000C4        	   733:                 beq.w   .eat_eol                ; header — skip
-01:00F0AE28 0C000031        	   734:                 cmpi.b  #'1',d0
-01:00F0AE2C 6D00FFCC        	   735:                 blt.w   .scan_S
-01:00F0AE30 0C000033        	   736:                 cmpi.b  #'3',d0
-01:00F0AE34 6E00FFC4        	   737:                 bgt.w   .scan_S
-                            	   738:                 ; data record S1 / S2 / S3
-01:00F0AE38 1C00            	   739:                 move.b  d0,d6                   ; save type
-01:00F0AE3A 61000296        	   740:                 bsr.w   read_hex_byte
-                            	   741:                 ; read_hex_byte only writes d0's low byte, so the upper 24
-                            	   742:                 ; bits are stale.  Zero-extend explicitly, and keep the
-                            	   743:                 ; count word-sized below: a payload count >= $80 is legal
-                            	   744:                 ; in an S1 record, and a signed byte test would read it as
-                            	   745:                 ; negative and silently truncate the record to no data.
-01:00F0AE3E 7400            	   746:                 moveq   #0,d2
-01:00F0AE40 1400            	   747:                 move.b  d0,d2                   ; payload count (incl addr+cksum)
-                            	   748:                 ; d7 accumulates the record checksum: sum of the count byte,
-                            	   749:                 ; the address bytes and the data bytes.  A valid record has
-                            	   750:                 ; (sum + cksum) & $FF == $FF.  Without this a corrupted line
-                            	   751:                 ; loads silently and reports success, which over a serial
-                            	   752:                 ; link at an unverified baud rate is exactly the failure we
-                            	   753:                 ; would not notice.
-01:00F0AE42 7E00            	   754:                 moveq   #0,d7
-01:00F0AE44 DE00            	   755:                 add.b   d0,d7
-01:00F0AE46 7600            	   756:                 clr.l   d3
-01:00F0AE48 0C060033        	   757:                 cmpi.b  #'3',d6
-01:00F0AE4C 6708            	   758:                 beq.b   .a32
-01:00F0AE4E 0C060032        	   759:                 cmpi.b  #'2',d6
-01:00F0AE52 670E            	   760:                 beq.b   .a24
-01:00F0AE54 6018            	   761:                 bra.b   .a16
-                            	   762: .a32:
-01:00F0AE56 6100027A        	   763:                 bsr.w   read_hex_byte
-01:00F0AE5A DE00            	   764:                 add.b   d0,d7
-01:00F0AE5C E18B            	   765:                 lsl.l   #8,d3
-01:00F0AE5E 8600            	   766:                 or.b    d0,d3
-01:00F0AE60 5342            	   767:                 subq.w  #1,d2
-                            	   768: .a24:
-01:00F0AE62 6100026E        	   769:                 bsr.w   read_hex_byte
-01:00F0AE66 DE00            	   770:                 add.b   d0,d7
-01:00F0AE68 E18B            	   771:                 lsl.l   #8,d3
-01:00F0AE6A 8600            	   772:                 or.b    d0,d3
-01:00F0AE6C 5342            	   773:                 subq.w  #1,d2
-                            	   774: .a16:
-01:00F0AE6E 61000262        	   775:                 bsr.w   read_hex_byte
-01:00F0AE72 DE00            	   776:                 add.b   d0,d7
-01:00F0AE74 E18B            	   777:                 lsl.l   #8,d3
-01:00F0AE76 8600            	   778:                 or.b    d0,d3
-01:00F0AE78 61000258        	   779:                 bsr.w   read_hex_byte
-01:00F0AE7C DE00            	   780:                 add.b   d0,d7
-01:00F0AE7E E18B            	   781:                 lsl.l   #8,d3
-01:00F0AE80 8600            	   782:                 or.b    d0,d3
-01:00F0AE82 5542            	   783:                 subq.w  #2,d2
-01:00F0AE84 5342            	   784:                 subq.w  #1,d2                   ; -1 for checksum
-01:00F0AE86 2843            	   785:                 move.l  d3,a4                   ; dest pointer
-01:00F0AE88 6100020C        	   786:                 bsr.w   srec_check              ; d1 = 0 -> would self-destruct
-01:00F0AE8C 4A01            	   787:                 tst.b   d1
-01:00F0AE8E 67000044        	   788:                 beq.w   .badaddr
-                            	   789: .dloop:
-01:00F0AE92 4A42            	   790:                 tst.w   d2
-01:00F0AE94 6F0E            	   791:                 ble.b   .endrec
-01:00F0AE96 6100023A        	   792:                 bsr.w   read_hex_byte
-01:00F0AE9A DE00            	   793:                 add.b   d0,d7
-01:00F0AE9C 18C0            	   794:                 move.b  d0,(a4)+
-01:00F0AE9E 5285            	   795:                 addq.l  #1,d5
-01:00F0AEA0 5342            	   796:                 subq.w  #1,d2
-01:00F0AEA2 60EE            	   797:                 bra.b   .dloop
-                            	   798: .endrec:
-01:00F0AEA4 6100022C        	   799:                 bsr.w   read_hex_byte           ; the record's checksum byte
-01:00F0AEA8 DE00            	   800:                 add.b   d0,d7
-01:00F0AEAA 0C0700FF        	   801:                 cmpi.b  #$FF,d7
-01:00F0AEAE 660E            	   802:                 bne.b   .badsum
-01:00F0AEB0 5284            	   803:                 addq.l  #1,d4
-01:00F0AEB2 103C002E        	   804:                 move.b  #'.',d0
-01:00F0AEB6 61000316        	   805:                 bsr.w   putchar
-01:00F0AEBA 6000002E        	   806:                 bra.w   .eat_eol
-                            	   807: .badsum:
-                            	   808:                 ; The data was already written by the time we can check, so
-                            	   809:                 ; say which record failed and let the operator re-send it.
-01:00F0AEBE 41FA0923        	   810:                 lea     srec_sum_msg(pc),a0
-01:00F0AEC2 61000346        	   811:                 bsr.w   puts
-01:00F0AEC6 2003            	   812:                 move.l  d3,d0
-01:00F0AEC8 61000390        	   813:                 bsr.w   puthex_long
-01:00F0AECC 61000348        	   814:                 bsr.w   put_crlf
-01:00F0AED0 6000FF28        	   815:                 bra.w   .scan_S
-                            	   816: .badaddr:
-                            	   817:                 ; Skip this record.  No need to consume its hex: .scan_S
-                            	   818:                 ; resyncs on the next 'S', and hex digits are 0-9A-F so
-                            	   819:                 ; none of the skipped payload can be mistaken for a
-                            	   820:                 ; record start.
-01:00F0AED4 41FA08E0        	   821:                 lea     srec_bad_msg(pc),a0
-01:00F0AED8 61000330        	   822:                 bsr.w   puts
-01:00F0AEDC 2003            	   823:                 move.l  d3,d0
-01:00F0AEDE 6100037A        	   824:                 bsr.w   puthex_long
-01:00F0AEE2 61000332        	   825:                 bsr.w   put_crlf
-01:00F0AEE6 6000FF12        	   826:                 bra.w   .scan_S
-                            	   827: .eat_eol:
-01:00F0AEEA 6100030C        	   828:                 bsr.w   getchar
-01:00F0AEEE 0C00000D        	   829:                 cmpi.b  #13,d0
-01:00F0AEF2 6700FF06        	   830:                 beq.w   .scan_S
-01:00F0AEF6 0C00000A        	   831:                 cmpi.b  #10,d0
-01:00F0AEFA 6700FEFE        	   832:                 beq.w   .scan_S
-01:00F0AEFE 60EA            	   833:                 bra.b   .eat_eol
-                            	   834: .terminator:
-                            	   835:                 ; finish the terminator's line
-                            	   836: .t_eol:
-01:00F0AF00 610002F6        	   837:                 bsr.w   getchar
-01:00F0AF04 0C00000D        	   838:                 cmpi.b  #13,d0
-01:00F0AF08 6708            	   839:                 beq.b   .t_done
-01:00F0AF0A 0C00000A        	   840:                 cmpi.b  #10,d0
-01:00F0AF0E 6702            	   841:                 beq.b   .t_done
-01:00F0AF10 60EE            	   842:                 bra.b   .t_eol
-                            	   843: .t_done:
-01:00F0AF12 61000302        	   844:                 bsr.w   put_crlf
-01:00F0AF16 41FA0702        	   845:                 lea     load_done_msg(pc),a0
-01:00F0AF1A 610002EE        	   846:                 bsr.w   puts
-01:00F0AF1E 2004            	   847:                 move.l  d4,d0
-01:00F0AF20 61000338        	   848:                 bsr.w   puthex_long
-01:00F0AF24 41FA06FF        	   849:                 lea     load_bytes_msg(pc),a0
-01:00F0AF28 610002E0        	   850:                 bsr.w   puts
-01:00F0AF2C 2005            	   851:                 move.l  d5,d0
-01:00F0AF2E 6100032A        	   852:                 bsr.w   puthex_long
-01:00F0AF32 610002E2        	   853:                 bsr.w   put_crlf
-01:00F0AF36 6000F9C2        	   854:                 bra.w   cmd_loop
-                            	   855: 
-                            	   856: ;================================================================
-                            	   857: ; Helpers
-                            	   858: ;================================================================
-                            	   859: 
-                            	   860: ; ---- hexdump d2 bytes starting at a4 ----
-                            	   861: hexdump:
-01:00F0AF3A 2C02            	   862:                 move.l  d2,d6                   ; bytes remaining
-                            	   863: .line:
-                            	   864:                 ; Print address
-01:00F0AF3C 200C            	   865:                 move.l  a4,d0
-01:00F0AF3E 6100031A        	   866:                 bsr.w   puthex_long
-01:00F0AF42 103C003A        	   867:                 move.b  #':',d0
-01:00F0AF46 61000286        	   868:                 bsr.w   putchar
-01:00F0AF4A 103C0020        	   869:                 move.b  #' ',d0
-01:00F0AF4E 6100027E        	   870:                 bsr.w   putchar
-                            	   871:                 ; row count = min(16, d6)
-01:00F0AF52 7810            	   872:                 moveq   #16,d4
-01:00F0AF54 BC84            	   873:                 cmp.l   d4,d6
-01:00F0AF56 6C02            	   874:                 bge.b   .full
-01:00F0AF58 2806            	   875:                 move.l  d6,d4
-                            	   876: .full:
-01:00F0AF5A 2A4C            	   877:                 move.l  a4,a5                   ; row start
-                            	   878:                 ; print d4 hex bytes
-01:00F0AF5C 2604            	   879:                 move.l  d4,d3
-01:00F0AF5E 4A83            	   880:                 tst.l   d3
-01:00F0AF60 6712            	   881:                 beq.b   .pad
-                            	   882: .hex:
-01:00F0AF62 101C            	   883:                 move.b  (a4)+,d0
-01:00F0AF64 610002DA        	   884:                 bsr.w   puthex_byte
-01:00F0AF68 103C0020        	   885:                 move.b  #' ',d0
-01:00F0AF6C 61000260        	   886:                 bsr.w   putchar
-01:00F0AF70 5383            	   887:                 subq.l  #1,d3
-01:00F0AF72 66EE            	   888:                 bne.b   .hex
-                            	   889: .pad:
-                            	   890:                 ; pad to 16 hex slots
-01:00F0AF74 7A10            	   891:                 moveq   #16,d5
-01:00F0AF76 9A84            	   892:                 sub.l   d4,d5
-01:00F0AF78 4A85            	   893:                 tst.l   d5
-01:00F0AF7A 6714            	   894:                 beq.b   .ascii
-                            	   895: .padl:
-01:00F0AF7C 103C0020        	   896:                 move.b  #' ',d0
-01:00F0AF80 6100024C        	   897:                 bsr.w   putchar
-01:00F0AF84 61000248        	   898:                 bsr.w   putchar
-01:00F0AF88 61000244        	   899:                 bsr.w   putchar
-01:00F0AF8C 5385            	   900:                 subq.l  #1,d5
-01:00F0AF8E 66EC            	   901:                 bne.b   .padl
-                            	   902: .ascii:
-01:00F0AF90 103C007C        	   903:                 move.b  #'|',d0
-01:00F0AF94 61000238        	   904:                 bsr.w   putchar
-01:00F0AF98 2604            	   905:                 move.l  d4,d3
-01:00F0AF9A 4A83            	   906:                 tst.l   d3
-01:00F0AF9C 671C            	   907:                 beq.b   .ascii_end
-                            	   908: .ascii_l:
-01:00F0AF9E 101D            	   909:                 move.b  (a5)+,d0
-01:00F0AFA0 0C000020        	   910:                 cmpi.b  #' ',d0
-01:00F0AFA4 6D08            	   911:                 blt.b   .dot
-01:00F0AFA6 0C00007E        	   912:                 cmpi.b  #126,d0
-01:00F0AFAA 6E02            	   913:                 bgt.b   .dot
-01:00F0AFAC 6004            	   914:                 bra.b   .pchar
-                            	   915: .dot:
-01:00F0AFAE 103C002E        	   916:                 move.b  #'.',d0
-                            	   917: .pchar:
-01:00F0AFB2 6100021A        	   918:                 bsr.w   putchar
-01:00F0AFB6 5383            	   919:                 subq.l  #1,d3
-01:00F0AFB8 66E4            	   920:                 bne.b   .ascii_l
-                            	   921: .ascii_end:
-01:00F0AFBA 103C007C        	   922:                 move.b  #'|',d0
-01:00F0AFBE 6100020E        	   923:                 bsr.w   putchar
-01:00F0AFC2 61000252        	   924:                 bsr.w   put_crlf
-01:00F0AFC6 9C84            	   925:                 sub.l   d4,d6
-01:00F0AFC8 6E00FF72        	   926:                 bgt.w   .line
-01:00F0AFCC 4E75            	   927:                 rts
-                            	   928: 
-                            	   929: ; ---- read_line: read line from SIO into MON_LINEBUF, term=0 ----
-                            	   930: read_line:
-01:00F0AFCE 41F90000F850    	   931:                 lea     MON_LINEBUF,a0
-01:00F0AFD4 743C            	   932:                 moveq   #60,d2                  ; 61 chars + NUL, 2 spare
-                            	   933:                                         ;   in the 64 B before MON_LASTADDR
-                            	   934: .rloop:
-01:00F0AFD6 61000220        	   935:                 bsr.w   getchar
-01:00F0AFDA 0C00000D        	   936:                 cmpi.b  #13,d0                  ; CR
-01:00F0AFDE 671C            	   937:                 beq.b   .end
-01:00F0AFE0 0C00000A        	   938:                 cmpi.b  #10,d0                  ; LF
-01:00F0AFE4 6716            	   939:                 beq.b   .end
-01:00F0AFE6 0C000008        	   940:                 cmpi.b  #8,d0                   ; BS
-01:00F0AFEA 671A            	   941:                 beq.b   .bs
-01:00F0AFEC 0C00007F        	   942:                 cmpi.b  #127,d0                 ; DEL
-01:00F0AFF0 6714            	   943:                 beq.b   .bs
-01:00F0AFF2 610001DA        	   944:                 bsr.w   putchar                 ; echo
-01:00F0AFF6 10C0            	   945:                 move.b  d0,(a0)+
-01:00F0AFF8 51CAFFDC        	   946:                 dbra    d2,.rloop
-                            	   947: .end:
-01:00F0AFFC 10BC0000        	   948:                 move.b  #0,(a0)                 ; not clr: CLR reads first
-01:00F0B000 61000214        	   949:                 bsr.w   put_crlf
-01:00F0B004 4E75            	   950:                 rts
-                            	   951: .bs:
-01:00F0B006 B1FC0000F850    	   952:                 cmpa.l  #MON_LINEBUF,a0
-01:00F0B00C 67C8            	   953:                 beq.b   .rloop                  ; empty - ignore
-01:00F0B00E 5388            	   954:                 subq.l  #1,a0
-01:00F0B010 5282            	   955:                 addq.l  #1,d2
-01:00F0B012 103C0008        	   956:                 move.b  #8,d0
-01:00F0B016 610001B6        	   957:                 bsr.w   putchar
-01:00F0B01A 103C0020        	   958:                 move.b  #' ',d0
-01:00F0B01E 610001AE        	   959:                 bsr.w   putchar
-01:00F0B022 103C0008        	   960:                 move.b  #8,d0
-01:00F0B026 610001A6        	   961:                 bsr.w   putchar
-01:00F0B02A 60AA            	   962:                 bra.b   .rloop
-                            	   963: 
-                            	   964: ; ---- skip_ws: skip whitespace at (a6) ----
-                            	   965: skip_ws:
-01:00F0B02C 1016            	   966: .lp:            move.b  (a6),d0
-01:00F0B02E 0C000020        	   967:                 cmpi.b  #' ',d0
-01:00F0B032 6708            	   968:                 beq.b   .adv
-01:00F0B034 0C000009        	   969:                 cmpi.b  #9,d0                   ; tab
-01:00F0B038 6702            	   970:                 beq.b   .adv
-01:00F0B03A 4E75            	   971:                 rts
-01:00F0B03C 528E            	   972: .adv:           addq.l  #1,a6
-01:00F0B03E 60EC            	   973:                 bra.b   .lp
-                            	   974: 
-                            	   975: ; ---- parse_hex: parse hex number at (a6) into d0; d1=1 ok, 0 err ----
-                            	   976: ;                 advances a6 past digits
-                            	   977: parse_hex:
-01:00F0B040 7000            	   978:                 clr.l   d0
-01:00F0B042 4201            	   979:                 clr.b   d1                      ; success flag
-01:00F0B044 4203            	   980:                 clr.b   d3                      ; digit count
-                            	   981: .lp:
-01:00F0B046 1416            	   982:                 move.b  (a6),d2
-01:00F0B048 0C020030        	   983:                 cmpi.b  #'0',d2
-01:00F0B04C 6D3C            	   984:                 blt.b   .end
-01:00F0B04E 0C020039        	   985:                 cmpi.b  #'9',d2
-01:00F0B052 6F24            	   986:                 ble.b   .dig
-01:00F0B054 0C020041        	   987:                 cmpi.b  #'A',d2
-01:00F0B058 6D30            	   988:                 blt.b   .end
-01:00F0B05A 0C020046        	   989:                 cmpi.b  #'F',d2
-01:00F0B05E 6F12            	   990:                 ble.b   .upper
-01:00F0B060 0C020061        	   991:                 cmpi.b  #'a',d2
-01:00F0B064 6D24            	   992:                 blt.b   .end
-01:00F0B066 0C020066        	   993:                 cmpi.b  #'f',d2
-01:00F0B06A 6E1E            	   994:                 bgt.b   .end
-01:00F0B06C 04020057        	   995:                 subi.b  #'a'-10,d2
-01:00F0B070 600A            	   996:                 bra.b   .acc
-                            	   997: .upper:
-01:00F0B072 04020037        	   998:                 subi.b  #'A'-10,d2
-01:00F0B076 6004            	   999:                 bra.b   .acc
-                            	  1000: .dig:
-01:00F0B078 04020030        	  1001:                 subi.b  #'0',d2
-                            	  1002: .acc:
-01:00F0B07C E988            	  1003:                 lsl.l   #4,d0
-01:00F0B07E 0202000F        	  1004:                 andi.b  #$0F,d2
-01:00F0B082 8002            	  1005:                 or.b    d2,d0
-01:00F0B084 528E            	  1006:                 addq.l  #1,a6
-01:00F0B086 5203            	  1007:                 addq.b  #1,d3
-01:00F0B088 60BC            	  1008:                 bra.b   .lp
-                            	  1009: .end:
-01:00F0B08A 4A03            	  1010:                 tst.b   d3
-01:00F0B08C 6704            	  1011:                 beq.b   .err
-01:00F0B08E 7201            	  1012:                 moveq   #1,d1
-01:00F0B090 4E75            	  1013:                 rts
-                            	  1014: .err:
-01:00F0B092 4201            	  1015:                 clr.b   d1
-01:00F0B094 4E75            	  1016:                 rts
-                            	  1017: 
-                            	  1018: ;================================================================
-                            	  1019: ; srec_check — is it safe to write d2 bytes starting at d3?
-                            	  1020: ;   returns d1 = 1 safe, 0 = refuse.  Preserves d0/d2/d3.
-                            	  1021: ;
-                            	  1022: ; A load is refused unless its whole range lies in on-board RAM and
-                            	  1023: ; clear of the two regions the monitor itself needs:
-                            	  1024: ;
-                            	  1025: ;   $000000-$0003FF  the exception vector table
-                            	  1026: ;   $00F800-$00FEFF  MON_* workspace, breakpoint table, and the
-                            	  1027: ;                    cold-entry supervisor stack below $0FF00
-                            	  1028: ;
-                            	  1029: ; Anything at or above $20000 is refused outright.  That range is ROM
-                            	  1030: ; and peripherals, and a stray S2/S3 record pointed there would not
-                            	  1031: ; merely be ignored: a write to $F70011 would transmit a byte over the
-                            	  1032: ; SIO, and writes to the XLTR or AP I/F blocks would poke the chassis.
-                            	  1033: ; Deliberate peripheral pokes are what the `w` command is for.
-                            	  1034: ;
-                            	  1035: ; The workspace used to live at $1F000, inside the WCS staging buffer,
-                            	  1036: ; which forced the top 4 KB of the buffer to be refused.  It now sits at
-                            	  1037: ; $0F800, below the buffer, so $10000-$1FFFF is loadable end to end.
-                            	  1038: ;================================================================
-                            	  1039: srec_check:
-01:00F0B096 48E79000        	  1040:                 movem.l d0/d3,-(sp)
-01:00F0B09A 7200            	  1041:                 moveq   #0,d1
-01:00F0B09C 0C8300000400    	  1042:                 cmpi.l  #$400,d3
-01:00F0B0A2 6528            	  1043:                 bcs.b   .out                    ; below vector-table top
-01:00F0B0A4 0C8300020000    	  1044:                 cmpi.l  #$20000,d3
-01:00F0B0AA 6420            	  1045:                 bcc.b   .out                    ; beyond on-board RAM
-01:00F0B0AC 2003            	  1046:                 move.l  d3,d0
-01:00F0B0AE D082            	  1047:                 add.l   d2,d0
-01:00F0B0B0 5380            	  1048:                 subq.l  #1,d0                   ; last byte to be written
-01:00F0B0B2 0C8000020000    	  1049:                 cmpi.l  #$20000,d0
-01:00F0B0B8 6412            	  1050:                 bcc.b   .out                    ; would run off the end of RAM
-01:00F0B0BA 0C830000FF00    	  1051:                 cmpi.l  #MON_HI,d3
-01:00F0B0C0 6408            	  1052:                 bcc.b   .ok                     ; starts above our region
-01:00F0B0C2 0C800000F800    	  1053:                 cmpi.l  #MON_LO,d0
-01:00F0B0C8 6402            	  1054:                 bcc.b   .out                    ; reaches workspace/stack
-                            	  1055: .ok:
-01:00F0B0CA 7201            	  1056:                 moveq   #1,d1
-                            	  1057: .out:
-01:00F0B0CC 4CDF0009        	  1058:                 movem.l (sp)+,d0/d3
-01:00F0B0D0 4E75            	  1059:                 rts
-                            	  1060: 
-                            	  1061: ; ---- read_hex_byte: read 2 hex chars from SIO, return byte in d0 ----
-                            	  1062: read_hex_byte:
-01:00F0B0D2 2F02            	  1063:                 move.l  d2,-(sp)                ; preserve d2 (caller may use it)
-01:00F0B0D4 61000010        	  1064:                 bsr.w   read_hex_nibble
-01:00F0B0D8 E908            	  1065:                 lsl.b   #4,d0
-01:00F0B0DA 1400            	  1066:                 move.b  d0,d2
-01:00F0B0DC 61000008        	  1067:                 bsr.w   read_hex_nibble
-01:00F0B0E0 8002            	  1068:                 or.b    d2,d0
-01:00F0B0E2 241F            	  1069:                 move.l  (sp)+,d2
-01:00F0B0E4 4E75            	  1070:                 rts
-                            	  1071: 
-                            	  1072: read_hex_nibble:
-01:00F0B0E6 61000110        	  1073:                 bsr.w   getchar
-01:00F0B0EA 0C000039        	  1074:                 cmpi.b  #'9',d0
-01:00F0B0EE 6E06            	  1075:                 bgt.b   .alpha
-01:00F0B0F0 04000030        	  1076:                 subi.b  #'0',d0
-01:00F0B0F4 4E75            	  1077:                 rts
-                            	  1078: .alpha:
-01:00F0B0F6 0C000046        	  1079:                 cmpi.b  #'F',d0
-01:00F0B0FA 6E06            	  1080:                 bgt.b   .lower
-01:00F0B0FC 04000037        	  1081:                 subi.b  #'A'-10,d0
-01:00F0B100 4E75            	  1082:                 rts
-                            	  1083: .lower:
-01:00F0B102 04000057        	  1084:                 subi.b  #'a'-10,d0
-01:00F0B106 4E75            	  1085:                 rts
-                            	  1086: 
-                            	  1087: ;================================================================
-                            	  1088: ; cold_init — called from monitor_cold ONLY (never from monitor_entry).
-                            	  1089: ;
-                            	  1090: ; The MC68000 has no VBR: the exception vector table is hard-wired at
-                            	  1091: ; $000000-$0003FF, which on this board is plain DRAM.  The reset SSP/PC
-                            	  1092: ; are the only vectors that come from ROM — the M68KVM02 maps just the
-                            	  1093: ; first 8 bytes of ROM to address 0 for the first four bus cycles after
-                            	  1094: ; a total system reset, then address 0 is DRAM like any other.  So at
-                            	  1095: ; power-on every vector except reset is whatever the DRAM happens to
-                            	  1096: ; hold, i.e. garbage.
+                            	   692:                 ; Where this build actually ends, rather than a hardcoded
+                            	   693:                 ; number that goes stale every time the monitor grows.
+01:00F0ADAE 41FA0A04        	   694:                 lea     mend_msg(pc),a0
+01:00F0ADB2 6100047A        	   695:                 bsr.w   puts
+01:00F0ADB6 203C00F0B82E    	   696:                 move.l  #monitor_end,d0
+01:00F0ADBC 610004C0        	   697:                 bsr.w   puthex_long
+01:00F0ADC0 61000478        	   698:                 bsr.w   put_crlf
+                            	   699: 
+                            	   700:                 ; Fault / link state: frame kind, nest guard, TX-timeout
+                            	   701:                 ; flag.  MON_NEST = 2 means a previous run died while
+                            	   702:                 ; reporting a fault; MON_TXFAIL = 1 means putchar gave up
+                            	   703:                 ; waiting for the SIO at some point.
+01:00F0ADC4 41FA0A05        	   704:                 lea     fault_msg(pc),a0
+01:00F0ADC8 61000464        	   705:                 bsr.w   puts
+01:00F0ADCC 10390000F894    	   706:                 move.b  MON_GRP0,d0
+01:00F0ADD2 61000490        	   707:                 bsr.w   puthex_byte
+01:00F0ADD6 103C002F        	   708:                 move.b  #'/',d0
+01:00F0ADDA 61000406        	   709:                 bsr.w   putchar
+01:00F0ADDE 10390000F895    	   710:                 move.b  MON_NEST,d0
+01:00F0ADE4 6100047E        	   711:                 bsr.w   puthex_byte
+01:00F0ADE8 103C002F        	   712:                 move.b  #'/',d0
+01:00F0ADEC 610003F4        	   713:                 bsr.w   putchar
+01:00F0ADF0 10390000F896    	   714:                 move.b  MON_TXFAIL,d0
+01:00F0ADF6 6100046C        	   715:                 bsr.w   puthex_byte
+01:00F0ADFA 6100043E        	   716:                 bsr.w   put_crlf
+01:00F0ADFE 6000FAFA        	   717:                 bra.w   cmd_loop
+                            	   718: 
+                            	   719: ;----------------------------------------------------------------
+                            	   720: ; Load S-record over the SIO (channel A).
+                            	   721: ; Each line consumed and validated; bytes go to addresses inside.
+                            	   722: ; Terminator: S8 / S9 record.
+                            	   723: ;----------------------------------------------------------------
+                            	   724: cmd_load_srec:
+01:00F0AE02 41FA0824        	   725:                 lea     load_msg(pc),a0
+01:00F0AE06 61000426        	   726:                 bsr.w   puts
+01:00F0AE0A 7800            	   727:                 clr.l   d4                      ; record count
+01:00F0AE0C 7A00            	   728:                 clr.l   d5                      ; byte count
+                            	   729: .scan_S:
+01:00F0AE0E 61000404        	   730:                 bsr.w   getchar
+01:00F0AE12 0C000053        	   731:                 cmpi.b  #'S',d0
+01:00F0AE16 66F6            	   732:                 bne.b   .scan_S                  ; skip until 'S'
+01:00F0AE18 610003FA        	   733:                 bsr.w   getchar                  ; record type
+01:00F0AE1C 0C000038        	   734:                 cmpi.b  #'8',d0
+01:00F0AE20 670000F2        	   735:                 beq.w   .terminator
+01:00F0AE24 0C000039        	   736:                 cmpi.b  #'9',d0
+01:00F0AE28 670000EA        	   737:                 beq.w   .terminator
+01:00F0AE2C 0C000037        	   738:                 cmpi.b  #'7',d0
+01:00F0AE30 670000E2        	   739:                 beq.w   .terminator
+01:00F0AE34 0C000030        	   740:                 cmpi.b  #'0',d0
+01:00F0AE38 670000C4        	   741:                 beq.w   .eat_eol                ; header — skip
+01:00F0AE3C 0C000031        	   742:                 cmpi.b  #'1',d0
+01:00F0AE40 6D00FFCC        	   743:                 blt.w   .scan_S
+01:00F0AE44 0C000033        	   744:                 cmpi.b  #'3',d0
+01:00F0AE48 6E00FFC4        	   745:                 bgt.w   .scan_S
+                            	   746:                 ; data record S1 / S2 / S3
+01:00F0AE4C 1C00            	   747:                 move.b  d0,d6                   ; save type
+01:00F0AE4E 61000296        	   748:                 bsr.w   read_hex_byte
+                            	   749:                 ; read_hex_byte only writes d0's low byte, so the upper 24
+                            	   750:                 ; bits are stale.  Zero-extend explicitly, and keep the
+                            	   751:                 ; count word-sized below: a payload count >= $80 is legal
+                            	   752:                 ; in an S1 record, and a signed byte test would read it as
+                            	   753:                 ; negative and silently truncate the record to no data.
+01:00F0AE52 7400            	   754:                 moveq   #0,d2
+01:00F0AE54 1400            	   755:                 move.b  d0,d2                   ; payload count (incl addr+cksum)
+                            	   756:                 ; d7 accumulates the record checksum: sum of the count byte,
+                            	   757:                 ; the address bytes and the data bytes.  A valid record has
+                            	   758:                 ; (sum + cksum) & $FF == $FF.  Without this a corrupted line
+                            	   759:                 ; loads silently and reports success, which over a serial
+                            	   760:                 ; link at an unverified baud rate is exactly the failure we
+                            	   761:                 ; would not notice.
+01:00F0AE56 7E00            	   762:                 moveq   #0,d7
+01:00F0AE58 DE00            	   763:                 add.b   d0,d7
+01:00F0AE5A 7600            	   764:                 clr.l   d3
+01:00F0AE5C 0C060033        	   765:                 cmpi.b  #'3',d6
+01:00F0AE60 6708            	   766:                 beq.b   .a32
+01:00F0AE62 0C060032        	   767:                 cmpi.b  #'2',d6
+01:00F0AE66 670E            	   768:                 beq.b   .a24
+01:00F0AE68 6018            	   769:                 bra.b   .a16
+                            	   770: .a32:
+01:00F0AE6A 6100027A        	   771:                 bsr.w   read_hex_byte
+01:00F0AE6E DE00            	   772:                 add.b   d0,d7
+01:00F0AE70 E18B            	   773:                 lsl.l   #8,d3
+01:00F0AE72 8600            	   774:                 or.b    d0,d3
+01:00F0AE74 5342            	   775:                 subq.w  #1,d2
+                            	   776: .a24:
+01:00F0AE76 6100026E        	   777:                 bsr.w   read_hex_byte
+01:00F0AE7A DE00            	   778:                 add.b   d0,d7
+01:00F0AE7C E18B            	   779:                 lsl.l   #8,d3
+01:00F0AE7E 8600            	   780:                 or.b    d0,d3
+01:00F0AE80 5342            	   781:                 subq.w  #1,d2
+                            	   782: .a16:
+01:00F0AE82 61000262        	   783:                 bsr.w   read_hex_byte
+01:00F0AE86 DE00            	   784:                 add.b   d0,d7
+01:00F0AE88 E18B            	   785:                 lsl.l   #8,d3
+01:00F0AE8A 8600            	   786:                 or.b    d0,d3
+01:00F0AE8C 61000258        	   787:                 bsr.w   read_hex_byte
+01:00F0AE90 DE00            	   788:                 add.b   d0,d7
+01:00F0AE92 E18B            	   789:                 lsl.l   #8,d3
+01:00F0AE94 8600            	   790:                 or.b    d0,d3
+01:00F0AE96 5542            	   791:                 subq.w  #2,d2
+01:00F0AE98 5342            	   792:                 subq.w  #1,d2                   ; -1 for checksum
+01:00F0AE9A 2843            	   793:                 move.l  d3,a4                   ; dest pointer
+01:00F0AE9C 6100020C        	   794:                 bsr.w   srec_check              ; d1 = 0 -> would self-destruct
+01:00F0AEA0 4A01            	   795:                 tst.b   d1
+01:00F0AEA2 67000044        	   796:                 beq.w   .badaddr
+                            	   797: .dloop:
+01:00F0AEA6 4A42            	   798:                 tst.w   d2
+01:00F0AEA8 6F0E            	   799:                 ble.b   .endrec
+01:00F0AEAA 6100023A        	   800:                 bsr.w   read_hex_byte
+01:00F0AEAE DE00            	   801:                 add.b   d0,d7
+01:00F0AEB0 18C0            	   802:                 move.b  d0,(a4)+
+01:00F0AEB2 5285            	   803:                 addq.l  #1,d5
+01:00F0AEB4 5342            	   804:                 subq.w  #1,d2
+01:00F0AEB6 60EE            	   805:                 bra.b   .dloop
+                            	   806: .endrec:
+01:00F0AEB8 6100022C        	   807:                 bsr.w   read_hex_byte           ; the record's checksum byte
+01:00F0AEBC DE00            	   808:                 add.b   d0,d7
+01:00F0AEBE 0C0700FF        	   809:                 cmpi.b  #$FF,d7
+01:00F0AEC2 660E            	   810:                 bne.b   .badsum
+01:00F0AEC4 5284            	   811:                 addq.l  #1,d4
+01:00F0AEC6 103C002E        	   812:                 move.b  #'.',d0
+01:00F0AECA 61000316        	   813:                 bsr.w   putchar
+01:00F0AECE 6000002E        	   814:                 bra.w   .eat_eol
+                            	   815: .badsum:
+                            	   816:                 ; The data was already written by the time we can check, so
+                            	   817:                 ; say which record failed and let the operator re-send it.
+01:00F0AED2 41FA093B        	   818:                 lea     srec_sum_msg(pc),a0
+01:00F0AED6 61000356        	   819:                 bsr.w   puts
+01:00F0AEDA 2003            	   820:                 move.l  d3,d0
+01:00F0AEDC 610003A0        	   821:                 bsr.w   puthex_long
+01:00F0AEE0 61000358        	   822:                 bsr.w   put_crlf
+01:00F0AEE4 6000FF28        	   823:                 bra.w   .scan_S
+                            	   824: .badaddr:
+                            	   825:                 ; Skip this record.  No need to consume its hex: .scan_S
+                            	   826:                 ; resyncs on the next 'S', and hex digits are 0-9A-F so
+                            	   827:                 ; none of the skipped payload can be mistaken for a
+                            	   828:                 ; record start.
+01:00F0AEE8 41FA08F8        	   829:                 lea     srec_bad_msg(pc),a0
+01:00F0AEEC 61000340        	   830:                 bsr.w   puts
+01:00F0AEF0 2003            	   831:                 move.l  d3,d0
+01:00F0AEF2 6100038A        	   832:                 bsr.w   puthex_long
+01:00F0AEF6 61000342        	   833:                 bsr.w   put_crlf
+01:00F0AEFA 6000FF12        	   834:                 bra.w   .scan_S
+                            	   835: .eat_eol:
+01:00F0AEFE 61000314        	   836:                 bsr.w   getchar
+01:00F0AF02 0C00000D        	   837:                 cmpi.b  #13,d0
+01:00F0AF06 6700FF06        	   838:                 beq.w   .scan_S
+01:00F0AF0A 0C00000A        	   839:                 cmpi.b  #10,d0
+01:00F0AF0E 6700FEFE        	   840:                 beq.w   .scan_S
+01:00F0AF12 60EA            	   841:                 bra.b   .eat_eol
+                            	   842: .terminator:
+                            	   843:                 ; finish the terminator's line
+                            	   844: .t_eol:
+01:00F0AF14 610002FE        	   845:                 bsr.w   getchar
+01:00F0AF18 0C00000D        	   846:                 cmpi.b  #13,d0
+01:00F0AF1C 6708            	   847:                 beq.b   .t_done
+01:00F0AF1E 0C00000A        	   848:                 cmpi.b  #10,d0
+01:00F0AF22 6702            	   849:                 beq.b   .t_done
+01:00F0AF24 60EE            	   850:                 bra.b   .t_eol
+                            	   851: .t_done:
+01:00F0AF26 61000312        	   852:                 bsr.w   put_crlf
+01:00F0AF2A 41FA071A        	   853:                 lea     load_done_msg(pc),a0
+01:00F0AF2E 610002FE        	   854:                 bsr.w   puts
+01:00F0AF32 2004            	   855:                 move.l  d4,d0
+01:00F0AF34 61000348        	   856:                 bsr.w   puthex_long
+01:00F0AF38 41FA0717        	   857:                 lea     load_bytes_msg(pc),a0
+01:00F0AF3C 610002F0        	   858:                 bsr.w   puts
+01:00F0AF40 2005            	   859:                 move.l  d5,d0
+01:00F0AF42 6100033A        	   860:                 bsr.w   puthex_long
+01:00F0AF46 610002F2        	   861:                 bsr.w   put_crlf
+01:00F0AF4A 6000F9AE        	   862:                 bra.w   cmd_loop
+                            	   863: 
+                            	   864: ;================================================================
+                            	   865: ; Helpers
+                            	   866: ;================================================================
+                            	   867: 
+                            	   868: ; ---- hexdump d2 bytes starting at a4 ----
+                            	   869: hexdump:
+01:00F0AF4E 2C02            	   870:                 move.l  d2,d6                   ; bytes remaining
+                            	   871: .line:
+                            	   872:                 ; Print address
+01:00F0AF50 200C            	   873:                 move.l  a4,d0
+01:00F0AF52 6100032A        	   874:                 bsr.w   puthex_long
+01:00F0AF56 103C003A        	   875:                 move.b  #':',d0
+01:00F0AF5A 61000286        	   876:                 bsr.w   putchar
+01:00F0AF5E 103C0020        	   877:                 move.b  #' ',d0
+01:00F0AF62 6100027E        	   878:                 bsr.w   putchar
+                            	   879:                 ; row count = min(16, d6)
+01:00F0AF66 7810            	   880:                 moveq   #16,d4
+01:00F0AF68 BC84            	   881:                 cmp.l   d4,d6
+01:00F0AF6A 6C02            	   882:                 bge.b   .full
+01:00F0AF6C 2806            	   883:                 move.l  d6,d4
+                            	   884: .full:
+01:00F0AF6E 2A4C            	   885:                 move.l  a4,a5                   ; row start
+                            	   886:                 ; print d4 hex bytes
+01:00F0AF70 2604            	   887:                 move.l  d4,d3
+01:00F0AF72 4A83            	   888:                 tst.l   d3
+01:00F0AF74 6712            	   889:                 beq.b   .pad
+                            	   890: .hex:
+01:00F0AF76 101C            	   891:                 move.b  (a4)+,d0
+01:00F0AF78 610002EA        	   892:                 bsr.w   puthex_byte
+01:00F0AF7C 103C0020        	   893:                 move.b  #' ',d0
+01:00F0AF80 61000260        	   894:                 bsr.w   putchar
+01:00F0AF84 5383            	   895:                 subq.l  #1,d3
+01:00F0AF86 66EE            	   896:                 bne.b   .hex
+                            	   897: .pad:
+                            	   898:                 ; pad to 16 hex slots
+01:00F0AF88 7A10            	   899:                 moveq   #16,d5
+01:00F0AF8A 9A84            	   900:                 sub.l   d4,d5
+01:00F0AF8C 4A85            	   901:                 tst.l   d5
+01:00F0AF8E 6714            	   902:                 beq.b   .ascii
+                            	   903: .padl:
+01:00F0AF90 103C0020        	   904:                 move.b  #' ',d0
+01:00F0AF94 6100024C        	   905:                 bsr.w   putchar
+01:00F0AF98 61000248        	   906:                 bsr.w   putchar
+01:00F0AF9C 61000244        	   907:                 bsr.w   putchar
+01:00F0AFA0 5385            	   908:                 subq.l  #1,d5
+01:00F0AFA2 66EC            	   909:                 bne.b   .padl
+                            	   910: .ascii:
+01:00F0AFA4 103C007C        	   911:                 move.b  #'|',d0
+01:00F0AFA8 61000238        	   912:                 bsr.w   putchar
+01:00F0AFAC 2604            	   913:                 move.l  d4,d3
+01:00F0AFAE 4A83            	   914:                 tst.l   d3
+01:00F0AFB0 671C            	   915:                 beq.b   .ascii_end
+                            	   916: .ascii_l:
+01:00F0AFB2 101D            	   917:                 move.b  (a5)+,d0
+01:00F0AFB4 0C000020        	   918:                 cmpi.b  #' ',d0
+01:00F0AFB8 6D08            	   919:                 blt.b   .dot
+01:00F0AFBA 0C00007E        	   920:                 cmpi.b  #126,d0
+01:00F0AFBE 6E02            	   921:                 bgt.b   .dot
+01:00F0AFC0 6004            	   922:                 bra.b   .pchar
+                            	   923: .dot:
+01:00F0AFC2 103C002E        	   924:                 move.b  #'.',d0
+                            	   925: .pchar:
+01:00F0AFC6 6100021A        	   926:                 bsr.w   putchar
+01:00F0AFCA 5383            	   927:                 subq.l  #1,d3
+01:00F0AFCC 66E4            	   928:                 bne.b   .ascii_l
+                            	   929: .ascii_end:
+01:00F0AFCE 103C007C        	   930:                 move.b  #'|',d0
+01:00F0AFD2 6100020E        	   931:                 bsr.w   putchar
+01:00F0AFD6 61000262        	   932:                 bsr.w   put_crlf
+01:00F0AFDA 9C84            	   933:                 sub.l   d4,d6
+01:00F0AFDC 6E00FF72        	   934:                 bgt.w   .line
+01:00F0AFE0 4E75            	   935:                 rts
+                            	   936: 
+                            	   937: ; ---- read_line: read line from SIO into MON_LINEBUF, term=0 ----
+                            	   938: read_line:
+01:00F0AFE2 41F90000F850    	   939:                 lea     MON_LINEBUF,a0
+01:00F0AFE8 743C            	   940:                 moveq   #60,d2                  ; 61 chars + NUL, 2 spare
+                            	   941:                                         ;   in the 64 B before MON_LASTADDR
+                            	   942: .rloop:
+01:00F0AFEA 61000228        	   943:                 bsr.w   getchar
+01:00F0AFEE 0C00000D        	   944:                 cmpi.b  #13,d0                  ; CR
+01:00F0AFF2 671C            	   945:                 beq.b   .end
+01:00F0AFF4 0C00000A        	   946:                 cmpi.b  #10,d0                  ; LF
+01:00F0AFF8 6716            	   947:                 beq.b   .end
+01:00F0AFFA 0C000008        	   948:                 cmpi.b  #8,d0                   ; BS
+01:00F0AFFE 671A            	   949:                 beq.b   .bs
+01:00F0B000 0C00007F        	   950:                 cmpi.b  #127,d0                 ; DEL
+01:00F0B004 6714            	   951:                 beq.b   .bs
+01:00F0B006 610001DA        	   952:                 bsr.w   putchar                 ; echo
+01:00F0B00A 10C0            	   953:                 move.b  d0,(a0)+
+01:00F0B00C 51CAFFDC        	   954:                 dbra    d2,.rloop
+                            	   955: .end:
+01:00F0B010 10BC0000        	   956:                 move.b  #0,(a0)                 ; not clr: CLR reads first
+01:00F0B014 61000224        	   957:                 bsr.w   put_crlf
+01:00F0B018 4E75            	   958:                 rts
+                            	   959: .bs:
+01:00F0B01A B1FC0000F850    	   960:                 cmpa.l  #MON_LINEBUF,a0
+01:00F0B020 67C8            	   961:                 beq.b   .rloop                  ; empty - ignore
+01:00F0B022 5388            	   962:                 subq.l  #1,a0
+01:00F0B024 5282            	   963:                 addq.l  #1,d2
+01:00F0B026 103C0008        	   964:                 move.b  #8,d0
+01:00F0B02A 610001B6        	   965:                 bsr.w   putchar
+01:00F0B02E 103C0020        	   966:                 move.b  #' ',d0
+01:00F0B032 610001AE        	   967:                 bsr.w   putchar
+01:00F0B036 103C0008        	   968:                 move.b  #8,d0
+01:00F0B03A 610001A6        	   969:                 bsr.w   putchar
+01:00F0B03E 60AA            	   970:                 bra.b   .rloop
+                            	   971: 
+                            	   972: ; ---- skip_ws: skip whitespace at (a6) ----
+                            	   973: skip_ws:
+01:00F0B040 1016            	   974: .lp:            move.b  (a6),d0
+01:00F0B042 0C000020        	   975:                 cmpi.b  #' ',d0
+01:00F0B046 6708            	   976:                 beq.b   .adv
+01:00F0B048 0C000009        	   977:                 cmpi.b  #9,d0                   ; tab
+01:00F0B04C 6702            	   978:                 beq.b   .adv
+01:00F0B04E 4E75            	   979:                 rts
+01:00F0B050 528E            	   980: .adv:           addq.l  #1,a6
+01:00F0B052 60EC            	   981:                 bra.b   .lp
+                            	   982: 
+                            	   983: ; ---- parse_hex: parse hex number at (a6) into d0; d1=1 ok, 0 err ----
+                            	   984: ;                 advances a6 past digits
+                            	   985: parse_hex:
+01:00F0B054 7000            	   986:                 clr.l   d0
+01:00F0B056 4201            	   987:                 clr.b   d1                      ; success flag
+01:00F0B058 4203            	   988:                 clr.b   d3                      ; digit count
+                            	   989: .lp:
+01:00F0B05A 1416            	   990:                 move.b  (a6),d2
+01:00F0B05C 0C020030        	   991:                 cmpi.b  #'0',d2
+01:00F0B060 6D3C            	   992:                 blt.b   .end
+01:00F0B062 0C020039        	   993:                 cmpi.b  #'9',d2
+01:00F0B066 6F24            	   994:                 ble.b   .dig
+01:00F0B068 0C020041        	   995:                 cmpi.b  #'A',d2
+01:00F0B06C 6D30            	   996:                 blt.b   .end
+01:00F0B06E 0C020046        	   997:                 cmpi.b  #'F',d2
+01:00F0B072 6F12            	   998:                 ble.b   .upper
+01:00F0B074 0C020061        	   999:                 cmpi.b  #'a',d2
+01:00F0B078 6D24            	  1000:                 blt.b   .end
+01:00F0B07A 0C020066        	  1001:                 cmpi.b  #'f',d2
+01:00F0B07E 6E1E            	  1002:                 bgt.b   .end
+01:00F0B080 04020057        	  1003:                 subi.b  #'a'-10,d2
+01:00F0B084 600A            	  1004:                 bra.b   .acc
+                            	  1005: .upper:
+01:00F0B086 04020037        	  1006:                 subi.b  #'A'-10,d2
+01:00F0B08A 6004            	  1007:                 bra.b   .acc
+                            	  1008: .dig:
+01:00F0B08C 04020030        	  1009:                 subi.b  #'0',d2
+                            	  1010: .acc:
+01:00F0B090 E988            	  1011:                 lsl.l   #4,d0
+01:00F0B092 0202000F        	  1012:                 andi.b  #$0F,d2
+01:00F0B096 8002            	  1013:                 or.b    d2,d0
+01:00F0B098 528E            	  1014:                 addq.l  #1,a6
+01:00F0B09A 5203            	  1015:                 addq.b  #1,d3
+01:00F0B09C 60BC            	  1016:                 bra.b   .lp
+                            	  1017: .end:
+01:00F0B09E 4A03            	  1018:                 tst.b   d3
+01:00F0B0A0 6704            	  1019:                 beq.b   .err
+01:00F0B0A2 7201            	  1020:                 moveq   #1,d1
+01:00F0B0A4 4E75            	  1021:                 rts
+                            	  1022: .err:
+01:00F0B0A6 4201            	  1023:                 clr.b   d1
+01:00F0B0A8 4E75            	  1024:                 rts
+                            	  1025: 
+                            	  1026: ;================================================================
+                            	  1027: ; srec_check — is it safe to write d2 bytes starting at d3?
+                            	  1028: ;   returns d1 = 1 safe, 0 = refuse.  Preserves d0/d2/d3.
+                            	  1029: ;
+                            	  1030: ; A load is refused unless its whole range lies in on-board RAM and
+                            	  1031: ; clear of the two regions the monitor itself needs:
+                            	  1032: ;
+                            	  1033: ;   $000000-$0003FF  the exception vector table
+                            	  1034: ;   $00F800-$00FEFF  MON_* workspace, breakpoint table, and the
+                            	  1035: ;                    cold-entry supervisor stack below $0FF00
+                            	  1036: ;
+                            	  1037: ; Anything at or above $20000 is refused outright.  That range is ROM
+                            	  1038: ; and peripherals, and a stray S2/S3 record pointed there would not
+                            	  1039: ; merely be ignored: a write to $F70011 would transmit a byte over the
+                            	  1040: ; SIO, and writes to the XLTR or AP I/F blocks would poke the chassis.
+                            	  1041: ; Deliberate peripheral pokes are what the `w` command is for.
+                            	  1042: ;
+                            	  1043: ; The workspace used to live at $1F000, inside the WCS staging buffer,
+                            	  1044: ; which forced the top 4 KB of the buffer to be refused.  It now sits at
+                            	  1045: ; $0F800, below the buffer, so $10000-$1FFFF is loadable end to end.
+                            	  1046: ;================================================================
+                            	  1047: srec_check:
+01:00F0B0AA 48E79000        	  1048:                 movem.l d0/d3,-(sp)
+01:00F0B0AE 7200            	  1049:                 moveq   #0,d1
+01:00F0B0B0 0C8300000400    	  1050:                 cmpi.l  #$400,d3
+01:00F0B0B6 6528            	  1051:                 bcs.b   .out                    ; below vector-table top
+01:00F0B0B8 0C8300020000    	  1052:                 cmpi.l  #$20000,d3
+01:00F0B0BE 6420            	  1053:                 bcc.b   .out                    ; beyond on-board RAM
+01:00F0B0C0 2003            	  1054:                 move.l  d3,d0
+01:00F0B0C2 D082            	  1055:                 add.l   d2,d0
+01:00F0B0C4 5380            	  1056:                 subq.l  #1,d0                   ; last byte to be written
+01:00F0B0C6 0C8000020000    	  1057:                 cmpi.l  #$20000,d0
+01:00F0B0CC 6412            	  1058:                 bcc.b   .out                    ; would run off the end of RAM
+01:00F0B0CE 0C830000FF00    	  1059:                 cmpi.l  #MON_HI,d3
+01:00F0B0D4 6408            	  1060:                 bcc.b   .ok                     ; starts above our region
+01:00F0B0D6 0C800000F800    	  1061:                 cmpi.l  #MON_LO,d0
+01:00F0B0DC 6402            	  1062:                 bcc.b   .out                    ; reaches workspace/stack
+                            	  1063: .ok:
+01:00F0B0DE 7201            	  1064:                 moveq   #1,d1
+                            	  1065: .out:
+01:00F0B0E0 4CDF0009        	  1066:                 movem.l (sp)+,d0/d3
+01:00F0B0E4 4E75            	  1067:                 rts
+                            	  1068: 
+                            	  1069: ; ---- read_hex_byte: read 2 hex chars from SIO, return byte in d0 ----
+                            	  1070: read_hex_byte:
+01:00F0B0E6 2F02            	  1071:                 move.l  d2,-(sp)                ; preserve d2 (caller may use it)
+01:00F0B0E8 61000010        	  1072:                 bsr.w   read_hex_nibble
+01:00F0B0EC E908            	  1073:                 lsl.b   #4,d0
+01:00F0B0EE 1400            	  1074:                 move.b  d0,d2
+01:00F0B0F0 61000008        	  1075:                 bsr.w   read_hex_nibble
+01:00F0B0F4 8002            	  1076:                 or.b    d2,d0
+01:00F0B0F6 241F            	  1077:                 move.l  (sp)+,d2
+01:00F0B0F8 4E75            	  1078:                 rts
+                            	  1079: 
+                            	  1080: read_hex_nibble:
+01:00F0B0FA 61000118        	  1081:                 bsr.w   getchar
+01:00F0B0FE 0C000039        	  1082:                 cmpi.b  #'9',d0
+01:00F0B102 6E06            	  1083:                 bgt.b   .alpha
+01:00F0B104 04000030        	  1084:                 subi.b  #'0',d0
+01:00F0B108 4E75            	  1085:                 rts
+                            	  1086: .alpha:
+01:00F0B10A 0C000046        	  1087:                 cmpi.b  #'F',d0
+01:00F0B10E 6E06            	  1088:                 bgt.b   .lower
+01:00F0B110 04000037        	  1089:                 subi.b  #'A'-10,d0
+01:00F0B114 4E75            	  1090:                 rts
+                            	  1091: .lower:
+01:00F0B116 04000057        	  1092:                 subi.b  #'a'-10,d0
+01:00F0B11A 4E75            	  1093:                 rts
+                            	  1094: 
+                            	  1095: ;================================================================
+                            	  1096: ; cold_init — called from monitor_cold ONLY (never from monitor_entry).
                             	  1097: ;
-                            	  1098: ; The stock firmware handles this on its 2nd and 3rd instructions —
-                            	  1099: ; MainInit at F08700 does `lea $1ffd0,a7` then immediately installs
-                            	  1100: ; $8 and $C (F08706 / F0870E) before touching any I/O.  But when
-                            	  1101: ; patch_rom.py --reset points the reset PC at monitor_cold, MainInit
-                            	  1102: ; never executes, so nothing fills the table and the monitor inherits
-                            	  1103: ; garbage.  Any bus or address error then fetches a junk handler
-                            	  1104: ; address, faults again, and the 68000 asserts HALT (double bus fault)
-                            	  1105: ; with no diagnostic at all.  That is what a bad SIO address did on
-                            	  1106: ; real hardware: FAIL + HALTED, silently.
-                            	  1107: ;
-                            	  1108: ; Point every vector at monitor_entry so the next fault reports itself
-                            	  1109: ; instead of killing the CPU.  Writing all 1 KB also leaves valid DRAM
-                            	  1110: ; parity across the table, which matters if the board's parity strap is
-                            	  1111: ; enabled (a read of never-written DRAM can raise BERR).
-                            	  1112: ;
-                            	  1113: ; This deliberately does NOT run on the panic path: with --panic only,
-                            	  1114: ; the firmware booted normally and its live vectors are already in
-                            	  1115: ; place, and `g` needs them intact to resume.
-                            	  1116: ;================================================================
-                            	  1117: cold_init:
-01:00F0B108 91C8            	  1118:                 suba.l  a0,a0                   ; a0 = $000000
-01:00F0B10A 203C00F0A840    	  1119:                 move.l  #monitor_entry,d0
-01:00F0B110 323C00FF        	  1120:                 move.w  #255,d1                 ; 256 vectors, dbra -> 256 passes
-                            	  1121: .vfill:
-01:00F0B114 20C0            	  1122:                 move.l  d0,(a0)+
-01:00F0B116 51C9FFFC        	  1123:                 dbra    d1,.vfill
-                            	  1124: 
-                            	  1125:                 ; Vectors 2 and 3 push the 7-word group-0 frame, which
-                            	  1126:                 ; monitor_entry would misread — give them their own stub.
-01:00F0B11A 21FC00F0A8740008	  1127:                 move.l  #grp0_entry,$8          ; bus error
-01:00F0B122 21FC00F0A874000C	  1128:                 move.l  #grp0_entry,$C          ; address error
-                            	  1129: 
-                            	  1130:                 ; Pre-write the whole workspace.  Two reasons: it leaves
-                            	  1131:                 ; valid DRAM parity on every byte the monitor later reads
-                            	  1132:                 ; back (MON_NEST and MON_LASTADDR are both read before
-                            	  1133:                 ; being written otherwise), and it puts the guard in a
-                            	  1134:                 ; known state.  move.l/move.b, never clr: a real MC68000
-                            	  1135:                 ; READS the destination before writing it on CLR, so clr
-                            	  1136:                 ; on never-written DRAM is a parity-BERR risk.  (Musashi
-                            	  1137:                 ; models CLR as a pure write, so the emulator never shows
-                            	  1138:                 ; this — see m68k_in.c, M68KMAKE_OP(clr, 32, ., .).)
-                            	  1139:                 ; MON_REGS itself must be written too, not just the
-                            	  1140:                 ; scalars below it: cmd_regs READS all 60 bytes, and on a
-                            	  1141:                 ; cold boot nothing has written them yet.  On a board with
-                            	  1142:                 ; the DRAM parity strap enabled, reading never-written
-                            	  1143:                 ; memory raises BERR, so `r` before any fault would have
-                            	  1144:                 ; been a parity trap rather than a register dump.  The
-                            	  1145:                 ; emulator cannot show this — its RAM is zero-filled and
-                            	  1146:                 ; it models no parity.
-01:00F0B12A 41F90000F800    	  1147:                 lea     MON_REGS,a0
-01:00F0B130 720E            	  1148:                 moveq   #14,d1                  ; 15 longs, dbra -> 15 passes
-                            	  1149: .rclr:
-01:00F0B132 20FC00000000    	  1150:                 move.l  #0,(a0)+
-01:00F0B138 51C9FFF8        	  1151:                 dbra    d1,.rclr
-                            	  1152: 
-01:00F0B13C 23FC000000000000	  1153:                 move.l  #0,MON_SPC
-01:00F0B144 F83C
-01:00F0B146 33FC27000000F840	  1154:                 move.w  #$2700,MON_SSR
-01:00F0B14E 23FC000000000000	  1155:                 move.l  #0,MON_LASTADDR
-01:00F0B156 F890
-01:00F0B158 13FC00FF0000F894	  1156:                 move.b  #$FF,MON_GRP0           ; cold entry: no frame
-01:00F0B160 13FC00000000F895	  1157:                 move.b  #0,MON_NEST             ; first fault is reportable
-01:00F0B168 13FC00000000F896	  1158:                 move.b  #0,MON_TXFAIL
-                            	  1159:                 ; clear the breakpoint slot table (addr 0 = free)
-01:00F0B170 41F90000F8A0    	  1160:                 lea     MON_BPT,a0
-01:00F0B176 7207            	  1161:                 moveq   #MON_BPN-1,d1
-                            	  1162: .bpclr:
-01:00F0B178 20BC00000000    	  1163:                 move.l  #0,(a0)
-01:00F0B17E 317C00000004    	  1164:                 move.w  #0,4(a0)
-01:00F0B184 5C88            	  1165:                 lea     MON_BP_SZ(a0),a0
-01:00F0B186 51C9FFF0        	  1166:                 dbra    d1,.bpclr
-01:00F0B18A 4E75            	  1167:                 rts
-                            	  1168: 
-                            	  1169: ; ---- SIO init for 9600 8N1, RX+TX enabled, no IRQs ----
-                            	  1170: sio_init:
-                            	  1171:                 ; Channel reset
-01:00F0B18C 13FC001800F70015	  1172:                 move.b  #$18,SIO_A_CTRL         ; WR0: cmd 3 = chan reset
-01:00F0B194 4E71            	  1173:                 nop
-01:00F0B196 4E71            	  1174:                 nop
-01:00F0B198 4E71            	  1175:                 nop
-01:00F0B19A 4E71            	  1176:                 nop
-                            	  1177:                 ; WR4: x16 clk, 1 stop, no parity
-01:00F0B19C 13FC000400F70015	  1178:                 move.b  #$04,SIO_A_CTRL         ; WR0: ptr to WR4
-01:00F0B1A4 13FC004400F70015	  1179:                 move.b  #$44,SIO_A_CTRL
-                            	  1180:                 ; WR3: 8 bits/RX char, RX enable
-01:00F0B1AC 13FC000300F70015	  1181:                 move.b  #$03,SIO_A_CTRL         ; WR0: ptr to WR3
-01:00F0B1B4 13FC00C100F70015	  1182:                 move.b  #$C1,SIO_A_CTRL
-                            	  1183:                 ; WR5: 8 bits/TX char, TX enable, DTR, RTS
-01:00F0B1BC 13FC000500F70015	  1184:                 move.b  #$05,SIO_A_CTRL         ; WR0: ptr to WR5
-01:00F0B1C4 13FC00EA00F70015	  1185:                 move.b  #$EA,SIO_A_CTRL
-01:00F0B1CC 4E75            	  1186:                 rts
-                            	  1187: 
-                            	  1188: ; ---- putchar: send byte in d0 over SIO chA.  Bounded: drops the
-                            	  1189: ;      character and sets MON_TXFAIL rather than hanging forever, so a
-                            	  1190: ;      dead or mis-strapped SIO still lets the monitor make progress and
-                            	  1191: ;      leaves evidence in RAM.  Preserves d0 and d1.
-                            	  1192: putchar:
-01:00F0B1CE 2F01            	  1193:                 move.l  d1,-(sp)
-01:00F0B1D0 72104841        	  1194:                 move.l  #TX_SPIN_LIMIT,d1
-                            	  1195: .wait:
-01:00F0B1D4 0839000200F70015	  1196:                 btst.b  #RR0_TX_EMPTY,SIO_A_CTRL
-01:00F0B1DC 6610            	  1197:                 bne.b   .ready
-01:00F0B1DE 5381            	  1198:                 subq.l  #1,d1
-01:00F0B1E0 66F2            	  1199:                 bne.b   .wait
-                            	  1200:                 ; Timed out.  move.b, not an increment: a read-modify-write
-                            	  1201:                 ; on never-written DRAM is a parity-BERR risk on real
-                            	  1202:                 ; hardware, and this path runs when things are already bad.
-01:00F0B1E2 13FC00010000F896	  1203:                 move.b  #1,MON_TXFAIL
-01:00F0B1EA 221F            	  1204:                 move.l  (sp)+,d1
-01:00F0B1EC 4E75            	  1205:                 rts
-                            	  1206: .ready:
-01:00F0B1EE 13C000F70011    	  1207:                 move.b  d0,SIO_A_DATA
-01:00F0B1F4 221F            	  1208:                 move.l  (sp)+,d1
-01:00F0B1F6 4E75            	  1209:                 rts
-                            	  1210: 
-                            	  1211: ; ---- getchar: receive byte from SIO chA into d0 ----
-                            	  1212: ;      Deliberately unbounded: waiting indefinitely for a human to type
-                            	  1213: ;      is correct behaviour for a monitor prompt, and a timeout here
-                            	  1214: ;      would just spin the prompt.  The dangerous spin was putchar,
-                            	  1215: ;      which blocks *before* any output exists; that one is bounded
-                            	  1216: ;      above.  If a board goes quiet, MON_TXFAIL distinguishes "TX
-                            	  1217: ;      never became ready" from "nobody typed anything".
-                            	  1218: getchar:
-01:00F0B1F8 0839000000F70015	  1219:                 btst.b  #RR0_RX_AVAIL,SIO_A_CTRL
-01:00F0B200 67F6            	  1220:                 beq.b   getchar
-01:00F0B202 103900F70011    	  1221:                 move.b  SIO_A_DATA,d0
+                            	  1098: ; The MC68000 has no VBR: the exception vector table is hard-wired at
+                            	  1099: ; $000000-$0003FF, which on this board is plain DRAM.  The reset SSP/PC
+                            	  1100: ; are the only vectors that come from ROM — the M68KVM02 maps just the
+                            	  1101: ; first 8 bytes of ROM to address 0 for the first four bus cycles after
+                            	  1102: ; a total system reset, then address 0 is DRAM like any other.  So at
+                            	  1103: ; power-on every vector except reset is whatever the DRAM happens to
+                            	  1104: ; hold, i.e. garbage.
+                            	  1105: ;
+                            	  1106: ; The stock firmware handles this on its 2nd and 3rd instructions —
+                            	  1107: ; MainInit at F08700 does `lea $1ffd0,a7` then immediately installs
+                            	  1108: ; $8 and $C (F08706 / F0870E) before touching any I/O.  But when
+                            	  1109: ; patch_rom.py --reset points the reset PC at monitor_cold, MainInit
+                            	  1110: ; never executes, so nothing fills the table and the monitor inherits
+                            	  1111: ; garbage.  Any bus or address error then fetches a junk handler
+                            	  1112: ; address, faults again, and the 68000 asserts HALT (double bus fault)
+                            	  1113: ; with no diagnostic at all.  That is what a bad SIO address did on
+                            	  1114: ; real hardware: FAIL + HALTED, silently.
+                            	  1115: ;
+                            	  1116: ; Point every vector at monitor_entry so the next fault reports itself
+                            	  1117: ; instead of killing the CPU.  Writing all 1 KB also leaves valid DRAM
+                            	  1118: ; parity across the table, which matters if the board's parity strap is
+                            	  1119: ; enabled (a read of never-written DRAM can raise BERR).
+                            	  1120: ;
+                            	  1121: ; This deliberately does NOT run on the panic path: with --panic only,
+                            	  1122: ; the firmware booted normally and its live vectors are already in
+                            	  1123: ; place, and `g` needs them intact to resume.
+                            	  1124: ;================================================================
+                            	  1125: cold_init:
+01:00F0B11C 91C8            	  1126:                 suba.l  a0,a0                   ; a0 = $000000
+01:00F0B11E 203C00F0A840    	  1127:                 move.l  #monitor_entry,d0
+01:00F0B124 323C00FF        	  1128:                 move.w  #255,d1                 ; 256 vectors, dbra -> 256 passes
+                            	  1129: .vfill:
+01:00F0B128 20C0            	  1130:                 move.l  d0,(a0)+
+01:00F0B12A 51C9FFFC        	  1131:                 dbra    d1,.vfill
+                            	  1132: 
+                            	  1133:                 ; Vectors 2 and 3 push the 7-word group-0 frame, which
+                            	  1134:                 ; monitor_entry would misread — give them their own stub.
+01:00F0B12E 21FC00F0A8740008	  1135:                 move.l  #grp0_entry,$8          ; bus error
+01:00F0B136 21FC00F0A874000C	  1136:                 move.l  #grp0_entry,$C          ; address error
+                            	  1137: 
+                            	  1138:                 ; Pre-write the whole workspace.  Two reasons: it leaves
+                            	  1139:                 ; valid DRAM parity on every byte the monitor later reads
+                            	  1140:                 ; back (MON_NEST and MON_LASTADDR are both read before
+                            	  1141:                 ; being written otherwise), and it puts the guard in a
+                            	  1142:                 ; known state.  move.l/move.b, never clr: a real MC68000
+                            	  1143:                 ; READS the destination before writing it on CLR, so clr
+                            	  1144:                 ; on never-written DRAM is a parity-BERR risk.  (Musashi
+                            	  1145:                 ; models CLR as a pure write, so the emulator never shows
+                            	  1146:                 ; this — see m68k_in.c, M68KMAKE_OP(clr, 32, ., .).)
+                            	  1147:                 ; MON_REGS itself must be written too, not just the
+                            	  1148:                 ; scalars below it: cmd_regs READS all 60 bytes, and on a
+                            	  1149:                 ; cold boot nothing has written them yet.  On a board with
+                            	  1150:                 ; the DRAM parity strap enabled, reading never-written
+                            	  1151:                 ; memory raises BERR, so `r` before any fault would have
+                            	  1152:                 ; been a parity trap rather than a register dump.  The
+                            	  1153:                 ; emulator cannot show this — its RAM is zero-filled and
+                            	  1154:                 ; it models no parity.
+01:00F0B13E 41F90000F800    	  1155:                 lea     MON_REGS,a0
+01:00F0B144 720E            	  1156:                 moveq   #14,d1                  ; 15 longs, dbra -> 15 passes
+                            	  1157: .rclr:
+01:00F0B146 20FC00000000    	  1158:                 move.l  #0,(a0)+
+01:00F0B14C 51C9FFF8        	  1159:                 dbra    d1,.rclr
+                            	  1160: 
+01:00F0B150 23FC000000000000	  1161:                 move.l  #0,MON_SPC
+01:00F0B158 F83C
+01:00F0B15A 33FC27000000F840	  1162:                 move.w  #$2700,MON_SSR
+01:00F0B162 23FC000000000000	  1163:                 move.l  #0,MON_LASTADDR
+01:00F0B16A F890
+01:00F0B16C 13FC00FF0000F894	  1164:                 move.b  #$FF,MON_GRP0           ; cold entry: no frame
+01:00F0B174 13FC00000000F895	  1165:                 move.b  #0,MON_NEST             ; first fault is reportable
+01:00F0B17C 13FC00000000F896	  1166:                 move.b  #0,MON_TXFAIL
+                            	  1167:                 ; clear the breakpoint slot table (addr 0 = free)
+01:00F0B184 41F90000F8A0    	  1168:                 lea     MON_BPT,a0
+01:00F0B18A 7207            	  1169:                 moveq   #MON_BPN-1,d1
+                            	  1170: .bpclr:
+01:00F0B18C 20BC00000000    	  1171:                 move.l  #0,(a0)
+01:00F0B192 317C00000004    	  1172:                 move.w  #0,4(a0)
+01:00F0B198 5C88            	  1173:                 lea     MON_BP_SZ(a0),a0
+01:00F0B19A 51C9FFF0        	  1174:                 dbra    d1,.bpclr
+01:00F0B19E 4E75            	  1175:                 rts
+                            	  1176: 
+                            	  1177: ; ---- SIO init for 9600 8N1, RX+TX enabled, no IRQs ----
+                            	  1178: sio_init:
+                            	  1179:                 ; Channel reset
+01:00F0B1A0 13FC001800F70015	  1180:                 move.b  #$18,SIO_A_CTRL         ; WR0: cmd 3 = chan reset
+01:00F0B1A8 4E71            	  1181:                 nop
+01:00F0B1AA 4E71            	  1182:                 nop
+01:00F0B1AC 4E71            	  1183:                 nop
+01:00F0B1AE 4E71            	  1184:                 nop
+                            	  1185:                 ; WR4: x16 clk, 1 stop, no parity
+01:00F0B1B0 13FC000400F70015	  1186:                 move.b  #$04,SIO_A_CTRL         ; WR0: ptr to WR4
+01:00F0B1B8 13FC004400F70015	  1187:                 move.b  #$44,SIO_A_CTRL
+                            	  1188:                 ; WR3: 8 bits/RX char, RX enable
+01:00F0B1C0 13FC000300F70015	  1189:                 move.b  #$03,SIO_A_CTRL         ; WR0: ptr to WR3
+01:00F0B1C8 13FC00C100F70015	  1190:                 move.b  #$C1,SIO_A_CTRL
+                            	  1191:                 ; WR5: 8 bits/TX char, TX enable, DTR, RTS
+01:00F0B1D0 13FC000500F70015	  1192:                 move.b  #$05,SIO_A_CTRL         ; WR0: ptr to WR5
+01:00F0B1D8 13FC00EA00F70015	  1193:                 move.b  #$EA,SIO_A_CTRL
+01:00F0B1E0 4E75            	  1194:                 rts
+                            	  1195: 
+                            	  1196: ; ---- putchar: send byte in d0 over SIO chA.  Bounded: drops the
+                            	  1197: ;      character and sets MON_TXFAIL rather than hanging forever, so a
+                            	  1198: ;      dead or mis-strapped SIO still lets the monitor make progress and
+                            	  1199: ;      leaves evidence in RAM.  Preserves d0 and d1.
+                            	  1200: putchar:
+01:00F0B1E2 2F01            	  1201:                 move.l  d1,-(sp)
+                            	  1202:                 ; Belt-and-braces: point the register pointer at RR0 before
+                            	  1203:                 ; polling status.  On a Z80-SIO-family part the pointer
+                            	  1204:                 ; auto-resets to 0 after each access, so this should be
+                            	  1205:                 ; unnecessary -- but $00 to WR0 is the null command
+                            	  1206:                 ; (pointer := 0, no side effect), it costs two instructions,
+                            	  1207:                 ; and if the auto-reset does NOT behave as assumed the poll
+                            	  1208:                 ; would otherwise read WR5 forever and never transmit.  One
+                            	  1209:                 ; attempt per hardware trip: take the insurance.
+01:00F0B1E4 13FC000000F70015	  1210:                 move.b  #0,SIO_A_CTRL
+01:00F0B1EC 72104841        	  1211:                 move.l  #TX_SPIN_LIMIT,d1
+                            	  1212: .wait:
+01:00F0B1F0 0839000200F70015	  1213:                 btst.b  #RR0_TX_EMPTY,SIO_A_CTRL
+01:00F0B1F8 6610            	  1214:                 bne.b   .ready
+01:00F0B1FA 5381            	  1215:                 subq.l  #1,d1
+01:00F0B1FC 66F2            	  1216:                 bne.b   .wait
+                            	  1217:                 ; Timed out.  move.b, not an increment: a read-modify-write
+                            	  1218:                 ; on never-written DRAM is a parity-BERR risk on real
+                            	  1219:                 ; hardware, and this path runs when things are already bad.
+01:00F0B1FE 13FC00010000F896	  1220:                 move.b  #1,MON_TXFAIL
+01:00F0B206 221F            	  1221:                 move.l  (sp)+,d1
 01:00F0B208 4E75            	  1222:                 rts
-                            	  1223: 
-                            	  1224: ; ---- puts: print null-terminated string at (a0) ----
-                            	  1225: puts:
-01:00F0B20A 1018            	  1226:                 move.b  (a0)+,d0
-01:00F0B20C 6706            	  1227:                 beq.b   .end
-01:00F0B20E 6100FFBE        	  1228:                 bsr.w   putchar
-01:00F0B212 60F6            	  1229:                 bra.b   puts
-                            	  1230: .end:
-01:00F0B214 4E75            	  1231:                 rts
-                            	  1232: 
-                            	  1233: put_crlf:
-01:00F0B216 103C000D        	  1234:                 move.b  #13,d0
-01:00F0B21A 6100FFB2        	  1235:                 bsr.w   putchar
-01:00F0B21E 103C000A        	  1236:                 move.b  #10,d0
-01:00F0B222 6000FFAA        	  1237:                 bra.w   putchar
-                            	  1238: 
-                            	  1239: puthex_nibble:
-01:00F0B226 0200000F        	  1240:                 andi.b  #$0F,d0
-01:00F0B22A 0C00000A        	  1241:                 cmpi.b  #10,d0
-01:00F0B22E 6D08            	  1242:                 blt.b   .num
-01:00F0B230 06000037        	  1243:                 addi.b  #'A'-10,d0
-01:00F0B234 6000FF98        	  1244:                 bra.w   putchar
-                            	  1245: .num:
-01:00F0B238 06000030        	  1246:                 addi.b  #'0',d0
-01:00F0B23C 6000FF90        	  1247:                 bra.w   putchar
-                            	  1248: 
-                            	  1249: puthex_byte:
-01:00F0B240 2F00            	  1250:                 move.l  d0,-(sp)
-01:00F0B242 E808            	  1251:                 lsr.b   #4,d0
-01:00F0B244 6100FFE0        	  1252:                 bsr.w   puthex_nibble
-01:00F0B248 201F            	  1253:                 move.l  (sp)+,d0
-01:00F0B24A 6000FFDA        	  1254:                 bra.w   puthex_nibble
-                            	  1255: 
-                            	  1256: puthex_word:
-01:00F0B24E E158            	  1257:                 rol.w   #8,d0
-01:00F0B250 6100FFEE        	  1258:                 bsr.w   puthex_byte
-01:00F0B254 E158            	  1259:                 rol.w   #8,d0
-01:00F0B256 6000FFE8        	  1260:                 bra.w   puthex_byte
-                            	  1261: 
-                            	  1262: puthex_long:
-01:00F0B25A 4840            	  1263:                 swap    d0
-01:00F0B25C 6100FFF0        	  1264:                 bsr.w   puthex_word
-01:00F0B260 4840            	  1265:                 swap    d0
-01:00F0B262 6000FFEA        	  1266:                 bra.w   puthex_word
+                            	  1223: .ready:
+01:00F0B20A 13C000F70011    	  1224:                 move.b  d0,SIO_A_DATA
+01:00F0B210 221F            	  1225:                 move.l  (sp)+,d1
+01:00F0B212 4E75            	  1226:                 rts
+                            	  1227: 
+                            	  1228: ; ---- getchar: receive byte from SIO chA into d0 ----
+                            	  1229: ;      Deliberately unbounded: waiting indefinitely for a human to type
+                            	  1230: ;      is correct behaviour for a monitor prompt, and a timeout here
+                            	  1231: ;      would just spin the prompt.  The dangerous spin was putchar,
+                            	  1232: ;      which blocks *before* any output exists; that one is bounded
+                            	  1233: ;      above.  If a board goes quiet, MON_TXFAIL distinguishes "TX
+                            	  1234: ;      never became ready" from "nobody typed anything".
+                            	  1235: getchar:
+01:00F0B214 13FC000000F70015	  1236:                 move.b  #0,SIO_A_CTRL           ; point at RR0 (see putchar)
+                            	  1237: .poll:
+01:00F0B21C 0839000000F70015	  1238:                 btst.b  #RR0_RX_AVAIL,SIO_A_CTRL
+01:00F0B224 67F6            	  1239:                 beq.b   .poll
+01:00F0B226 103900F70011    	  1240:                 move.b  SIO_A_DATA,d0
+01:00F0B22C 4E75            	  1241:                 rts
+                            	  1242: 
+                            	  1243: ; ---- puts: print null-terminated string at (a0) ----
+                            	  1244: puts:
+01:00F0B22E 1018            	  1245:                 move.b  (a0)+,d0
+01:00F0B230 6706            	  1246:                 beq.b   .end
+01:00F0B232 6100FFAE        	  1247:                 bsr.w   putchar
+01:00F0B236 60F6            	  1248:                 bra.b   puts
+                            	  1249: .end:
+01:00F0B238 4E75            	  1250:                 rts
+                            	  1251: 
+                            	  1252: put_crlf:
+01:00F0B23A 103C000D        	  1253:                 move.b  #13,d0
+01:00F0B23E 6100FFA2        	  1254:                 bsr.w   putchar
+01:00F0B242 103C000A        	  1255:                 move.b  #10,d0
+01:00F0B246 6000FF9A        	  1256:                 bra.w   putchar
+                            	  1257: 
+                            	  1258: puthex_nibble:
+01:00F0B24A 0200000F        	  1259:                 andi.b  #$0F,d0
+01:00F0B24E 0C00000A        	  1260:                 cmpi.b  #10,d0
+01:00F0B252 6D08            	  1261:                 blt.b   .num
+01:00F0B254 06000037        	  1262:                 addi.b  #'A'-10,d0
+01:00F0B258 6000FF88        	  1263:                 bra.w   putchar
+                            	  1264: .num:
+01:00F0B25C 06000030        	  1265:                 addi.b  #'0',d0
+01:00F0B260 6000FF80        	  1266:                 bra.w   putchar
                             	  1267: 
-                            	  1268: ;================================================================
-                            	  1269: ; Strings
-                            	  1270: ;================================================================
-                            	  1271: banner_msg:
-01:00F0B266 0D              	  1272:                 dc.b    13,10
-01:00F0B267 0A
-01:00F0B268 3D3D3D3D3D3D3D3D	  1273:                 dc.b    "==================================",13,10
-01:00F0B270 3D3D3D3D3D3D3D3D
-01:00F0B278 3D3D3D3D3D3D3D3D
-01:00F0B280 3D3D3D3D3D3D3D3D
-01:00F0B288 3D3D
-01:00F0B28A 0D
+                            	  1268: puthex_byte:
+01:00F0B264 2F00            	  1269:                 move.l  d0,-(sp)
+01:00F0B266 E808            	  1270:                 lsr.b   #4,d0
+01:00F0B268 6100FFE0        	  1271:                 bsr.w   puthex_nibble
+01:00F0B26C 201F            	  1272:                 move.l  (sp)+,d0
+01:00F0B26E 6000FFDA        	  1273:                 bra.w   puthex_nibble
+                            	  1274: 
+                            	  1275: puthex_word:
+01:00F0B272 E158            	  1276:                 rol.w   #8,d0
+01:00F0B274 6100FFEE        	  1277:                 bsr.w   puthex_byte
+01:00F0B278 E158            	  1278:                 rol.w   #8,d0
+01:00F0B27A 6000FFE8        	  1279:                 bra.w   puthex_byte
+                            	  1280: 
+                            	  1281: puthex_long:
+01:00F0B27E 4840            	  1282:                 swap    d0
+01:00F0B280 6100FFF0        	  1283:                 bsr.w   puthex_word
+01:00F0B284 4840            	  1284:                 swap    d0
+01:00F0B286 6000FFEA        	  1285:                 bra.w   puthex_word
+                            	  1286: 
+                            	  1287: ;================================================================
+                            	  1288: ; Strings
+                            	  1289: ;================================================================
+                            	  1290: banner_msg:
+01:00F0B28A 0D              	  1291:                 dc.b    13,10
 01:00F0B28B 0A
-01:00F0B28C 204650532D333030	  1274:                 dc.b    " FPS-3000 SBC Monitor / Debugger",13,10
-01:00F0B294 3020534243204D6F
-01:00F0B29C 6E69746F72202F20
-01:00F0B2A4 4465627567676572
-01:00F0B2AC 0D
-01:00F0B2AD 0A
-01:00F0B2AE 204C697665732069	  1275:                 dc.b    " Lives in 21.9 KB free ROM @F0A826",13,10
-01:00F0B2B6 6E2032312E39204B
-01:00F0B2BE 4220667265652052
-01:00F0B2C6 4F4D204046304138
-01:00F0B2CE 3236
+01:00F0B28C 3D3D3D3D3D3D3D3D	  1292:                 dc.b    "==================================",13,10
+01:00F0B294 3D3D3D3D3D3D3D3D
+01:00F0B29C 3D3D3D3D3D3D3D3D
+01:00F0B2A4 3D3D3D3D3D3D3D3D
+01:00F0B2AC 3D3D
+01:00F0B2AE 0D
+01:00F0B2AF 0A
+01:00F0B2B0 204650532D333030	  1293:                 dc.b    " FPS-3000 SBC Monitor / Debugger",13,10
+01:00F0B2B8 3020534243204D6F
+01:00F0B2C0 6E69746F72202F20
+01:00F0B2C8 4465627567676572
 01:00F0B2D0 0D
 01:00F0B2D1 0A
-01:00F0B2D2 2054616C6B732076	  1276:                 dc.b    " Talks via SIO chA (F70011/F70015)",13,10
-01:00F0B2DA 69612053494F2063
-01:00F0B2E2 6841202846373030
-01:00F0B2EA 31312F4637303031
-01:00F0B2F2 3529
+01:00F0B2D2 204C697665732069	  1294:                 dc.b    " Lives in 21.9 KB free ROM @F0A826",13,10
+01:00F0B2DA 6E2032312E39204B
+01:00F0B2E2 4220667265652052
+01:00F0B2EA 4F4D204046304138
+01:00F0B2F2 3236
 01:00F0B2F4 0D
 01:00F0B2F5 0A
-01:00F0B2F6 3D3D3D3D3D3D3D3D	  1277:                 dc.b    "==================================",13,10,0
-01:00F0B2FE 3D3D3D3D3D3D3D3D
-01:00F0B306 3D3D3D3D3D3D3D3D
-01:00F0B30E 3D3D3D3D3D3D3D3D
-01:00F0B316 3D3D
+01:00F0B2F6 2054616C6B732076	  1295:                 dc.b    " Talks via SIO chA (F70011/F70015)",13,10
+01:00F0B2FE 69612053494F2063
+01:00F0B306 6841202846373030
+01:00F0B30E 31312F4637303031
+01:00F0B316 3529
 01:00F0B318 0D
 01:00F0B319 0A
-01:00F0B31A 00
-                            	  1278: 
-01:00F0B31B 656E746572656420	  1279: entry_msg:      dc.b    "entered at PC=$",0
-01:00F0B323 61742050433D24
-01:00F0B32A 00
-01:00F0B32B 202053523D24    	  1280: sr_msg:         dc.b    "  SR=$",0
-01:00F0B331 00
-                            	  1281: 
-01:00F0B332 667073336B3E20  	  1282: prompt_msg:     dc.b    "fps3k> ",0
-01:00F0B339 00
-01:00F0B33A 3F20205479706520	  1283: unknown_msg:    dc.b    "?  Type 'h' for help.",13,10,0
-01:00F0B342 27682720666F7220
-01:00F0B34A 68656C702E
-01:00F0B34F 0D
-01:00F0B350 0A
-01:00F0B351 00
-                            	  1284: 
-                            	  1285: help_msg:
-01:00F0B352 436F6D6D616E6473	  1286:                 dc.b    "Commands:",13,10
-01:00F0B35A 3A
-01:00F0B35B 0D
-01:00F0B35C 0A
-01:00F0B35D 2020722020202020	  1287:                 dc.b    "  r              show registers",13,10
-01:00F0B365 2020202020202020
-01:00F0B36D 2073686F77207265
-01:00F0B375 67697374657273
-01:00F0B37C 0D
-01:00F0B37D 0A
-01:00F0B37E 20206D2041414141	  1288:                 dc.b    "  m AAAA [NN]    dump NN bytes (default 16) at AAAA",13,10
-01:00F0B386 205B4E4E5D202020
-01:00F0B38E 2064756D70204E4E
-01:00F0B396 2062797465732028
-01:00F0B39E 64656661756C7420
-01:00F0B3A6 3136292061742041
-01:00F0B3AE 414141
-01:00F0B3B1 0D
-01:00F0B3B2 0A
-01:00F0B3B3 2020642041414141	  1289:                 dc.b    "  d AAAA [NN]    same as m",13,10
-01:00F0B3BB 205B4E4E5D202020
-01:00F0B3C3 2073616D65206173
-01:00F0B3CB 206D
-01:00F0B3CD 0D
-01:00F0B3CE 0A
-01:00F0B3CF 2020772041414141	  1290:                 dc.b    "  w AAAA BB BB.. write bytes to AAAA",13,10
-01:00F0B3D7 2042422042422E2E
-01:00F0B3DF 2077726974652062
-01:00F0B3E7 7974657320746F20
-01:00F0B3EF 41414141
-01:00F0B3F3 0D
-01:00F0B3F4 0A
-01:00F0B3F5 202067205B414141	  1291:                 dc.b    "  g [AAAA]       resume, or start at AAAA",13,10
-01:00F0B3FD 415D202020202020
-01:00F0B405 20726573756D652C
-01:00F0B40D 206F722073746172
-01:00F0B415 7420617420414141
-01:00F0B41D 41
-01:00F0B41E 0D
-01:00F0B41F 0A
-01:00F0B420 20204C2020202020	  1292:                 dc.b    "  L              load Motorola S-records over SIO",13,10
-01:00F0B428 2020202020202020
-01:00F0B430 206C6F6164204D6F
-01:00F0B438 746F726F6C612053
-01:00F0B440 2D7265636F726473
-01:00F0B448 206F766572205349
-01:00F0B450 4F
-01:00F0B451 0D
-01:00F0B452 0A
-01:00F0B453 202062205B414444	  1293:                 dc.b    "  b [ADDR|-ADDR|-]  set/clear/list breakpoints",13,10
-01:00F0B45B 527C2D414444527C
-01:00F0B463 2D5D20207365742F
-01:00F0B46B 636C6561722F6C69
-01:00F0B473 737420627265616B
-01:00F0B47B 706F696E7473
-01:00F0B481 0D
-01:00F0B482 0A
-01:00F0B483 2020742020202020	  1294:                 dc.b    "  t              single step (trace one insn)",13,10
-01:00F0B48B 2020202020202020
-01:00F0B493 2073696E676C6520
-01:00F0B49B 7374657020287472
-01:00F0B4A3 616365206F6E6520
-01:00F0B4AB 696E736E29
-01:00F0B4B0 0D
-01:00F0B4B1 0A
-01:00F0B4B2 2020692020202020	  1295:                 dc.b    "  i              live board status + diagnostics",13,10
-01:00F0B4BA 2020202020202020
-01:00F0B4C2 206C69766520626F
-01:00F0B4CA 6172642073746174
-01:00F0B4D2 7573202B20646961
-01:00F0B4DA 676E6F7374696373
-01:00F0B4E2 0D
-01:00F0B4E3 0A
-01:00F0B4E4 2020212020202020	  1296:                 dc.b    "  !              show banner",13,10
-01:00F0B4EC 2020202020202020
-01:00F0B4F4 2073686F77206261
-01:00F0B4FC 6E6E6572
-01:00F0B500 0D
-01:00F0B501 0A
-01:00F0B502 2020682C203F2020	  1297:                 dc.b    "  h, ?           this help",13,10,0
-01:00F0B50A 2020202020202020
-01:00F0B512 2074686973206865
-01:00F0B51A 6C70
-01:00F0B51C 0D
-01:00F0B51D 0A
-01:00F0B51E 00
-                            	  1298: 
-01:00F0B51F 6F6B            	  1299: ok_msg:         dc.b    "ok",13,10,0
-01:00F0B521 0D
-01:00F0B522 0A
-01:00F0B523 00
-01:00F0B524 3F686578        	  1300: hex_err:        dc.b    "?hex",13,10,0
-01:00F0B528 0D
-01:00F0B529 0A
-01:00F0B52A 00
-01:00F0B52B 6270207365742040	  1301: bp_set_msg:     dc.b    "bp set @$",0
-01:00F0B533 24
-01:00F0B534 00
-01:00F0B535 3F616C7265616479	  1302: bp_dup_msg:     dc.b    "?already set",13,10,0
-01:00F0B53D 20736574
-01:00F0B541 0D
-01:00F0B542 0A
-01:00F0B543 00
-01:00F0B544 3F6270207461626C	  1303: bp_full_msg:    dc.b    "?bp table full",13,10,0
-01:00F0B54C 652066756C6C
-01:00F0B552 0D
-01:00F0B553 0A
-01:00F0B554 00
-01:00F0B555 3F62616420616464	  1304: bp_odd_msg:     dc.b    "?bad addr (must be even and nonzero)",13,10,0
-01:00F0B55D 7220286D75737420
-01:00F0B565 6265206576656E20
-01:00F0B56D 616E64206E6F6E7A
-01:00F0B575 65726F29
-01:00F0B579 0D
-01:00F0B57A 0A
-01:00F0B57B 00
-01:00F0B57C 3F6E6F2073756368	  1305: bp_none_msg:    dc.b    "?no such bp",13,10,0
-01:00F0B584 206270
-01:00F0B587 0D
-01:00F0B588 0A
-01:00F0B589 00
-01:00F0B58A 627265616B706F69	  1306: bp_list_msg:    dc.b    "breakpoints:",13,10,0
-01:00F0B592 6E74733A
-01:00F0B596 0D
-01:00F0B597 0A
-01:00F0B598 00
-01:00F0B599 2020286E6F6E6529	  1307: bp_empty_msg:   dc.b    "  (none)",13,10,0
-01:00F0B5A1 0D
-01:00F0B5A2 0A
-01:00F0B5A3 00
-01:00F0B5A4 20206F7269673D24	  1308: bp_was_msg:     dc.b    "  orig=$",0
-01:00F0B5AC 00
-01:00F0B5AD 737465702066726F	  1309: trace_msg:      dc.b    "step from $",0
-01:00F0B5B5 6D2024
-01:00F0B5B8 00
-01:00F0B5B9 3F6E6F2072657375	  1310: nogo_msg:       dc.b    "?no resumable frame (cold entry, or bus/address"
-01:00F0B5C1 6D61626C65206672
-01:00F0B5C9 616D652028636F6C
-01:00F0B5D1 6420656E7472792C
-01:00F0B5D9 206F72206275732F
-01:00F0B5E1 61646472657373
-01:00F0B5E8 206572726F7229  	  1311:                 dc.b    " error)",13,10,0
-01:00F0B5EF 0D
-01:00F0B5F0 0A
-01:00F0B5F1 00
-01:00F0B5F2 726573756D652040	  1312: resume_msg:     dc.b    "resume @$",0
-01:00F0B5FA 24
-01:00F0B5FB 00
-01:00F0B5FC 73656E6420532D72	  1313: load_msg:       dc.b    "send S-records, S8/S9 ends:",13,10,0
-01:00F0B604 65636F7264732C20
-01:00F0B60C 53382F533920656E
-01:00F0B614 64733A
-01:00F0B617 0D
-01:00F0B618 0A
-01:00F0B619 00
-01:00F0B61A 0D              	  1314: load_done_msg:  dc.b    13,10,"loaded $",0
-01:00F0B61B 0A
-01:00F0B61C 6C6F616465642024
-01:00F0B624 00
-01:00F0B625 207265636F726473	  1315: load_bytes_msg: dc.b    " records, $",0
-01:00F0B62D 2C2024
-01:00F0B630 00
-                            	  1316: 
-                            	  1317: info_msg:
-01:00F0B631 52414D3A20202020	  1318:                 dc.b    "RAM:      128 KB (000000-01FFFF)",13,10
-01:00F0B639 2020313238204B42
-01:00F0B641 2028303030303030
-01:00F0B649 2D30314646464629
-01:00F0B651 0D
-01:00F0B652 0A
-01:00F0B653 524F4D3A20202020	  1319:                 dc.b    "ROM:      64 KB (F00000-F0FFFF)",13,10
-01:00F0B65B 20203634204B4220
-01:00F0B663 284630303030302D
-01:00F0B66B 46304646464629
-01:00F0B672 0D
-01:00F0B673 0A
-01:00F0B674 574353206275663A	  1320:                 dc.b    "WCS buf:  010000-01FFFF (fully loadable via L)",13,10
-01:00F0B67C 2020303130303030
-01:00F0B684 2D30314646464620
-01:00F0B68C 2866756C6C79206C
-01:00F0B694 6F616461626C6520
-01:00F0B69C 766961204C29
-01:00F0B6A2 0D
-01:00F0B6A3 0A
-01:00F0B6A4 6D6F6E20776F726B	  1321:                 dc.b    "mon work: 00F800-00FEFF + stack top 00FF00",13,10
-01:00F0B6AC 3A20303046383030
-01:00F0B6B4 2D30304645464620
-01:00F0B6BC 2B20737461636B20
-01:00F0B6C4 746F702030304646
-01:00F0B6CC 3030
+01:00F0B31A 3D3D3D3D3D3D3D3D	  1296:                 dc.b    "==================================",13,10,0
+01:00F0B322 3D3D3D3D3D3D3D3D
+01:00F0B32A 3D3D3D3D3D3D3D3D
+01:00F0B332 3D3D3D3D3D3D3D3D
+01:00F0B33A 3D3D
+01:00F0B33C 0D
+01:00F0B33D 0A
+01:00F0B33E 00
+                            	  1297: 
+01:00F0B33F 656E746572656420	  1298: entry_msg:      dc.b    "entered at PC=$",0
+01:00F0B347 61742050433D24
+01:00F0B34E 00
+01:00F0B34F 202053523D24    	  1299: sr_msg:         dc.b    "  SR=$",0
+01:00F0B355 00
+                            	  1300: 
+01:00F0B356 667073336B3E20  	  1301: prompt_msg:     dc.b    "fps3k> ",0
+01:00F0B35D 00
+01:00F0B35E 3F20205479706520	  1302: unknown_msg:    dc.b    "?  Type 'h' for help.",13,10,0
+01:00F0B366 27682720666F7220
+01:00F0B36E 68656C702E
+01:00F0B373 0D
+01:00F0B374 0A
+01:00F0B375 00
+                            	  1303: 
+                            	  1304: help_msg:
+01:00F0B376 436F6D6D616E6473	  1305:                 dc.b    "Commands:",13,10
+01:00F0B37E 3A
+01:00F0B37F 0D
+01:00F0B380 0A
+01:00F0B381 2020722020202020	  1306:                 dc.b    "  r              show registers",13,10
+01:00F0B389 2020202020202020
+01:00F0B391 2073686F77207265
+01:00F0B399 67697374657273
+01:00F0B3A0 0D
+01:00F0B3A1 0A
+01:00F0B3A2 20206D2041414141	  1307:                 dc.b    "  m AAAA [NN]    dump NN bytes (default 16) at AAAA",13,10
+01:00F0B3AA 205B4E4E5D202020
+01:00F0B3B2 2064756D70204E4E
+01:00F0B3BA 2062797465732028
+01:00F0B3C2 64656661756C7420
+01:00F0B3CA 3136292061742041
+01:00F0B3D2 414141
+01:00F0B3D5 0D
+01:00F0B3D6 0A
+01:00F0B3D7 2020642041414141	  1308:                 dc.b    "  d AAAA [NN]    same as m",13,10
+01:00F0B3DF 205B4E4E5D202020
+01:00F0B3E7 2073616D65206173
+01:00F0B3EF 206D
+01:00F0B3F1 0D
+01:00F0B3F2 0A
+01:00F0B3F3 2020772041414141	  1309:                 dc.b    "  w AAAA BB BB.. write bytes to AAAA",13,10
+01:00F0B3FB 2042422042422E2E
+01:00F0B403 2077726974652062
+01:00F0B40B 7974657320746F20
+01:00F0B413 41414141
+01:00F0B417 0D
+01:00F0B418 0A
+01:00F0B419 202067205B414141	  1310:                 dc.b    "  g [AAAA]       resume, or start at AAAA",13,10
+01:00F0B421 415D202020202020
+01:00F0B429 20726573756D652C
+01:00F0B431 206F722073746172
+01:00F0B439 7420617420414141
+01:00F0B441 41
+01:00F0B442 0D
+01:00F0B443 0A
+01:00F0B444 20204C2020202020	  1311:                 dc.b    "  L              load Motorola S-records over SIO",13,10
+01:00F0B44C 2020202020202020
+01:00F0B454 206C6F6164204D6F
+01:00F0B45C 746F726F6C612053
+01:00F0B464 2D7265636F726473
+01:00F0B46C 206F766572205349
+01:00F0B474 4F
+01:00F0B475 0D
+01:00F0B476 0A
+01:00F0B477 202062205B414444	  1312:                 dc.b    "  b [ADDR|-ADDR|-]  set/clear/list breakpoints",13,10
+01:00F0B47F 527C2D414444527C
+01:00F0B487 2D5D20207365742F
+01:00F0B48F 636C6561722F6C69
+01:00F0B497 737420627265616B
+01:00F0B49F 706F696E7473
+01:00F0B4A5 0D
+01:00F0B4A6 0A
+01:00F0B4A7 2020742020202020	  1313:                 dc.b    "  t              single step (trace one insn)",13,10
+01:00F0B4AF 2020202020202020
+01:00F0B4B7 2073696E676C6520
+01:00F0B4BF 7374657020287472
+01:00F0B4C7 616365206F6E6520
+01:00F0B4CF 696E736E29
+01:00F0B4D4 0D
+01:00F0B4D5 0A
+01:00F0B4D6 2020692020202020	  1314:                 dc.b    "  i              live board status + diagnostics",13,10
+01:00F0B4DE 2020202020202020
+01:00F0B4E6 206C69766520626F
+01:00F0B4EE 6172642073746174
+01:00F0B4F6 7573202B20646961
+01:00F0B4FE 676E6F7374696373
+01:00F0B506 0D
+01:00F0B507 0A
+01:00F0B508 2020212020202020	  1315:                 dc.b    "  !              show banner",13,10
+01:00F0B510 2020202020202020
+01:00F0B518 2073686F77206261
+01:00F0B520 6E6E6572
+01:00F0B524 0D
+01:00F0B525 0A
+01:00F0B526 2020682C203F2020	  1316:                 dc.b    "  h, ?           this help",13,10,0
+01:00F0B52E 2020202020202020
+01:00F0B536 2074686973206865
+01:00F0B53E 6C70
+01:00F0B540 0D
+01:00F0B541 0A
+01:00F0B542 00
+                            	  1317: 
+01:00F0B543 6F6B            	  1318: ok_msg:         dc.b    "ok",13,10,0
+01:00F0B545 0D
+01:00F0B546 0A
+01:00F0B547 00
+01:00F0B548 3F686578        	  1319: hex_err:        dc.b    "?hex",13,10,0
+01:00F0B54C 0D
+01:00F0B54D 0A
+01:00F0B54E 00
+01:00F0B54F 6270207365742040	  1320: bp_set_msg:     dc.b    "bp set @$",0
+01:00F0B557 24
+01:00F0B558 00
+01:00F0B559 3F616C7265616479	  1321: bp_dup_msg:     dc.b    "?already set",13,10,0
+01:00F0B561 20736574
+01:00F0B565 0D
+01:00F0B566 0A
+01:00F0B567 00
+01:00F0B568 3F6270207461626C	  1322: bp_full_msg:    dc.b    "?bp table full",13,10,0
+01:00F0B570 652066756C6C
+01:00F0B576 0D
+01:00F0B577 0A
+01:00F0B578 00
+01:00F0B579 3F62616420616464	  1323: bp_odd_msg:     dc.b    "?bad addr (need even, nonzero, on-board RAM)",13,10,0
+01:00F0B581 7220286E65656420
+01:00F0B589 6576656E2C206E6F
+01:00F0B591 6E7A65726F2C206F
+01:00F0B599 6E2D626F61726420
+01:00F0B5A1 52414D29
+01:00F0B5A5 0D
+01:00F0B5A6 0A
+01:00F0B5A7 00
+01:00F0B5A8 3F6E6F2073756368	  1324: bp_none_msg:    dc.b    "?no such bp",13,10,0
+01:00F0B5B0 206270
+01:00F0B5B3 0D
+01:00F0B5B4 0A
+01:00F0B5B5 00
+01:00F0B5B6 627265616B706F69	  1325: bp_list_msg:    dc.b    "breakpoints:",13,10,0
+01:00F0B5BE 6E74733A
+01:00F0B5C2 0D
+01:00F0B5C3 0A
+01:00F0B5C4 00
+01:00F0B5C5 2020286E6F6E6529	  1326: bp_empty_msg:   dc.b    "  (none)",13,10,0
+01:00F0B5CD 0D
+01:00F0B5CE 0A
+01:00F0B5CF 00
+01:00F0B5D0 20206F7269673D24	  1327: bp_was_msg:     dc.b    "  orig=$",0
+01:00F0B5D8 00
+01:00F0B5D9 737465702066726F	  1328: trace_msg:      dc.b    "step from $",0
+01:00F0B5E1 6D2024
+01:00F0B5E4 00
+01:00F0B5E5 3F6E6F2072657375	  1329: nogo_msg:       dc.b    "?no resumable frame (cold entry, or bus/address"
+01:00F0B5ED 6D61626C65206672
+01:00F0B5F5 616D652028636F6C
+01:00F0B5FD 6420656E7472792C
+01:00F0B605 206F72206275732F
+01:00F0B60D 61646472657373
+01:00F0B614 206572726F7229  	  1330:                 dc.b    " error)",13,10,0
+01:00F0B61B 0D
+01:00F0B61C 0A
+01:00F0B61D 00
+01:00F0B61E 726573756D652040	  1331: resume_msg:     dc.b    "resume @$",0
+01:00F0B626 24
+01:00F0B627 00
+01:00F0B628 73656E6420532D72	  1332: load_msg:       dc.b    "send S-records, S8/S9 ends:",13,10,0
+01:00F0B630 65636F7264732C20
+01:00F0B638 53382F533920656E
+01:00F0B640 64733A
+01:00F0B643 0D
+01:00F0B644 0A
+01:00F0B645 00
+01:00F0B646 0D              	  1333: load_done_msg:  dc.b    13,10,"loaded $",0
+01:00F0B647 0A
+01:00F0B648 6C6F616465642024
+01:00F0B650 00
+01:00F0B651 207265636F726473	  1334: load_bytes_msg: dc.b    " records, $",0
+01:00F0B659 2C2024
+01:00F0B65C 00
+                            	  1335: 
+                            	  1336: info_msg:
+01:00F0B65D 52414D3A20202020	  1337:                 dc.b    "RAM:      128 KB (000000-01FFFF)",13,10
+01:00F0B665 2020313238204B42
+01:00F0B66D 2028303030303030
+01:00F0B675 2D30314646464629
+01:00F0B67D 0D
+01:00F0B67E 0A
+01:00F0B67F 524F4D3A20202020	  1338:                 dc.b    "ROM:      64 KB (F00000-F0FFFF)",13,10
+01:00F0B687 20203634204B4220
+01:00F0B68F 284630303030302D
+01:00F0B697 46304646464629
+01:00F0B69E 0D
+01:00F0B69F 0A
+01:00F0B6A0 574353206275663A	  1339:                 dc.b    "WCS buf:  010000-01FFFF (fully loadable via L)",13,10
+01:00F0B6A8 2020303130303030
+01:00F0B6B0 2D30314646464620
+01:00F0B6B8 2866756C6C79206C
+01:00F0B6C0 6F616461626C6520
+01:00F0B6C8 766961204C29
 01:00F0B6CE 0D
 01:00F0B6CF 0A
-01:00F0B6D0 415020492F463A20	  1322:                 dc.b    "AP I/F:   FF0000-FF00FF",13,10
-01:00F0B6D8 2020464630303030
-01:00F0B6E0 2D464630304646
-01:00F0B6E7 0D
-01:00F0B6E8 0A
-01:00F0B6E9 584C54523A202020	  1323:                 dc.b    "XLTR:     FF0200-FF025F",13,10
-01:00F0B6F1 2020464630323030
-01:00F0B6F9 2D464630323546
-01:00F0B700 0D
-01:00F0B701 0A
-01:00F0B702 53494F206368413A	  1324:                 dc.b    "SIO chA:  F70011 data / F70015 ctrl (odd bytes)",13,10
-01:00F0B70A 2020463730303131
-01:00F0B712 2064617461202F20
-01:00F0B71A 4637303031352063
-01:00F0B722 74726C20286F6464
-01:00F0B72A 20627974657329
-01:00F0B731 0D
-01:00F0B732 0A
-01:00F0B733 50544D3A20202020	  1325:                 dc.b    "PTM:      F70001-F7000F (odd bytes)",13,10,0
-01:00F0B73B 2020463730303031
-01:00F0B743 2D46373030304620
-01:00F0B74B 286F646420627974
-01:00F0B753 657329
-01:00F0B756 0D
-01:00F0B757 0A
-01:00F0B758 00
-                            	  1326: 
-01:00F0B759 626F617264207374	  1327: bstat_msg:      dc.b    "board status F70019 = $",0
-01:00F0B761 6174757320463730
-01:00F0B769 303139203D2024
-01:00F0B770 00
-01:00F0B771 564D4F4420637472	  1328: vmod_msg:       dc.b    "VMOD ctrl   1FFF0  = $",0
-01:00F0B779 6C20202031464646
-01:00F0B781 3020203D2024
-01:00F0B787 00
-01:00F0B788 6D6F6E69746F725F	  1329: mend_msg:       dc.b    "monitor_end        = $",0
-01:00F0B790 656E642020202020
-01:00F0B798 2020203D2024
-01:00F0B79E 00
-01:00F0B79F 677270302F6E6573	  1330: fault_msg:      dc.b    "grp0/nest/txfail   = $",0
-01:00F0B7A7 742F74786661696C
-01:00F0B7AF 2020203D2024
-01:00F0B7B5 00
-01:00F0B7B6 2172656675736564	  1331: srec_bad_msg:   dc.b    "!refused (not RAM, or hits monitor space) @$",0
-01:00F0B7BE 20286E6F74205241
-01:00F0B7C6 4D2C206F72206869
-01:00F0B7CE 7473206D6F6E6974
-01:00F0B7D6 6F72207370616365
-01:00F0B7DE 29204024
-01:00F0B7E2 00
-01:00F0B7E3 21636865636B7375	  1332: srec_sum_msg:   dc.b    "!checksum error @$",0
-01:00F0B7EB 6D206572726F7220
-01:00F0B7F3 4024
-01:00F0B7F5 00
-                            	  1333: 
-01:00F0B7F6 50433D24        	  1334: pcmsg:          dc.b    "PC=$",0
-01:00F0B7FA 00
-01:00F0B7FB 202053523D24    	  1335: srmsg:          dc.b    "  SR=$",0
-01:00F0B801 00
-                            	  1336: 
-                            	  1337:                 even
-                            	  1338: monitor_end:
-                            	  1339: 
+01:00F0B6D0 6D6F6E20776F726B	  1340:                 dc.b    "mon work: 00F800-00FEFF + stack top 00FF00",13,10
+01:00F0B6D8 3A20303046383030
+01:00F0B6E0 2D30304645464620
+01:00F0B6E8 2B20737461636B20
+01:00F0B6F0 746F702030304646
+01:00F0B6F8 3030
+01:00F0B6FA 0D
+01:00F0B6FB 0A
+01:00F0B6FC 415020492F463A20	  1341:                 dc.b    "AP I/F:   FF0000-FF00FF",13,10
+01:00F0B704 2020464630303030
+01:00F0B70C 2D464630304646
+01:00F0B713 0D
+01:00F0B714 0A
+01:00F0B715 584C54523A202020	  1342:                 dc.b    "XLTR:     FF0200-FF025F",13,10
+01:00F0B71D 2020464630323030
+01:00F0B725 2D464630323546
+01:00F0B72C 0D
+01:00F0B72D 0A
+01:00F0B72E 53494F206368413A	  1343:                 dc.b    "SIO chA:  F70011 data / F70015 ctrl (odd bytes)",13,10
+01:00F0B736 2020463730303131
+01:00F0B73E 2064617461202F20
+01:00F0B746 4637303031352063
+01:00F0B74E 74726C20286F6464
+01:00F0B756 20627974657329
+01:00F0B75D 0D
+01:00F0B75E 0A
+01:00F0B75F 50544D3A20202020	  1344:                 dc.b    "PTM:      F70001-F7000F (odd bytes)",13,10,0
+01:00F0B767 2020463730303031
+01:00F0B76F 2D46373030304620
+01:00F0B777 286F646420627974
+01:00F0B77F 657329
+01:00F0B782 0D
+01:00F0B783 0A
+01:00F0B784 00
+                            	  1345: 
+01:00F0B785 626F617264207374	  1346: bstat_msg:      dc.b    "board status F70019 = $",0
+01:00F0B78D 6174757320463730
+01:00F0B795 303139203D2024
+01:00F0B79C 00
+01:00F0B79D 564D4F4420637472	  1347: vmod_msg:       dc.b    "VMOD ctrl   1FFF0  = $",0
+01:00F0B7A5 6C20202031464646
+01:00F0B7AD 3020203D2024
+01:00F0B7B3 00
+01:00F0B7B4 6D6F6E69746F725F	  1348: mend_msg:       dc.b    "monitor_end        = $",0
+01:00F0B7BC 656E642020202020
+01:00F0B7C4 2020203D2024
+01:00F0B7CA 00
+01:00F0B7CB 677270302F6E6573	  1349: fault_msg:      dc.b    "grp0/nest/txfail   = $",0
+01:00F0B7D3 742F74786661696C
+01:00F0B7DB 2020203D2024
+01:00F0B7E1 00
+01:00F0B7E2 2172656675736564	  1350: srec_bad_msg:   dc.b    "!refused (not RAM, or hits monitor space) @$",0
+01:00F0B7EA 20286E6F74205241
+01:00F0B7F2 4D2C206F72206869
+01:00F0B7FA 7473206D6F6E6974
+01:00F0B802 6F72207370616365
+01:00F0B80A 29204024
+01:00F0B80E 00
+01:00F0B80F 21636865636B7375	  1351: srec_sum_msg:   dc.b    "!checksum error @$",0
+01:00F0B817 6D206572726F7220
+01:00F0B81F 4024
+01:00F0B821 00
+                            	  1352: 
+01:00F0B822 50433D24        	  1353: pcmsg:          dc.b    "PC=$",0
+01:00F0B826 00
+01:00F0B827 202053523D24    	  1354: srmsg:          dc.b    "  SR=$",0
+01:00F0B82D 00
+                            	  1355: 
+                            	  1356:                 even
+                            	  1357: monitor_end:
+                            	  1358: 
 
 
 Symbols by name:
@@ -1613,78 +1633,78 @@ SIO_A_DATA                       E:00F70011
 SR_TRACE_BIT                     E:0000000F
 TRACE_VECTOR                     E:00000024
 TX_SPIN_LIMIT                    E:00100000
-banner_msg                       A:00F0B266
-bp_clr_all                       A:00F0AC94
-bp_clr_one                       A:00F0AC52
-bp_dup_msg                       A:00F0B535
-bp_empty_msg                     A:00F0B599
-bp_full_msg                      A:00F0B544
-bp_list                          A:00F0ACBC
-bp_list_msg                      A:00F0B58A
-bp_none_msg                      A:00F0B57C
-bp_odd_msg                       A:00F0B555
+banner_msg                       A:00F0B28A
+bp_clr_all                       A:00F0ACA8
+bp_clr_one                       A:00F0AC66
+bp_dup_msg                       A:00F0B559
+bp_empty_msg                     A:00F0B5C5
+bp_full_msg                      A:00F0B568
+bp_list                          A:00F0ACD0
+bp_list_msg                      A:00F0B5B6
+bp_none_msg                      A:00F0B5A8
+bp_odd_msg                       A:00F0B579
 bp_set                           A:00F0ABCE
-bp_set_msg                       A:00F0B52B
-bp_was_msg                       A:00F0B5A4
-bstat_msg                        A:00F0B759
+bp_set_msg                       A:00F0B54F
+bp_was_msg                       A:00F0B5D0
+bstat_msg                        A:00F0B785
 cmd_about                        A:00F0A994
 cmd_bp                           A:00F0AB7E
 cmd_dump                         A:00F0AA8C
 cmd_err                          A:00F0AA80
 cmd_go                           A:00F0AAC4
 cmd_help                         A:00F0A988
-cmd_info                         A:00F0AD66
-cmd_load_srec                    A:00F0ADEE
+cmd_info                         A:00F0AD7A
+cmd_load_srec                    A:00F0AE02
 cmd_loop                         A:00F0A8FA
 cmd_mem                          A:00F0AA30
 cmd_regs                         A:00F0A9A0
-cmd_trace                        A:00F0AD12
+cmd_trace                        A:00F0AD26
 cmd_write                        A:00F0AA90
-cold_init                        A:00F0B108
-entry_msg                        A:00F0B31B
-fault_msg                        A:00F0B79F
-getchar                          A:00F0B1F8
+cold_init                        A:00F0B11C
+entry_msg                        A:00F0B33F
+fault_msg                        A:00F0B7CB
+getchar                          A:00F0B214
 grp0_entry                       A:00F0A874
-help_msg                         A:00F0B352
-hex_err                          A:00F0B524
-hexdump                          A:00F0AF3A
-info_msg                         A:00F0B631
-load_bytes_msg                   A:00F0B625
-load_done_msg                    A:00F0B61A
-load_msg                         A:00F0B5FC
-mend_msg                         A:00F0B788
+help_msg                         A:00F0B376
+hex_err                          A:00F0B548
+hexdump                          A:00F0AF4E
+info_msg                         A:00F0B65D
+load_bytes_msg                   A:00F0B651
+load_done_msg                    A:00F0B646
+load_msg                         A:00F0B628
+mend_msg                         A:00F0B7B4
 mon_dead                         A:00F0A8AA
 monitor_cold                     A:00F0A826
 monitor_common                   A:00F0A8BE
-monitor_end                      A:00F0B802
+monitor_end                      A:00F0B82E
 monitor_entry                    A:00F0A840
-nogo_msg                         A:00F0B5B9
-ok_msg                           A:00F0B51F
-parse_hex                        A:00F0B040
-pcmsg                            A:00F0B7F6
-prompt_msg                       A:00F0B332
-put_crlf                         A:00F0B216
-putchar                          A:00F0B1CE
-puthex_byte                      A:00F0B240
-puthex_long                      A:00F0B25A
-puthex_nibble                    A:00F0B226
-puthex_word                      A:00F0B24E
-puts                             A:00F0B20A
-read_hex_byte                    A:00F0B0D2
-read_hex_nibble                  A:00F0B0E6
-read_line                        A:00F0AFCE
-resume_msg                       A:00F0B5F2
-sio_init                         A:00F0B18C
-skip_ws                          A:00F0B02C
-sr_msg                           A:00F0B32B
-srec_bad_msg                     A:00F0B7B6
-srec_check                       A:00F0B096
-srec_sum_msg                     A:00F0B7E3
-srmsg                            A:00F0B7FB
-trace_msg                        A:00F0B5AD
-trace_noframe                    A:00F0AD5A
-unknown_msg                      A:00F0B33A
-vmod_msg                         A:00F0B771
+nogo_msg                         A:00F0B5E5
+ok_msg                           A:00F0B543
+parse_hex                        A:00F0B054
+pcmsg                            A:00F0B822
+prompt_msg                       A:00F0B356
+put_crlf                         A:00F0B23A
+putchar                          A:00F0B1E2
+puthex_byte                      A:00F0B264
+puthex_long                      A:00F0B27E
+puthex_nibble                    A:00F0B24A
+puthex_word                      A:00F0B272
+puts                             A:00F0B22E
+read_hex_byte                    A:00F0B0E6
+read_hex_nibble                  A:00F0B0FA
+read_line                        A:00F0AFE2
+resume_msg                       A:00F0B61E
+sio_init                         A:00F0B1A0
+skip_ws                          A:00F0B040
+sr_msg                           A:00F0B34F
+srec_bad_msg                     A:00F0B7E2
+srec_check                       A:00F0B0AA
+srec_sum_msg                     A:00F0B80F
+srmsg                            A:00F0B827
+trace_msg                        A:00F0B5D9
+trace_noframe                    A:00F0AD6E
+unknown_msg                      A:00F0B35E
+vmod_msg                         A:00F0B79D
 
 Symbols by value:
 00000000 RR0_RX_AVAIL
@@ -1725,61 +1745,61 @@ Symbols by value:
 00F0AAC4 cmd_go
 00F0AB7E cmd_bp
 00F0ABCE bp_set
-00F0AC52 bp_clr_one
-00F0AC94 bp_clr_all
-00F0ACBC bp_list
-00F0AD12 cmd_trace
-00F0AD5A trace_noframe
-00F0AD66 cmd_info
-00F0ADEE cmd_load_srec
-00F0AF3A hexdump
-00F0AFCE read_line
-00F0B02C skip_ws
-00F0B040 parse_hex
-00F0B096 srec_check
-00F0B0D2 read_hex_byte
-00F0B0E6 read_hex_nibble
-00F0B108 cold_init
-00F0B18C sio_init
-00F0B1CE putchar
-00F0B1F8 getchar
-00F0B20A puts
-00F0B216 put_crlf
-00F0B226 puthex_nibble
-00F0B240 puthex_byte
-00F0B24E puthex_word
-00F0B25A puthex_long
-00F0B266 banner_msg
-00F0B31B entry_msg
-00F0B32B sr_msg
-00F0B332 prompt_msg
-00F0B33A unknown_msg
-00F0B352 help_msg
-00F0B51F ok_msg
-00F0B524 hex_err
-00F0B52B bp_set_msg
-00F0B535 bp_dup_msg
-00F0B544 bp_full_msg
-00F0B555 bp_odd_msg
-00F0B57C bp_none_msg
-00F0B58A bp_list_msg
-00F0B599 bp_empty_msg
-00F0B5A4 bp_was_msg
-00F0B5AD trace_msg
-00F0B5B9 nogo_msg
-00F0B5F2 resume_msg
-00F0B5FC load_msg
-00F0B61A load_done_msg
-00F0B625 load_bytes_msg
-00F0B631 info_msg
-00F0B759 bstat_msg
-00F0B771 vmod_msg
-00F0B788 mend_msg
-00F0B79F fault_msg
-00F0B7B6 srec_bad_msg
-00F0B7E3 srec_sum_msg
-00F0B7F6 pcmsg
-00F0B7FB srmsg
-00F0B802 monitor_end
+00F0AC66 bp_clr_one
+00F0ACA8 bp_clr_all
+00F0ACD0 bp_list
+00F0AD26 cmd_trace
+00F0AD6E trace_noframe
+00F0AD7A cmd_info
+00F0AE02 cmd_load_srec
+00F0AF4E hexdump
+00F0AFE2 read_line
+00F0B040 skip_ws
+00F0B054 parse_hex
+00F0B0AA srec_check
+00F0B0E6 read_hex_byte
+00F0B0FA read_hex_nibble
+00F0B11C cold_init
+00F0B1A0 sio_init
+00F0B1E2 putchar
+00F0B214 getchar
+00F0B22E puts
+00F0B23A put_crlf
+00F0B24A puthex_nibble
+00F0B264 puthex_byte
+00F0B272 puthex_word
+00F0B27E puthex_long
+00F0B28A banner_msg
+00F0B33F entry_msg
+00F0B34F sr_msg
+00F0B356 prompt_msg
+00F0B35E unknown_msg
+00F0B376 help_msg
+00F0B543 ok_msg
+00F0B548 hex_err
+00F0B54F bp_set_msg
+00F0B559 bp_dup_msg
+00F0B568 bp_full_msg
+00F0B579 bp_odd_msg
+00F0B5A8 bp_none_msg
+00F0B5B6 bp_list_msg
+00F0B5C5 bp_empty_msg
+00F0B5D0 bp_was_msg
+00F0B5D9 trace_msg
+00F0B5E5 nogo_msg
+00F0B61E resume_msg
+00F0B628 load_msg
+00F0B646 load_done_msg
+00F0B651 load_bytes_msg
+00F0B65D info_msg
+00F0B785 bstat_msg
+00F0B79D vmod_msg
+00F0B7B4 mend_msg
+00F0B7CB fault_msg
+00F0B7E2 srec_bad_msg
+00F0B80F srec_sum_msg
+00F0B822 pcmsg
+00F0B827 srmsg
+00F0B82E monitor_end
 00F70011 SIO_A_DATA
 00F70015 SIO_A_CTRL

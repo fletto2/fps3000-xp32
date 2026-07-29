@@ -507,6 +507,14 @@ bp_set:
                 beq.w   .odd                    ; 0 is not a target
                 btst.l  #0,d3
                 bne.w   .odd                    ; must be word-aligned
+                ; Target must be on-board RAM.  A breakpoint writes $4E4E to
+                ; the address: in ROM that is silently lost, but in
+                ; peripheral space it would poke the AP I/F or XLTR, and
+                ; $F70011 would transmit a byte over the SIO.
+                cmpi.l  #$400,d3
+                bcs.w   .odd                    ; vector table
+                cmpi.l  #$20000,d3
+                bcc.w   .odd                    ; not on-board RAM
                 ; find a free slot, and reject a duplicate
                 lea     MON_BPT,a0
                 moveq   #MON_BPN-1,d1
@@ -1191,6 +1199,15 @@ sio_init:
 ;      leaves evidence in RAM.  Preserves d0 and d1.
 putchar:
                 move.l  d1,-(sp)
+                ; Belt-and-braces: point the register pointer at RR0 before
+                ; polling status.  On a Z80-SIO-family part the pointer
+                ; auto-resets to 0 after each access, so this should be
+                ; unnecessary -- but $00 to WR0 is the null command
+                ; (pointer := 0, no side effect), it costs two instructions,
+                ; and if the auto-reset does NOT behave as assumed the poll
+                ; would otherwise read WR5 forever and never transmit.  One
+                ; attempt per hardware trip: take the insurance.
+                move.b  #0,SIO_A_CTRL
                 move.l  #TX_SPIN_LIMIT,d1
 .wait:
                 btst.b  #RR0_TX_EMPTY,SIO_A_CTRL
@@ -1216,8 +1233,10 @@ putchar:
 ;      above.  If a board goes quiet, MON_TXFAIL distinguishes "TX
 ;      never became ready" from "nobody typed anything".
 getchar:
+                move.b  #0,SIO_A_CTRL           ; point at RR0 (see putchar)
+.poll:
                 btst.b  #RR0_RX_AVAIL,SIO_A_CTRL
-                beq.b   getchar
+                beq.b   .poll
                 move.b  SIO_A_DATA,d0
                 rts
 
@@ -1301,7 +1320,7 @@ hex_err:        dc.b    "?hex",13,10,0
 bp_set_msg:     dc.b    "bp set @$",0
 bp_dup_msg:     dc.b    "?already set",13,10,0
 bp_full_msg:    dc.b    "?bp table full",13,10,0
-bp_odd_msg:     dc.b    "?bad addr (must be even and nonzero)",13,10,0
+bp_odd_msg:     dc.b    "?bad addr (need even, nonzero, on-board RAM)",13,10,0
 bp_none_msg:    dc.b    "?no such bp",13,10,0
 bp_list_msg:    dc.b    "breakpoints:",13,10,0
 bp_empty_msg:   dc.b    "  (none)",13,10,0

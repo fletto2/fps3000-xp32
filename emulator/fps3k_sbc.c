@@ -291,6 +291,16 @@ int m68k_irq_callback(int level) {
     /* Level 5: TCBIO1I host-link interrupt — vector $128 = #74,
      * handler F05DD6.  Set up by RTOSKernelInit at task creation. */
     extern host_sim_t host_sim;
+
+    /* Vectored interrupt from a BIM: the interrupter supplies the vector
+     * during the IACK cycle (MC68153 datasheet, Figure 6).  Ask the
+     * modelled BIM rather than returning a constant — the firmware
+     * programs BIM2 ch2 with CR $5F (level 7) and VR $4A, so both the
+     * level and the vector come from hardware state, not from us. */
+    if (host_sim.pending) {
+        int vec = versabus_bim_iack(level);
+        if (vec >= 0) return vec;
+    }
     if (level == 5 && host_sim.pending) {
         /* Do NOT clear host_sim.pending here.  The host's byte is consumed
          * when the SBC *reads* the data port, which versabus.c already
@@ -454,7 +464,11 @@ int main(int argc, char **argv) {
         /* Highest pending interrupt wins.  Host attention (L5) is
          * AP-I/F vectored — takes priority over chassis/PTM (L4). */
         if (host_sim.pending) {
-            m68k_set_irq(5);
+            /* Level comes from the BIM control register the firmware
+             * programmed, not from a hard-coded 5.  Falls back to 5 only
+             * if the firmware has not enabled the channel yet. */
+            int lvl = versabus_bim_pending_level();
+            m68k_set_irq(lvl ? lvl : 5);
         } else if (versabus_chassis_irq_pending() || versabus_ptm_irq_pending()) {
             m68k_set_irq(4);
         } else {

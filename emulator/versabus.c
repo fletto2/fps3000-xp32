@@ -408,7 +408,96 @@ static uint16_t xltr_read(uint32_t addr) {
     return 0;
 }
 
+/* ============== MC68153-style BIMs ($FF0230-$FF025F) ==============
+ *
+ * Layout confirmed against the MC68153 datasheet and against what the
+ * firmware writes (see refs_extracted/versabus_access_map.md):
+ *   CR0..CR3 at base+$0,+$2,+$4,+$6   VR0..VR3 at base+$8,+$A,+$C,+$E
+ *   CRn controls INTn.  CR bits 0-2 = request level (0 disables the
+ *   channel outright), bit 4 = IRE.
+ * The firmware programs BIM2 ch2 (CR $FF0254 = $5F, VR $FF025C = $4A)
+ * for the TCBIO1I host link: level 7, vector $4A -> $128 -> F05DD6.
+ * We previously hard-coded level 5 and vector 0x4A, which was wrong on
+ * both counts. */
+static struct {
+    uint8_t cr[BIM_CH];
+    uint8_t vr[BIM_CH];
+    int     req[BIM_CH];       /* device interrupt input asserted */
+} bim[BIM_COUNT];
+
+#define BIM_CR_LEVEL(c)  ((c) & 0x07)
+#define BIM_CR_IRE(c)    (((c) >> 4) & 1)
+
+static int bim_decode(uint32_t addr, int *unit, int *reg) {
+    if (addr < BIM_BASE || addr >= BIM_END) return 0;
+    uint32_t off = addr - BIM_BASE;
+    *unit = (int)(off / 0x10);
+    *reg  = (int)((off % 0x10) / 2);   /* 0-3 = CR0-3, 4-7 = VR0-3 */
+    return (*unit < BIM_COUNT);
+}
+
+int versabus_bim_assert(int unit, int ch) {
+    if (unit < 0 || unit >= BIM_COUNT || ch < 0 || ch >= BIM_CH) return 0;
+    bim[unit].req[ch] = 1;
+    uint8_t cr = bim[unit].cr[ch];
+    if (!BIM_CR_IRE(cr)) return 0;
+    return BIM_CR_LEVEL(cr);          /* 0 = disabled, no IRQ output */
+}
+
+void versabus_bim_clear(int unit, int ch) {
+    if (unit < 0 || unit >= BIM_COUNT || ch < 0 || ch >= BIM_CH) return;
+    bim[unit].req[ch] = 0;
+}
+
+int versabus_bim_enabled(int unit, int ch) {
+    if (unit < 0 || unit >= BIM_COUNT || ch < 0 || ch >= BIM_CH) return 0;
+    uint8_t cr = bim[unit].cr[ch];
+    return BIM_CR_IRE(cr) && BIM_CR_LEVEL(cr);
+}
+
+int versabus_bim_pending_level(void) {
+    int best = 0;
+    for (int u = 0; u < BIM_COUNT; u++)
+        for (int c = 0; c < BIM_CH; c++) {
+            if (!bim[u].req[c]) continue;
+            uint8_t cr = bim[u].cr[c];
+            if (!BIM_CR_IRE(cr)) continue;
+            int lvl = BIM_CR_LEVEL(cr);
+            if (lvl > best) best = lvl;
+        }
+    return best;
+}
+
+int versabus_bim_iack(int level) {
+    /* Datasheet: on a level match the interrupter supplies its vector.
+     * Among several requesters at the same level, "preference is given to
+     * the highest number requester, that is, INT3 has highest priority
+     * and INT0 has lowest". */
+    for (int u = BIM_COUNT - 1; u >= 0; u--)
+        for (int c = BIM_CH - 1; c >= 0; c--) {
+            if (!bim[u].req[c]) continue;
+            uint8_t cr = bim[u].cr[c];
+            if (!BIM_CR_IRE(cr)) continue;
+            if (BIM_CR_LEVEL(cr) != level) continue;
+            if (log_fp)
+                fprintf(log_fp, "[BIM] IACK L%d -> unit %d ch %d vector $%02X\n",
+                        level, u, c, bim[u].vr[c]);
+            return bim[u].vr[c];
+        }
+    return -1;
+}
+
 static void xltr_write(uint32_t addr, uint16_t val) {
+    int bu, br;
+    if (bim_decode(addr, &bu, &br)) {
+        /* 8-bit register on the low byte of the word slot */
+        if (br < 4) bim[bu].cr[br]     = (uint8_t)val;
+        else        bim[bu].vr[br - 4] = (uint8_t)val;
+        if (log_fp)
+            fprintf(log_fp, "[BIM] unit %d %s%d <- $%02X\n",
+                    bu, br < 4 ? "CR" : "VR", br < 4 ? br : br - 4, (uint8_t)val);
+        /* fall through so the raw shadow still round-trips on read */
+    }
     int idx = (addr - XLTR_BASE) / 2;
     if (idx < 0 || idx >= (int)(sizeof xltr.raw / sizeof xltr.raw[0])) return;
 

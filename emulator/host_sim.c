@@ -72,8 +72,15 @@ static int host_sim_next_byte(host_sim_t *h) {
 }
 
 /* Don't start sending until the SBC has finished its self-test +
- * RTOS init.  Detected by vector $128 (TCBIO1I host-link ISR) being
- * programmed to F05DD6 — that vector is set when TCBIO1I task starts.
+ * RTOS init.  The gate is that the firmware has ENABLED the host
+ * channel on the BIM (CR $FF0254: IRE set, level != 0) — that is what
+ * physically permits the interrupt to reach the CPU.
+ *
+ * The old gate was 'vector $128 == F05DD6', which fires too early: the
+ * RTOS installs that vector at task-creation time, before the TCBIO1I
+ * task body runs.  A trace shows F05DB8 (the CR write) and F05D00 (the
+ * task body) never execute at all, so the previous model was injecting
+ * an interrupt into a task that had not initialised.
  * Until then, our IRQs would land on F0A27A panic or F00896 generic
  * (which doesn't post the right ASQ event for TCBRDHC). */
 extern uint8_t *host_sim_get_ram_ptr(void);
@@ -84,6 +91,8 @@ static int sbc_ready(void) {
     if (!ram) return 0;
     uint32_t v128 = ((uint32_t)ram[0x128] << 24) | ((uint32_t)ram[0x129] << 16)
                   | ((uint32_t)ram[0x12A] << 8)  |  (uint32_t)ram[0x12B];
+    /* Faithful gate: the BIM channel must be enabled. */
+    if (!versabus_bim_enabled(BIM_HOST_UNIT, BIM_HOST_CH)) return 0;
     return v128 == 0xF05DD6;
 }
 
@@ -121,7 +130,11 @@ void host_sim_tick(host_sim_t *h, uint32_t cycles) {
         fprintf(h->log_fp, "[host] queue byte 0x%02X ('%c') #%d\n",
                 b, (b >= 32 && b < 127) ? b : '.', h->bytes_sent);
     }
-    /* Raise level-5 vectored on the VERSAbus */
+    /* Assert the host channel's device-interrupt input on the BIM.  The
+     * BIM decides the request level from its control register; we no
+     * longer pick one.  (BIM2 ch2 = CR $FF0254, VR $FF025C.) */
+    versabus_bim_assert(BIM_HOST_UNIT, BIM_HOST_CH);
+    /* Raise the interrupt on the VERSAbus */
     m68k_set_irq(5);
     h->delay_remaining = h->interbyte_delay;
 }
