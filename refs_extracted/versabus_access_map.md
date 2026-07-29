@@ -1455,6 +1455,49 @@ original was right in substance and my re-verification of it was wrong in
 method. Both were caught by doing the arithmetic or the decode rather than
 trusting a summary.*
 
+### How much of this firmware has actually been executed: 19%
+
+Taking the union of five diverse emulator configurations — a plain boot, an XP
+channel driven to its `$8000` path, TCBIO1I driven on both arms, the mailbox
+reply path, and a full S-record staging run — and comparing against the FPS
+application region `$F04488-$F0A5FF`:
+
+| region | executed | of |
+|---|---|---|
+| init / self-test | **52%** | 5,888 b |
+| RTOS init | **41%** | 2,560 b |
+| TCBIO1I | **30%** | 512 b |
+| **TCBRDHC** | **8%** | 5,888 b |
+| XP1I | 6% | 2,560 b |
+| XP2I / XP3I / XP4I | 4% each | 2,560 b each |
+| pre-task | 7% | 376 b |
+| **overall** | **19%** | **24,952 b** |
+
+**Four fifths of this firmware has never run**, in any configuration this
+project has constructed. The largest dark spans are the four XP task bodies —
+about 2,350 bytes each, 92% of each task — and the middle of RDHC.
+
+This is the calibration the rest of this document needs, so it is worth being
+blunt about which claims sit on which side.
+
+**Execution-verified**: the self-test suite and its phase beacon; the S-record
+staging path end to end; the XP channel ISR and its `$8004` transaction; the
+`$8000`/`$1B` path and the command-word bits that gate it; the `$105E`
+presence gate; TCBIO1I's two arms and the `$00010002` reply; the BIM
+programming and the resulting vector table; the `$281` deadlock.
+
+**Static only**: essentially all of RDHC beyond its prologue — the panel
+command processor's internals, most of the host command dispatch, the SLC
+parser paths; and 94-96% of each XP task body, including everything past the
+bit-11 dispatch. Those readings come from decoding, and decoding is what
+produced three wrong claims in the audit above.
+
+The reason is structural rather than a gap in effort: **every task blocks on
+directive `$13` within ~45 instructions of its entry**, and only an interrupt
+advances it. Without a chassis model that drives the full command protocol,
+most of this firmware cannot be reached. That, not the ROM, is the limiting
+factor on further progress from the emulator side.
+
 ### Audit of the pre-existing annotations — result
 
 The `fps3k.asm` note table carried **64 annotations** written before this
