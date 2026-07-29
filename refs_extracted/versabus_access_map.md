@@ -1455,6 +1455,45 @@ original was right in substance and my re-verification of it was wrong in
 method. Both were caught by doing the arithmetic or the decode rather than
 trusting a summary.*
 
+### Sweeping the response codes does not unlock RDHC
+
+The coverage measurement below names the bottleneck as "a chassis model that
+drives the full command protocol". The cheapest approximation of that is to
+script every response code the 16-entry dispatcher at `$F05102` accepts. It
+was tried, and it does not work.
+
+Driven one at a time, each code reaches a useful slice of RDHC:
+
+| code | RDHC PCs | | code | RDHC PCs |
+|---|---|---|---|---|
+| `$03` | 82 | | `$0A` | 69 |
+| `$04` | 48 | | `$0B` | 65 |
+| `$05` | 68 | | `$0C` | 71 |
+| `$06` | 72 | | `$0D` | 66 |
+| `$07` | 62 | | `$0E` | 66 |
+| `$08` | 50 | | `$0F` | 65 |
+| `$09` | 62 | | | |
+
+Chained into one sequence they reach **147 distinct RDHC PCs, 56 of them new**.
+But in coverage terms that is **4,834 → 4,946 bytes**: RDHC goes from 7% to 8%
+and the overall figure stays at 19%.
+
+**And combining hooks makes things worse, not better.** A single configuration
+with the full code sweep *plus* channel presence, XP and host interrupts, a
+command word and an S-record source reaches **RDHC 2%** — below either the code
+sweep alone (4%) or the five-config union (7%). Driving several subsystems at
+once makes the firmware take different and shorter paths, so the best coverage
+comes from unioning separate focused runs, never from one maximal
+configuration. Worth knowing before anyone tries to build "the one config that
+exercises everything".
+
+The reason the sweep fails is already recorded as a modelling caveat: after the
+SBC acknowledges, the emulator queues the next step itself rather than waiting
+for another `CHANNEL_SELECT` write. A scripted sequence is therefore a
+monologue, and RDHC's bulk sits behind a conversation. Closing that needs a
+chassis model that *reacts* — which needs to know what the real chassis does,
+which is what the bus trace in Check 7c would tell us.
+
 ### How much of this firmware has actually been executed: 19%
 
 Taking the union of five diverse emulator configurations — a plain boot, an XP
