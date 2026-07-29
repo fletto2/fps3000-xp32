@@ -360,6 +360,28 @@ static uint16_t apif_read(uint32_t addr) {
         static uint16_t n = 0x1000;
         return n++;
     }
+    /* FPS3K_SREC=<file> serves the file's text through $FF0008 as two
+     * ASCII characters per 16-bit word, which is how the firmware's
+     * S-record front end at F04B22 reads it (F04B8A compares against
+     * $5330 = "S0"). */
+    /* $FF0004 bit 0 is the port-ready flag the firmware polls at F04B22
+     * and F05A22 before every transfer.  With an S-record source
+     * configured, data is always available. */
+    if (addr == 0xFF0004 && getenv("FPS3K_SREC")) return 0x0001;
+
+    if (addr == 0xFF0008) {
+        const char *fn = getenv("FPS3K_SREC");
+        if (fn) {
+            static FILE *sf; static int done;
+            if (!sf && !done) { sf = fopen(fn, "rb"); if (!sf) done = 1; }
+            if (sf) {
+                int c1 = fgetc(sf), c2 = fgetc(sf);
+                if (c1 == EOF) { fclose(sf); sf = NULL; done = 1; return 0; }
+                if (c2 == EOF) c2 = 0x0A;
+                return (uint16_t)((c1 << 8) | c2);
+            }
+        }
+    }
     if (addr == APIF_CMD_STATUS || addr == APIF_CMD_STATUS+1) {
         /* When the ROM polls after writing 0x8004/0x8005, we automatically
          * advance the state to "ready, no error" so the loop terminates. */
@@ -1207,6 +1229,20 @@ void versabus_tick(uint32_t cycles) {
     if (xltr.busy_ticks > cycles) xltr.busy_ticks -= cycles;
     else                          xltr.busy_ticks = 0;
     panel_resp_tick(cycles);
+
+    /* A scripted chassis initiates.  TCBRDHC parks at F04736 waiting to
+     * be told what to do, so nothing ever writes CHANNEL_SELECT to arm
+     * the first response -- the sequence has to start itself once BIM0
+     * ch0 is enabled and the RTOS is up. */
+    {
+        static uint64_t seq_start;
+        seq_init();
+        if (seq_len > 0 && seq_next == 0 && !panel_resp_armed) {
+            if (seq_start < 40000000ull) seq_start += cycles;
+            else if (versabus_bim_enabled(0, 0))
+                versabus_arm_panel_response(0, 400);
+        }
+    }
 
     if (!inject_done) {
         const char *e = getenv("FPS3K_INJECT");

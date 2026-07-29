@@ -493,6 +493,53 @@ is that the value's origin is **unresolved**.
 
 Reproduce with `FPS3K_DMA10AA=2 FPS3K_MBOX=00010000 FPS3K_HOSTLVL=5`.
 
+### Driving the S-record front end — what it takes, and where it stops
+
+Reaching `SRecordDataHandler` through the firmware's own path (rather
+than the monitor's `L` bypass) needs four things, each found by running
+into it:
+
+1. **`$FF0004` bit 0 must read set.** F04B22 spins on it before every
+   transfer — 9.2 million iterations in the run that lacked it. It is the
+   port-ready flag, and `versabus.c` now returns it when an S-record
+   source is configured.
+2. **The chassis must initiate.** TCBRDHC parks at **F04736** waiting to
+   be told what to do, so nothing ever writes CHANNEL_SELECT and nothing
+   arms a response. The scripted chassis has to start itself once BIM0
+   ch0 is enabled; it cannot wait to be prompted.
+3. **The stream must be 4-character aligned and free of newlines.** The
+   parser reads **two words per iteration, two ASCII characters per
+   word**, and does not re-synchronise on a record boundary. A 17-byte
+   `S0` header with a trailing newline misaligns everything that follows,
+   which is what an early attempt did.
+4. **The word count `$E64` must be programmed first**, via response codes
+   `$2`/`$42`. With it zero the parser reads the header, matches `"S0"`
+   and exits immediately at F04C42.
+
+With all four, the path runs: `F04B8A` matches, `F04BBC` matches `"S2"`,
+and **`SRecordDataHandler` at F051A2 executes** — 35 distinct
+instructions of it, reading the record body directly from `$FF0008`
+through its own arm/poll/clear loop at F051A8-F051BE.
+
+Reproduce with:
+
+```
+FPS3K_SREC=<file> FPS3K_SEQ="02:000E,42:0000,00:0000"
+```
+
+**Where it still stops.** The handler runs to its drain loop at
+F05218-F05222 and does not reach F05224, the `PCMD_CH1_ACK` that ends a
+successful record. The staging buffer stays empty, so the store never
+happens. The likely cause is the record-body byte count: the handler
+decrements `d4` per character and the source runs out, returning zeros
+past end-of-file, so the loop never satisfies its exit test.
+
+That is a defect in the **test harness**, not evidence about the
+firmware — a chassis that stops presenting data rather than returning
+zeros would behave differently. Anyone continuing this should make the
+source signal exhaustion rather than pad, and check `d4`/`d5` against the
+record's own length byte.
+
 ### `$FF0008` has three modes, and one of them is ASCII S-records
 
 The third branch out of the opcode test — `$E5C == 0` with `$E87` bit 5
