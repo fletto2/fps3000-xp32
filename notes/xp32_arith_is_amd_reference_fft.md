@@ -114,3 +114,77 @@ non-FFT kernel should use the same bits for visibly different purposes.
 - Everything above about the microword is inference from AMD's design
   applied to FPS's hardware. It predicts what to look for; it does not
   establish the FPS encoding.
+
+---
+
+## AMD publishes the reference design's 128-bit microword — and it is bit-mapped
+
+§4.1 states the design's microprogram control unit outright:
+
+> The microword width is **128 bits**. The code can be up to **2K** deep.
+> High-speed (35 ns) registered PROMs are used to store the code. The
+> sequencer is the Am2910A. Two Am2922s allow the sequencer to test up to
+> 16 different conditions.
+
+128 bits is the XP-32 AU microword width exactly, and 2K is the EU PROM
+depth Hockney gives. That is not proof of a shared design, but it is a
+second independent convergence on top of the six-part hardware match.
+
+Better still, **Appendix 2 (`DSP.DEF`) is reproduced in full** — the
+AMDASM meta-assembler definition file, opening with `WORD 128` and
+followed by a bit-numbered map. The OCR is imperfect but the structure is
+unambiguous:
+
+| Bits | Group | Contents |
+|---|---|---|
+| 127–96 | **Real ALU** | shift, ALU function, `R0p`/`Rsp` selects, A/B port selects, `RMIO3-0`, `RDIO2-0`, `RWE` |
+| 95–64 | **Imaginary ALU** | the same fields mirrored (`IALU`, `IA…`, `IB…`, `IMIO`, `IDIO`, `IWE`) |
+| 63–32 | **Multiplier + Address Generator** | `RND`, multiplier port selects, then `AG19…AG0` — twenty address-generator bits |
+| 31–0 | **Program Sequence** | `INTR`, `CKSEL`, `CCSEL3-0`, `BR11…BR0` branch address, `IOI3-0` |
+
+Four 32-bit quarters, one per major resource.
+
+### The overlay is explicit, and it carries an Am29116 instruction
+
+Immediately after the main map the file has a section headed
+**`ADDRESS GENERATOR OVERLAY`**, redefining the same bit positions as
+`DITIF`, `4I2`, `PSD`, `S3-0` … and **`I15…I00`** — a full **16-bit
+Am29116 instruction field** occupying the bits that otherwise carry
+Am29540 FFT control.
+
+This is the prose claim ("the microcode bits for the two parts are
+overlayed") realised in the actual assembler definitions, and it is
+directly relevant: the XP-32's EU also has an Am29116 whose 16-bit
+instruction has to come from somewhere, and CLAUDE.md's reading of
+Hockney's 80-bit EU word is "16-bit Am29116 instruction + 64 bits of side
+control".
+
+---
+
+## This resolves an open objection in the layout stress test
+
+`notes/mc_xp32_layout_stress.md` lists as an unresolved adversarial
+objection:
+
+> Adder #2 symmetry unverified — the FPS-3000 may have asymmetric adders
+> (one FP + one integer/address).
+
+The consensus layout allots bits 24–35 to "Adder #1" and 36–47 to
+"Adder #2 (symmetric mirror — UNVERIFIED)". AMD's design answers the
+architectural question: its two ALUs are the **real and imaginary halves
+of complex arithmetic**, byte-for-byte symmetric in the microword because
+complex data demands it.
+
+The FPS-3000 AC is described as "1 mul + 2 add" — the same shape. For a
+machine built around FFTs, two *symmetric* adders is the expected design,
+not two differently-purposed ones. The objection does not disappear —
+FPS could still have made them asymmetric — but the "one FP + one
+integer/address" alternative now has to explain why an FFT engine would
+forgo a complex-arithmetic datapath its own parts list is organised
+around.
+
+**What does not carry over:** AMD's ALUs are Am29501 16-bit fixed-point
+slices; the XP-32 is 32-bit IEEE-754 with Weitek parts. The field
+*contents* will differ. What transfers is the organising principle — two
+symmetric arithmetic channels, a multiplier, a sequencer, and an
+address-generator region overlaid with an Am29116 instruction.
