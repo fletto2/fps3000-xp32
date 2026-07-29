@@ -3,6 +3,7 @@
 #include "versabus.h"
 #include "mc6840.h"
 #include "upd7201.h"
+#include "musashi/m68k.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -184,6 +185,8 @@ static void log_access(const char *op, uint32_t addr, uint32_t val, int size) {
 
     fprintf(log_fp, "[%-12s] %s %d-byte %06X = %08X  %s",
             cls, op, size, addr, val, name);
+    if (getenv("FPS3K_BUSPC"))
+        fprintf(log_fp, " @%06X", m68k_get_reg(NULL, M68K_REG_PPC));
 
     /* For panel-cmd-related writes, decode the panel cmd */
     if ((addr == APIF_CMD_ARG_HI ||
