@@ -1532,6 +1532,56 @@ transfer loop.
 consistent with the emulator's bit-5 BERR gate derived from the boot
 self-tests.
 
+### Coverage map: what is left to analyse
+
+Combining the replication map with the named routines and finding notes
+in `fps3k.asm` gives a defensible answer to "how much is understood".
+
+Counting only **named** routines (45) and **finding notes** (36) — not
+the 1,132 auto-generated `loc_F0xxxx` labels, which sit about 21 bytes
+apart and would make any proximity metric meaningless:
+
+| | bytes |
+|---|---|
+| unique logic (replication removed) | 14,792 |
+| attributed to a named routine or finding | 7,812 — **53%** |
+| unattributed, in runs of 200 B or more | 5,304 |
+
+**The ten largest unattributed runs**, which are the work queue:
+
+| range | size | region |
+|---|---|---|
+| `F0929C-F098EB` | 1,616 B | self-test |
+| `F05356-F05687` | 818 B | TCBRDHC |
+| `F099EE-F09C05` | 536 B | self-test |
+| `F08B5C-F08D5D` | 514 B | MainInit |
+| `F0A14E-F0A331` | 484 B | init/RTOS |
+| `F07DC0-F07F05` | 326 B | TCBXP1I |
+| `F0A432-F0A55D` | 300 B | init/RTOS |
+| `F09072-F09175` | 260 B | self-test |
+| `F09D96-F09E87` | 242 B | init/RTOS |
+| `F08832-F08901` | 208 B | MainInit |
+
+Two observations worth acting on.
+
+**Nearly half the backlog is in the self-test region** (2,412 of 5,304
+bytes across three runs). Those phases are documented behaviourally in
+`selftest_reference.md` — what each asserts and what a hang there means —
+but the routines themselves are unnamed. Since the suite now runs to
+completion in the emulator, they can be analysed with live traces rather
+than by reading alone, which is the cheapest remaining work here.
+
+**`F05356-F05687` in TCBRDHC is the highest-value single run.** It sits
+immediately before `PanelIOConfigure_25A` and contains the descriptor
+copy loop at F0549E and the `HXP0` ASQ-name builder at F053B6, both only
+partly traced. It is command-path code, so it bears directly on driving
+the machine.
+
+The 47% figure should not be read as "half the firmware is a mystery".
+Much of the unattributed remainder is RMS68K glue and init sequencing
+whose *behaviour* is understood from traces even where no name has been
+attached. It measures documentation coverage, not comprehension.
+
 ### A quarter of the application firmware is literal copy-paste
 
 The seven-copy issuer and the five-copy dispatch table are not isolated
