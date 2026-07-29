@@ -1389,6 +1389,59 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The panel-command issuer exists in eight byte-identical copies
+
+There are exactly nine `bra .` (`60FE`) sites in the ROM, and **eight of them
+are the tail of the same 48-byte routine**, replicated verbatim:
+
+| entry | spin | reached from | note |
+|---|---|---|---|
+| `$F04500` | `$F04530` | pre-task region | |
+| `$F05688` | `$F056B8` | RDHC | documented as "PanelIOCommand processor" |
+| `$F05E56` | `$F05E86` | TCBIO1I | the `$281` deadlock above |
+| `$F068A8` | `$F068D8` | XP4I | |
+| `$F072C0` | `$F072F0` | XP3I | |
+| `$F07CC0` | `$F07CF0` | XP2I | |
+| `$F086C0` | `$F086F0` | XP1I | the `jsr $F086C0` all over XP1I |
+| `$F0A57E` | `$F0A5AE` | RTOS/init | |
+
+The ninth spin is `$F001AA`, in the RMS68K kernel.
+
+All eight are **byte-identical over the full 48 bytes**, preamble included:
+
+```
+move.w  d0,$0E6E          ; stash the command code -- the SAME global in all 8
+movea.l #$FF0000,a0
+move.w  d0,$0E(a0)        ; command port
+move.w  $202(a0),d1 / bclr #$E / bset #$C / move.w d1,$202(a0)
+move.w  $200(a0),d1 / bclr #$A / move.w d1,$200(a0)
+move.w  d0,$204(a0)       ; CHANNEL_SELECT
+bra .
+```
+
+Because it takes its command in `d0` and addresses everything off `$FF0000`,
+the routine needs no per-task constants — which is exactly why it could be
+copied verbatim rather than parameterised. All eight write the same global
+`$0E6E`, so there is no per-copy state either; the replication buys locality,
+not behaviour.
+
+Three loose ends close here:
+
+- **`$F086C0`**, the target of the `jsr` that appears throughout XP1I and
+  whose siblings `$F07CC0`/`$F072C0`/`$F068A8` show up in the template diff as
+  differing constants, is this routine.
+- **`$F0A57E`** is copy eight. This project previously recorded that address
+  as `TCBDefinitionTable`, which was wrong (corrected earlier to `$F0A600`);
+  it is a panel-command issuer.
+- **`$F05688`**, already documented as the "PanelIOCommand processor", is one
+  member of a family rather than a unique routine.
+
+**The level constraint applies to every copy.** Each ends in a spin that only
+`F04930` can break, and `F04930` is level 6. So any caller running at level 7
+— which is every channel ISR, since the firmware writes `CR = $5F` to all of
+them — cannot be rescued. Whether that matters depends on whether a given copy
+is ever called from ISR context; measured so far, only TCBIO1I's is.
+
 ### The `$281` path is unserviceable as the firmware programs the BIMs
 
 TCBIO1I's host-request arm ends in the documented `bra .` spin, and the

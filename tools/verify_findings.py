@@ -96,6 +96,20 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- eight byte-identical copies of the panel-command issuer ---------
+    ISSUERS = [0xF04500, 0xF05688, 0xF05E56, 0xF068A8,
+               0xF072C0, 0xF07CC0, 0xF086C0, 0xF0A57E]
+    body = d[ISSUERS[0]-B:ISSUERS[0]-B+0x30]
+    check('panel-command issuer: 8 byte-identical 48-byte copies',
+          all(d[e-B:e-B+0x30] == body for e in ISSUERS) and
+          d.count(body) == 8)
+    check('each issuer stashes d0 at $0E6E and is followed by bra .',
+          body[:6].hex().upper() == '33C000000E6E' and
+          body[0x2C:0x30].hex().upper() == '31400204' and
+          all(d[e-B+0x30:e-B+0x32] == b'\x60\xfe' for e in ISSUERS))
+    check('exactly 9 bra . sites: the 8 issuers plus one in the kernel',
+          d.count(b'\x60\xfe') == 9)
+
     # --- the $281 arm cannot be rescued: level 6 under a level-7 ISR -----
     tr6, _ = run({'FPS3K_XPIRQ': '6'}, 150_000_000)
     check('BIM0 ch0 responder F04930 runs when nothing is spinning',
