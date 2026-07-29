@@ -493,6 +493,47 @@ is that the value's origin is **unresolved**.
 
 Reproduce with `FPS3K_DMA10AA=2 FPS3K_MBOX=00010000 FPS3K_HOSTLVL=5`.
 
+### `$FF0008` has three modes, and one of them is ASCII S-records
+
+The third branch out of the opcode test — `$E5C == 0` with `$E87` bit 5
+**clear** — leads to F04B22, and it is the S-record receiver:
+
+```
+F04B22  poll $FF0004 bit 0            ; port ready
+F04B2C  COUNTER <- 4
+F04B4E  STATUS_IRQ <- $400            ; arm
+F04B54  poll STATUS_IRQ bit 15, clear
+F04B64  d1 = (a0)                     ; word 1 from $FF0008
+F04B68  arm / poll / clear again
+F04B7E  d2 = (a0)                     ; word 2
+F04B82  jsr F05150                    ; hex conversion
+F04B8A  cmpi.w #$5330,d1              ; "S0"
+F04B9A  cmpi.w #$5331,d1              ; "S1" -> d5=8, jsr SRecordDataHandler
+```
+
+`$5330` is ASCII **`"S0"`** and `$5331` is **`"S1"`**. So the S-records
+arrive through the same `$FF0008` port as **two ASCII characters per
+16-bit word**, one word per arm/poll/clear cycle on `XLTR_STATUS_IRQ`.
+
+CLAUDE.md describes the upload as "S-records over the AP I/F", which is
+right but leaves the mechanism open. The concrete answer:
+
+| `$E5C` | bit 5 | Mode at `$FF0008` |
+|---|---|---|
+| `$00` | 0 | **ASCII S-record text**, 2 chars per word, parsed in place |
+| `$28` | — | **binary inbound**, word -> `$10000+` |
+| `$00` | 1 | **binary outbound**, `$10000+` -> port |
+
+One port, three modes, all three gated by the identical
+`STATUS_IRQ <- $400` / poll bit 15 / `STATUS_IRQ <- 0` handshake. The
+mode is selected entirely by the latched opcode and one response bit.
+
+That also explains why the firmware carries an S-record parser at all
+when it has a perfectly good binary bulk path: the two are alternative
+front ends to the same staging buffer, and the ASCII form is what a host
+sends when it is shipping a *file*, while the binary form is what the
+chassis uses once a transfer is already set up.
+
 ### `$FF0008` is bidirectional, and response-byte bit 5 picks the direction
 
 The inbound loop at F04AE2 is only half the mechanism. F04C50 is its
