@@ -696,6 +696,64 @@ four labels are wrong. The evidence supports:
 | +`$0A` | 32-bit data register, **low half** |
 | +`$0E` | **command/trigger** — `$8000` fires it; also readable |
 
+## Why no datasheet defines the board-status bits: six of them are user-defined
+
+Motorola's own **Table 1 — VM02 Specifications** (M68KVM02-3, page 2-59
+of the datasheet, now at `refs/datasheets/M68KVM02.pdf`) settles a
+question this project has worked around for a long time:
+
+```
+Board Status/Control Registers
+  Size            28 bits
+  Status Inputs   System Controller
+  12 Bits         VERSAbus Available
+                  VERSAbus Interrupt Serviced
+                  System Failure
+                  VERSAbus Test
+                  User-Defined (6)          <-- six of the twelve
+  Control Outputs VERSAbus Interrupt
+  16 Bits         VERSAbus Interrupt Acknowledge Mask
+                  System Controller VERSAbus Transfer Request
+                  VERSAbus Block Transfer Request
+                  Board Fail Status
+                  Interrupt Mask
+                  VERSAbus Available Mask
+                  System Fail Interrupt Mask
+                  Write Protect
+                  I/O Channel Interrupt Mask
+                  VERSAbus Resource Management (4)
+```
+
+12 status + 16 control = the stated 28 bits. `$F70018/$F70019` carries
+the status inputs; `$1FFF0/$1FFF1` carries the control outputs.
+
+**Half the status register is left to the integrator.** Motorola defines
+five signals and hands FPS six bits to wire to whatever the chassis
+needs. That is exactly where the bits this project has been reverse-
+engineering must live: `$F70019` bits 1, 2, 3, 4 and 5 — the ones driving
+the self-test gate, the chassis-ready handshake and the block selector —
+are FPS-specific, not Motorola-specific.
+
+Three consequences:
+
+1. **No datasheet will ever define them.** Searching for Motorola
+   documentation of these bits was never going to succeed, and the
+   inference-from-firmware approach was not a workaround but the only
+   available method.
+2. **The relationships are allowed to look arbitrary.** `$F70019` bit 3
+   tracking the inverse of `$1FFF1` bit 6 is a wire FPS chose. There is
+   no general rule to recover, only this machine's wiring.
+3. **The count fits.** Five bits are in active use in the firmware
+   (1, 2, 3, 4, 5) against six user-defined inputs available — a
+   comfortable match, and it suggests one spare.
+
+The same table also confirms a modelling detail taken on faith. The
+memory map footnote reads "**Control Register image only. Register not
+directly accessible**", so `$1FFF0` is a RAM-backed image whose reads
+return the last value written rather than any hardware state. That is
+what `versabus.c` implements, and phase `$0600`'s eight-pattern
+round-trip test only passes because of it.
+
 ## Validation record: the self-test suite as a chassis-model test harness
 
 With the four chassis-stub fixes in place the firmware's own diagnostics
