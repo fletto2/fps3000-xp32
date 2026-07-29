@@ -56,8 +56,18 @@ void mc6840_write(mc6840_t *p, int reg, uint8_t val) {
     switch (reg) {
         case 0:
             /* CR1 or CR3 depending on CR2[0] */
-            if (p->cr2_select_cr1) p->cr[0] = val;
-            else                   p->cr[2] = val;
+            if (p->cr2_select_cr1) {
+                p->cr[0] = val;
+                /* Setting the internal reset (CR1 bit 0) holds all three
+                 * timers AND clears the interrupt flags.  Without this the
+                 * phase-$900 handler cannot dismiss the interrupt on its
+                 * d6==3 path, which reads the status register but not the
+                 * counters: T3's flag stayed set with CR3 bit 6 still
+                 * enabled, so the handler re-entered forever. */
+                if (val & 0x01) p->status = 0;
+            } else {
+                p->cr[2] = val;
+            }
             if (p->log_fp) fprintf(p->log_fp, "[PTM] CR%d <- %02X\n",
                                    p->cr2_select_cr1 ? 1 : 3, val);
             break;
@@ -106,8 +116,16 @@ void mc6840_tick(mc6840_t *p, uint32_t cpu_cycles) {
      * Each timer's internal reset is its OWN CRn bit 0.  Default
      * "halted" state (CRn = 0x01) means that timer is held in
      * preset state and does not count. */
+    /* CORRECTION: the MC6840 has ONE internal reset, CR1 bit 0, and it
+     * holds ALL THREE timers.  CR2 bit 0 is the reg-0 address select
+     * (as the comment above says) and CR3 bit 0 is the T3 prescaler
+     * select — neither is a halt.  Treating bit 0 as a per-timer halt
+     * left T2 and T3 free-running with a zero latch, re-setting their
+     * status flags faster than the phase-$900 interrupt handler
+     * (F0911E) could clear them, so its `tst.b` on the status register
+     * never read 0 and the test span forever. */
+    if (p->cr[0] & 0x01) return;                 /* CR1 bit 0 = internal reset */
     for (int t = 0; t < 3; t++) {
-        if (p->cr[t] & 0x01) continue;           /* CRn bit 0 = reset → halted */
         uint32_t to_decr = cpu_cycles;
         if (p->cr[t] & 0x02) to_decr /= 8;       /* very rough prescale */
         if (p->counter[t] >= to_decr) {

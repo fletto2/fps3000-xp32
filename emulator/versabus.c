@@ -77,6 +77,9 @@ static int versabus_seq_take(uint8_t *code);
  * issued the command. */
 static int      bim_in_service_unit = -1, bim_in_service_ch = -1;
 
+/* Count of $D0 checkpoint markers the SBC has written to $1FFF1. */
+static int      vmod_d0_writes;
+
 /* VERSAmodule control register */
 static uint16_t vmod_ctrl;
 
@@ -652,7 +655,14 @@ static void xltr_write(uint32_t addr, uint16_t val) {
                 fprintf(log_fp, "[PANEL] CHANNEL_SELECT <- $%04X, mode0=$%04X, arm=%s\n",
                         val, xltr.mode0,
                         (xltr.mode0 & MODE0_RESP_ACK) ? "no (ACK set)" : "yes");
-            if (!(xltr.mode0 & MODE0_RESP_ACK)) {
+            /* Only a real panel command gets a response.  PanelIOConfigure
+             * sets MODE1 bit 12 (bset #$c at F056A0) before writing
+             * CHANNEL_SELECT; the self-test register walks write MODE1 =
+             * $2000 with bit 12 clear.  Without this gate the model armed
+             * a response during phase $1600 and put a code into MODE0's
+             * low byte, which F09590-F09598 checks must be zero -- the
+             * chassis model was failing the firmware's own test. */
+            if ((xltr.mode1 & 0x1000) && !(xltr.mode0 & MODE0_RESP_ACK)) {
                 /* FPS3K_RESP overrides the returned status code, so the
                  * 0..$14 code space can be swept experimentally. */
                 const char *e = getenv("FPS3K_RESP");
@@ -908,7 +918,19 @@ static uint32_t board_status_read(uint32_t addr) {
              * abort mid-test on the second pattern.  Neither can be
              * right.  Read as a chassis status line -- 0 = no fault, run
              * diagnostics -- it satisfies both sites. */
-            int b5 = e ? (int)strtoul(e, NULL, 0) & 1 : 0;
+            /* bit 5 = bit 7 AND bit 6 of $1FFF1.  Checked against every
+             * site that reads it:
+             *   $50 (bits 6,4)  gate at F08732      -> 0, run the tests
+             *   $9F,$9A         F08E2E patterns     -> 0, no spurious abort
+             *   $D0 (bits 7,6,4) checkpoint F087AA  -> 1, advance
+             * A single-bit mirror cannot satisfy all three; this can. */
+            /* bit 5 selects which test block runs next, so it cannot be a
+             * combinational function of VMOD: F087C6/F08854 want it CLEAR
+             * after the first checkpoint (run block 2) and SET after the
+             * second (run block 3).  The SBC marks each checkpoint by
+             * writing $D0 to $1FFF1 (F087AA, F08832), so the chassis
+             * tracking those is the behaviour that fits. */
+            int b5 = e ? (int)strtoul(e, NULL, 0) & 1 : (vmod_d0_writes >= 2);
             if (b5) live |=  0x00200000;
             else    live &= ~0x00200000;
         }
@@ -1022,6 +1044,7 @@ void versabus_write(uint32_t addr, uint32_t val, int size) {
             vmod_ctrl = (vmod_ctrl & 0xFF00) | (val & 0xFF);
         }
         uint8_t new_lo = vmod_ctrl & 0xFF;
+        if (new_lo == 0xD0 && prev_lo != 0xD0) vmod_d0_writes++;
         /* nothing */
         /* Phase 0x1300 (F09338, PanelBusInterruptDiagnostic): writing
          * any of bits 0..2 of $1FFF1 with bit 7 set triggers a level-4
