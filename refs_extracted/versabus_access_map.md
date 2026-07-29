@@ -1520,6 +1520,47 @@ transfer loop.
 consistent with the emulator's bit-5 BERR gate derived from the boot
 self-tests.
 
+### The panel-command issuer exists seven times, byte for byte
+
+The "two tiers of spin" table elsewhere in this document lists seven
+`bra .` sites: F04530, F056B8, F05E86, F068D8, F072F0, F07CF0, F086F0.
+They are not seven similar routines — they are **seven byte-identical
+copies of the same 50-byte block**, and each listed spin is that block's
+final instruction.
+
+| copy | starts | spins at | region |
+|---|---|---|---|
+| 1 | `F04500` | `F04530` | **pre-task init — outside every TDTI region** |
+| 2 | `F05688` | `F056B8` | TCBRDHC (`PanelIOConfigure_25A`) |
+| 3 | `F05E56` | `F05E86` | TCBIO1I |
+| 4 | `F068A8` | `F068D8` | TCBXP4I |
+| 5 | `F072C0` | `F072F0` | TCBXP3I |
+| 6 | `F07CC0` | `F07CF0` | TCBXP2I |
+| 7 | `F086C0` | `F086F0` | TCBXP1I |
+
+The block is: stage the command in `$E6E`, write it to `$FF000E`, set
+MODE1 bit 12 and clear bit 14, clear MODE0 bit 10, write CHANNEL_SELECT,
+then `bra .`. A byte-for-byte search over `$F04488-$F0A000` finds exactly
+these seven and nothing else.
+
+Two things follow.
+
+**The spin tiers are a property of context, not of code.** The same
+instructions park at IPL 0 in a task and at IPL 7 inside an ISR. There is
+no "task-context issuer" and "ISR-context issuer" to tell apart — the
+difference is entirely who called it.
+
+**Copy 1 is the interesting one.** It sits at `F04500`, before the first
+TDTI region, so it runs when no task exists yet. That is the firmware
+issuing a panel command during early initialisation, which is consistent
+with the EU being alive at power-on from its mask PROM: the SBC can talk
+to the chassis before it has an RTOS, let alone microcode.
+
+This is the same replication pattern as the 42-slot dispatch table (five
+copies) and the four XP task bodies on the `$A00` stride. The firmware
+was built by copying blocks and patching constants, and recognising that
+saves treating each copy as a separate routine to analyse.
+
 ### The dispatch table exists five times, and is position-independent
 
 The 42-slot table decoded elsewhere in this document as

@@ -65,7 +65,8 @@ RAM = {
 }
 
 # ---- task regions, from the TDTI table at $F0A600 ------------------------
-REGIONS = [(0xF04600,0xF05CFF,'TCBRDHC  - master dispatch, panel cmds, SLC loader'),
+REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs before tasks exist'),
+           (0xF04600,0xF05CFF,'TCBRDHC  - master dispatch, panel cmds, SLC loader'),
            (0xF05D00,0xF05EFF,'TCBIO1I  - host link, mailbox $70001C/$700020'),
            (0xF05F00,0xF068FF,'TCBXP4I  - XP-32 channel 4  (the divergent copy)'),
            (0xF06900,0xF072FF,'TCBXP3I  - XP-32 channel 3'),
@@ -107,6 +108,14 @@ NOTES = {
  0xF08DF8:'BoardStatusPoll_3F11 - polls (status & $3F31) == $3F11. NEVER reads ROM.',
  0xF098EC:'phase $2000: RAM address uniqueness, move.l a0,(a0)+ over $0-$10000',
  0xF046E0:'4-entry table: XP channel -> BIM control register ($244,$246,$250,$252)',
+ 0xF04500:'PanelIOConfigure copy 1/7 - pre-task init. Seven BYTE-IDENTICAL copies of',
+ 0xF04530:'  this 50-byte routine exist: F04500 F05688 F05E56 F068A8 F072C0 F07CC0 F086C0,',
+ 0xF05688:'PanelIOConfigure copy 2/7 - TCBRDHC. ...one per task region plus this pre-task one.',
+ 0xF05E56:'PanelIOConfigure copy 3/7 - TCBIO1I (this one spins inside a level-7 ISR)',
+ 0xF068A8:'PanelIOConfigure copy 4/7 - TCBXP4I',
+ 0xF072C0:'PanelIOConfigure copy 5/7 - TCBXP3I',
+ 0xF07CC0:'PanelIOConfigure copy 6/7 - TCBXP2I',
+ 0xF086C0:'PanelIOConfigure copy 7/7 - TCBXP1I',
 }
 
 src = open(IN).read().split('\n')

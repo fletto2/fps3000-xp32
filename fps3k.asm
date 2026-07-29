@@ -67,6 +67,10 @@
 ;   "XP1I".."XP4I"  XP-32 channel 1-4 task names (TCBXP1I..4I)
 ;   "AS0f".."AS3f"  Application-Specific function tables
 
+
+; ============================================================================
+; $F04488-$F045FF   pre-task init - outside every TDTI region; runs before tasks exist
+; ============================================================================
   f04488: 48 e7 00 1e             movem.l  a3-a6, -(a7)
   f0448c: 20 6d 00 34             movea.l  $34(a5), a0
   f04490: 70 18                   moveq    #$18, d0
@@ -125,6 +129,7 @@ loc_F044D6:
   f044fa: 00 00                   DC.W     0x0000
   f044fc: 00 00                   DC.W     0x0000
   f044fe: 00 00                   DC.W     0x0000
+;### PanelIOConfigure copy 1/7 - pre-task init. Seven BYTE-IDENTICAL copies of
   f04500: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
   f04506: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
   f0450c: 31 40 00 0e             move.w   d0, $e(a0)
@@ -138,6 +143,7 @@ loc_F044D6:
   f0452c: 31 40 02 04             move.w   d0, $204(a0)  [XLTR_CHANNEL_SELECT]
 
 loc_F04530:
+;###   this 50-byte routine exist: F04500 F05688 F05E56 F068A8 F072C0 F07CC0 F086C0,
   f04530: 60 fe                   bra.b    loc_F04530
   f04532: 00 00                   DC.W     0x0000
   f04534: 00 00                   DC.W     0x0000
@@ -2089,6 +2095,7 @@ loc_F05684:
 ; PanelIOConfigure_25A
 ; ============================================================
 PanelIOConfigure_25A:
+;### PanelIOConfigure copy 2/7 - TCBRDHC. ...one per task region plus this pre-task one.
   f05688: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
   f0568e: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
   f05694: 31 40 00 0e             move.w   d0, $e(a0)
@@ -2952,6 +2959,7 @@ loc_F05E52:
   f05e54: 4e 41                   trap     #$1
 
 loc_F05E56:
+;### PanelIOConfigure copy 3/7 - TCBIO1I (this one spins inside a level-7 ISR)
   f05e56: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
   f05e5c: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
   f05e62: 31 40 00 0e             move.w   d0, $e(a0)
@@ -4048,6 +4056,7 @@ loc_F068A6:
 ; PanelTimeoutAbortPath
 ; ============================================================
 PanelTimeoutAbortPath:
+;### PanelIOConfigure copy 4/7 - TCBXP4I
   f068a8: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
 ;>>>> [R6/BOTH] Loads the base address of the XLTR register block (0xFF0000) into address register a0, used by `PanelTimeoutAbortPath` to access the AP I/F command/status and mode registers for issuing an abort command.
   f068ae: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
@@ -5088,6 +5097,7 @@ loc_F072BE:
   f072be: 4e 75                   rts      
 
 loc_F072C0:
+;### PanelIOConfigure copy 5/7 - TCBXP3I
   f072c0: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
 ;>>>> [R15/GLM] Loads XLTR base address ($FF0000) into a0 for panel command operations.
   f072c6: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
@@ -6119,6 +6129,7 @@ loc_F07CBE:
   f07cbe: 4e 75                   rts      
 
 loc_F07CC0:
+;### PanelIOConfigure copy 6/7 - TCBXP2I
   f07cc0: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
   f07cc6: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
   f07ccc: 31 40 00 0e             move.w   d0, $e(a0)
@@ -7159,6 +7170,7 @@ loc_F086BE:
   f086be: 4e 75                   rts      
 
 loc_F086C0:
+;### PanelIOConfigure copy 7/7 - TCBXP1I
   f086c0: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
   f086c6: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
   f086cc: 31 40 00 0e             move.w   d0, $e(a0)
