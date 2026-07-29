@@ -108,6 +108,13 @@ else:
     except FileNotFoundError:
         check('fps3k.asm present', False)
 
+    # --- vector 140 is made non-fatal, not serviced ----------------------
+    check('F00896 tests a flag, optionally bsr, and rte -- it ignores the IRQ',
+          d[0x896:0x8A6].hex().upper().startswith('08380' + '00E0C346706' + '61000DE8')
+          and d[0x8A4:0x8A6] == b'\x4e\x73')
+    check('nothing in the ROM writes $8C or references $230 outside the fill',
+          d.count(b'\x00\x00\x02\x30') <= 1)
+
     # --- the vector table is fully written; the spare BIMs split two ways -
     _, ramv = run({}, 400_000_000)
     vec = lambda n: struct.unpack('>I', ramv[n*4:n*4+4])[0]

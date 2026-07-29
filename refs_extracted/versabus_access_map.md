@@ -2849,8 +2849,38 @@ about it.
 `cmpa.l #$230,a0 / beq` steps over it, preserving `F00896`. A watchpoint shows
 `$F09CF6` (`move.l a4,(a3)+`, a generic fill loop) put it there earlier in the
 same boot. So the firmware installs a handler at vector 140 and then takes care
-not to clobber it. What raises vector 140 remains unidentified — it is not a
-BIM channel, since the BIM vector registers only ever carry `$41`-`$4A`.
+not to clobber it.
+
+**But "installs a handler" overstates it, and the earlier note's "meant to be
+serviced" is wrong.** `F00896` is:
+
+```
+$F00896  btst #$E,$0C34      ; test a flag in RAM
+$F0089C  beq  -> $F008A4
+$F0089E  bsr  $F01688        ; ...optionally call something
+$F008A4  rte
+```
+
+It tests a flag, optionally calls one routine, and returns. It is the handler
+on **37 vectors**, and what it does is *ignore the interrupt*. So the fill's
+exception for `$230` makes vector 140 **non-fatal**, not serviced — those are
+different things, and the distinction matters for anyone reasoning about what
+the hardware is expected to do.
+
+Two negatives worth recording, since they bound the question:
+
+- **Nothing in this ROM ever writes the value `$8C` to any register** — not in
+  the FPS application region and not in the RMS68K kernel. Every vector number
+  the firmware programs goes into a BIM vector register, and those only ever
+  carry `$41`-`$4A`.
+- **Nothing references `$230` anywhere except the fill's own `cmpa.l`** —
+  again in neither region.
+
+So vector 140 is not configured by this firmware at all. Either a device
+supplies it from a power-on default or from configuration done elsewhere (a
+card this ROM does not program), or it is an RMS68K-internal allocation the
+kernel expects to survive. The firmware's only stated position on it is
+"do not panic".
 
 The natural reading of the block is that BIM0's four channels serve the
 chassis command interface (ch0 = `$41` is the panel-status response handler)
