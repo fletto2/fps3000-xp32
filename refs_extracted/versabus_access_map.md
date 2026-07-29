@@ -1455,6 +1455,47 @@ original was right in substance and my re-verification of it was wrong in
 method. Both were caught by doing the arithmetic or the decode rather than
 trusting a summary.*
 
+### Complete post-boot RAM map: 3% touched, 115.5 KB free
+
+Scanning the whole 128 KB at longword granularity after a clean boot:
+
+| range | bytes | what |
+|---|---|---|
+| `$00000-$00807` | 2,056 | vector table, stack fill, stack top |
+| `$00BC4-$00C9B` | 216 | globals |
+| `$01108-$0110F` | 8 | two longwords |
+| `$1DF00-$1DF0B` | 12 | RTOS |
+| `$1E100`/`$1E300`/`$1E500`/`$1E700` | 20 each | four small blocks, stride `$200` |
+| `$1E900`+`$200`*n | 116 each | **the six TCBs** |
+| `$1E9F8`+`$200`*n | 164 each | six companion blocks (ASQs?) |
+| `$1F500`-`$1FFFF` | ~770 | RTOS tables, `$1FFD0` supervisor stack |
+| **total** | **4,828** | **3% of 131,072** |
+
+**Free: `$01110-$1DEFF` — 115.5 KB contiguous**, plus 1.1 KB at
+`$00C9C-$01107`.
+
+Three things follow.
+
+**The staging-buffer ceiling is confirmed from the other direction.** Nothing
+between `$01110` and `$1DEFF` is touched, and everything from `$1DF00` up is,
+so `$1DEFF` is exactly where the usable region ends — the same boundary the
+TCB finding gives.
+
+**The monitor's workspace choice was right.** It sits at `$0F800-$0FF00`,
+inside the free span and nowhere near either cluster. The relocation from
+`$1F000` moved it out of what is now demonstrably live RTOS memory.
+
+**The per-task RAM is regular.** Each task owns a 116-byte TCB at
+`$1E900 + $200*n` and a 164-byte block at `$1E9F8 + $200*n`, and four further
+20-byte blocks sit at `$1E100`-`$1E700` on the same `$200` stride. The whole
+RTOS working set is one `$200`-strided array per structure type.
+
+*Method note: a first pass at this scanned for runs of nonzero **bytes** and
+reported `$00000-$00403` as free — the vector table, missed because every
+vector is `$00Fxxxxx` and the leading zero byte breaks each entry into a
+3-byte fragment that a "runs ≥ 4 bytes" filter discards. Longword granularity
+is the right unit for a map of 32-bit structures.*
+
 ### The live TCBs sit INSIDE the WCS staging buffer — the 64 KB claim is unsafe
 
 Sweeping post-boot RAM for repeated longwords turns up `$21544342` six times —

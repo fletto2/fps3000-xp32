@@ -166,6 +166,12 @@ else:
     check('a clean boot uses well under half the 1 KB supervisor stack',
           all(_r[x:x+4] == _P for x in range(0x404, 0x600, 4)))
 
+    check('post-boot RAM: $01110-$1DEFF is entirely untouched (115.5 KB)',
+          not any(_r[x] for x in range(0x1110, 0x1DF00)))
+    check('post-boot RAM: only ~3% of the 128 KB is touched',
+          400 < sum(1 for x in range(0, 0x20000, 4)
+                    if _r[x:x+4] != b'\x00\x00\x00\x00') < 1600)
+
     # --- live TCBs sit inside the WCS staging buffer ----------------------
     TCBRAM = [(0x1E900, b'XP1I', 0xF07D4A), (0x1EB00, b'XP2I', 0xF0734A),
               (0x1ED00, b'XP3I', 0xF0694A), (0x1EF00, b'XP4I', 0xF05F4A),
