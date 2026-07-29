@@ -103,6 +103,17 @@ else:
               asm.count('\n;### ') >= 160)
         check('NOTES merges duplicate addresses instead of dropping them',
               'NOTES.setdefault' in open('tools/mk_consolidated_asm.py').read())
+        # Only CODE lines matter: the header deliberately mentions the old
+        # name to explain the correction, and ";>>>>" prose is unverified.
+        check('no code line in fps3k.asm still uses the TCBDefinitionTable label',
+              not [l for l in asm.split('\n')
+                   if re.match(r'^\s+f0[0-9a-f]{4}:', l)
+                   and 'TCBDefinitionTable' in l])
+        check('fps3k.asm no longer carries the retracted "never read" claim',
+              'never read anywhere' not in asm)
+        check('fps3k.asm labels $F0A57E as PanelCmdIssuer_8 at all four sites',
+              asm.count('PanelCmdIssuer_8(pc)') == 3 and
+              'bra.w    PanelCmdIssuer_8' in asm)
         check('fps3k.asm annotates the $FF0048 read and the presence gate',
               'FF0048 IS READ' in asm and 'PRESENCE GATE' in asm)
     except FileNotFoundError:

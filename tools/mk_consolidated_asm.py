@@ -272,6 +272,45 @@ for _a, _t in _NOTE_PAIRS:
     NOTES.setdefault(_a, []).append(_t)
 
 src = open(IN).read().split('\n')
+
+# ---------------------------------------------------------------------------
+# Label corrections applied to the frozen input.  fps3k_custom_annotated.asm
+# is not regenerable (its own input was a temp file), so wrong labels have to
+# be fixed here by substitution rather than at the source.
+#
+# TCBDefinitionTable was attached to $F0A57E, which is the EIGHTH copy of the
+# panel-command issuer, not a table.  The real !TCB table is at $F0A600.  The
+# original label was not baseless: RTOS init locates the table FROM $F0A57E by
+# rounding up to the next 256-byte boundary ($F09D30: lea $F0A57E,a3 /
+# move.l a3,d1 / addi.l #$FF,d1 / clr.b d1  ->  $F0A600).  So $F0A57E is the
+# search base and $F0A600 is the table; the label conflated them.
+RENAME = {'TCBDefinitionTable': 'PanelCmdIssuer_8'}
+
+# Symbol rename first.  Skipped on ";>>>>" lines: those are unverified Monte
+# Carlo prose, and renaming a symbol inside a sentence produces gibberish
+# rather than a correction.  One such annotation asserts a TCB definition table
+# at $F0A57E and is simply wrong; it is left as written, since ";>>>>" already
+# means unverified.
+src = [l if l.lstrip().startswith(';>>>>')
+       else re.sub(r'\bTCBDefinitionTable\b', 'PanelCmdIssuer_8', l)
+       for l in src]
+
+# Whole-line replacements, keyed on the POST-rename text so the rename cannot
+# rewrite the replacements themselves.
+LINE_FIX = {
+ '; DATA   : 0xF0A57E-0xF0B17E  PanelCmdIssuer_8 + 6\u00d796B TCB entries':
+   '; DATA   : 0xF0A600-0xF0A840  the real !TCB table - 6 x $60 entries.\n'
+   ';          $F0A57E is PanelCmdIssuer_8, NOT a table.  RTOS init locates the\n'
+   ';          table FROM it by rounding up: $F09D30 does lea $F0A57E,a3 /\n'
+   ';          move.l a3,d1 / addi.l #$FF,d1 / clr.b d1  ->  $F0A600.  The old\n'
+   ';          label conflated the search base with the table.',
+ '; Coverage: 22988/47992 bytes as code  (47.9%)':
+   '; Coverage: inherited from the frozen input and STALE - see CLAUDE.md',
+ '; Instructions decoded: 6485':
+   '; Instructions decoded: inherited and STALE - see CLAUDE.md',
+}
+src = [LINE_FIX.get(l, l) for l in src]
+
 out = []
 stamp = datetime.date.today().isoformat()
 out += [
@@ -290,7 +329,9 @@ out += [
  ';   AP I/F channel window is not write/readA/status/readB.',
  ';     +$08 / +$0A are the HIGH and LOW halves of one 32-bit data register',
  ';     +$0E is a command/trigger register ($8000 fires it)',
- ';     $FF0048 is never read anywhere in this ROM',
+ ';     $FF0048 IS read - by the channel ISR at $F07EF6, as $48(a5) with',
+ ';     a5=$FF0000. An earlier edition of this header said "never read";',
+ ';     that was an absolute-address scan missing the displacement form.',
  ';   $FF0008 is a bidirectional bulk port with three modes (see F04AE2/F04C50/F04B22)',
  ';   $FF0230-$FF025F are BIM registers, not per-channel config',
  ';   $E60 is the XP channel number, not an S-record count',
@@ -298,6 +339,27 @@ out += [
  ';   $E74 is the result register returned to the chassis via CHANNEL_SELECT',
  ';   $E86/$E87 hold the latched chassis response, not a "channel mode"',
  ';   F08DF8 is BoardStatusPoll_3F11, not ROMChecksumTest - it never reads ROM',
+ ';',
+ ';   Added by the second 2026-07-29 pass:',
+ ';   $F0A57E is PanelCmdIssuer_8 (copy 8 of 8), NOT TCBDefinitionTable. The',
+ ';     real !TCB table is $F0A600; init reaches it by rounding $F0A57E up.',
+ ';   $29E-$2A6 are CPU-EXCEPTION reporters, one per class, from a 9-entry',
+ ';     table at $F0A23A. All nine bra.w to PanelCmdIssuer_8. If the board',
+ ';     dies, the last value at $FF000E names the exception.',
+ ';   $105E is a channel-present COUNT written by the CPU at $F0A224, not a',
+ ';     chassis DMA target. Each XP task gates on count >= its own channel.',
+ ';   The six LIVE TCBs sit at $1E900+$200n - INSIDE the WCS staging buffer.',
+ ';     Usable staging is $10000-$1DEFF (~56.75 KB), not the full 64 KB.',
+ ';   $F0891C is the self-test checkpoint: 65 calls, one per subtest, and the',
+ ';     place a failure becomes visible (clears VMOD bit 6, MODE1 <- $1000).',
+ ';   A clean boot issues NO panel command at all - the only $FF000E write is',
+ ';     $AAAA, a RAM test pattern. The panel path is error/command-only.',
+ ';   Only TRAP #0 and TRAP #1 are used; #2-#15 are free.',
+ ';',
+ ';   FILE ROLES: fps3k.asm (this file) is the product and the one to read.',
+ ';   fps3k_custom.asm is the raw disasm.py output; fps3k_custom_annotated.asm',
+ ';   is the frozen build input - it is NOT regenerable (its own input was a',
+ ';   temp file), which is why label fixes are applied here by substitution.',
  ';',
  '; Task region boundaries are from the ROM\'s own TDTI table at $F0A600, so',
  '; they are authoritative rather than heuristic.',

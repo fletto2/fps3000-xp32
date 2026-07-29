@@ -13,7 +13,9 @@
 ;   AP I/F channel window is not write/readA/status/readB.
 ;     +$08 / +$0A are the HIGH and LOW halves of one 32-bit data register
 ;     +$0E is a command/trigger register ($8000 fires it)
-;     $FF0048 is never read anywhere in this ROM
+;     $FF0048 IS read - by the channel ISR at $F07EF6, as $48(a5) with
+;     a5=$FF0000. An earlier edition of this header said "never read";
+;     that was an absolute-address scan missing the displacement form.
 ;   $FF0008 is a bidirectional bulk port with three modes (see F04AE2/F04C50/F04B22)
 ;   $FF0230-$FF025F are BIM registers, not per-channel config
 ;   $E60 is the XP channel number, not an S-record count
@@ -21,6 +23,27 @@
 ;   $E74 is the result register returned to the chassis via CHANNEL_SELECT
 ;   $E86/$E87 hold the latched chassis response, not a "channel mode"
 ;   F08DF8 is BoardStatusPoll_3F11, not ROMChecksumTest - it never reads ROM
+;
+;   Added by the second 2026-07-29 pass:
+;   $F0A57E is PanelCmdIssuer_8 (copy 8 of 8), NOT TCBDefinitionTable. The
+;     real !TCB table is $F0A600; init reaches it by rounding $F0A57E up.
+;   $29E-$2A6 are CPU-EXCEPTION reporters, one per class, from a 9-entry
+;     table at $F0A23A. All nine bra.w to PanelCmdIssuer_8. If the board
+;     dies, the last value at $FF000E names the exception.
+;   $105E is a channel-present COUNT written by the CPU at $F0A224, not a
+;     chassis DMA target. Each XP task gates on count >= its own channel.
+;   The six LIVE TCBs sit at $1E900+$200n - INSIDE the WCS staging buffer.
+;     Usable staging is $10000-$1DEFF (~56.75 KB), not the full 64 KB.
+;   $F0891C is the self-test checkpoint: 65 calls, one per subtest, and the
+;     place a failure becomes visible (clears VMOD bit 6, MODE1 <- $1000).
+;   A clean boot issues NO panel command at all - the only $FF000E write is
+;     $AAAA, a RAM test pattern. The panel path is error/command-only.
+;   Only TRAP #0 and TRAP #1 are used; #2-#15 are free.
+;
+;   FILE ROLES: fps3k.asm (this file) is the product and the one to read.
+;   fps3k_custom.asm is the raw disasm.py output; fps3k_custom_annotated.asm
+;   is the frozen build input - it is NOT regenerable (its own input was a
+;   temp file), which is why label fixes are applied here by substitution.
 ;
 ; Task region boundaries are from the ROM's own TDTI table at $F0A600, so
 ; they are authoritative rather than heuristic.
@@ -35,9 +58,13 @@
 ; Base   : 0xF00000
 ; Range  : 0xF04488-0xF0FFFF  (47992 bytes)
 ; Method : recursive-descent + reference scan + convergence loop
-; Coverage: 22988/47992 bytes as code  (47.9%)
-; Instructions decoded: 6485
-; DATA   : 0xF0A57E-0xF0B17E  TCBDefinitionTable + 6×96B TCB entries
+; Coverage: inherited from the frozen input and STALE - see CLAUDE.md
+; Instructions decoded: inherited and STALE - see CLAUDE.md
+; DATA   : 0xF0A600-0xF0A840  the real !TCB table - 6 x $60 entries.
+;          $F0A57E is PanelCmdIssuer_8, NOT a table.  RTOS init locates the
+;          table FROM it by rounding up: $F09D30 does lea $F0A57E,a3 /
+;          move.l a3,d1 / addi.l #$FF,d1 / clr.b d1  ->  $F0A600.  The old
+;          label conflated the search base with the table.
 ; DATA   : 0xF0B17E-0xF10000  Trailing data tables / padding
 
 ; ============================================================
@@ -9642,7 +9669,7 @@ loc_F09C66:
   f09c6a: 67 2a                   beq.b    VCTScanSetup
   f09c6c: 26 7a 08 88             movea.l  loc_F0A4F6(pc), a3
   f09c70: 24 41                   movea.l  d1, a2
-  f09c72: 49 fa 09 0a             lea.l    TCBDefinitionTable(pc), a4
+  f09c72: 49 fa 09 0a             lea.l    PanelCmdIssuer_8(pc), a4
   f09c76: d9 fc 00 00 08 00       adda.l   #$800, a4
   f09c7c: 41 fa 00 18             lea.l    VCTScanSetup(pc), a0
   f09c80: 91 ca                   suba.l   a2, a0
@@ -9744,7 +9771,7 @@ loc_F09D22:
   f09d26: 24 3a 07 d2             move.l   loc_F0A4FA(pc), d2
   f09d2a: 47 fa fe d4             lea.l    ResetEntry(pc), a3
   f09d2e: 26 0b                   move.l   a3, d3
-  f09d30: 47 fa 08 4c             lea.l    TCBDefinitionTable(pc), a3
+  f09d30: 47 fa 08 4c             lea.l    PanelCmdIssuer_8(pc), a3
   f09d34: 22 0b                   move.l   a3, d1
   f09d36: 06 81 00 00 00 ff       addi.l   #$ff, d1
   f09d3c: 42 01                   clr.b    d1
@@ -10119,7 +10146,7 @@ RTOSKernelInit:
   f0a05a: 4a b8 0c 10             tst.l    $c10.w
   f0a05e: 66 00 00 9e             bne.w    loc_F0A0FE
   f0a062: 42 b8 0c 14             clr.l    $c14.w
-  f0a066: 47 fa 05 16             lea.l    TCBDefinitionTable(pc), a3
+  f0a066: 47 fa 05 16             lea.l    PanelCmdIssuer_8(pc), a3
 ;>>>> [R10/BOTH] Sets up the XLTR_MODE0 register pointer for TCB initialization in the RTOS kernel.
   f0a06a: 43 eb 02 00             lea.l    $200(a3)  [XLTR_MODE0], a1
   f0a06e: 20 3c 21 54 43 42       move.l   #$21544342, d0
@@ -10305,40 +10332,40 @@ loc_F0A224:
 
 loc_F0A23A:
   f0a23a: 30 3c 02 9e             move.w   #$29e, d0
-  f0a23e: 60 00 03 3e             bra.w    TCBDefinitionTable
+  f0a23e: 60 00 03 3e             bra.w    PanelCmdIssuer_8
 
 loc_F0A242:
 ;>>>> [R8/BOTH] loads task index 0x29f for TCBDefinitionTable to configure XP-4 channel task.
   f0a242: 30 3c 02 9f             move.w   #$29f, d0
-  f0a246: 60 00 03 36             bra.w    TCBDefinitionTable
+  f0a246: 60 00 03 36             bra.w    PanelCmdIssuer_8
 
 loc_F0A24A:
   f0a24a: 30 3c 02 a0             move.w   #$2a0, d0
-  f0a24e: 60 00 03 2e             bra.w    TCBDefinitionTable
+  f0a24e: 60 00 03 2e             bra.w    PanelCmdIssuer_8
 
 loc_F0A252:
   f0a252: 30 3c 02 a1             move.w   #$2a1, d0
-  f0a256: 60 00 03 26             bra.w    TCBDefinitionTable
+  f0a256: 60 00 03 26             bra.w    PanelCmdIssuer_8
 
 loc_F0A25A:
   f0a25a: 30 3c 02 a2             move.w   #$2a2, d0
-  f0a25e: 60 00 03 1e             bra.w    TCBDefinitionTable
+  f0a25e: 60 00 03 1e             bra.w    PanelCmdIssuer_8
 
 loc_F0A262:
   f0a262: 30 3c 02 a3             move.w   #$2a3, d0
-  f0a266: 60 00 03 16             bra.w    TCBDefinitionTable
+  f0a266: 60 00 03 16             bra.w    PanelCmdIssuer_8
 
 loc_F0A26A:
   f0a26a: 30 3c 02 a4             move.w   #$2a4, d0
-  f0a26e: 60 00 03 0e             bra.w    TCBDefinitionTable
+  f0a26e: 60 00 03 0e             bra.w    PanelCmdIssuer_8
 
 loc_F0A272:
   f0a272: 30 3c 02 a5             move.w   #$2a5, d0
-  f0a276: 60 00 03 06             bra.w    TCBDefinitionTable
+  f0a276: 60 00 03 06             bra.w    PanelCmdIssuer_8
 
 loc_F0A27A:
   f0a27a: 30 3c 02 a6             move.w   #$2a6, d0
-  f0a27e: 60 00 02 fe             bra.w    TCBDefinitionTable
+  f0a27e: 60 00 02 fe             bra.w    PanelCmdIssuer_8
 
 loc_F0A282:
   f0a282: 2e 78 0c 08             movea.l  $c08.w, a7
@@ -10732,9 +10759,9 @@ loc_F0A54A:
   f0a57a: 00 00 00 00             ori.b    #$0, d0
 
 ; ============================================================
-; TCBDefinitionTable
+; PanelCmdIssuer_8
 ; ============================================================
-TCBDefinitionTable:
+PanelCmdIssuer_8:
 ;### panel-command issuer, copy 8 of 8 -- THE PANIC PATH. All nine CPU-exception
 ;###   handlers at $F0A23A bra.w here with their code in d0, so the last value at
 ;###   $FF000E names the exception: $29E bus error .. $2A6 catch-all. NOT the TCB
