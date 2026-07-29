@@ -1389,6 +1389,66 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### RDHC builds the per-channel ASQ names at runtime
+
+A census of 4-character A-Z0-9 sequences turns up `HXP0` twice, at `$F053B8`
+and `$F05478` — a name no task declares. Both sites load the same literal and then add the channel number:
+
+```
+$F053B6  223C 48585030   move.l #'HXP0',d1
+$F053BC  D204            add.b  d4,d1        -> 'HXP1' .. 'HXP4'
+
+$F05476  223C 48585030   move.l #'HXP0',d1
+$F0547C  282E 0004       move.l $4(a6),d4    ; channel number from the frame
+$F05480  D204            add.b  d4,d1
+```
+
+The second site fetches the channel number from its stack frame first, which
+is the more informative of the two: the channel number is a **parameter**, so
+this is a general "attach to channel *n*'s host queue" path rather than four
+unrolled cases.
+
+RDHC **constructs** the host-side queue name from a template by adding the
+channel number to the last character. `HXP0` is therefore not a fifth queue; it
+is the base string, never used as-is. This is how RDHC addresses the per-channel
+queues that the XP tasks attach to via their header's `+$36` entry.
+
+The census also confirms two counts: **`PROG` appears exactly six times**, once
+per TDTI entry, and **`STCK` six times**, once per task — RDHC's inside its
+`$01` block at `$F046BC`, the other five at `base+$20`.
+
+#### `$F09BB6` is the diagnostics' pattern table
+
+```
+$F09BB6  00000000
+$F09BBA  FFFFFFFF
+$F09BBE  55555555
+$F09BC2  AAAAAAAA
+```
+
+The four classic RAM-test patterns, which is what the `UUUU` hits in the census
+were. Worth recording because the `$10AA` injection defect found earlier —
+a location that reads back a constant fails a pattern test — is precisely a
+failure against this table.
+
+#### Method note: most 4-char "tags" are instructions
+
+Of the 29 sequences the census found, the majority are code read as ASCII:
+
+| "tag" | actually |
+|---|---|
+| `HA3A` ×15 | `4841 3341` — `swap d1 / move.w d1,…` |
+| `HB3B` ×10, `HC3C` ×10 | the same idiom on d2 and d3 |
+| `42HN` ×4 | `3432 484E` — the channel-scan `move.w $4E(a2,d4.l),d2`, once per XP task |
+| `CBXP`/`CBIO`/`CBRD` | `!TCB` + task name, read two bytes off |
+| `F0NA` | the tail of `lea $F04630,a0` plus `trap #1` |
+| `UUUU` | the `$55555555` test pattern |
+
+Only `USER`, `STCK`, `PROG`, `UPGM`, the task names and the `AXPn`/`HXPn`/
+`HIO1` queue names are real tags. The `HA3A` family is a useful accident: it
+counts the 32-bit-split idiom — `swap` then store the low half — which is how
+this firmware writes every 32-bit value to the 16-bit channel data pair.
+
 ### RDHC's header, and the `$F046E0` BIM table located exactly
 
 RDHC's prologue differs from the XP tasks', and decoding it explains its odd

@@ -96,6 +96,16 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- runtime ASQ name construction and the pattern table -------------
+    check("RDHC builds ASQ names: move.l #'HXP0',d1 then add.b d4,d1",
+          d.count(b'\x22\x3c\x48\x58\x50\x30') == 2 and
+          all(b'\xd2\x04' in d[a2+6:a2+16] for a2 in (0x53B6, 0x5476)))
+    check('$F09BB6 holds the four RAM-test patterns',
+          [struct.unpack('>I', d[0x9BB6+i:0x9BBA+i])[0] for i in (0,4,8,12)]
+          == [0x00000000, 0xFFFFFFFF, 0x55555555, 0xAAAAAAAA])
+    check('PROG appears 6x (one per TDTI entry) and STCK 6x (one per task)',
+          d.count(b'PROG') == 6 and d.count(b'STCK') == 6)
+
     # --- $F046E0 BIM table and RDHC's distinct prologue ------------------
     check('$F046E0 is a 4-entry BIM CR table in channel order',
           [struct.unpack('>I', d[0x46E0+i:0x46E4+i])[0] for i in (0,4,8,12)]
