@@ -635,6 +635,47 @@ The BIM row reproduces the F046E0 table exactly, and the data-port rows
 reproduce the `$20` channel stride. This is a sixth independent
 confirmation of the mapping.
 
+### `$101E` is a 16-longword register file with a direction flag
+
+F0549E takes a descriptor from the command stream and copies to or from
+the block:
+
+```
+d1 = (a0)+                 ; direction: 0 = write in, nonzero = read out
+d2 = (a0)+                 ; start index
+d3 = d2;  d2 <<= 2
+a1 = $101E + d2            ; pointer into the block
+d2 = (a0)+                 ; count
+d3 = index + count
+if d3 > $10   -> error, panel cmd $25B
+if d1 != 0    -> exg a1,a0 ; swap source and destination
+loop: (a1)+ <- (a0)+  x count
+```
+
+The `exg` is the whole trick: one copy loop serves both directions, and
+the bound `index + count <= $10` makes the block **16 longwords**,
+`$101E-$105D`. F054E8 does the same thing for a second block at `$E8A`.
+
+Note where that leaves `$105E`: immediately after the register file. The
+control block is contiguous and its pieces now all have names.
+
+### Map of the SBC control block
+
+| Range | Size | Contents |
+|---|---|---|
+| `$101E-$105D` | 16 longwords | register file, read/written by descriptor (F0549E) or a half-word at a time by response code `$C` |
+| `$105E` | word | **installed-AC count** — chassis-supplied, gates the four XP tasks |
+| `$1062` | word | channel number, each task writes its own |
+| `$1064` | word | shared bitmask, all four tasks `and`/`or` into it |
+| `$1066-$107D` | 4 x 3 words | per-channel control blocks, stride 6 |
+| `$1080-$108F` | 4 longwords | per-channel pointer table (F053DA) |
+| `$10A0-` | words | per-channel array (F053E2), stride 2 — `$10AA` falls here |
+
+Response code `$A` walks `$1064` through `$107C` as 13 words; the
+descriptor path walks `$101E` through `$105D` as 16 longwords. Two
+different windows onto one contiguous structure, which is why their
+bounds (`$C` and `$10`) differ.
+
 ### The 13-slot range check, explained
 
 The two RAM-slot rows above run at **stride 6**, giving a per-channel
