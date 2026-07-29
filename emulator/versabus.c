@@ -81,6 +81,11 @@ static int      bim_in_service_unit = -1, bim_in_service_ch = -1;
 /* Count of $D0 checkpoint markers the SBC has written to $1FFF1. */
 static int      vmod_d0_writes;
 static int      vmod_d0_ack;      /* checkpoint indication consumed */
+static uint64_t seq_gap_left;     /* cycles until the next scripted command */
+static uint64_t seq_gap_cycles(void) {
+    const char *e = getenv("FPS3K_SEQGAP");
+    return e ? strtoull(e, NULL, 0) : 20000000ull;
+}
 
 /* VERSAmodule control register */
 static uint16_t vmod_ctrl;
@@ -1188,11 +1193,14 @@ static void panel_resp_tick(uint32_t cycles) {
         xltr.raw[(XLTR_MODE0 - XLTR_BASE) / 2] = xltr.mode0;
         versabus_bim_clear(0, 0);
         if (log_fp) fprintf(log_fp, "[PANEL] response acknowledged\n");
-        /* A scripted chassis pushes its own command stream: once the SBC
-         * has acknowledged, queue the next step without waiting for it to
-         * write CHANNEL_SELECT again. */
+        /* A scripted chassis drives its OWN schedule.  The SBC is a bus
+         * slave here -- the chassis masters the transfers -- so there is
+         * no CPU-side "command complete" to wait for, and two attempts to
+         * find one (PC == F04736, then the $FF000E write) both failed.
+         * Instead space the commands far enough apart that the SBC has
+         * finished; FPS3K_SEQGAP sets the spacing in cycles. */
         seq_init();
-        if (seq_next < seq_len) versabus_arm_panel_response(0, 400);
+        if (seq_next < seq_len) seq_gap_left = seq_gap_cycles();
     }
     if (!panel_resp_armed) return;
     if (panel_resp_delay > cycles) { panel_resp_delay -= cycles; return; }
@@ -1237,10 +1245,17 @@ void versabus_tick(uint32_t cycles) {
     {
         static uint64_t seq_start;
         seq_init();
-        if (seq_len > 0 && seq_next == 0 && !panel_resp_armed) {
-            if (seq_start < 40000000ull) seq_start += cycles;
-            else if (versabus_bim_enabled(0, 0))
+        if (seq_len > 0 && !panel_resp_armed && seq_next < seq_len) {
+            if (seq_next == 0) {
+                if (seq_start < 40000000ull) seq_start += cycles;
+                else if (versabus_bim_enabled(0, 0))
+                    versabus_arm_panel_response(0, 400);
+            } else if (seq_gap_left > cycles) {
+                seq_gap_left -= cycles;
+            } else if (seq_gap_left) {
+                seq_gap_left = 0;
                 versabus_arm_panel_response(0, 400);
+            }
         }
     }
 

@@ -613,23 +613,43 @@ the completion signal it looks like. The change was reverted.
 
 The `$FF000E` panel-command write was tried too, on the reasoning that
 F05224 issues `PCMD_CH1_ACK` that way after a successful record. **It
-also failed**, and worse: it broke the isolated cases as well. The reason
-is the same one that defeated `F04736` — the SBC writes `$FF000E` when it
-*starts* a command as well as when it finishes one, so the flag fires
-immediately and the next response still lands mid-command.
+also failed**, and worse: it broke the isolated cases as well. The SBC
+writes `$FF000E` when it *starts* a command as well as when it finishes
+one, so the flag fired immediately and the next response still landed
+mid-command.
 
-Two attempts, one cause: **there is no single observable event that means
-"the SBC has finished"**. Every candidate so far is a point the firmware
-passes through both during and between commands.
+Two attempts, one cause: **there is no CPU-side event meaning "the SBC
+has finished"** — and the bus-mastership section above explains why. The
+SBC is a slave here. It is not driving the transfer, so its instruction
+stream cannot report the transfer's completion. Both attempts were
+interrogating the reactive party.
 
-What would actually work is a sequencer that models the protocol instead
-of guessing at it — tracking which command it issued and what response
-that command is supposed to produce, and only advancing when it sees the
-matching reply. That is a redesign, not a patch, and it is not needed for
-any result here: both halves are demonstrated in isolation, and chaining
-them is a convenience.
+### The fix: let the chassis keep its own schedule
 
-Recorded so the next person does not spend the same two attempts.
+Once the SBC is understood as reactive, the sequencer becomes simple. The
+chassis issues a command, waits long enough for the SBC to deal with it,
+and issues the next — no inference, no completion signal.
+`FPS3K_SEQGAP` sets the spacing in cycles (default 20 M).
+
+**With that, the whole chain runs in one session:**
+
+```
+FPS3K_SEQGAP=40000000 FPS3K_SREC=<file> \
+FPS3K_SEQ="02:001C,42:0000,00:0000,01:0010,41:0001,02:0008,42:0000,20:0000"
+```
+
+| stage | result |
+|---|---|
+| inbound stores (F0520E) | **16** |
+| staging at `$10010` | `DEADBEEFCAFEBABE0102030405060708` |
+| parameters reloaded | `$E58 = $00010010`, `$E64 = $00000008` |
+| outbound moves (F04C62) | **8** |
+| words written to `$FF0008` | `DEAD BEEF CAFE BABE 0102 0304 0506 0708` |
+
+The bytes that entered as ASCII S-record text leave as binary words on
+the bus, in order, with nothing lost. **That is the complete microcode
+upload path — host to WCS — exercised through the firmware's own
+mechanisms in a single run.**
 
 ### The record address is an OFFSET — the firmware adds `$10000` itself
 
