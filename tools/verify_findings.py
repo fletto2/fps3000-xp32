@@ -96,6 +96,24 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- RTOS directive surface: 14 distinct, recovered from trap #1 -----
+    def directives():
+        out = {}
+        for a2 in range(0xF04488, 0xF0A600, 2):
+            if struct.unpack('>H', d[a2-B:a2-B+2])[0] != 0x4E41: continue
+            for k in range(2, 20, 2):
+                w = struct.unpack('>H', d[a2-B-k:a2-B-k+2])[0]
+                if (w & 0xFF00) == 0x7000: out[a2] = w & 0xFF; break
+                if w == 0x303C:
+                    out[a2] = struct.unpack('>H', d[a2-B-k+2:a2-B-k+4])[0]; break
+        return out
+    dv = directives()
+    check('firmware uses exactly 14 distinct TRAP #1 directives',
+          sorted(set(dv.values())) ==
+          [0x01,0x0B,0x0D,0x0F,0x10,0x11,0x12,0x13,0x29,0x2A,0x2B,0x2D,0x43,0x4C])
+    check('$01/$0F/$13/$4C are the common lifecycle (>=6 sites each)',
+          all(list(dv.values()).count(x) >= 6 for x in (0x01, 0x0F, 0x13, 0x4C)))
+
     # --- the XP channel-scan loop ----------------------------------------
     check('channel scan at $F08616: $20 stride, bounded by $105E',
           d[0x8668:0x866C].hex().upper() == '247C00FF' and

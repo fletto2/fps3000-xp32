@@ -1389,6 +1389,57 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The firmware's complete RTOS API surface: 14 directives
+
+Recovering the directive from every `trap #1` site — walking back for the last
+write to `d0` — gives the full set the firmware uses, and the distribution is
+as informative as the list:
+
+| directive | sites | used by |
+|---|---:|---|
+| `$01` | 7 | **every task** + RDHC twice |
+| `$0F` | 6 | **every task** |
+| `$13` | 6 | **every task** |
+| `$4C` | 6 | **every task** |
+| `$2B` | 9 | IO1I, each XP task ×2 |
+| `$2D` | 9 | IO1I, each XP task ×2 |
+| `$10` | 5 | RDHC, each XP task |
+| `$11` | 4 | each XP task |
+| `$43` | 4 | each XP task |
+| `$12` | 5 | **RDHC only** |
+| `$0B` | 1 | **RDHC only** |
+| `$0D` | 1 | **RDHC only** |
+| `$29` | 1 | **RDHC only** |
+| `$2A` | 1 | **RDHC only** |
+
+65 sites resolved, 6 where the directive could not be recovered by this
+method (`d0` set further back or computed).
+
+The shape matches the task roles established elsewhere:
+
+- **`$01`, `$0F`, `$13`, `$4C` are the common lifecycle** — every task makes
+  each call exactly once. `$01` sets up the task and stack, `$4C` connects the
+  interrupt vector (traced directly), `$13` is the blocking wait. `$0F` is the
+  fourth member of that set and is also called once from every channel ISR.
+- **`$2B` and `$2D` are paired and channel-oriented** — twice each in every XP
+  task and once each in TCBIO1I, never in RDHC. The two `$2D` calls in the XP
+  prologue attach the `AXP1`/`HXP1` ASQs; the `$2B` calls sit in the bit-14
+  dispatch path.
+- **Five directives are RDHC's alone** — `$0B`, `$0D`, `$12`, `$29`, `$2A`.
+  That is consistent with RDHC being the master/dispatch task: it is the only
+  one doing whatever those five do, and `$12` is its most-used call.
+
+Note this is the TRAP #1 surface. CLAUDE.md separately records 37 internal
+directives reached by TRAP #0 with the directive in `d0`; those are kernel
+internals, not calls this firmware makes.
+
+**None of these numbers could be matched against Motorola's published names.**
+The RMS68K source at `~/src/claude/versados/rms68k_source.SA` gives
+`GTASQ 31`, `WTEVNT 36`, `RDEVNT 34`, `RTEVNT 37`, `TERM 15`, `CMR 60`, none
+of which line up, and the kernel's own 35-entry dispatch table at `$F001D6` is
+too short to be indexed by `$43` or `$4C` directly. The roles above are
+established from what the calls do in this ROM.
+
 ### The largest XP-only routine is a channel scan
 
 The 408-byte block replicated across the four XP tasks and absent from RDHC
