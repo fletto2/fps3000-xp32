@@ -574,19 +574,65 @@ chassis says "nothing more" by clearing it, or by raising bit 15.
 Our model returns `$4000` there permanently, so the drain never
 terminates — which is what the run actually did.
 
-**Where the test stops.** In this harness the address accumulates to
-`$00020010` instead of `$00010000`, and `d5` reaches `$F8` — it has run
-one step past zero, so a fourth address-shift happened where three were
-expected. The record is framed as `S2` + count + 3 address bytes, which
-should give exactly three.
+### The record address is an OFFSET — the firmware adds `$10000` itself
 
-That is a **framing question between the harness and the parser**, not a
-firmware mystery: the handler's own byte accounting is consistent, so the
-disagreement is over where the caller stops consuming and the handler
-starts. Resolving it needs the exact division of labour at F04B82-F04B88
-against F051BE, which is a short piece of work for whoever picks this up.
-The store, the bounds check and the end-of-stream protocol above are
-established regardless.
+The address accumulation loop settles it:
+
+```
+F051A2  a1 = $10                 ; initial value
+F051BE  d2 = (a0)                ; one byte, as two ASCII chars
+F051C4  convert
+F051CE  lsl.l d5,d2              ; shift into position
+F051D0  adda.l d2,a1             ; accumulate
+F051D4  d5 -= 8
+F051DA  bge F051A8               ; more address bytes
+F051DC  adda.l #$10000,a1        ; <-- add the staging-buffer base
+```
+
+So the destination is
+
+```
+    a1 = $10 + <record address> + $10000
+```
+
+An S2 record carrying address `$010000` therefore lands at
+`$10 + $010000 + $10000 = $020010`, which is out of bounds and silently
+rejected — exactly the `$00020010` the instrumented run reported.
+
+**CLAUDE.md says "SRecordDataHandler enforces `0x10000 <= addr <=
+0x1FFFF`". That is the check on the *computed* address, not on the
+address written in the record.** The record address must be an offset
+from zero. The usable range is:
+
+| | |
+|---|---|
+| record address | `$0000` - `$FFEF` |
+| lands at | `$10010` - `$1FFFF` |
+
+The first 16 bytes of the staging buffer are unreachable through this
+path because of the `$10` initial value.
+
+### Verified end to end
+
+Records built that way load correctly through the firmware's own front
+end, with no monitor involvement:
+
+```
+S20C000000DEADBEEFCAFEBABE7B S20C0000080102030405060708C7
+FPS3K_SREC=<file> FPS3K_SEQ="02:001C,42:0000,00:0000"
+
+-> F0520E executes 16 times
+-> $10010: DEADBEEFCAFEBABE0102030405060708
+```
+
+Two records, sixteen bytes, contiguous and correct at the computed
+destination. **This is the complete microcode staging path exercised
+through the firmware's S-record receiver** — host ASCII into `$FF0008`,
+parsed in place, stored to the WCS staging buffer — as opposed to the
+monitor's `L` command, which bypasses all of it.
+
+Anyone generating microcode for this machine needs to emit S-records
+addressed from **zero**, not from `$10000`.
 
 ### `$FF0008` has three modes, and one of them is ASCII S-records
 
