@@ -96,6 +96,14 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- large replicated blocks: RDHC + one per XP task -----------------
+    for ln, addrs in [(408, [0xF06750, 0xF07168, 0xF07B68, 0xF08568]),
+                      (192, [0xF05B92, 0xF065D2, 0xF06FEA, 0xF079EA, 0xF083EA]),
+                      (176, [0xF05A0E, 0xF0644E, 0xF06E66, 0xF07866, 0xF08266])]:
+        blk = d[addrs[0]-B:addrs[0]-B+ln]
+        check('replicated %d-byte block x%d' % (ln, len(addrs)),
+              all(d[a2-B:a2-B+ln] == blk for a2 in addrs) and d.count(blk) == len(addrs))
+
     # --- eight byte-identical copies of the panel-command issuer ---------
     ISSUERS = [0xF04500, 0xF05688, 0xF05E56, 0xF068A8,
                0xF072C0, 0xF07CC0, 0xF086C0, 0xF0A57E]

@@ -1389,6 +1389,59 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### A third of the application code is byte-identical replication
+
+Sweeping the FPS application region `$F04488-$F0A5FF` for duplicated blocks
+(32-byte seed windows, grown to maximal length, non-overlapping) gives:
+
+| length | copies | addresses |
+|---:|---:|---|
+| 408 | **4** | `$F06750` `$F07168` `$F07B68` `$F08568` — XP tasks only |
+| 192 | **5** | `$F05B92` `$F065D2` `$F06FEA` `$F079EA` `$F083EA` |
+| 176 | **5** | `$F05A0E` `$F0644E` `$F06E66` `$F07866` `$F08266` |
+| 130 | 5 | `$F05AFC` `$F0653C` `$F06F54` `$F07954` `$F08354` |
+| 106 | 5 | `$F0599C` `$F063DC` `$F06DF4` `$F077F4` `$F081F4` |
+| 88 | 5 | `$F057FA` `$F0623A` `$F06C52` `$F07652` `$F08052` |
+| 58 | 10 | `$F05A84` `$F05B44` `$F064C4` `$F06584` … |
+| 52 | 15 | `$F056C8` `$F0594A` `$F059D2` `$F06108` … |
+| 50 | 15 | `$F05742` `$F057AC` `$F05820` `$F06182` … |
+| 50 | **8** | the panel-command issuer |
+
+**9,182 of 24,952 bytes — 36% — are a byte-identical copy of an earlier
+block.**
+
+The dominant shape is **five copies: one in RDHC and one in each of the four
+XP tasks**. Read the first address of each 5-copy group and it is always in
+RDHC's range, with the other four landing at the same offset within each XP
+task. The 408-byte group is the exception, appearing in the four XP tasks and
+not in RDHC.
+
+Measuring the overlap directly:
+
+| | windows also occurring in the other |
+|---|---|
+| XP1I vs RDHC | **32%** of XP1I |
+| IO1I vs RDHC | **23%** of IO1I |
+| RDHC vs XP1I | 13% of RDHC |
+
+So each XP task is roughly a third shared library, and RDHC — much the largest
+region — is mostly its own code.
+
+**What this is good for.** Combined with the earlier finding that XP1I, XP2I
+and XP3I differ in only 77 bytes, it means the ROM's ~25 KB of application
+code contains about **15.8 KB of distinct code**. Anyone reading the
+disassembly can cover essentially all of it by reading RDHC and one XP task;
+the other three XP tasks and a third of each are already accounted for. It
+also explains a result recorded earlier — that panel codes `$269`, `$26A`×4,
+`$26B`×2 and `$26C`×9 appear with *identical counts* in RDHC and all four XP
+tasks. They sit inside these replicated blocks.
+
+This is also a strong hint about how the firmware was built: a library
+included into each task at assembly time rather than linked as shared
+routines. Nothing here identifies the toolchain, but wholesale duplication at
+this scale, with no per-copy constants in the largest groups, is what textual
+inclusion produces and not what a linker does.
+
 ### The panel-command issuer exists in eight byte-identical copies
 
 There are exactly nine `bra .` (`60FE`) sites in the ROM, and **eight of them
