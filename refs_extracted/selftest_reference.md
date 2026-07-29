@@ -30,6 +30,59 @@ on any failure. A test that fails generally re-runs its current subtest
 rather than aborting, so a hang with a stable beacon value is a failed
 assertion, not a crash.
 
+### The thirteen phases nobody had labelled
+
+The annotation table names phases `$02`-`$17`. Phases `$18`-`$1A` and
+`$20`-`$29` had no identity. Combining each phase's entry PC with the chassis
+registers it touches:
+
+| phase | entry | touches | reading |
+|---|---|---|---|
+| `$18` | `$F096D8` | `$FF0216` ×4, `$FF0210` | XLTR **mode/page register** test |
+| `$19` | `$F0977E` | `$FF0216` ×4, **`$FF0214` ×2**, `$FF0210` | XLTR **data register** test |
+| `$1A` | `$F09846` | **`$FF0218` ×4**, `$FF0216` ×3, `$FF000E` ×3, `$FF020C` ×2 | **status/IRQ + panel-command** test |
+| `$20` | `$F098F2` | board status ×4 | short gate |
+| `$21` | `$F099B8` | board status ×196,608 | **3 × 64K** loop |
+| `$22` | `$F099FA` | board status ×32,768 | 32K loop |
+| `$23` | `$F09A84` | board status ×32,768 | 32K loop |
+| `$24` | `$F098F2` | *identical to `$20`* | **second pass** |
+| `$25` | `$F099B8` | *identical to `$21`* | second pass |
+| `$26` | `$F099FA` | *identical to `$22`* | second pass |
+| `$27` | `$F09A84` | *identical to `$23`* | second pass |
+| `$28` | `$F09ADE` | board status ×26, `$FF0210` ×2 | short |
+| `$29` | `$F09B54` | board status ×65,536, **`$F70003` ×7,211, `$F7000D` ×7,209**, `$F70018` ×82 | **PTM-timed** test |
+
+**`$20`-`$23` and `$24`-`$27` are the same four routines run twice**, which the
+identical entry PCs make unambiguous. The block-3 setup says what differs:
+
+```
+$F0885A  clr.w   d5
+$F08862  move.w  #$2000,d6          ; phase $20
+$F08866  movea.l #$00000000,a0      ; base
+$F0886C  movea.l #$00000400,a1      ; FIRST range start
+$F08872  movea.l #$0001F000,a2      ; end
+$F08876  bsr     $F08A4A
+$F0887C  movea.l #$00010000,a1      ; SECOND range start
+$F08882  bsr     $F08992
+$F08886  lea     $0800,a7           ; stack reset
+$F0888A  move.l  $1F800,$400
+```
+
+So the two passes are **RAM tests over `$400`-`$1F000` and then
+`$10000`-`$1F000`** — the second covering exactly the WCS staging buffer. A
+board that reaches `$24` but hangs in `$25`-`$27` has good low RAM and bad
+staging RAM, which is a directly useful split for a bench session.
+
+**Phase `$29` is the only test that touches the MC6840 PTM** (`$F70003` and
+`$F7000D`, ~7,200 accesses each), alongside 65,536 board-status reads. That
+identifies it as the timed test, and explains why it dominates the beacon: it
+is counting real time, not iterations of a data pattern.
+
+Note these readings come from *which registers each phase touches*, not from
+decoding each routine. The register evidence is strong for `$18`-`$1A` and
+`$29`, where the touched set is distinctive; `$20`-`$28` are distinguished
+mainly by their loop counts and the setup above.
+
 ### Measured phase table — 30 phases, and their sub-step counts
 
 Logging every write to `$FF0204` over a full boot gives the complete beacon

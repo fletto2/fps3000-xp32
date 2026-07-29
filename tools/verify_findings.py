@@ -108,6 +108,12 @@ else:
     except FileNotFoundError:
         check('fps3k.asm present', False)
 
+    # --- block 3 runs its four tests twice, over two RAM ranges ----------
+    check('block 3 tests $400-$1F000 then $10000-$1F000',
+          d[0x8866:0x887A].hex().upper() ==
+          '207C00000000227C00000400247C0001F0006100' and
+          d[0x887C:0x8882].hex().upper() == '227C00010000')
+
     # --- the phase beacon: 29 phases, $29 dominates ----------------------
     import subprocess as _sp
     with tempfile.TemporaryDirectory() as _td:
