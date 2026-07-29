@@ -436,6 +436,11 @@ void cpu_set_fc(unsigned int fc) { (void)fc; }
 /* Musashi's M68K_INSTRUCTION_CALLBACK is wired to call this symbol. */
 void instr_hook_callback(unsigned int pc) {
     total_instr++;
+        { const char *rl = getenv("FPS3K_REGLOG");
+      if (rl && pc == (unsigned)strtoul(rl, NULL, 16))
+          fprintf(stderr, "[REG] pc=%06X a1=%08X d2=%08X d4=%08X d5=%08X\n",
+                  pc, m68k_get_reg(NULL,M68K_REG_A1), m68k_get_reg(NULL,M68K_REG_D2),
+                  m68k_get_reg(NULL,M68K_REG_D4), m68k_get_reg(NULL,M68K_REG_D5)); }
     if (trace_fp) {
         /* compact: just hex PC */
         fprintf(trace_fp, "%06X\n", pc);

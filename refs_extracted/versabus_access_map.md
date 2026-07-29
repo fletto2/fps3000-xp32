@@ -527,18 +527,66 @@ Reproduce with:
 FPS3K_SREC=<file> FPS3K_SEQ="02:000E,42:0000,00:0000"
 ```
 
-**Where it still stops.** The handler runs to its drain loop at
-F05218-F05222 and does not reach F05224, the `PCMD_CH1_ACK` that ends a
-successful record. The staging buffer stays empty, so the store never
-happens. The likely cause is the record-body byte count: the handler
-decrements `d4` per character and the source runs out, returning zeros
-past end-of-file, so the loop never satisfies its exit test.
+### Inside `SRecordDataHandler`, decoded
 
-That is a defect in the **test harness**, not evidence about the
-firmware — a chassis that stops presenting data rather than returning
-zeros would behave differently. Anyone continuing this should make the
-source signal exhaustion rather than pad, and check `d4`/`d5` against the
-record's own length byte.
+Instrumenting the range check (`FPS3K_REGLOG=F051FE`) gives the register
+roles directly:
+
+| Register | Role |
+|---|---|
+| `d5` | **address-width shift**, set by the caller per record type: `$08` for S1, `$10` for S2, `$18` for S3 — i.e. `(address_bytes - 1) * 8` |
+| `d4` | **record byte count**, taken from the record's own count field at F04B88 and decremented once per byte consumed |
+| `d2` | the current converted byte |
+| `a1` | the destination pointer, **initialised to `$10`** at F051A2 |
+
+The store and its guard:
+
+```
+F051FE  cmpa.l #$10000,a1
+F05204  blt  F05212            ; below the staging buffer -> reject
+F05206  cmpa.l #$1FFFF,a1
+F0520C  bgt  F05212            ; above it -> reject
+F0520E  move.b d2,(a1)+        ; the store
+F05210  bra  SRecordParseLoop
+```
+
+This is where the `$10000-$1FFFF` constraint CLAUDE.md attributes to the
+handler actually lives — a byte-at-a-time store with a two-sided bounds
+check, silently rejecting anything outside.
+
+### `$FF0000` signals end-of-stream
+
+The reject path is more interesting than a simple error exit:
+
+```
+F05212  a1 = $FF0000
+F05218  cmpi.w #$0,$0(a1)      ; read APIF_CMD_STATUS
+F0521E  ble  F05224            ; <= 0 -> done, issue PCMD_CH1_ACK
+F05220  d0 = (a0)              ; else drain a word from $FF0008
+F05222  bra  F05218
+```
+
+So after a rejected record the firmware **drains the port until
+`$FF0000` reads zero or negative**. That makes `$FF0000` an
+end-of-stream indicator as well as the command/status register: the
+chassis says "nothing more" by clearing it, or by raising bit 15.
+
+Our model returns `$4000` there permanently, so the drain never
+terminates — which is what the run actually did.
+
+**Where the test stops.** In this harness the address accumulates to
+`$00020010` instead of `$00010000`, and `d5` reaches `$F8` — it has run
+one step past zero, so a fourth address-shift happened where three were
+expected. The record is framed as `S2` + count + 3 address bytes, which
+should give exactly three.
+
+That is a **framing question between the harness and the parser**, not a
+firmware mystery: the handler's own byte accounting is consistent, so the
+disagreement is over where the caller stops consuming and the handler
+starts. Resolving it needs the exact division of labour at F04B82-F04B88
+against F051BE, which is a short piece of work for whoever picks this up.
+The store, the bounds check and the end-of-stream protocol above are
+established regardless.
 
 ### `$FF0008` has three modes, and one of them is ASCII S-records
 
