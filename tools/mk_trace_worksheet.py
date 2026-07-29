@@ -150,6 +150,13 @@ y=tbl(y,["question","finding"],[M,M+230],
   ("Which pins carry the host-side 32-bit path?","")])
 y=note(y,"The host-side counterpart card is missing, so its pinout has to come off this card.")
 y-=3
+y=chk(y,"Check 0c - stack high-water mark, from one memory dump")
+y=para(y,"The supervisor stack top is $0800 and the kilobyte below it is pre-filled with $09ABCDEF, from $0404 up.")
+y=para(y,"Dump that range and count surviving $09ABCDEF longwords. 236 of 256 = normal (a clean boot uses 76 bytes).")
+y=para(y,"A low count means something recursed. ZERO means the stack has already overrun into the vector table at $03FF,")
+y=para(y,"which sits directly below with no guard region - and that ends in a double bus fault.")
+y=note(y,"Surviving $09ABCDEF longwords: ______ of 256      Deepest address reached: $______")
+y-=4
 y=chk(y,"Check 0b - if the board dies, the panel port names the exception")
 y=para(y,"The last word written to $FF000E before a hang is a CPU exception code. Nine of them, from a table at $F0A23A.")
 y=para(y,"This costs nothing to watch and immediately separates a bus fault from a stray interrupt.")

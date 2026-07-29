@@ -153,6 +153,19 @@ else:
               0xA240 + 8*i + struct.unpack('>H', d[0xA240+8*i:0xA242+8*i])[0]
               == 0xA57E for i in range(9)))
 
+    # --- stack fill pattern and high-water mark --------------------------
+    with tempfile.TemporaryDirectory() as _td4:
+        subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000',
+                        '-dump-ram', _td4+'/r'], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL)
+        _r = open(_td4+'/r', 'rb').read()
+    _P = bytes.fromhex('09ABCDEF')
+    _intact = sum(1 for x in range(0x400, 0x800, 4) if _r[x:x+4] == _P)
+    check('stack area $400-$7FF is pre-filled with $09ABCDEF',
+          _intact > 200)
+    check('a clean boot uses well under half the 1 KB supervisor stack',
+          all(_r[x:x+4] == _P for x in range(0x404, 0x600, 4)))
+
     # --- vector-table integrity across configurations --------------------
     def vecwrites(env2):
         return subprocess.run([EMU, '-rom', ROM, '-cycles', '300000000'],

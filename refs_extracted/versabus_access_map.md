@@ -1455,6 +1455,39 @@ original was right in substance and my re-verification of it was wrong in
 method. Both were caught by doing the arithmetic or the decode rather than
 trusting a summary.*
 
+### The firmware fills its stack with `$09ABCDEF` — a free high-water gauge
+
+`$F08886` is `lea $0800,a7`, so the supervisor stack top is **`$0800`**, and the
+kilobyte below it is pre-filled with the repeating longword **`$09ABCDEF`**,
+from **`$0404`** upward — the longword at `$0400` itself is left zero. That is a stack-fill pattern, and it makes stack depth
+measurable from nothing but a memory dump: scan down from `$07FC` and the first
+longword that is no longer `$09ABCDEF` is the high-water mark.
+
+| configuration | deepest stack use | pattern longwords intact |
+|---|---|---|
+| clean boot | **76 bytes** of 1,024 | 236 of 256 |
+| the `$281` deadlock | **1,024 of 1,024 — exhausted** | **0 of 256** |
+
+A healthy machine uses **7.4%** of its supervisor stack. The deadlock consumes
+all of it and then writes 764 bytes of vector table, which is the overrun the
+previous section measured from the other side.
+
+**This is usable on hardware.** Dump `$0400`-`$07FF` from a live board — the
+monitor's `m` command does it — and count surviving `$09ABCDEF` longwords. 236
+means normal; a low count means something recursed; zero means the vector table
+below is already damaged and the machine is running on borrowed time. No
+debugger, no instrumentation, one memory dump.
+
+Note also what sits immediately below: **the vector table, with no guard region
+at all.** `$0400` is the stack floor and `$03FF` is the top of the vector table.
+The firmware's own margin is the 948 bytes it does not normally use.
+
+*Method note: the first attempt at this measurement scanned upward from `$0400`
+and reported "1,020 bytes used, 4 bytes of headroom" — exactly backwards, and
+wrong by a factor of thirteen. A surviving pattern means the stack did **not**
+reach that address. The high-water mark is found scanning down from the top,
+not up from the floor.*
+
 ### The `$281` deadlock is worse than a hang: it destroys the vector table
 
 `FPS3K_VECWATCH` used to watch four bytes — `$128`-`$12B`, TCBIO1I's vector —
