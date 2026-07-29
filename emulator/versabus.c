@@ -756,9 +756,18 @@ static void xltr_write(uint32_t addr, uint16_t val) {
              * $FF000E, not a command code, so its spin at F056B8 was never
              * answered and the machine stalled one step further on. */
             if (log_fp)
-                fprintf(log_fp, "[PANEL] CHANNEL_SELECT <- $%04X, mode0=$%04X, arm=%s\n",
-                        val, xltr.mode0,
-                        (xltr.mode0 & MODE0_RESP_ACK) ? "no (ACK set)" : "yes");
+                /* Report the ACTUAL arming decision.  This used to print
+                 * arm=yes whenever the ACK bit was clear, ignoring the
+                 * MODE1 bit-12 gate below -- so every self-test phase-beacon
+                 * write to this same register logged "arm=yes" when nothing
+                 * was armed, all 32,967 of them.  A diagnostic that reports a
+                 * different decision from the one the code makes is worse
+                 * than none. */
+                fprintf(log_fp, "[PANEL] CHANNEL_SELECT <- $%04X, mode0=$%04X, "
+                        "mode1=$%04X, arm=%s\n", val, xltr.mode0, xltr.mode1,
+                        (xltr.mode0 & MODE0_RESP_ACK) ? "no (ACK set)"
+                        : !(xltr.mode1 & 0x1000)      ? "no (MODE1 b12 clear -- beacon/walk)"
+                        : "YES");
             /* Only a real panel command gets a response.  PanelIOConfigure
              * sets MODE1 bit 12 (bset #$c at F056A0) before writing
              * CHANNEL_SELECT; the self-test register walks write MODE1 =
@@ -767,6 +776,19 @@ static void xltr_write(uint32_t addr, uint16_t val) {
              * low byte, which F09590-F09598 checks must be zero -- the
              * chassis model was failing the firmware's own test. */
             if ((xltr.mode1 & 0x1000) && !(xltr.mode0 & MODE0_RESP_ACK)) {
+                /* This is the completion of a real panel command, so the
+                 * chassis must INTERPRET it here.
+                 *
+                 * The model used to process commands only on a $8004
+                 * REQUEST-TRANSFER write to $FF0000 -- but the panel-command
+                 * issuer never writes $8004.  All eight copies write the code
+                 * to $FF000E, adjust MODE1/MODE0, write CHANNEL_SELECT, and
+                 * spin; $8004 belongs to the channel ISRs.  So every command
+                 * the issuer sent was answered with a generic $14 and never
+                 * looked at.  Processing it here closes that gap: the code
+                 * staged at $FF000E is now interpreted at the moment the
+                 * issuer completes the command. */
+                chassis_process_panel_cmd(last_panel_cmd);
                 /* FPS3K_RESP overrides the returned status code, so the
                  * 0..$14 code space can be swept experimentally. */
                 const char *e = getenv("FPS3K_RESP");

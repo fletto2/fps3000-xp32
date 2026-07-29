@@ -1473,6 +1473,43 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The chassis never interpreted the commands the issuer sent
+
+Toward whole-machine emulation, the chassis model had a structural gap: it
+processed a panel command only when the SBC wrote **`$8004`** (REQUEST-TRANSFER)
+to `$FF0000`. But **the panel-command issuer never writes `$8004`.** All eight
+copies write the code to `$FF000E`, adjust MODE1/MODE0, write `CHANNEL_SELECT`,
+and spin; `$8004` belongs to the channel ISRs.
+
+So every command the firmware issued through an issuer was answered with a
+generic `$14` and **never looked at**. The chassis now interprets the code
+staged at `$FF000E` at the moment the issuer completes the command — i.e. on the
+`CHANNEL_SELECT` write with MODE1 bit 12 set. Driving the S-record path now
+shows `panel cmd 0x25F (PCMD_CH3_CONFIG)` reaching the chassis, where before
+nothing did.
+
+**Coverage is unchanged — 0 new PCs — and that is the expected result.**
+Interpreting the command changes what the chassis *sees*, not what the SBC
+*executes*, because the response returned is still the generic `$14`. The gap
+closed here is a precondition for per-code responses, not a behavioural change
+in itself.
+
+#### And a diagnostic that reported the wrong decision
+
+The `[PANEL] CHANNEL_SELECT` log line printed `arm=yes` whenever the ACK bit was
+clear, **ignoring the MODE1 bit-12 gate immediately below it**. Since the
+self-test phase beacon writes to this same register, every one of the **32,972**
+beacon writes in a boot logged `arm=yes` while nothing was armed. Reading that
+log is what first suggested the beacon was arming responses; it was not.
+
+The line now reports the actual decision, and the true count of armings in a
+full boot plus a scripted sequence is **one** — the `$025F` command above.
+
+*This is the third instrument defect found this session, after the bus log's
+blind spot on `$400000` and the write-tracking gate that treated zero writes as
+non-writes. All three produced specific, confident, wrong numbers, and none was
+found by re-reading the firmware.*
+
 ### The emulator's host-byte model was wrong *and inert* — now corrected
 
 Working toward whole-machine emulation, the AP I/F host-byte path turned out to
