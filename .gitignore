@@ -28,3 +28,14 @@ emulator/trace.log
 emulator/bus.log
 emulator/ramdump.bin
 *.o
+
+# --- exceptions to the blanket *.py rule above ---------------------------
+# These four generate artifacts that ARE tracked, so without them those
+# artifacts cannot be reproduced from the repo.  All four are verified to
+# contain no credentials and to make no network calls.  Everything else
+# stays ignored: 18 of the 36 .py files here reference API keys (read from
+# external paths, not embedded), and the blanket rule is what keeps them out.
+!disasm.py
+!build_clean_disasm.py
+!tools/
+!tools/*.py
