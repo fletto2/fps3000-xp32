@@ -13,7 +13,7 @@ fails, either the change is wrong or the documentation needs updating --
 both worth knowing before the discrepancy is discovered months later.
 
 """
-import hashlib, os, re, struct, subprocess, sys, tempfile
+import collections, hashlib, os, re, struct, subprocess, sys, tempfile
 
 ROM = sys.argv[1] if len(sys.argv) > 1 else 'FPS3K_U11_U12_JOIN.bin'
 B   = 0xF00000
@@ -152,6 +152,16 @@ else:
           all(struct.unpack('>H', d[0xA23E+8*i:0xA240+8*i])[0] == 0x6000 and
               0xA240 + 8*i + struct.unpack('>H', d[0xA240+8*i:0xA242+8*i])[0]
               == 0xA57E for i in range(9)))
+
+    # --- FPS3K_LOGCHASSIS exposes the window; 4 PCs x 65536 --------------
+    with tempfile.TemporaryDirectory() as _td2:
+        _o = subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000'],
+                            capture_output=True, text=True,
+                            env={**os.environ, 'FPS3K_LOGCHASSIS': '1'}).stderr
+    _pcs = collections.Counter(re.findall(r'CHASSIS-MEM.*@(\w{6})', _o))
+    check('chassis-window logging: exactly 4 PCs do 65536 accesses each',
+          sorted(p for p, n in _pcs.items() if n == 65536) ==
+          ['F09B48', 'F09B58', 'F09B70', 'F09B72'])
 
     # --- the $400000 window is exercised, and the bus log misses it ------
     import subprocess as _s2

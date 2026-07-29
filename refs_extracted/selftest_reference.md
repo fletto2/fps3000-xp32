@@ -49,7 +49,7 @@ registers it touches:
 | `$25` | `$F099B8` | *identical to `$21`* | second pass |
 | `$26` | `$F099FA` | *identical to `$22`* | second pass |
 | `$27` | `$F09A84` | *identical to `$23`* | second pass |
-| `$28` | `$F09ADE` | board status ×26, `$FF0210` ×2 | short |
+| `$28` | `$F09ADE` | board status ×26, `$FF0210` ×2, **65,536 + 104 chassis-window accesses** | **major chassis test**, not short |
 | `$29` | `$F09B54` | board status ×65,536, **`$F70003` ×7,211, `$F7000D` ×7,209**, `$F70018` ×82 | **chassis-memory** test — see the correction below |
 
 **`$20`-`$23` and `$24`-`$27` are the same four routines run twice**, which the
@@ -85,9 +85,26 @@ writes by 80M cycles, 131,144 / 131,148 by 200M. The window is referenced from
 `$F09AE8`, `$F09B32`, `$F09B38` (`$404000`) and `$F09BA2` (`$403FFC`), all
 inside those two phases.
 
-131,072 is 32,768 × 4, matching phase `$29`'s 32,768 iterations at four window
-accesses each. So `$29` walks chassis memory through the paged window and uses
+**The emulator now logs the window** (`FPS3K_LOGCHASSIS=1`, off by default —
+a full boot emits ~262k lines), and that gives exact attribution rather than
+inference. Four program counters do **65,536 accesses each**:
+
+| PC | accesses | phase |
+|---|---|---|
+| `$F09B48` | 65,536 | `$28` |
+| `$F09B58` | 65,536 | `$29` |
+| `$F09B70` | 65,536 | `$29` |
+| `$F09B72` | 65,536 | `$29` |
+| `$F09AF6`, `$F09B00` | 52 each | `$28` |
+| `$F0980A`, `$F0981A` | 8 each | `$19` |
+
+So `$29` walks chassis memory through the paged window at three sites and uses
 the PTM alongside it — most likely to time or bound the walk.
+
+**And phase `$28` is not "short".** The table above called it that on the
+strength of 26 board-status reads; it in fact makes **65,536 + 104 chassis
+accesses**, more than any phase except `$29`. That row is corrected. Both
+mislabellings — `$29` as timed, `$28` as short — have the same single cause.
 
 **Tooling note worth carrying forward:** any per-phase analysis built from the
 bus log is blind to `$400000-$4FFFFF`. That is why the table above shows only

@@ -186,6 +186,17 @@ static uint8_t bus_read8(uint32_t a) {
     if (a >= CHASSIS_MEM_BASE && a < CHASSIS_MEM_BASE + CHASSIS_MEM_SIZE) {
         if (!(versabus_xltr_data_hi() & 0x20)) {
             chassis_mem_reads++;
+            /* FPS3K_LOGCHASSIS=1 logs this window.  It is intercepted here,
+             * BEFORE versabus_read(), so log_access() never sees it -- which
+             * is why every per-phase analysis built from the bus log showed
+             * phases $20-$29 touching nothing but board status, and why
+             * phase $29 was mislabelled a timed test when it walks 131k
+             * chassis addresses.  Off by default: a full boot emits ~262k
+             * lines. */
+            if (getenv("FPS3K_LOGCHASSIS"))
+                fprintf(stderr, "[CHASSIS-MEM ] RD 1-byte %06X = %02X @%06X\n",
+                        a, chassis_mem[a - CHASSIS_MEM_BASE],
+                        m68k_get_reg(NULL, M68K_REG_PPC));
             return chassis_mem[a - CHASSIS_MEM_BASE];
         }
         chassis_mem_berrs++;
@@ -276,6 +287,9 @@ static void bus_write8(uint32_t a, uint8_t v) {
     if (a >= CHASSIS_MEM_BASE && a < CHASSIS_MEM_BASE + CHASSIS_MEM_SIZE) {
         if (!(versabus_xltr_data_hi() & 0x20)) {
             chassis_mem_writes++; chassis_mem[a - CHASSIS_MEM_BASE] = v;
+            if (getenv("FPS3K_LOGCHASSIS"))
+                fprintf(stderr, "[CHASSIS-MEM ] WR 1-byte %06X = %02X @%06X\n",
+                        a, v, m68k_get_reg(NULL, M68K_REG_PPC));
             return;
         }
     }
