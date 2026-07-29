@@ -63,15 +63,15 @@ Resolving each vector number against the post-boot vector table gives:
 
 | BIM | ch | CR | value | VR | vec | vector addr | installed handler | owner |
 |---|---|---|---|---|---|---|---|---|
-| 0 | 0 | `$FF0230` | `$5E` | `$FF0238` | `$41` | `$104` | `F04930` | — |
+| 0 | 0 | `$FF0230` | `$5E` | `$FF0238` | `$41` | `$104` | `F04930` | **TCBRDHC** |
 | 0 | 1 | `$FF0232` | `$00` | `$FF023A` | `$42` | `$108` | `F00896` generic | disabled |
 | 0 | 2 | `$FF0234` | `$00` | `$FF023C` | `$43` | `$10C` | `F00896` generic | disabled |
 | 0 | 3 | `$FF0236` | `$00` | `$FF023E` | `$44` | `$110` | `F00896` generic | disabled |
 | 1 | 0 | `$FF0240` | never written | `$FF0248` | — | — | — | unused |
 | 1 | 1 | `$FF0242` | `$00` | `$FF024A` | `$49` | `$124` | `F0A27A` panic | disabled |
 | 1 | 2 | `$FF0244` | `$5F` | `$FF024C` | `$45` | `$114` | `F07EE6` | **TCBXP1I** |
-| 1 | 3 | `$FF0246` | `$5F` | `$FF024E` | `$46` | `$118` | `F074E6` | **TCBXP2I/3I** |
-| 2 | 0 | `$FF0250` | `$5F` | `$FF0258` | `$47` | `$11C` | `F06AE6` | **TCBXP3I/2I** |
+| 1 | 3 | `$FF0246` | `$5F` | `$FF024E` | `$46` | `$118` | `F074E6` | **TCBXP2I** |
+| 2 | 0 | `$FF0250` | `$5F` | `$FF0258` | `$47` | `$11C` | `F06AE6` | **TCBXP3I** |
 | 2 | 1 | `$FF0252` | `$5F` | `$FF025A` | `$48` | `$120` | `F060CE` | **TCBXP4I** |
 | 2 | 2 | `$FF0254` | `$5F` | `$FF025C` | `$4A` | `$128` | `F05DD6` | **TCBIO1I** |
 | 2 | 3 | `$FF0256` | `$00` | `$FF025E` | — | — | — | disabled |
@@ -102,8 +102,57 @@ registers, and `$5F` is a control value. A fifth control register at
 `$FF0254` belongs to TCBIO1I and appears in no earlier doc.
 
 Two channels are wired but unused (`$FF0240`/`$FF0248` and
-`$FF0256`/`$FF025E`). BIM0 has one enabled channel whose vector `$41`
-reaches `F04930`, a handler we have not identified.
+`$FF0256`/`$FF025E`).
+
+### Reading the channel owners off the handlers
+
+Every vector target starts with a register-save prologue, so all six are
+interrupt handlers. The four XP handlers open with the identical
+instruction (`move.l a5,-(a7)`), marking them as four instances of one
+code pattern.
+
+Locating each handler inside the disassembly's function map identifies
+the owners, including two the earlier version of this document left
+ambiguous:
+
+| task instance | CR write | CR addr | vec | ISR | ISR - CR | gap to previous |
+|---|---|---|---|---|---|---|
+| TCBXP1I | `F07E12` | `$FF0244` | `$45` | `F07EE6` | +`$D4` | — |
+| TCBXP2I | `F07412` | `$FF0246` | `$46` | `F074E6` | +`$D4` | `$A00` |
+| TCBXP3I | `F06A12` | `$FF0250` | `$47` | `F06AE6` | +`$D4` | `$A00` |
+| TCBXP4I | `F06018` | `$FF0252` | `$48` | `F060CE` | +`$B6` | `$9FA` |
+
+Four instances of one task body, `$A00` apart, three of them with the ISR
+at a fixed `+$D4` from the control-register write. As the task address
+descends, both the control-register address and the vector number ascend.
+TCBXP1I (highest) and TCBXP4I (lowest) are already labelled in the
+disassembly, so the two instances between them are channels 2 and 3 in
+that order. Three orderings agree and the endpoints are pinned.
+
+Vector `$41` lands at `F04930`, inside **TCBRDHC**, the master dispatch
+task that drives the panel command interface and the SLC microcode
+receiver. Its prologue saves every register (`movem.l d0-d7/a0-a7`),
+heavier than the XP handlers. So BIM0 ch0 serves TCBRDHC at level 6,
+while the four XP data channels and the host link run at level 7. Data
+movement outranks the dispatcher.
+
+Vector `$49` (BIM1 ch1) points at the panic catch-all and its channel is
+disabled, which marks it as a spare. `RTOSKernelInit` writes it after
+`$47` and `$48`, so the firmware assigns vector numbers by purpose rather
+than by register address.
+
+### What the vectors do not settle
+
+The handler addresses fix which task owns which channel. They say nothing
+about the IACKIN/IACKOUT daisy chain, which decides who wins when two
+channels request the same level in the same cycle. Five channels share
+level 7 across BIM1 (two) and BIM2 (three), so the question is live.
+
+The firmware numbers vectors in task order, `$45` through `$48` for XP
+channels 1 to 4, crossing from BIM1 to BIM2 between `$46` and `$47`. A
+designer who wired the chain to match that order would put BIM1 ahead of
+BIM2. That is a reading of intent, not evidence, and the emulator's
+scan order stays a placeholder until someone buzzes pins 6 and 7.
 
 ### Confirmation from the MC68153 datasheet
 
@@ -177,8 +226,43 @@ which the 68000 reserves as uninitialised.
 Known control-register bits: 0-2 are the level, 4 is IRE, and 7 is the
 Flag ("Flag (F) is located in bit position 7"). The datasheet names IRAC
 (interrupt auto-clear), FAC (flag auto-clear) and X/IN (internal versus
-external response) without giving their positions in the pages read so
-far, so bits 3, 5 and 6 of the `$5F` the firmware writes stay unnamed.
+external response) without giving their positions in the pages rendered
+so far.
+
+Motorola's own VERSAdos drivers fill part of that gap. `MPCCDRV.SA` and
+`P050DRV.SA` (`~/src/claude/versados/SR07/U9993/`) drive a BIM on
+another board and confirm the layout from a second, independent source:
+
+```
+BIM_CTL0 EQU $FF10C1     BIM_CTL1 EQU $FF10C3     BIM_CTL3 EQU $FF10C7
+BIM_VEC3 EQU $FF10CF     IRE      EQU 4           BIM_SET  EQU $3B
+```
+
+Control registers two bytes apart on odd addresses, `BIM_CTL3` and
+`BIM_VEC3` exactly eight bytes apart, and `IRE EQU 4` labelled "Interrupt
+request enable bit". That is the layout this document derives from the
+FPS firmware, arrived at on different hardware by the vendor.
+
+`BIM_SET = $3B` also locates IRAC. Motorola writes `$3B` when programming
+the BIM and writes it **again inside the interrupt handler**, under the
+comment "Clear the interrupt at the BIM #1". That re-arm is what IRAC=1
+requires: the chip clears IRE during IACK, so software must set it again
+before the source can interrupt a second time. Comparing the two
+firmwares:
+
+| | value | level | bit 3 | IRE (4) | bit 5 | bit 6 | F (7) |
+|---|---|---|---|---|---|---|---|
+| Motorola `BIM_SET` | `$3B` | 3 | 1 | 1 | **1** | 0 | 0 |
+| FPS-3000 | `$5F` | 7 | 1 | 1 | **0** | 1 | 0 |
+
+Bits 5 and 6 are the only ones that differ in role. Motorola sets bit 5
+and re-arms every interrupt; the FPS firmware clears bit 5 and writes
+`$FF0254` once, at task start, never again. That points at **bit 5 =
+IRAC**, with bit 6 the remaining candidate for FAC.
+
+The practical consequence: the FPS-3000 runs its BIM channels with
+auto-clear off, so a channel stays armed after acknowledgement and the
+emulator is right not to clear IRE on IACK.
 
 ### Remaining caveat
 

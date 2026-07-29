@@ -443,10 +443,14 @@ static void bim_reset(void) {
  *   bits 0-2  L0-L2, interrupt request level (0 disables the channel)
  *   bit 4     IRE, interrupt enable
  *   bit 7     F, flag ("Flag (F) is located in bit position 7")
- * Named but not located in the pages read so far: IRAC (interrupt
- * auto-clear), FAC (flag auto-clear), X/IN (internal vs external
- * response).  The firmware writes $5F and $5E, whose bits 3, 5 and 6 we
- * therefore cannot name.  IRAC is not modelled for that reason. */
+ * IRAC (interrupt auto-clear) is bit 5, inferred from Motorola's own
+ * VERSAdos drivers: MPCCDRV.SA programs its BIM with BIM_SET = $3B (bit
+ * 5 set) and rewrites that value inside the interrupt handler under the
+ * comment "Clear the interrupt at the BIM #1", which is the re-arm IRAC=1
+ * forces.  The FPS firmware writes $5F (bit 5 CLEAR) to $FF0254 once at
+ * task start and never re-arms.  So auto-clear is off on this machine and
+ * a channel stays armed after acknowledgement, which is what the code
+ * below does.  FAC is the remaining candidate for bit 6; X/IN is unlocated. */
 
 #define BIM_CR_LEVEL(c)  ((c) & 0x07)
 #define BIM_CR_IRE(c)    (((c) >> 4) & 1)
@@ -516,13 +520,10 @@ int versabus_bim_iack(int level) {
              * reporting the level, so a caller trusting the BIM alone would
              * see a permanently asserted line.
              *
-             * NOT modelled: the real chip's IRAC (interrupt auto-clear)
-             * control bit, which when set clears IRE during the IACK cycle
-             * and so requires software to re-enable the source before it can
-             * interrupt again.  Which CR bit carries IRAC is not established
-             * from the datasheet pages read so far, and $5F's bit pattern
-             * does not tell us.  If a future trace shows IRAC set, this
-             * needs to clear IRE here too. */
+             * IRAC (bit 5) is CLEAR in the $5F this firmware writes, so
+             * the chip does not auto-clear IRE on acknowledgement and the
+             * channel stays armed.  Nothing to do here.  A firmware that
+             * sets bit 5 would need IRE cleared at this point. */
             bim[u].req[c] = 0;
             return bim[u].vr[c];
         }
