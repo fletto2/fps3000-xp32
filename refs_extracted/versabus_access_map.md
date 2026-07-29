@@ -1520,6 +1520,48 @@ transfer loop.
 consistent with the emulator's bit-5 BERR gate derived from the boot
 self-tests.
 
+### A quarter of the application firmware is literal copy-paste
+
+The seven-copy issuer and the five-copy dispatch table are not isolated
+cases. Hashing every 48-byte window across `$F04488-$F0A600` and counting
+recurrences:
+
+| window | bytes that repeat earlier code | share |
+|---|---|---|
+| 32 B | 7,874 of 24,952 | **31.6%** |
+| 48 B | 7,134 of 24,952 | **28.6%** |
+| 64 B | 6,266 of 24,952 | **25.1%** |
+
+579 distinct 48-byte blocks occur more than once, and the distribution is
+telling: 481 of them appear **four or five times** — once per XP task,
+sometimes plus TCBRDHC. Another 5 appear fifteen times, which is five
+regions times three sites within each.
+
+The longest exactly-duplicated runs are all at the `$A00` task stride:
+
+```
+  410 B   F07168 (XP3I) == F07B68 (XP2I)
+  408 B   F07B68 (XP2I) == F08568 (XP1I)
+  408 B   F06750 (XP4I) == F07168 (XP3I)
+  214 B   F065D2 (XP4I) == F06FEA (XP3I) == F079EA (XP2I) == F083EA (XP1I)
+  192 B   F05B92 (RDHC) == F065D2 (XP4I)
+  176 B   F05A0E (RDHC) == F0644E (XP4I) == ... == F08266 (XP1I)
+```
+
+Note the last two: **TCBRDHC shares 192- and 176-byte blocks with the XP
+tasks**, which are the dispatch handlers (`POLL`, `D1_SEND`, `BLK_XFR`,
+`D2_FIN`) that the five copies of the 42-slot table jump into.
+
+**So the unique logic is about 17.8 KB, not 25 KB.** That is the number
+worth carrying: roughly a quarter of what looks like firmware to read is
+the same code seen again.
+
+Practically, it means a routine found in one task region can be assumed
+present in the other four unless shown otherwise, and that time spent
+analysing XP2I or XP3I is largely wasted — TCBXP1I is the template and
+TCBXP4I is the only one that genuinely diverges (90% different, per the
+task-body diff above).
+
 ### The panel-command issuer exists seven times, byte for byte
 
 The "two tiers of spin" table elsewhere in this document lists seven
