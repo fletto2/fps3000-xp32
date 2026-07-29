@@ -56,6 +56,7 @@ static struct {
 
 /* Board status/control register (M68KVM02 PAL-decoded) */
 static uint32_t board_status;
+static void bim_reset(void);   /* defined with the BIM model below */
 
 /* VERSAmodule control register */
 static uint16_t vmod_ctrl;
@@ -182,6 +183,7 @@ void versabus_init(FILE *trace_log, int verb) {
     verbose = verb;
     memset(&apif, 0, sizeof apif);
     memset(&xltr, 0, sizeof xltr);
+    bim_reset();
     memset(&mailbox, 0, sizeof mailbox);
     mc6840_init(&ptm_dev, log_fp);
     upd7201_init(&sio_dev, log_fp);
@@ -425,6 +427,27 @@ static struct {
     int     req[BIM_CH];       /* device interrupt input asserted */
 } bim[BIM_COUNT];
 
+/* Datasheet reset state: "The control registers are reset to all zeroes
+ * and the Vector Registers are set to a value of $0F.  This vector value
+ * is the uninitialized vector for the MC68000." */
+static void bim_reset(void) {
+    for (int u = 0; u < BIM_COUNT; u++)
+        for (int c = 0; c < BIM_CH; c++) {
+            bim[u].cr[c] = 0x00;
+            bim[u].vr[c] = 0x0F;
+            bim[u].req[c] = 0;
+        }
+}
+
+/* Known CR bits, from the MC68153 datasheet:
+ *   bits 0-2  L0-L2, interrupt request level (0 disables the channel)
+ *   bit 4     IRE, interrupt enable
+ *   bit 7     F, flag ("Flag (F) is located in bit position 7")
+ * Named but not located in the pages read so far: IRAC (interrupt
+ * auto-clear), FAC (flag auto-clear), X/IN (internal vs external
+ * response).  The firmware writes $5F and $5E, whose bits 3, 5 and 6 we
+ * therefore cannot name.  IRAC is not modelled for that reason. */
+
 #define BIM_CR_LEVEL(c)  ((c) & 0x07)
 #define BIM_CR_IRE(c)    (((c) >> 4) & 1)
 
@@ -472,7 +495,13 @@ int versabus_bim_iack(int level) {
     /* Datasheet: on a level match the interrupter supplies its vector.
      * Among several requesters at the same level, "preference is given to
      * the highest number requester, that is, INT3 has highest priority
-     * and INT0 has lowest". */
+     * and INT0 has lowest".  That rule covers channels WITHIN one chip.
+     *
+     * Ordering BETWEEN the three chips is decided on the real card by the
+     * IACKIN / IACKOUT daisy chain, whose wiring we have not traced (it is
+     * Check 3 in refs_extracted/versabus_trace_worksheet.pdf).  Scanning
+     * unit 2 first is a placeholder, not a derived rule.  It only matters
+     * when two chips request the same level in the same cycle. */
     for (int u = BIM_COUNT - 1; u >= 0; u--)
         for (int c = BIM_CH - 1; c >= 0; c--) {
             if (!bim[u].req[c]) continue;
@@ -482,6 +511,19 @@ int versabus_bim_iack(int level) {
             if (log_fp)
                 fprintf(log_fp, "[BIM] IACK L%d -> unit %d ch %d vector $%02X\n",
                         level, u, c, bim[u].vr[c]);
+            /* Drop the request once acknowledged.  Without this the input
+             * latches high forever and versabus_bim_pending_level() keeps
+             * reporting the level, so a caller trusting the BIM alone would
+             * see a permanently asserted line.
+             *
+             * NOT modelled: the real chip's IRAC (interrupt auto-clear)
+             * control bit, which when set clears IRE during the IACK cycle
+             * and so requires software to re-enable the source before it can
+             * interrupt again.  Which CR bit carries IRAC is not established
+             * from the datasheet pages read so far, and $5F's bit pattern
+             * does not tell us.  If a future trace shows IRAC set, this
+             * needs to clear IRE here too. */
+            bim[u].req[c] = 0;
             return bim[u].vr[c];
         }
     return -1;

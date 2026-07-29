@@ -297,7 +297,11 @@ int m68k_irq_callback(int level) {
      * modelled BIM rather than returning a constant — the firmware
      * programs BIM2 ch2 with CR $5F (level 7) and VR $4A, so both the
      * level and the vector come from hardware state, not from us. */
-    if (host_sim.pending) {
+    /* Any BIM channel requesting this level supplies its vector.  This
+     * must not be conditional on host_sim: the host link is only one of
+     * the five channels the firmware enables, and gating on it would
+     * leave every other BIM source unacknowledged. */
+    {
         int vec = versabus_bim_iack(level);
         if (vec >= 0) return vec;
     }

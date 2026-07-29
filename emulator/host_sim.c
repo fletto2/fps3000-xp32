@@ -133,9 +133,13 @@ void host_sim_tick(host_sim_t *h, uint32_t cycles) {
     /* Assert the host channel's device-interrupt input on the BIM.  The
      * BIM decides the request level from its control register; we no
      * longer pick one.  (BIM2 ch2 = CR $FF0254, VR $FF025C.) */
-    versabus_bim_assert(BIM_HOST_UNIT, BIM_HOST_CH);
-    /* Raise the interrupt on the VERSAbus */
-    m68k_set_irq(5);
+    /* The BIM decides the level from its control register; asserting the
+     * channel returns it.  The literal 5 that used to be here was wrong:
+     * the firmware programs this channel for level 7. */
+    {
+        int lvl = versabus_bim_assert(BIM_HOST_UNIT, BIM_HOST_CH);
+        m68k_set_irq(lvl ? lvl : 5);
+    }
     h->delay_remaining = h->interbyte_delay;
 }
 

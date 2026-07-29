@@ -53,10 +53,12 @@ interrupt channels:
 BIM0 sits at `$FF0230`, BIM1 at `$FF0240`, BIM2 at `$FF0250`. Control
 register `n` pairs with vector register `n` eight bytes higher.
 
-`RTOSKernelInit` (F0A164-F0A1CA) zeroes the control registers, then
-loads the vector registers with the interrupt vector numbers `$41`
-through `$4A`. Each task later enables its own channel by writing `$5F`
-to its control register, with BIM0 ch0 the exception at `$5E`.
+`RTOSKernelInit` (F0A164-F0A1CA) zeroes six of the twelve control
+registers (`$FF0232`, `$234`, `$236`, `$242`, `$254`, `$256`), then loads
+ten vector registers with the interrupt vector numbers `$41` through
+`$4A`. It never touches `$FF0240` or `$FF0248`. Each task later enables
+its own channel by writing `$5F` to its control register, with BIM0 ch0
+the exception at `$5E`.
 Resolving each vector number against the post-boot vector table gives:
 
 | BIM | ch | CR | value | VR | vec | vector addr | installed handler | owner |
@@ -75,9 +77,11 @@ Resolving each vector number against the post-boot vector table gives:
 | 2 | 3 | `$FF0256` | `$00` | `$FF025E` | — | — | — | disabled |
 
 Every channel with an enabled control register has a distinct handler.
-Every channel left at `$00` points at the generic handler or the panic
-catch-all. That correspondence across ten registers is the evidence for
-the identification.
+Every channel that holds `$00` and has a vector loaded points at the
+generic handler or the panic catch-all. The two channels with no vector
+loaded (BIM1 ch0 and BIM2 ch3) sit outside that pattern. The
+correspondence across the ten loaded registers is the evidence for the
+identification.
 
 Each task programs its own control register and owns the ISR named by
 the vector register eight bytes above it. `TCBIO1I` writes `$5F` to
@@ -126,9 +130,9 @@ That decodes the observed values:
 | `$5E` | `110` = 6 | 1 | enabled, requests IRQ level 6 |
 | `$00` | `000` = 0 | 0 | disabled, no IRQ output exists at level 0 |
 
-Level zero meaning disabled explains why every channel we observed at
-`$00` points at the generic handler or the panic catch-all. Those
-channels cannot raise an interrupt.
+Level zero meaning disabled explains the pattern above: a channel left
+at `$00` cannot raise an interrupt at all, so whatever its vector
+register points at never runs.
 
 ### The interrupt level, and an emulator bug
 
@@ -157,8 +161,24 @@ The post-boot autovector table shows the same thing from another angle:
 
 An autovectored level-5 host interrupt would land on `F00896`. The only
 route to `F05DD6` runs through vector `$4A`, which the BIM supplies.
-Level 7 never uses its autovector, which is why `$07C` stays zero. A
-spurious NMI on real hardware would jump to address zero.
+Level 7 never uses its autovector, which is why `$07C` stays zero. An
+autovectored level-7 interrupt would fetch vector 31 from `$07C` and jump
+to address zero. That is separate from the 68000 spurious-interrupt
+vector (24, at `$060`), which applies when BERR is asserted during IACK.
+
+### Reset state
+
+The datasheet gives the power-on state: "The control registers are reset
+to all zeroes and the Vector Registers are set to a value of `$0F`. This
+vector value is the uninitialized vector for the MC68000." A BIM the
+firmware never programs therefore answers IACK with `$0F`, vector 15,
+which the 68000 reserves as uninitialised.
+
+Known control-register bits: 0-2 are the level, 4 is IRE, and 7 is the
+Flag ("Flag (F) is located in bit position 7"). The datasheet names IRAC
+(interrupt auto-clear), FAC (flag auto-clear) and X/IN (internal versus
+external response) without giving their positions in the pages read so
+far, so bits 3, 5 and 6 of the `$5F` the firmware writes stay unnamed.
 
 ### Remaining caveat
 
