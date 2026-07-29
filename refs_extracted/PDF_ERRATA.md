@@ -1,16 +1,28 @@
-# Errata for `versabus_address_map.pdf` and `versabus_trace_worksheet.pdf`
+# Errata for the bench PDFs
 
-**Read this before using either PDF at the bench.** Both were generated
-before several findings that contradict them, and their generator scripts
-are `*.py`, which `.gitignore` excludes — so the PDFs cannot currently be
-regenerated from anything in the repo. Until they are rebuilt, the
-corrections below override them.
+| PDF | status |
+|---|---|
+| `versabus_address_map.pdf` | **REBUILT 2026-07-29 — current, use it** |
+| `versabus_trace_worksheet.pdf` | **STALE — corrections below override it** |
 
-The prose in `versabus_access_map.md` is current; the PDFs are not.
+The address map has been regenerated and now carries the corrected
+channel-window roles, the three `$FF0008` modes, the chassis-to-SBC
+command table, the S-record offset rule, the bus-mastership finding and
+the self-test phase beacon. Everything in the numbered sections below is
+already fixed in it; they remain here because they still apply to the
+**trace worksheet**, which has not been rebuilt.
+
+Generator scripts are `*.py`, which `.gitignore` excludes, so neither PDF
+can be regenerated from the repo alone — the rebuilt address map was
+produced from a script kept outside it. That is the same repo rule
+CLAUDE.md flags for `disasm.py` and the generated `.asm` files, and it
+applies here too.
+
+The prose in `versabus_access_map.md` is current.
 
 ---
 
-## 1. The per-channel window labels are wrong (both PDFs)
+## 1. The per-channel window labels are wrong (worksheet; fixed in the address map)
 
 Both carry a table reading:
 
