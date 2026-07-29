@@ -1,0 +1,1609 @@
+# AMD Am29500 DSP reference design — AMDASM source (DSP.DEF + FFT microcode)
+
+Extracted verbatim from `refs/datasheets/AMD_Am29500_Family_Handbook_1986.pdf`,
+Appendix 2, via `pdftotext -layout`. Lines 8139-9695 of that extraction.
+
+## Why this is here
+
+This is the microcode definition file and worked FFT source for AMD's
+reference DSP board — the design the FPS-3000 XP32 ARITH card matches
+part for part (see `notes/xp32_arith_is_amd_reference_fft.md`). It is
+the closest thing to XP-32 AU microcode that exists outside a real
+XPMLIB kernel, and it is a **128-bit horizontal microword** like the
+XP-32's.
+
+It contains:
+
+- `WORD 128` and the bit-numbered field map, four 32-bit quarters:
+  Real ALU (127-96), Imaginary ALU (95-64), Multiplier + Address
+  Generator (63-32), Program Sequence (31-0)
+- an explicit **`ADDRESS GENERATOR OVERLAY`** section in which the same
+  bits carry a 16-bit Am29116 instruction (`I15…I00`) instead of Am29540
+  FFT control
+- `EQU` definitions for the Am29501 ALU functions, port selects and
+  multiplier controls
+- worked microcode for **forward FFT, inverse FFT, the butterfly loops
+  (`BTF.LOOP`, `IBTF.LUP`) and matrix multiply (`MXMULT`)**
+
+Each microinstruction is written as a lead line plus `/&` continuation
+lines, one per resource group — the horizontal-microcode idiom, and a
+direct illustration of how the four quarters are filled in parallel.
+
+## Read with care — this is OCR
+
+The source PDF has a text layer of mediocre quality. Known systematic
+damage:
+
+| Appears as | Almost certainly |
+|---|---|
+| `H 110`, `Hfl 4`, `H/18`, `HllD` | `H#0`, `H#4`, `H#8`, `H#D` (AMDASM hex) |
+| `Q 110`, `Qfl1`, `Q/14` | `Q#0`, `Q#1`, `Q#4` (AMDASM octal) |
+| `I&`, `/&` | `&` (continuation marker) |
+| `8` in register names (`83`, `82`, `81`) | `B3`, `B2`, `B1` |
+| `2VB/111`, `2VB#11` | `2VB#11` |
+| `~`, `1t`, `tt` in rule lines | decorative separators |
+
+**Do not treat any single token here as authoritative.** Use it for
+structure — field groupings, which resources are controlled together,
+how a butterfly is scheduled across parallel units — and go back to the
+PDF page for any specific bit value that matters.
+
+---
+
+                                                  1-3
+TITLE                   AmDSP Vigital            ~ignal    Processor uefinitions
+
+;
+    WORD 128
+     ===============================================================
+     11111                 11111                               11111111111
+     ~ ~ 2 2 2 2 2 2 1 1 1 1 1 1 1 1                           1 0 0 0 0 0 0 0 0 0 0 9 9 9 9
+     7 b 5 4 3 2 1 0 9 8 7 6 5 4 3 2                           0 9 8 7 6 5 4 3 2 1 0 9 8 7 6
+
+     s s R R R R R R R R R R R                    R R R    R R R R   R R R   R R R R R R R R R
+     H R A A A A R R R s s s A                    A A A    A A B B   B B B   B M M M M D D D w
+     1 0 L L L L 0 0 0 0 0 0 1                    1 2 2    3 3 1 1   2 2 3   3 I I I I I I I E
+         u u u u p p p p p p 1                    0 1 0    1 0 1 0   1 0 1   0 0 0 0 0 0 0 0
+         3 2 1 0 2 1 0 2 1 0                                                   3 2 1 0 2 1 0
+
+                                                 Real ALU
+     ===============================================================
+     9 9 9 9 9 9 8 8 8 8 8 8 8 8 8 8 7 7 7 7 7 7 7 7 7 7 6 6 6 6 6 6
+     5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4
+
+     s---"-""-~"""-""~-"---~~-----------------------------------"---~
+        s I I I I I I I I I I I I I I I I I I I I I I I I I I I I I I
+      I I A A A A R R R s s s A A A A A A B B B B B B M M M M D D D w
+         0 L L L L 0 0 0 0 0 0   1 1 2 2 3 3 1 1 2 2 3 3 I I I I I I I E
+             u u u u     p   p p   p p   p
+                                 1 0 1 0 1 0 1 0 1 0 1 0 0 0 0 0 0 0 0
+             3 2 1 0 2 1 0 2 1 0                         3 2 1 0 2 1 0
+
+                                                 Imaginary ALU
+     ===============================================================
+     b b b b 5 5 5 5 5 5 5 5 5 5 4 4 4 4 4 4 4 4 4 4 3 3 3 3 3 3 3 3
+     3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2
+
+    D--------------------~-~---------------------------~------------
+       R F M 0 2 x x E s c 1 5 A A A A A A A A A A A A A A A A A A A
+     p   N A   s   E   c s s   N I F 1       4 G G G G G G G G G G G G G G G G G G G
+         D     p   L     E E   x N A 6       0 1 1 1 1 1 1 1 1 1 9 8 7 6 5 4 3 2 1 0
+               L         L L     c D 0       0 8 7 6 5 4 3 2 1 0
+               s         1 0     0 R E       E
+               p                   s
+                   Multiplier                                      Address Generator
+     ===============================================================
+    3 3 2 2 2 2 2 2 2 2 2 2 1 1 1 1 1 1 1 1 1 1
+    1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+    B              5 5 5 5 I c c c c c c c                 B   B B B B B B B B B B B 1   1 1 1
+    u              2 2 2 2 N K K c c c c c                 R   R R R R R R R R R R R 0   0 0 0
+    F              0 0 0 0 T s s p s s s s                 1   1 9 8 7 6 5 4 3 2 1 0 I   I I I
+    c              I I s s R E E 0 E E E E                 1   0                     3   2 1 0
+    D              1 0 1 0   L L L L L L L
+                             1 0   3 2 1 0
+
+                                                            Program Sequence
+    ===============================================================
+EJECT
+                             ADDRESS GENERATOR OVERLAY
+
+
+
+
+                                                     2-1
+                                                                                   D             5 5 5 5 5 5
+                                                                                   I     4 4 4 4 4 4
+                                                                                   T 4 P 0 0 0 0 0 0
+                                                                                   I I S I I S S S S
+                                                                                   F 2 D 1 0               3   2 1 0
+
+                                                                    1 1 1 1 1 1 1 1 1 1                            1 1 1 1 1
+                                                                    1 1 1 1 1 1 1 1 1 1                            1 1 1 1 1
+                                                                    6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6
+                                                     s D I I I I I I I I I I I I I I I I I
+                                                     R L E 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0
+                                                     E E N 5 4 3 2 1 0 9 8 7 6 5 4 3 2 1 0
+
+                                                                                   AG18•00
+EJECT
+
+     * * " " " " " " " "              tt   tt
+                                                * * *          tt
+                                                                    *    1t   1t   tt   1t
+                                                                                             *   tt   tt
+
+
+
+     Am29501 lNSTRUCTION ::>ET
+                 tt                             tt   tt
+     " " " " "        " "   1t   1t   1t
+                                           *              *    1t   1t   1t   tt
+                                                                                   * * * * *
+     Am29501 ALU r· UNCTIONS (R FUNCTION S)
+     CONDITIONAL CARRY OUTPUT
+
+ADD.CC:                 EQU                H 110
+SUBS.CC:                EQU                Hfl 4
+MOVE.CC:                EQU                H/18
+.,
+SUBR.CC:                EQU                H/IC
+
+;INHIBIT CARRY OUTPUT
+
+ADD.NC:                 EQU                H /11
+SUBS.NC:                EQU                H/15
+MOVE.NC:                EQU                H/19
+SUBR.NC:                EQU                HllD
+
+;FORCE CARRY OUTPUT
+;
+ADD.FC:                 EQU                H 112
+SUBS.FC:                EQU                H/16
+MOVE.FC:                EQU                H/IA
+SUBR.FC:                EQU                H/IE
+;
+;LOGICAL (NO CARRY USED TO DISTINGUISH FROM 29116 LOGICALS)
+
+XOR.NC:                 EQU                H/13
+AND.NC:                 EQU                H/17
+INV.NC:                 EQU                H/IB
+OR.NC:                  EQU                H/IF
+;
+.,; Am29501   SOURCE OPERANDS                        R, S
+A 1:                    EQU                Q 110
+
+
+
+                                                              2-2
+A2:                 EQU     Qfl 1
+A3:                 EQU     Qfl2
+B1 :                EQU     Qfl3
+B2:                 EQU     Q/14
+B3:                 EQU     Qfl5
+SIGN.EXT:           EQU     Qfl6
+ZERO:               EQU     Qfl7
+MSP:                EQU     Qfl6
+LSP:                EQU     Qfl7
+EJECT
+
+; PORT SELECTS
+;
+M.EQ.A1:            EQU     HII 0
+M.EQ.A2:            EQU     Hfl 1
+M.EQ.A3:            EQU     H112
+M.EQ.B1:            EQU     Hfl3
+M.EQ.B2:            EQU     Hfl 4
+M.EQ.B3:            EQU     H/15
+M.EQ.AU:            EQU     H/16
+M.EQ.DI:            EQU     H117
+MIO.IN:             EQU     HllB
+;
+D.EQ.A2:            EQU     QllO
+D.EQ.A3:            EQU     Qfl 1
+D.EQ.B2:            EQU     Q/12
+D.EQ.B3:            EQU     Qfl3
+DIO.IN:             EQU     Qfl4
+
+., Am29501    Register Operations
+;
+A1.EQ.MP:           EQU     BllOO
+A1.EQ.DI:           EQU     Bii 01
+A1.EQ.B3:           EQU     Bii 1 0
+A1.HOLD:            EQU     Bii 11
+A2. EQ. LP:         EQU     BllOO
+A2.EQ.AU:           EQU     Bfl 01
+A2.EQ.A1:           EQU     Bfl 1 0
+A2.HOLD:            EQU     Bfl 11
+A3.EQ.MP:           EQU     B/100
+A3.EQ.AU:           EQU     Bii 01
+A3.EQ.A2:           EQU     Bii 1 0
+A3.HOLD:            EQU     Bfl 11
+B1.EQ.MP:           EQU     BllOO
+B1.EQ.DI:           EQU     BllO 1
+B1.EQ.A3:           EQU     Bii 1 0
+B1.HOLD:            EQU     Bfl 11
+B2.EQ.LP:           EQU     BllOO
+B2.EQ.AU:           EQU     Bii 01
+B2.EQ.B1:           EQU     Bii 1 0
+B2.HOLD:            EQU     Bfl 1 1
+B3.EQ.MP:           EQU     Bii 00
+B3.EQ.AU:           EQU     Bii 01
+B3.EQ.B2:           EQU     Bii 1 0
+B3.HOLD:            EQU     Bfl 11
+
+
+                                      2-3
+EJECT
+,
+;REAL ALU INSTRUCTIONS
+;
+R. ADD: DEF       2X,ADD.CC,3VQ#0,3VQ#0,2VB#11,2VB#11,2VB#11,2VB#11,2VB#11,
+I     .           2VB#11,4VH#8,3VQ#4,97X
+R.SUBS: DEF       2X,SUBS.CC,3VQ#0,3VQ#0,2VB#11,2VB#11,2VB#11,2VB#11,2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,97X
+R.MOVE: DEF       2X, MOVE. NC, 3VQllO, 3X, 2VB/111, 2VB/111, 2VB/111, 2VB#11, 2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,97X
+R.SUBR: DEF       2X,SUBR.CC,3VQ#0,3VQ#0,2VB#11,2VB#11,2VB#11,2VB#11,2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,97X
+R.XOR: DEF        2X, XOR. NC, 3VQllO, 3VQ/IO, 2VB/111, 2VB/111, 2VB/111, 2VB/111, 2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,97X
+R.AND: DEF        2X,AND.NC,3VQ#0,3VQ#0,2VB#11,2VB#11,2VB#11,2VB#11,2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,97X
+R. INV: DEF       2X,INV.NC,3VQ#0,3VQ#0,2VB#11,2VB#11,2VB#11,2VB#11,2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,97X
+R.OR: DEF         2X,OR.NC,3VQ#0,3VQ#0,2VB#11,2VB#11,2VB#11,2VB#11,2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,97X
+;IMAGINARY ALU INSTRUCTIONS
+I. ADD: DEF       34X,ADD.CC,3VQ#0,3VQ#0,2VB#11,2VB#11,2VB#11,2VB#11,2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,65X
+I. SUBS: DEF      34X,SUBS.CC,3VQ#0,3VQ#0,2VB#11,2VB#11,2VB#11,2VB#11,2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,65X
+I.MOVE: DEF       34X,MOVE.NC,3VQ#0,3X,2VB#11,2VB#11,2VB#11,2VB#11,2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,65X
+I.SUBR: DEF       34X,SUBR.CC,3VQ#0,3VQ#0,2VB#11,2VB#11,2VB#11,2VB#11,2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,65X
+I.XOR: DEF        34X, XOR. NC, 3VQ/IO, 3VQ#O, 2VB/111, 2VB/111, 2VB/111, 2VB/111, 2VB/111,
+I                 2VB#11,4VH#8,3VQ#4,65X
+I.AND: DEF        34X,AND.NC,3VQ#0,3VQ#0,2VB#11,2VB#11,2VB#11,2VB#11,2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,65X
+I. INV: DEF       34X,INV.NC,3VQ#0,3VQ#0,2VB#11,2VB#11,2VB#11,2VB#11,2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,65X
+I. OR: DEF        34X,OR.NC,3VQ#0,3VQ#0,2VB#11,2VB#11,2VB#11,2VB#11,2VB#11,
+I                 2VB#11,4VH#8,3VQ#4,65X
+EJECT
+
+    * • • * * * * * * * * * * * * * * * * * * * * *
+    Am29517 MULTIPLIER
+    * • * * * * * * * * * * * * * * * * * * * * * *
+;
+MX.RALU:          EQU      H 110   ;MULTIPLIER IS REAL ALU MIO
+MX.HOLD:          EQU      H/12    ;USE PREVIOUS MULTIPLIER
+MX. !MAG:         EQU      H/14    ;MULTIPLIER IS !MAG MEM
+MX.REAL:          EQU      H 118   ;MULTIPLIER IS REAL MEM
+MX.CONST:         EQU      H llC   ;MULTIPLIER IS COEF ROM
+MX.COS:           EQU      H#C     ;MULTIPLIER IS FFT COS ROM
+MX.SIN:           EQU      HllD    ;MULTIPLIER IS FFT SIN ROM
+MXY.2C:           EQU      B 111   ;MULTIPLIERS ARE TWO'S COMP
+MXY.MAG:          EQU      MXY.2C*         ;UNSIGNED MAGNITUDE
+MY. OE:           EQU      B#O     ;ENABLE LSP ON Y
+
+
+
+
+                                           2-4
+MY.IN:            EQU      MY.OE*            ;ENABLE Y INPUT
+MP.FRAC:          EQU      B#O      ;FRACTIONAL MULTIPLY (FA)
+MP.INTG:          EQU      MP.FRAC*          ;INTEGER MULTIPLY
+MP.HOU.ND:        EQU      B#1      ;ROUNDED MSP
+MP.TRUNC:         EQU      MP.ROUND*         ;TRUNCATED MSP
+MP.MSP:           EQU      B#O      ;MOST SIGNIFICANT PRODUCT OUT
+MP. LSP:          EQU      MP.MSP*           ;LEAST SIGNIFICANT PRODUCT OUT
+MP. OE:           EQU      B#O      ;OUTPUT ENABLE
+; MULTIPLIER INSTRUCTIONS
+;
+MSPROD: DEF       65X, 1VB#1, 1VB#O,MP.MSP           ;MOST SIGNIFICANT PRODUCT
+I                 , 1VBll1, 1VB/11, 4VH/12
+I                 , 2 2X, 1VB111 , 3 1X
+LSPROD: DEF       65X, 1VBll1, 1VBllO,MP.LSP         ;LEAST SIGNIFICANT PRODUCT
+I                 , 1VB/11, 1VB/11, 4VH/12
+I                 , 22X, 1VB/11, 31X
+    * * * * * * * * * * * * * * * * * * * * * * * *
+    Am25S10 SHIFTER
+    * * * * * * * * * * * * * * * * * * * * * * * *
+;
+NO.SHIFT:         EQU      B/111                     ;LSB CONNECTED TO I ( .. 3)
+SHIFT.R1:         EQU      Bii 1 0
+SHIFT.R2:         EQU      BII 01
+SHIFT.R3:         EQU      BllOO
+;
+SHIFT.OE:         EQU      BllO
+EJECT
+
+    * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+
+          INDEX TO Am29116 INSTRUCTIONS .. [i] REFERS TO ALLOWED MNEMONICS GROUP
+                  SINGLE OPERAND l1], [2], [3], [4]
+                  TWO OPERAND     [5], [6], [7], [8]
+                  SHIFT           [9], [10], [11]
+                  ROTATE          [12], [13], [14]
+                  BIT .. ORIENTED [15], [16], [17]
+                  ROTATE & MERGE [18]
+                  ROTATE & COMPR [19]
+                  PRIORITIZE      [20], [21 ], [22], [23], [24], [25]
+                  CYCLIC REDUNDANCY CHECKS
+                  NOOP
+                  STATUS·         [26], [27]
+                  TEST STATUS     [CT]
+    *************************************************
+    GENERAL MNEMONICS
+    *************************************************
+    ****************************
+    BYTE "'"WORD MODE SELECT [M]
+    ****************************
+
+
+
+
+                                               2-5
+'
+B:                    EQU               lBllO       BYTE MODE
+W:                    EQU               1Bll1       WORD MODE
+
+
+     ***************************************************
+     32 RAM REGISTERS [R]
+     ***************************************************
+;
+RO:                   EQU               50110%      00000
+H 1:                  EQU               50111%
+R2:                   EQU               50112%
+R3:                   EQU               50113%
+R 4:                  EQU               50114%
+R5:                   EQU               50115%
+R 6:                  EQU               5'0116%
+R7:                   EQU               50117%
+R8:                   EQU               50118%
+R9:                   EQU               50119%
+R 1 u:                EQU               501110%
+R 11:                 EQU               501111%
+R12:                  EQU               501112%
+R 13:                 EQU               501113%
+R 14:                 EQU               501114%
+R15:                  EQU               501115%
+R16:                  EQU               501116%
+R17:                  EQU               501117%
+R18:                  EQU               501118%
+R19:                  EQU               501119%
+R20:                  EQU               501120%
+R 21:                 EQU               5Dfl2U
+R22:                  EQU               501122%
+R 23:                 EQU               501123%
+R 24:                 EQU               5011243
+R25:                  EQU               501125%
+R 26:                 EQU               501126%
+R27:                  EQU               50/1273
+R28:                  EQU               501128%
+R29:                  EQU               501129%
+R 30:                 EQU               501130%
+R 31:                 EQU               501131%
+EJECT
+     * * * * * * * * * * * * * * * * *
+     Am29116    CONTROL LINES
+     16~Bit    Bipolar Microprocessor
+     * * * * * * * * * * * * * * * * *
+OEYEN:                EQU               Bllu        Y BUS ENABLE
+OEYDIS:               EQU               B/11
+;
+OLE.EN:               EQU               Bii 1       DATA LATCH ENABLE
+OLE.DIS:              EQU               BllO
+
+OE TEN:               EQU               Bfl 1       T BUS ENABLE
+OETDIS:               EQU               BIJO
+
+
+
+
+                                                  2-6
+.
+SRE.EN:             EQU                    Bf/l)               STATUS REGISTER ENABLE
+SHE.DIS:            EQU                    Bfl1
+;
+!EN:                EQU                    BIJO                INSTRUCTION ENABLE
+!DIS:               EQU                    Bf/1
+
+    • • • • • * * * * * * * * * * * * * * * * * * * * * * * * * * *                            I
+
+
+;
+EJECT
+    •••••••••••••••••••••••••••••
+    SINGLE OPERAND INSTRUCTIONS
+    •••••••••••••••••••••••••••••
+    OPCODES [ 1 J
+MOVE:               EQU                    HIJC
+COMP:               EQU                    HIJD                COMPLEMENT
+INC:                EQU                    HllE                INCREMENT
+NEG:                EQU                    Hf/F                NEGATE
+;
+;   SOURCE~DESTINATION      SELECT l 2 J
+SORA:               EQU                    Hf/O                RAM      ACC
+SORY:               EQU                    Hfl2                RAM      Y BUS
+SORS:               EQU                    Hfl 3               RAM      STATUS
+SOAR:               EQU                    Hf/4                ACC      RAM
+SODR:               EQU                    Hfl6                D        RAM
+SOIR:               EQU                    Hf/7                I        RAM
+SOZR:               EQU                    HllB                u        RAM
+SOZER:              EQU                    Hfl9                D(uE)    RAM
+SOSER:              EQU                    HIJA                D(SE)    RAM
+
+. ........................................................... .
+SORR:
+;
+                    EQU                    HIJB                RAM      RAM
+
+;
+SOR: DEF            74X, 1VBll1, Bf/01, 3VBflu1u,                       ;SINGLE OPERAND RAM
+I                   1V, Bfl1u,4V,         4V,                     5V~,     4X, 2VBll11, 2VBIJ11, 24X
+                    MODE,QUAD,OPCODE,SOURCE~DEST,REGISTER
+                      [M]           [1]            [2]                 [R]
+
+    ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+    SOURCE (RI S) l 3]
+;
+SOA:                EQU                    Hfl 4           ACC
+SOD:                EQU                    H116            D
+SOI:                EQU                    Hf/7            I
+SOZ:                EQU                    Hf/8            0
+SOZE:               EQU                    Hf/9            D(OE)
+SOSE:               EQU                    HllA            D(SE)
+;
+; DEST I NATION [4]
+
+
+
+
+                                                         2-7
+;
+NRY:                   EQU                        0110                Y BUS
+NRA:                   EQU                        Ofl 1               ACC
+NRS:                   EQU                        0114                STATUS
+NRAS:                  EQU                        0115                ACC,STATUS
+;
+•' ***************************************************************
+                              .
+SONR: DEF              74X, 1VBll1, Bll01, 3VBll010,          ; SINGLE OPERAND NON~RAM
+I                      1V, Bll11,4V,         4V,     5V%, 4X, 2VBll11, 2VBll11, 24X
+                      MOOE,QUAD,OPCOOE,SOURCE,OESTINATION
+                        LM]              [1]         [3]               [4]
+•' ***************************************************************
+EJECT
+     ***********************************
+     TWO OPERAND INSTRUCTIONS
+     ***********************************
+     OPCODES [ 5]
+;
+SUBR:                 EQU                         HllO                 s minus R
+SUBRC:                EQU                         H111                 s minus R with carry
+SUBS:                 EQU                         H112                ·R minus s
+SUBSC:                EQU                         Hll3                R   minus S with carry
+ADD:                  EQU                         Hll4                R   plus S
+ADDC:                 EQU                         Hl/5                R   plus S with carry
+AND:                  EQU                         H116                R        s
+NANO:                 EQU                         H/17                R        s
+EXOR:                 EQU                         HllB                R        s
+NOR:                  EQU                         Hll9                R   +    s
+OR:                   EQU                         HI/A                R   +    s
+EXNOR:                EQU                         HUB                 R        s
+
+                                                                                   s
+.'   SOURCE~DESTINATION        [6]                                    R                     DEST
+TORAA:                 EQU                        HllO                RAM          ACC      ACC
+TO RIA:                EQU                        Hll2                RAM          I        ACC
+TOD RA:                EQU                        Hll3                D            RAM      ACC
+TORAY:                 EQU                        HllB                RAM          ACC      Y BUS
+TORIY:                 EQU                        HUA                 RAM          I        Y BUS
+TOD RY:                EQU                        HllB                D            RAM      Y BUS
+TORAR:                 EQU                        HllC                RAM          ACC      RAM
+TOR IR:                EQU                        HllE                RAM          I        RAM
+TODRR:                 EQU                        HllF                D            RAM      RAM
+;
+; ************************************************************
+T0 R1: DEF             7 4 X, 1VB 111 , BII 0 1 , 3VB II 0 10 ,                  ; TW 0 0 PER AND RAM ( 1 )
+I                      1V, Bll00,4V,                          4V,             5V%, 4X,2VBll11,2VBll11,24X
+                      MODE,QUAD,SOURCE~DEST,OPCODE,REGISTER
+                        lMJ                    [6]              [5]            [RJ
+     ************************************************************
+     THE   [i]   IN THE COMMENT BELOW THE                 VARIABLE~FIELO               REFERS TO THE ALLOWED
+
+
+
+
+                                                          2-8
+    MNEMONIC GROUP. EXAMPLE: MODE REFERS VIA [M] TO THE BYTE"WORD SELECT.
+    EXAMPLE: THE ALLOWED OPCODE SUBSTITUTIONS IN TOR1 COME FROM GROUP l5]
+    WHILE THE ALLOWED SOURCE"DESTINATIONS COME FROM GROUP L6].
+;
+EJECT
+
+    SOURCE"DESTINATION [7]                                     R          s         DEST
+;
+TODAR:            EQU                   Hf/ 1           D           ACC       RAM
+TOAIR:            EQU                   Hfl2            ACC         I         RAM
+TOD IR:           EQU                   H/15            D           I         RAM
+;
+• ************************************************************
+'
+TOR2: DEF         74X, 1VBfl1, Bl/01, 3VBfl010,                  ; TWO OPERAND RAM (2)
+I                 1V, Bll10,4V,               4V,             5V%, 4X,2VBll11,2VBll11,24X
+                  MODE,QUAD,SOURCE"DEST,OPCODE,REGISTER
+                  [M]              [7]                [5]          [R]
+    ************************************************************
+    SOURCE [8]                                          R           s
+TODA:             EQU                   Hf/ 1           D           ACC
+TOA!:             EQU                   Hl/2            ACC         I
+TOD!:             EQU                   H#5           ; D           I
+• ***********************************************************
+'
+TONR: DEF         74X, 1VBll1,Bll01,3VBfl010,                 ; TWO OPERAND NON"RAM
+I                 1V,    Bfl11,4V,     4V,             5V%, 4X,2VBll11,2VBll11,24X
+                  MODE, QUAD,SOURCE,OPCODE,DESTINATION
+                  [M]             [8]           [5]         [4]
+; ***********************************************************
+EJECT
+    **************************************************
+    SHIFT INSTRUCTIONS
+    ************************•*************************
+    DIRECTION AND INPUT   [ 9]
+;
+SHUPZ:            .EQU                  H/10            UP 0
+SHUP1:             EQU                  H# 1            UP 1
+SHUPL:             EQU                  H#2             UP QLINK
+SHDNZ:             EQU                  Hfl 4           DOWN 0
+SHDN 1:            EQU                  H/15            DOWN 1
+SHDNL:             EQU                  H/16            DOWN QLINK
+SHDNC:             EQU                  H/17            DOWN QC
+SHDNOV:            EQU                  H/18            DOWN QN QOVR
+
+    SOURCE [10]
+;
+SHRR:             EQU                   H/16            RAM         RAM
+SHOR:             EQU                   H/17            D           RAM
+
+
+
+
+                                               2-9
+    *****************************************************
+SHFTR: DEF        74X, 1VBIJ1,BIJ01,3VBll010,               ; SHIFT RAM
+I                 1V, BIJ10,4V,             4V,          5V%, 4X, 2VBl/11, 2VBIJ11, 24X
+                  MODE,QUAD,SOURCE,DIRECT•INPT,REGISTER
+                  [M]       [10)       [9]      [R]
+    *****************************************************
+
+    SOURCE [11)
+;
+SHA:              EQU                H/16          ACC
+SHD:              EQU                H/17          D
+
+
+; *****************************************************
+SHFTNR: DEF       74X, 1VB/11,Bl/01,3VBl/010, ; SHIFT NON•RAM
+I                 1V, Bll11,4V,       4V,     5V%, 4X, 2VBll11, 2VBl/11, 24X
+                  MODE,QUAD,SOURCE,DIRECT•INP,DESTINATION
+                  [M)        [11)   [9)         [4](NRY; NRA ONLY)
+    *****************************************************
+;
+EJECT
+. **************************************************
+'
+;ROTATE INSTRUCTIONS
+    **************************************************
+    SOURCE•DESTINATION [12)
+;
+RTRA:             EQU                HllC          RAM      ACC
+RTRY:             EQU                Hl/E          RAM      Y BUS
+RTRR:             EQU                HllF          RAM      RAM
+
+
+; *****************************************************
+ROTR   1:   DEF   74X, 1VB#1, B/101, 3VBl/010,         ; ROTATE RAM ( 1)
+I                 1V, B#00,4V,4V,              5V%, 4X,2VBll11,2VBll11,24X
+                  MODE,QUAD,N,SOURCE•DEST,REGISTER
+                  [MJ     [NJ      [12)     [R]
+    *****************************************************
+    ~OURCE•DESTINATION   L13]
+RTAR:             EQU                Hf/O          ACC      RAM
+HTDR:             EQU                H111          D        RAM
+
+
+; *****************************************************
+ROTR2: DEF        74X, 1VB/11,B//01,3VBll010,          ; ROTATE RAM (2)
+I                 1V, Bll01,4V,4V,            5V%, 4X, 2VB//11, 2VBl/11, 24X
+                  MODE,QUAD,N,SOURCE•DEST,REGISTER
+
+
+
+
+                                            2-10
+                      l MJ        [NJ   [ 13 J     [ RJ
+    *****************************************************
+    ::>OURCE DESTINATION L1 4 J
+RTDY:                 EQU               Dfl2 4     D        Y BUS
+RTDA:                 EQU               Df/25      D        ACC
+HTAY:                 EQU               Dfl28      ACC      Y BUS
+HTAA:                 EQU               Df/29      ACC      ACC
+
+
+; •****************************************************
+ROTNR: DEF            74X,1VB#1,B#01,3VB#010,          ; ROTATE NON~RAM
+I                     1V, B/111,4V,HflC,      5V%, 4X,2VBl/11,2VB/111,24X
+                      MODE,QUAD,N,FIXED CODE,DESTINATI-ON
+                      [MJ     [NJ                 [14J
+; *****************************************************
+EJECT
+    •**************************************************
+    HIT ORIENTED INSTRUCTIONS
+    ***************************************************
+    OPCODES [15J
+;
+SETNR:                EQU               HllD       SET RAM, BIT N
+HSTNR:                EQU               H flE      RESET RAM, BIT N
+TSTNR:                EQU               HflF       TEST HAM, BIT N
+
+
+    ********************************************************
+BOR1: DEF             74X,1VB#1,B#01,3VB#010,          ; BIT ORIENTED RAM (1)
+I                     1V, Bf/11,4V,4V,   5V%, 4X,2VB/111,2VB//11,24X
+                      MODE,QUAD,N,OPCODE,REGISTER
+                      [MJ     [NJ L15J      LRJ
+    •*******************************************************
+
+    OPCODES [ 1 6 J
+
+LD2NR:                EQU               HflC       2""N --- RAM
+LDC2NR:
+A2NR:
+                      EQU
+                      EQU
+                                        HllD
+                                        HflE
+                                                   2 .. N --- HAM
+                                                   RAM + 2 .. N   RAM
+S2NR:                 EQU               HflF       RAM - 2 .. N ~ RAM
+
+
+; ********************************************************
+BOR2: DEF             74X,1VB#1,B#01,3VB#010,         ; BIT ORIENTED RAM (2)
+I                     1V, B#10,4V,4V,    5V%, 4X,2VB#11,2VB#11,24X
+                      MODE,QUAD,N,OPCODE,REGISTER
+                      [MJ     [NJ L16J      [RJ
+; ********************************************************
+EJECT
+
+
+
+
+                                            2-11
+    OPCODES l17J
+;
+TSTNA:             EQU              D110            TEST ACC, BIT N
+RSTNA:             EQU              Dfl 1           RESET ACC, BIT N
+SETNA:             EQU              Dll2            SET ACC, BIT N
+A2NA:              EQU              Dfl4            ACC + 2 .. N ..,.., ACC
+S2NA:              EQU              Dfl 5           ACC ... 2··N ...... Ace
+LD2NA:             EQU              Hfl6            2 .. N ...... ACC
+LDC2NA:            EQU              0117            2 .. N ...... ACC
+TSTND:             EQU              Dfl 1 6         TEST D, BIT N
+RSTND:             EQU              Dfl 17      ,   RESET D, BIT N
+SETND:             EQU              Dfl 1 8         SET D, BIT N
+A2N DY:            EQU              Dfl20           D + 2 .. N .;.;..,:., y BUS
+S 2N DY:           EQU              Dfl 21          D "" 2 .. N ...... y BUS
+LD2NY:             EQU              01122           2 .. N        y BUS
+LDC2NY:            EQU              01123           2 .. N -- y BUS
+
+
+; •********************************************************
+BONR: DEF          74X,1VB/11,B/101,3VB/1010,         ; BIT ORIENTED NON..,RAM
+I                  1V, B#11,4V,B#1100,        5V%, 4X,2VB#11,2VB/111,24X
+                   MODE,QUAD,N,FIXED CODE,OPCODE
+                   [MJ     [NJ              [17J
+    *********************************************************
+EJECT
+    •*************************************************
+    HOTATE AND MERGE
+    •*************************************************
+    SOURCE-DEST SELECT [U,S,MASK-DESTJ l18J
+                                                    HOT       NON-ROT          MASK ... DEST
+MDAI:              EQU              H117            D         ACC          I
+MDAR:              EQU              Hfl 8           D         ACC          RAM
+MORI:              EQU              H fl 9          D         RAM          I
+MORA:              EQU              Hf/A            D         RAM          ACC
+MARI:              EQU              HflC            ACC       RAM          I
+MRAI:              EQU              HflE            RAM       ACC          I
+
+
+    •*********************************************************
+ROTM: DEF          74X,1VB/11,B/101,3VB/1010,         ;ROTATE AND MERGE
+I                  1V, B/101,4V,4V,           5V%, 4X,2VB/111,2VB/111,24X
+                   MODE,QUAD,N,SOURCE-DEST,REGISTER
+                   [MJ     [NJ     [18J       [RJ
+    •*********************************************************
+
+
+
+
+                                         2-12
+    •*************************************************
+    HOTATE   AN~   COMPARE
+    •*************************************************
+    ROT.SRC(U)•NON ROT.SRC(S)/DEST•MASK(S)[19]
+;
+CDAI:                 EQU                 Ht/2        D        ACC      I
+CORI:                 EQU                 Hf/3        D        RAM      I
+CORA:                 EQU                 Ht/4        D        RAM     ACC
+CRAI:                 EQU                 Ht/5        RAM      ACC      I
+
+
+    •*******************************************
+HOTC: DEF             74X, 1VBtl1, Bf/01, 3VBf/010,            ; ROTATE AND COMPARE
+I                     1V, Bf/01,4V,4V~                      5V%, 4X,2VB#11,2VB#11,24X
+                      MODE,QUAD,N,SOURCE-DEST-MASK,REGISTER
+                      [M]     [NJ        [19]        [RJ
+; •********************************************
+EJECT
+
+    •*************************************************
+    PRIORITIZE
+    •*************************************************
+    SOURCE l20]
+ RT1A:                EQU                 Hf/7        ACC
+PR1D:                 EQU                 Hfl9        D
+
+
+    DESTINATION [21]
+PR1A:                 EQU                 HflB        ACC
+PR1Y:                 EQU                 Ht/A        Y BUS
+PR1R:                 EQU                 HflB        RAM
+;
+; •**********************************************
+PRT1: DEF             74X, 1VBf/1,Bfl01,3VBf/010,              ; RAM ADDR MASK(S)
+I                     1V, Btl10,4V,             4V,         5V%, 4X,2VBtl11,2VBtl11,24X
+                      MODE,QUAD,DESTINATION,SOURCE,REG-MASK
+                      [M]           [21]      [20]    [R]
+    •**********************************************
+
+    DESTINATION l23]
+;
+PR2A:                 EQU                 HflO        ACC
+PR2Y:                 EQU                 Hfl2        Y BUS
+;
+; MASK (S) L22]
+
+
+
+
+                                             2-13
+;
+PRA:                 EQU              H#8                  ACC
+PRZ:                 EQU              HllA                 0
+PR I:                EQU              HOB                  I
+
+
+; ***********************************************
+PRT2: DEF            74X,1VB01,B#01,3VB#010,      ; PRIORITIZE RAM
+I                    1V, B#10,4V, 4V, 5V%, 4X,2VB#11,2VB#11,24X
+                     MODE,QUAD,MASK,DEST,REG~SOURCE
+                     [M]       [22] l23]             [R]
+    ***********************************************
+EJECT
+;
+; SOURCE ( R)    L24]
+;
+PR3R:                EQU              H/13                 HAM
+l'R3A:               EQU              H/14                 ACC
+PR3D:                EQU              H/16                 u
+
+    •••••••••••••••••••••••••••••••••••••••••••••••
+l'RT3: UEF           74X,1VBll1,Bll01,3VBll010,         ; PRIORITIZE KAM
+I                    1V, H#10,4V,     4V,     svi, 4X,2VB#11,2VB#11,24X
+                     MODE,QUAD,MASK,SOURCE,REG~DEST
+                     [MJ       [22]   L24]            LRJ
+    •**********************************************
+
+    :::>OURCE (R) l25]
+;
+PRTA:                EQU              Hll 4                ACC
+PRTD:                EQU              H116                 D
+
+
+    **********************************************
+l'RTNR: UEF          74X,1VB#1,B#01,3VB#010, ; PRIORITIZE NON~RAM
+I                    1V, H#11,4V, 4V,      svi, 4X,2VB#11,2VBl/11,24X
+                     MODE,QUAD,MASK,SOURCE,DESTINATION
+                     LM]       [22) L25]     [4](NRY,NRA           ON~Y)
+; •*********************************************
+J::JECT
+
+    •*********************************************
+    CYCLIC HEDUNDANCY CHECK
+    **********************************************
+
+    •••••••••••••••••••••••••••••••••••••••••••
+CRCF: UEF 74X, 1VB#1,B#01,3VB#010,
+I          B#11001100011,5V~,4X,2VB#11,2VB#11,24X                FORWARD
+
+
+
+
+                                              2-14
+     •******************************************
+
+     •******************************************
+CRCR: UEF 74X, 1VBU1,B#01,3VB#010,
+I       B#11001101001,5V1o, qX,2VB#11,2VB#11,24X            REVERSE
+     •******************************************
+
+
+
+
+     •*******************************************
+     NOOP
+
+     •*******************************************
+NOOP: UEF 74X,1VB#1,B#01,3VB#010,H#7140, qX,2VB#11,2VB#11,24X; NO OPERATION
+. •*******************************************
+;'
+UECT
+     •***********************************************
+     STATUS
+     •***********************************************
+     OPCODE [26]
+;
+::>ONZC:           EQU             5D#H          SET    OVR,N,C,Z
+SL:                EQU             5Dfl51o       SET    LINK
+SF 1:              EQU             5D#61o        SET    FLAG
+::>F 2:            EQU             5Dfl91o       SET    F'LAG 2
+::>F3:             EQU             5D#101o       SET    HAG 3
+
+
+; •*************************************************
+::>ETST: UEF 74X,1VB#1,B#01,3VB#010,
+I         B#011,H#BA,5V1o, qX,2VB#11,2VB#11,24X           ; SET STATUS
+                                               OPCODE
+                                                L26]
+     **************************************************
+
+
+     OPCODE L27J
+
+RONCZ:             EQU             D#31o         RESET    OVR,N,C,Z
+RL:                EQU             D#51o         RESET    LINK
+RF 1:              EQU             D#61o         RESET    FLAG 1
+RF2:               EQU             D#91o         RESET    FLAG 2
+HF3:               EQU             DU101o        RESET    r'LAG 3
+'
+•*****************************************************
+'
+RSTST: DEF 74X,1VB#1,B#01,3VB#010,
+I       B#011,H#AA,5V1o, qX,2VB#11,2VB#11,24X                         RESET STATUS
+
+
+
+
+                                        2-15
+                                                         OPCODE
+                                                         [27]
+; •***************************************************
+J::JECT
+
+
+    •***************************************************
+SVSTR: UEF          74X,1VBll1,B/101,3VBll010,        ; SAVE STATUS.-.RAM
+I                   1V, B/110,H/17A, 5VJ, 4X,2VB/111,2VB/111,24X
+                    MODE,QUAD,FIXED,RAM ADDRESS/DEST
+                    [M]                     [RJ
+    •***************************************************
+;
+;*****************************************************
+~VSTNR:     UEF     74X,1VBll1,Bll01,3VB/1010,         ; SAVE STATUS NON.-.RAM
+I                   1V, Bfl11,Hfl7A, 5VJ, 4X,2VBll11,2VB/111,24X
+                    MODE, QUAD, FIXED, DESTINATION
+                    LM]                [4J(NRY,NRA ONLY)
+    •***************************************************
+
+    •************************************************
+    TEST   ~TATUS
+    •************************************************
+    OPCODE (CT)
+TNOZ:               EQU                 Dfl 0              TEST   (N UVR) +    z
+TNO:                EQU                 D/12               TEST   N OVR
+TZ:                 EQU                 D/14               TEST   z
+TOVR:               EQU                 D/16               TEST   OVR
+TLOW:               EQU                 DllB               TEST   LOW
+TC:                 EQU                 Dfl 1 0            TEST   c
+TZC:                EQU                 Dfl 12             TEST   z   +   c
+TN:                 EQU                 Dfl 1 4            TEST   N
+TL:                 EQU                 Dfl 1 6            TEST   LINK
+TF 1:               EQU                 Dfl 18             TEST   FLAG
+TF2:                EQU                 D#20               TEST   FLAG 2
+TF3:                EQU                 Df/22              TEST   FLAG 3
+;
+; •*************************************************
+TEST: UEF 74X, 1VBfl1, Bf/01, 3VBfl010
+I       ,B#011,Hfl9A,5V~,     4X,2VB#11,2VB#11,24X                    ; TEST STATUS
+
+    •*************************************************
+IMMED: UEF          74X, 1VBfl1, Bf/01010, 16V$, 4X, 2VBfl11, 2VBfl11, 24X
+EJECT
+    • • • * • • • * • * * * * * * * • * * * * * * *
+    Am29540 FFT ADDRESS GENERATOR
+
+
+
+
+                                                  2-16
+. • • • • • • • • • • • • • • • • • • • • • • * •
+'
+ADR.HOLD:         EQU         B/100
+ADR.RST:          EQU         Bii u1
+ADR.LOAD:         EQU         Bii 1 0
+ADR.INC:          EQU         B1111
+RADIX.2:          EQU         Bii u
+RADIX.4:          EQU         RADIX.2*
+l'SD:             EQU         B#O      ;PRESCRAMBLED DATA
+NORM.ORD:         EQU         PSD*     ;NORMAL ORDER
+DIT:              EQU         Bii 1
+DIF:              EQU         DIT*
+ADR.OE:           EQU         BllO
+
+ADR 1:            EQU         H/10          ;DATA ADDRESS 1 FOR RADIX 2/q
+ADR2:             EQU         H /11         ;DATA ADDRESS 2 FOR RADIX 2/q
+ADR3:             EQU         H#2           ;DATA ADDRESS 3 FOR RADIX 4
+ADR4:             EQU         H/13          ;DATA ADDRESS 4 FOR RADIX 4
+ALT.ADR1:         EQU         H/14          ;ALTERNATE ADDRESS 1 FOR RADIX 2/4
+ALT.ADR2:         EQU         H/15          ;ALTERNATE ADDRESS 2 FOR RADIX 2/4
+ALT.ADR3:         EQU         H 116         ;ALTERNATE ADDRESS 3 FOR RADIX 4
+ALT.ADR4:         EQU         H#7           ;ALTERNATE ADDRESS 4 FOR RADIX 4
+GONST1:           EQU         Hl/8          ;CONSTANT ADDRESS 1 FOR RADIX 2/4 OR SHADING
+<.;ONST 2:        EQU         H119          ;CONSTANT ADDRESS 2 FOR RADIX 4
+c;o·NsT 3:        EQU         H/IA          ;CONSTANT ADDRESS 3 FOR RADIX 4
+CONST1.S:         EQU         H llB         ;INVERTED CONSTANT ADDRESS 1 FOR SHADING
+RVI. ADR 1:       EQU         H//C          ;REAL VALUE INPUT ADDRESS 1
+RVI.ADR2:         EQU         H llD         ;REAL VALUE INPUT ADDRESS 2
+RVI.ADR3:         EQU         H/IE          ;REAL VALUE INPUT ADDRESS 3
+RVI.ADR4:         EQU         HllF          ;REAL VALUE INPUT ADDRESS 4
+    • • • • • • • • • • • • * • • * * * • • * * • *
+    Am29520 PIPELINE REGISTERS
+    • • • • • • • • • * * • * * • * * • * * * • • *
+
+ADP.SHFT:         EQU         B1100         ;SHIFT ADDR THROUGH PIPELINE
+ADP.LOB:          EQU         BllO 1        ;LOAD & SHIFT SECOND HALF OF PIPELINE
+ADP.LOA:          EQU         Bii 1 0       ;LOAD & SHIFT FIRST HALF OF PIPELINE
+ADP.HOLD:         EQU         B1111         ;NO OP
+ADP.Al:          EQU          B 111 1       ;REG    A1    TO   OUTPUT
+ADP.A2:          EQU          B/11 0        ;REG    A2    TO   OUTPUT
+ADP.Bl:          EQU          Bllll 1       ;REG    Bl    TO   OUTPUT
+ADP.B2:          EQU          BIJOO         ;REG    B2    TO   OUTPUT
+;
+ADP. OE: t:QU     BllU        ;OUTPUT ENABLE
+;' ADDRESS GENERATOR INSTRUCTIONS
+;
+ADG.HOLD: UEF    74X, 1VB/11,B/11u001,3X, lVB/11, 1VBllO, 1VBll1,ADR.HOLD,4VH/I0,8X,
+I                2VB/J11,2VB#11,24X
+ADG. RST: UEF    7 4 X, 1VB111 , B11100 0 1 , 3X, 1VB111 , 1VB II 0, 1VBIJ1 , AD R. RS T, 4 VH II 0, 8X,
+I                2VB#11,2VB#11,24X
+ADG.LOAD: UEF    1 4 X, 1VB 111 , B111 u u 0 1 , 3 X, 1VB 111 , 1VB II u , 1VB 111 , AD R• LO AD , 4 VHII 0, 8 X,
+
+
+
+
+                                                   2-17
+I                  2VBl!11, 2VBl!11, 24X
+ADG.INC: DEF       7 4 X, 1VB fl 1 , Bfl 1 0 0 0 1 , 3 X, 1VB fl 1 , 1VB fl 0, 1VB fl 1 , AD R• INC , 4 VHfl 0 , 8X ,
+I                  2VBfl11, 2VBfl11, 24X
+EJECT
+
+'~   ......... . • • • • • • • • • • • • • • • • • •
+     Am2910 MICROPROGRAM CONTROLLER INSTRUCTION SET L20]
+     • • • • • • • * • * * * * * • • * * * * • * * * * * * *
+
+
+     CONDITION CODE MULTIPLEXER
+,
+IF.HIGH:           EQU           Bf!O     ;CONDITION PREFIX
+IF. LOW:           EQU           IF.HIGH*
+UNCOND:            EQU           Hf!O     ;UNCONDITIONAL BRANCH
+NEW.PROC:          EQU           Hiil     ;NEW PROCESS COMMAND FROM HOST
+!NT.ACK:           EQU           Hf!2     ;INTERRUPT ACK FROM HOST
+FFT.ITC:           EQU           Hf!3     ;Am29540 ITERATION COMPLETE
+FFT.DONE:          EQU           Hf!4     ;Am29540 fFT COMPLETE
+ADR.CT:            EQU           Hf!5     ;Am29116 CONDITION TEST
+HALU.S:            EQU           Hf!B     ;REAL ALU SIGN
+HALU.OV:           EQU           Hfl9     ;REAL ALU OVERFLOW
+HALU.Z:            EQU           Hf!A     ;REAL ALU ZERO
+HALU .C:           EQU           Hf!B     ;REAL ALU CARRY
+IALU.S:            EQU           Hf!C     ;IMAG ALU
+lALU.OV:           EQU           HflD
+IALU. Z:           EQU           HflE
+IALU.C:            EQU           HllF
+'
+JZ:        DEF     124X, HflO                                                 RESET STACK, MICROPC, ADDRESS
+CJS:       DEF     107X, 1VBfl0, 4V, 12V$Hf/FFF,Hfl1                          COND JUMP SUBROUTINE
+JSR:       DEF     107X,Bt!O,UNCOND,12V$Hf!FFF,Hf!1                           UNCOND JUMP SUBROUTINE
+JMAP:      DEF     112X, 12V$Hf!FFF,Hfl2                                      UNCOND JUMP TO MEMORY MAP (Di)
+CJP:       DEF     107X, 1VBfl0,4V, 12V$HflFFF,Htl3                           COND JUMP PIPELINE
+JM P:      DEF     107X,Bf!O,UNCOND,12V$Hf!FFF,Ht!3                           UNCOND JUMP PIPELINE
+PUSH:      DEF     107X, 1VBflO, 4V, 12V$, H/14                               PUSH STACK, LOAD REG MAYBE
+JSRP:      DEF     112X, 12V$Hf!FFF,Hf/5                                      JUMP SUB FHOM REG (F) OR PIPE(T)
+CJV:       DEF     107X, 1VBfl0,4V, 12V$Hf!FFF,H/16                           COND JUMP TO VECTOR INTER (Di)
+J HP:      DEF     112X, 12V$H/IFFF,H117                                      JUMP TO HEG (F) OR PIPE (T)
+HFCT:      DEF     1 12 X, 12 V$H /IF FF, H118                                DO LOOP HEPEAT UNTIL CTR=O"STACK
+HPCT:      DEF     112X, 12V$H/IFFF,H/19                                      DO LOOP UNTIL CTR:O ~ PIPE
+CRTN:      DEF     107X, 1VBflu,4V, 12V$H/IFFF,H//A                           COND RETURN, POP STACK (T)
+RTN:       DEF     107X,BllO,UNCOND,12V$Hl/FFF,HllA                           UNCOND HETURN
+CJPP:      DEF     107X, 1VBflO, 4V, 12V$H/IFFF,Hl/B                          COND JUMP PIPELINE, POP STACK
+LDCT:      DEF     112X, 12V$, H//C                                           LOAD REGISTER, CONTINUE
+LOOP:      DEF     124X,HllD                                                  DO LOOP UNTIL TEST:T ~ STACK
+CONT:      DEF     124X, Hl/E                                                 CONTINUE
+TWB:       DEF     107X, 1VBflu, 4V, 12V$Hf!FFF,Hf/F                          THREE WAY BRANCH
+EJECT
+        • • • • • • * • • • • * * • • • * • * * * * * * *
+
+
+
+
+                                                            2-18
+    Am2925 CYCLE LENGTH SELECT                                      [ 21 ]
+    system Clock Generator and Driver
+        ....• .• • • • • • • • • •        lt    lt   lt   lt   lt   lt   lt   lt   lt
+
+
+
+    THE J:'OLLOW ING ARE THE CYCLE LENGTH CODES           (PRELIM)
+                                                            EXAMPLE CYCLE ( 1 OF        LI)
+  LA:     EQU      QllO       3 CLOCK PERIODS                100ns AT 30MHz
+CLB:      EQU      Qlll       LI                             160ns AT 25MHz
+CLC:      EQU      Q/15       5                             200ns AT 25MHz
+CLD:      EQU      Qll7       6                             200ns AT 30MHz
+c;LE:     EQU      Q/13       7                             280ns AT 25MHz
+CLF:      EQU      Q/12       8                             320ns AT 25MHz
+CLG:      EQU      Qllb       9                             300ns AT 30MHz
+CLH:      EQU      Q/14       10 CLOCK PERIODS              322ns AT 31MHz
+                                            tmax crystal frequency is 31 lMHz)
+
+    OTHER CONTROL LINES FOR THE Am2925
+    1NCOMPLETELY DEFINED AT PRESENT (IN THIS !:'ILE)
+;
+FIRST.25:          EQU     Bii 1
+LAST.25:           EQU     BllO
+,
+HALT:              EQU     BllOO
+NOHALT:            EQU     BllOO
+,
+SINGLSTP:          EQU     BllOO
+RUN:               EQU     BllOO
+,
+WAITREQ:           EQU     BllO
+NOWAITRQ:          EQU     Bf/1
+;
+READY:             EQU     BllO
+NOTREADY:          EQU     Biil
+;
+lNITIALIZE:        EQU     BllO
+NO.INIT:           EQU     Bf/1
+
+EJECT
+;
+; MISCELLANEOUS CONTROLS FOR THE DSP
+;
+WE:                EQU     BllO     ;MEMORY WRITE ENABLE
+NWE:               EQU     WE•      ;NO WRITE
+;
+RD.MEM: DEF        31X,NWE,31X,NWE,64X
+WR.CMPX UEF        31X,WE,31X,WE,64X
+WR.REAL DEF        31X,WE,31X,NWE,64X
+WR. IMAG DEF       31X,NWE,31X,WE,64X
+,
+SEL.116            EQU     BllO 1
+SEL.540            EQU     Bii 10
+NO.ADDR            EQU     B/111
+
+
+
+
+                                               2-19
+BUFCD:              EQU       8111      ;BUFFER t;HIP JJISABLE
+HUF EN:             EQU       BUFCD•
+;
+CF.LOAD:            EQU       8110     ;ENABLE NEW HOM ADDRESS
+CF.HOLD:            EQU       CF.LOAD•
+;
+; JJATA PRESCALING
+;
+DIV.BY.1:           DEF       NO.SHIFT,30X,NO.SHIFT,94X
+DIV.BY.2:           DEF       SHIFT.R1,30X,SHIFT.R1,94X
+DIV.BY.4:           DEF       SHIFT.R2,30X,SHIFT.R2,94X
+DIV.BY.8:           DEF       SHIFT.R3,30X,SHIFT.R3,94X
+SP:                 EQU       Biil      ;SINGLE PRECISION (16 HITS)
+DP:                 EQU       8110      ;DOUBLE PRECISION (32 BITS~IMAG:REAL)
+
+lNTRRUPT: JJEF      104X, Bii 1, 23X    ;GENERATE C:XTERNAL INTERRUPT
+;
+;F"IELD POSITIONS
+;
+M!SC: UEF           64X, 1VBll1, 39X, 1VBllO, 2VBllOO, 21X
+'
+NO.OP: IJEF         NO.SHIFT,MOVE.NC,A1,A1 ;DO NOTHING
+I                   ,A1.HOLD,A2.HOLD,A3.HOLD,B1.HOLD,B2.HOLD,B3.HOLD
+I                   ,MIO.IN,DIO.IN,NWE
+I                   ,NO.SHIFT,MOVE.NC,A1,A1
+I                   ,A1.HOLD,A2.HOLD,A3.HOLD,B1.HOLD,B2.HOLD,B3.HOLD
+I                   ,MIO.IN,DIO.IN,NWE
+I                   ,SP,MP.TRUNC,MP.FRAC,MP.MSP
+I                   ,MY.IN,MXY.2C,MX.CONST
+I                   ,1X,SEL.540,B#111
+I                   ,3X,DIT,RADIX.2,NORM.ORD,ADR.HOLD,ADR1
+I                   ,8X,ADP.HOLD,ADP.A1,24X
+;
+HD.CHO: DEF         NO.SHIFT,MOVE.CC,A1,A1 ;READ MODE INTO ~40 AND 29116
+I                   ,A1.HOLD,A2.HOLD,A3.HOLD,B1.HOLD,B2.HOLD,B3.HOLD
+I                   ,MIO.IN,DIO.IN,NWE
+I                   ,NO.SHIFT,MOVE.CC,A1,A1
+I                   ,A1.HOLD,A2.HOLD,A3.HOLD,B1.HOLD,B2.HOLD,B3.HOLD
+I                   ,MIO.IN,DIO.IN,NWE
+I                   ,SP,MP.TRUNC,MP.FRAC,MP.MSP
+I                   ,MY.IN,MXY.2C,MX.CONST
+I                   ,1X,NO.ADDR,B#101
+I                   ,3X,DIT,RADIX.2,NORM.ORD,ADR.HOLD,ADR1
+I                   ,8X,ADP.HOLD,ADP.A1,24X
+;
+MAKE.ONE: DEF       NO.SHIFT,MOVE.FC,A1,A1 ;FORCE GARRY INTO !MAG ALU
+I                   ,A1.HOLD,A2.HOLD,A3.HOLD,B1.HOLD,B2.HOLD,B3.HOLD
+I                   ,MIO.IN,DIO.IN,NWE
+I                   ,NO.SHIFT,MOVE.CC,ZERO,A1       ; 0 +CRY= 1
+I                   ,A1.HOLD,A2.EQ.AU,A3.HOLD,B1.HOLD,B2.HOLD,B3.HOLD
+I                   ,MIO.IN,DIO.IN,NWE
+I                   ,DP,MP.TRUNC,MP.FRAC,MP.MSP
+I                   ,MY.IN,MXY.2C,HX.CONST
+                    ,54X
+
+!::ND
+
+
+
+
+                                                  2-20
+TITLE       AMDSP DIGITAL SIGNAL PROCESSOR
+    • * * * * * * * * • * • * * * * * * * * * * • * * * * * * * * * * * *
+;' lDLE LOOP WAITING FOR PROCESS INSTRUCTION
+;
+START::
+NO.OP & JMP $     +   1                              JUMP INSTR FOR JAMMING
+NO.OP & CJP IF.LOW,NEW.PROC,$                        WAIT FOR INSTR STROBE
+;
+NO.OP & CJP IF.HIGH,NEW.PROC,$                       WAIT FOR STROBE TO LATCH DATA
+;
+RD.CHO & JMAP                                        VECTOR TO COMMANDED PROCESS
+    • * * •   * • • • • •   * • • • • • •   * • • • • • • • • • * • * • * • • •
+
+    SET INTERRUPT FLAG AND WAIT FOR AN ACKNOWLEDGE
+;
+FINISH:
+                                                     WAIT FOR ACKNOWLEDGE
+INTRRUPT & NO.OP & CONT                              NO INTR WHILE DEBUGGING
+I; & CJP IF.HIGH,INT.ACK,$
+'
+NO.OP & JMP START
+EJECT
+    * *   * • • • • • • • * • • *   * • • • * • • • •      * • • • • • • * • * * •
+    FFT PROGRAM
+    SIZE HANDLED BY Am29540
+;
+FFT::
+;                                              *** RESET 29540 AND DO NOTHING
+ADG.RST & RD.HEM & DIV.BY.2
+!& R.MOVE & I.MOVE & MSPROD & MISC
+I& CONT
+                                           *** FILL PIPELINE BEFORE WRITING
+ '
+ADG. HOLD , DIT, RADIX. 2, NORM. ORD, ADR2, ADP.LOB
+/& RD.HEM & DIV.BY.2               .
+I& R.MOVE & I.MOVE & MSPROD & MISC
+/& CONT
+                                           *** READ B OPERAND & COEFFICIENT
+ADG.HOLD CF.LOAD, DIT, RADIX.2, NORM.ORD, CONST1, ADP.HOLD, ADP.Bl
+/& RD.HEM & DIV.BY.2
+I& R.MOVE , , , , Bl.EQ.DI, , , , DID.IN
+I& I.MOVE , , , , Bl.EQ.DI, , , , DID.IN
+/& MSPROD
+/& MISC
+/& CONT
+                                           *** REAL*COS
+ADG.HOLD CF.HOLD, DIT, RADIX.2, NORM.ORD, ADR1, ADP.LOA
+!& RD.HEM & DIV.BY.2
+I& R.MOVE , , , , Bl.HOLD, , , M.EQ.Bl
+I& I.MOVE , , , , Bl.HOLD, , , MIO.IN
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFEN
+
+
+
+
+                                               3-1
+/&   MISC
+I& CONT
+                                         *** REAL*SIN, READ A OPERAND
+ADG.INC CF.HOLD, DIT, RADIX.2, NORM.ORD, , ADP.HOLD, ADP.A1
+/& RD.MEM & DIV.BY.2
+I& R.MOVE , A1.EQ.DI, , , , , , M.EQ.B1, DIO.IN
+I& I.MOVE , A1.EQ.DI, , , B1.HOLD, , , MIO.IN, DIO.IN
+/& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.SIN, BUFEN
+/& MISC
+I& CONT
+ ,                                       *** IMAG*COS
+ADG.HOLD CF.HOLD, DIT, RADIX.2, NORM.ORD, ADR2, ADP.LOB
+I& RD.HEM & DIV.BY.2
+/& R.ADD A1,MSP, A1.HOLD, , A3.EQ.MP, , 82.EQ.AU, , MIO.IN
+/& I.MOVE , A1.HOLD, , , B1.HOLD, , , M.EQ.81
+/& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFCD
+I& MISC
+I& CONT
+ ;                                       *** IMAG*SIN & READ 8
+ADG.HOLD CF.LOAD, DIT, RADIX.2, NORM.ORD, CONST1, ADP.HOLD, ADP.81
+I& RD.HEM & DIV.8Y.2
+I& R.MOVE , A1.HOLD, , A3.HOLD, 81.EQ.DI, B2.HOLD, , MIO.IN, DIO.IN
+I& I.SUBS A1,MSP, A1.HOLD, , A3.EQ.MP, B1.EQ.DI, 82.EQ.AU, , M.EQ.81, DID.IN
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.SIN, BUFCD
+/& MISC
+I& CONT
+;                                        *** REAL*COS
+ADG.HOLD CF.HOLD, DIT, RADIX.2, NORM.ORD, ADR1, ADP.LOA
+I& RD.HEM & DIV.BY.2
+I& R.SUBS A1,A3, A1.HOLD, A2.EQ.AU, , 81.HOLD, 82.HOLD, , M.EQ.81
+I& I.ADD 82,MSP, A1.HOLD, , A3.HOLD, 81.HOLD, 82.EQ.AU, 83.EQ.MP, MIO.IN
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFEN
+I& MISC
+I& CONT
+                                         *** PASS 1 LOOP CAN DO SHADING
+'
+IT1.LOOP:
+;                                        *** REAL*SIN, READ A
+ADG.INC CF.HOLD, DIT, RADIX.2, NORM.ORD, , ADP.HOLD, ADP.A1
+/& RD.HEM & DIV.8Y.2
+I& R.ADD 82,MSP, A1.EQ.DI, A2.HOLD, , , 82.EQ.AU, B3.EQ.MP, M.EQ.81, DIO.IN
+I& I.SUBS A1,B3, A1.EQ.DI, A2.EQ.AU, A3.HOLD, 81.HOLD, 82.HOLD, , MIO.IN, DID.IN
+/& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.SIN, BUFEN
+I& MISC
+/& CONT
+                                         ••• IMAG*COS, WRITE A - s•w
+ADG.HOLD CF.HOLD, DIT, RADIX.2, NORM.ORD, ADR2, ADP.LOB, ADP.82
+!& WR.CMPX
+I& R.ADD A1,MSP, A1.HOLD, A2.HOLD, A3.EQ.MP, , 82.EQ.AU, 83.HOLD, , D.EQ.82
+/& I.ADD A2,A3, A1.HOLD, A2.EQ.AU, , 81.HOLD, , , M.EQ.81, D.EQ.82
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, 8UFCD
+/& MISC
+/& CONT
+ ;                                       *** IMAG*SIN, READ 8
+ADG.HOLD CF.LOAD, DIT, RADIX.2, NORM.ORD, CONST1, ADP.HOLD, ADP.81
+I& RD.HEM & DIV.BY.2
+
+
+
+
+                                       3-2
+/& R.SUBS A2,B3, Al.HOLD, A2.EQ.AU, A3.HOLD, Bl.EQ.DI, B2.HOLD, , , DID.IN
+/& I.SUBS Al,MSP, Al.HOLD, A2.HOLD, A3.EQ.MP, Bl.EQ.DI, B2.EQ.AU, ,M.EQ.Bl, DID.IN
+/& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.SIN, BUFCD
+I& MISC
+/& CONT
+;                                        *** REAL*COS, WRITE A + B1 w
+ADG.HOLD CF.HOLD, DIT, RADIX.2, NORM.ORD, ADRl, ADP.LOA, ADP.A2
+/& WR.CMPX
+/& R.SUBS A1,A3, , A2.EQ.AU, , Bl.HOLD, B2.HOLD, , M.EQ.Bl, D.EQ.A2
+I& I.ADD B2,MSP, Al.HOLD, , A3.HOLD, Bl.HOLD, B2.EQ.AU, B3.EQ.MP, MIO.IN, D.EQ.A2
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFEN
+/& MISC
+/& CJP IF.LOW,FFT.ITC,IT1.LOOP
+;
+BTF.LOOP:
+;                                        *** REAL*SIN, READ A
+ADG.INC CF.HOLD, DIT, RADIX.2, NORM.ORD, , ADP.HOLD, ADP.Al
+I& RD.HEM & DIV.BY.2
+/& R.ADD B2,MSP, A1.EQ.DI, A2.HOLD, , , B2.EQ.AU, B3.EQ.MP, M.EQ.Bl, DID.IN
+/& I.SUBS A1,B3, Al.EQ.DI, A2.EQ.AU, A3.HOLD, Bl.HOLD, B2.HOLD, , MIO.IN, DID.IN
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.SIN, BUFEN
+/& MISC
+I& CONT
+;                                        *** IMAG*COS, WRITE A - B1 w
+ADG.HOLD CF.HOLD, DIT, RADIX.2, NORM.ORD, ADR2, ADP.LOB, ADP.B2
+/& WR.CMPX
+I& 8.ADD Al,MSP, Al.HOLD, A2.HOLD, A3.EQ.MP, , B2.EQ.AU, B3.HOLD, , D.EQ.B2
+I& I.ADD A2,A3, Al.HOLD, A2.EQ.AU, , Bl.HOLD, , , M.EQ.B1, D.EQ.B2
+/& HSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFCD
+/& MISC
+I& CONT
+;                                        *** IMAG*SIN, READ B
+ADG.HOLD CF.LOAD, DIT, RADIX.2, NORM.ORD, CONST1, ADP.HOLD, ADP.Bl
+/& RD.HEM & DIV.BY.2
+I& R.SUBS A2,B3, Al.HOLD, A2.EQ.AU, A3.HOLD, B1.EQ.DI, B2.HOLD, , , DID.IN
+I& I.SUBS Al,MSP, Al.HOLD, A2.HOLD, A3.EQ.MP, B1.EQ.DI, B2.EQ.AU, ,M.EQ.Bl, DID.IN
+/& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.SIN, BUFCD
+/& MISC
+I& CONT
+,                                        *** REAL*COS, WRITE A + B*w
+ADG.HOLD CF.HOLD, DIT, RADIX.2, NORM.ORD, ADR1, ADP.LOA, ADP.A2
+I& WR.CMPX
+I& R.SUBS A1,A3, , A2.EQ.AU, , Bl.HOLD, B2.HOLD, , M.EQ.Bl, D.EQ.A2
+I& I.ADD 82,MSP, Al.HOLD, , A3.HOLD, Bl.HOLD, B2.EQ.AU, B3.EQ.MP, MIO.IN, D.EQ.A2
+I& MSPROD HP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFEN
+I& MISC
+I& CJP IF.LOW,FFT.DONE,BTF.LOOP
+;/& CJP IF.LOW,FFT.ITC,BTF.LOOP
+;                                        *** REAL*SIN, READ A
+ADG.INC CF.HOLD, DIT, RADIX.2, NORM.ORD, , ADP.HOLD, ADP.Al
+/& RD.HEM & DIV.BY.2
+I& R.ADD B2,MSP, Al.EQ.DI, A2.HOLD, , , B2.EQ.AU, B3.EQ.MP, M.EQ.B1, DID.IN
+I& I.SUBS Al,83, Al.EQ.DI, A2.EQ.AU, A3.HOLD, Bl.HOLD, 82.HOLD, , MIO.IN, DID.IN
+/& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.SIN, BUFEN
+/& MISC
+
+
+
+
+                                       3-3
+I& CONT
+;/& RPCT BTF.LOOP+1               ;COUNT PASSES FOR TESTING
+;
+; FLUSH PIPELINE
+                                        *** IMAG*COS, WRITE A - B*w
+ADG.HOLD CF.HOLD, DIT, RADIX.2, NORM.ORD, ADR2, ADP.LOB, ADP.B2
+/& WR.CMPX
+I& R.ADD A1,MSP, A1.HOLD, A2.HOLD, A3.EQ.MP, , B2.EQ.AU, B3.HOLD, , D.EQ.B2
+I& I.ADD A2,A3, A1.HOLD, A2.EQ.AU, , B1.HOLD, , , M.EQ.B1, D.EQ.B2
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFCD
+I& MISC
+I& CONT
+                                        *** IMAG*SIN
+ADG.HOLD , DIT, RADIX.2, NORM.ORD, , ADP.HOLD
+/& RD.HEM & DIV.BY.2
+/& R.SUBS A2,83, A1.HOLD, A2.EQ.AU, A3.HOLD, , 82.HOLD
+I& I.SUBS A1,MSP, A1.HOLD, A2.HOLD, A3.EQ.MP, , 82.EQ.AU, ,M.EQ.B1
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.SIN, BUFCD
+/& MISC
+I& CONT
+                                         *** WRITE A + B*w
+ADG.HOLD , DIT, RADIX.2, NORM.ORD, , ADP.LOA, ADP.A2
+I& WR.CMPX
+I& R.SUBS A1,A3, , A2.EQ.AU, , , B2.HOLD, , , D.EQ.A2
+/& I.ADD B2,MSP, A1.HOLD, , A3.HOLD, , B2.EQ.AU, B3.EQ.MP, , D.EQ.A2
+/& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C
+I& MISC
+/& CONT
+
+ADG.HOLD, DIT, RADIX.2, NORM.ORD,, ADP.HOLD
+I& RD.MEM & DIV.BY.2
+/& R.ADD B2,MSP, , A2.HOLD, , , B2.EQ.AU, B3.EQ.MP
+I& I.SUBS A1,B3, , A2.EQ.AU, A3.HOLD, , B2.HOLD
+I& MSPROD & MISC
+/& CONT
+;                                           *** WRITE A - B*w
+ADG. HOLD , DIT, RADIX·. 2, NORM. ORD, , , ADP. 82
+/& WR.CMPX
+I& R.MOVE , , , , , , , , D.EQ.82
+I& I.ADD A2,A3, , A2.EQ.AU, , , , , , D.EQ.82
+I& MSPROD & MISC
+I& CONT
+;
+ADG.HOLD , DIT, RADIX.2, NORM.ORD
+I& RD.MEM & DIV.BY.2
+I& R.SUBS A2,B3, , A2.EQ.AU
+I& I.MOVE,, A2.HOLD
+/& MSPROD & MISC
+I& CONT
+                                              *** WRITE A + B*w
+'
+ADG.HOLD  , DIT, RADIX.2, NORM.ORD,          ADP.A2
+I& WR.CMPX                            ' '
+/& R.MOVE , , , , , , , , D.EQ.A2
+I& I.MOVE , , , , , , , , D.EQ.A2
+I& MSPROD & MISC
+
+
+
+
+                                       3-4
+I& JMP FINISH
+EJECT
+    * * * * * * * * * * * * * * * * * * * * * * • • * • * • • * * • * * *
+    INVERSE FFT PROGRAM (PRE SCRAMBLED DATA)
+    SIZE HANDLED BY Am29540
+;
+IFFT::
+;                                           *** RESET 29540 AND DO NOTHING
+ADG.RST & RD.MEM & DIV.BY.2
+/& R.HOVE & I.HOVE & HSPROD & MISC
+I& CONT
+                                          *** FILL PIPELINE BEFORE WRITING
+ADG.HOLD , DIT, RADIX.2, PSD, ADR2, ADP.LOB
+/& RD.HEM & DIV.BY.2
+I& R.HOVE & I.MOVE & MSPROD & MISC
+/& CONT
+;                                         *** READ B OPERAND & COEFFICIENT
+ADG.HOLD CF.LOAD, DIT, RADIX.2, PSD, CONST1, ADP.HOLD, ADP.B1
+/& RD.MEM & DIV.BY.2
+I& R.MOVE          B1.EQ.DI,     , DIC.IN
+/& I.MOVE ' ' ' ' B1.EQ.DI, ' ' , DIC.IN
+/& MSPROD ' '  ' '           ' '
+/& MISC
+/& CONT
+;                                         *** REAL*COS OF COMPLEX MULTIPLY
+ADG.HOLD CF.HOLD, DIT, RADIX.2, PSD, ADR1, ADP.LOA
+I& RD.HEH & DIV.BY.2
+/& R.MOVE , , , , Bl.HOLD, , , M.EQ.B1
+/& I.HOVE , , , , Bl.HOLD, , , MIO.IN
+/& HSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFEN
+/& MISC
+/& CONT
+;                                         *** REAL*SIN, READ A OPERAND
+ADG.INC CF.HOLD, DIT, RADIX.2, PSD, , ADP.HOLD, ADP.Al
+I& RD.HEM & DIV.BY.2
+/& R.MOVE , A1.EQ.DI, , , , , , H.EQ.B1, DIC.IN
+I& I.MOVE , A1.EQ.DI, , , Bl.HOLD, , , MIO.IN, DIC.IN
+/& HSPROD HP.ROUND, HP.FRAC, MY.IN, MXY.2C, HX.SIN, BUFEN
+/& MISC
+I& CONT
+;                                         *** IHAG*COS
+ADG.HOLD CF.HOLD, DIT, RADIX.2, PSD, ADR2, ADP.LOB
+/& RD.HEM & DIV.BY.2
+/& R.ADD A1,HSP, Al.HOLD, , A3.EQ.MP, , B2.EQ.AU
+I& I.MOVE , Al.HOLD, , , Bl.HOLD, , , M.EQ.B1
+/& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFCD
+I& MISC
+/& CONT
+                                          *** IMAG*SIN, READ 5
+ADG.HOLD CF.LOAD, DIT, RADIX.2, PSD, CONST1, ADP.HOLD, ADP.Bl
+I& RD.HEM & DIV.BY.2
+I& R.MOVE, Al.HOLD, , A3.HOLD, B1.EQ.DI, B2.HOLD, , , DIC.IN
+I& I.ADD A1,HSP, Al.HOLD, , A3.EQ.MP, B1.EQ.DI, B2.EQ.AU, , H.EQ.B1, DIC.IN
+
+
+
+
+                                      3-5
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.SIN, BUFCD
+I& MISC
+/&  CONT
+,                                       *** REAL*COS
+ADG.HOLD CF.HOLD, DIT, RADIX.2, PSD, ADR1, ADP.LOA
+I& RD.MEM & DIV.BY.2
+I& R.SUBS A1,A3, A1.HOLD, A2.EQ.AU, , B1.HOLD, B2.HOLD, , M.EQ.B1
+/& I.ADD B2,MSP, A1.HOLD, , A3.HOLD, B1.HOLD, B2.EQ.AU, B3.EQ.MP, MIO.IN
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFEN
+I & MISC
+I& CONT
+IBTF.LUP:
+,                                          *** REAL*SIN, READ A
+ADG.INC CF.HOLD, DIT, RADIX.2, PSD, , ADP.HOLD, ADP.A1
+I& RD.HEM & DIV.BY.2
+I& R.SUBS B2,MSP, A1.EQ.DI, A2.HOLD, , , B2.EQ.AU, B3.EQ.MP, M.EQ.B1, DIO.IN
+I& I.SUBS A1,B3, A1.EQ.DI, A2.EQ.AU, A3.HOLD, B1.HOLD, B2.HOLD, , MIO.IN, DIO.IN
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.SIN, BUFEN
+I & MISC
+I& CONT
+;                                          *** IMAG*COS, WRITE A - B*w
+ADG.HOLD CF.HOLD, DIT, RADIX.2, PSD, ADR2, ADP.LOB, ADP.B2
+I& WR.CMPX
+I& R.ADD A1,MSP, A1.HOLD, A2.HOLD, A3.EQ.MP, , B2.EQ.AU, B3.HOLD, , D.EQ.B2
+I& I.SUBS A2,A3, A1.HOLD, A2.EQ.AU, , B1.HOLD, , , M.EQ.B1, D.EQ.B2
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFCD
+I& MISC
+I& CONT
+,                                          *** IMAG*SIN, READ B
+ADG. HOLD CF. LOAD, DIT, RADIX. 2, PSD, CONST 1, ADP. HOLD, ADP. B1
+I& RD.HEM & DIV.BY.2
+I& R.ADD A2,B3, A1.HOLD, A2.EQ.AU, A3.HOLD, B1.EQ.DI, B2.HOLD, , , DID.IN
+I& I.ADD A1,MSP, A1.HOLD, A2.HOLD, A3.EQ.MP, B1.EQ.DI, B2.EQ.AU, ,M.EQ.B1, DIO.IN
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.SIN, BUFCD
+I& MISC
+I& CONT
+ ;                                         *** REAL*COS, WRITE A + B*w
+ADG.HOLD CF.HOLD, DIT, RADIX.2, PSD, ADR1, ADP.LOA, ADP.A2
+/& WR,CMPX
+I& R.SUBS A1,A3, , A2.EQ,AU, , B1.HOLD, B2.HOLD, , M.EQ.B1, D.EQ.A2
+I& I.ADD B2,MSP, A1.HOLD, , A3.HOLD, B1.HOLD, B2.EQ.AU, B3.EQ.MP, MIO.IN, D.EQ.A2
+/& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFEN
+I& MISC
+I& CJP IF.LOW,FFT.DONE,IBTF.LUP
+;                                          *** REAL*SIN, READ A OPERAND
+ADG.INC CF.HOLD, DIT, RADIX.2, PSD,, ADP.HOLD, ADP.A1
+I& RD.HEM & DIV.BY.2
+I& R.SUBS B2,MSP, A1.EQ.DI, A2.HOLD, , , B2.EQ.AU, B3.EQ.MP, M.EQ.B1, DIO,IN
+/& I.SUBS A1,B3, A1.EQ.DI, A2.EQ.AU, A3.HOLD, B1.HOLD, B2.HOLD, , MIO.IN, DID.IN
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.SIN, BUFEN
+I& MISC
+/& CONT
+;
+; FLUSH PIPELINE
+
+
+
+
+                                       3-6
+,                                        *** IMAG*COS, WRITE A - B*w
+ADG.HOLD CF.HOLD, DIT, RADIX.2, PSD, ADR2, ADP.LOB, ADP.B2
+I& WR.CMPX
+I& R.ADD A1,MSP, A1.HOLD, A2.HOLD, A3.EQ.MP, , B2.EQ.AU, B3.HOLD, , D.EQ.B2
+I& I.SUBS A2,A3, A1.HOLD, A2.EQ.AU, , B1.HOLD, , , M.EQ.B1, D.EQ.B2
+I& MSPROD MP~ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFCD
+I& MISC
+/& CONT
+;                                            •••
+                                             IMAG*SIN
+ADG.HOLD, DIT, RADIX.2, PSD,, ADP.HOLD
+I& RD.MEM & DIV.BY.2
+I& R.ADD A2,B3, A1.HOLD, A2.EQ.AU, A3.HOLD, , B2.HOLD
+I& I.ADD A1,MSP, A1.HOLD, A2.HOLD, A3.EQ.MP, , B2.EQ.AU, ,M.EQ.B1
+/& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.SIN, BUFCD
+I& MISC
+I& CONT
+                                         *** WRITE A + B*w
+ADG.HOLD , DIT, RADIX.2, PSD, , ADP.LOA, ADP.A2
+I& WR.CMPX
+I&· R.SUBS A1,A3, , A2.EQ.AU, , , B2.HOLD, , , D.EQ.A2
+I& I.ADD B2,MSP, A1.HOLD, , A3.HOLD, , B2.EQ.AU, B3.EQ.MP, , D.EQ.A2
+I& MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C
+I& MISC
+I& CONT
+;
+ADG.HOLD, DIT, RADIX.2, PSD,, ADP.HOLD
+I& RD.MEM & DIV.BY.2
+I& R.SUBS B2,MSP, , A2.HOLD, , , B2.EQ.AU, B3.EQ.MP
+I& I.SUBS A1,B3, , A2.EQ.AU, A3.HOLD, , B2.HOLD
+I& MSPROD & MISC
+I& CONT
+                                         *** WRITE A - B*w
+'
+ADG.HOLD , DIT, RADIX.2, PSD, , , ADP.B2
+I& WR.CMPX
+I& R.MOVE , , , , , , , , D.EQ.B2
+I& I.SUBS A2,A3, , A2.EQ.AU, , , , , , D.EQ.B2
+I& MSPROD & MISC
+I& CONT
+;
+ADG. HOLD , DIT, RADIX. 2, PSD
+I& RD.MEM & DIV.BY.2
+I& R.ADD A2,B3, , A2.EQ.AU
+I& I.MOVE , , A2.HOLD
+I& MSPROD & MISC
+I& CONT
+                                             *** WRITE A   +   B*w
+'
+ADG. HOLD , DIT, RADIX. 2, PSD, , , ADP.A2
+I& WR.CMPX
+I& R.MOVE , , , , , , , , D.EQ.A2
+I& I.MOVE , , , , , , , , D.EQ.A2
+I& MSPROD & MISC
+I& JMP FINISH
+EJECT
+MXMULT::
+
+
+
+
+                                      3-7
+NO.OP & JMP START              ;TBDL
+EJECT
+
+    •••••••••••••••••••••••••••••••••••
+            PROCESS VECTORS
+            ORG     1024 - 8
+;
+NO.OP   &   JMP   START                INSTRUCTION 0     NOOP
+                                                       = MATRIX
+NO.OP   &   JMP   MXMULT                           1              MULTIPLY
+NO.OP   &   JMP   FILTER                           2       FILTER
+NO.OP   &   JMP   FFT                              3   =   FFT
+NO.OP   &   JMP   IFFT                             4       INVERSE FFT
+            END

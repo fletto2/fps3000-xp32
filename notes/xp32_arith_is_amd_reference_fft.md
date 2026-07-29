@@ -188,3 +188,47 @@ slices; the XP-32 is 32-bit IEEE-754 with Weitek parts. The field
 *contents* will differ. What transfers is the organising principle — two
 symmetric arithmetic channels, a multiplier, a sequencer, and an
 address-generator region overlaid with an Am29116 instruction.
+
+---
+
+## The appendix also carries worked FFT microcode — preserved
+
+Appendix 2 does not stop at definitions. It includes **working microcode**
+for the reference design: forward FFT, inverse FFT, the two butterfly
+loops (`BTF.LOOP`, `IBTF.LUP`) and matrix multiply (`MXMULT`).
+
+Extracted verbatim to
+**`refs_extracted/amd_dsp_reference_microcode.txt`** (1,609 lines, 367
+labels) with the OCR damage catalogued in its header.
+
+Each microinstruction is a lead line plus `&` continuation lines, one per
+resource group. A single butterfly step reads:
+
+```
+ADG.HOLD  CF.HOLD, DIT, RADIX.2, NORM.ORD, ADR1, ADP.LOA, ADP.A2
+&  WR.CMPX
+&  R.SUBS A1,A3, , A2.EQ.AU, , B1.HOLD, B2.HOLD, , M.EQ.B1, D.EQ.A2
+&  I.ADD  B2,MSP, A1.HOLD, , A3.HOLD, B1.HOLD, B2.EQ.AU, B3.EQ.MP, MIO.IN, D.EQ.A2
+&  MSPROD MP.ROUND, MP.FRAC, MY.IN, MXY.2C, MX.COS, BUFEN
+&  MISC
+&  CJP IF.LOW, FFT.ITC, IT1.LOOP
+```
+
+Seven groups in one 128-bit word: address generator, memory write, real
+ALU, imaginary ALU, multiplier, misc, sequencer. The real and imaginary
+lines carry the **same operand structure with different operations**
+(`R.SUBS` against `I.ADD`) — the complex butterfly `A ± BW` expressed as
+two symmetric ALU channels driven in parallel.
+
+**Why keep it.** This project has never had an example of the kind of
+code the XP-32 AU WCS holds. The recovered AP-120B microcode is the
+64-bit ancestor with a different field structure; a real XPMLIB kernel
+has never surfaced. This is a 128-bit horizontal microword for an
+architecture built from the same parts, doing the workload the XP-32 was
+built for, with the field layout published alongside. For questions of
+the form "how would a butterfly be scheduled across these units" or
+"which resources share a microinstruction", it is the best available
+evidence.
+
+It is not XP-32 microcode and must not be read as such — different ALU
+width, different float format, different vendor. Its value is structural.
