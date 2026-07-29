@@ -19,6 +19,27 @@ The prose in `versabus_access_map.md` is current, and
 `selftest_reference.md` is the detailed companion to the worksheet's
 Check 0.
 
+## Address map rebuilt, 2026-07-29 (second pass)
+
+**One stale claim removed.** The map asserted "`$FF0048` is NEVER READ by the
+ROM". It is — by the channel ISR, as `$48(a5)` with `a5 = $FF0000`, a
+displacement form no absolute-address scan can see. Reads only occur once a
+channel BIM interrupt is raised, which is why every earlier run missed them.
+The note now says so and explains the blind spot rather than just deleting the
+claim.
+
+**Two sections added, both measured rather than inferred:**
+
+- **What one channel transaction looks like on a trace** — the eight bus cycles
+  of the XP channel ISR in order, with the PC that issues each: read `+$0E`,
+  `+$08`, `+$0A`; write BIM CR `$4F`; write the data pair back; write `$8004`
+  REQUEST-TRANSFER; then poll. This is what a logic analyser should show when a
+  channel interrupts, and it is the most directly checkable prediction in the
+  document.
+- **SBC RAM the chassis interacts with** — `$105E` and the per-channel snapshot
+  array at `$1066`-`$107D`, the `$10A0` flag array with its channel 1-4 bound,
+  and `$10AA` flagged as **not writable by the CPU at all**.
+
 ## Worksheet rebuilt again, 2026-07-29 (second pass)
 
 The Check 0 beacon table now carries **measured** data rather than inferred

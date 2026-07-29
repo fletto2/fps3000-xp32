@@ -73,7 +73,42 @@ for r in [("+$04", "$FF0044", "$FF0064", "$FF0084", "$FF00A4", "write port"),
     y = row(c, y, list(r), X)
 y -= 3
 y = note(c, y, "+$08 and +$0A are one 32-bit register, not data+status: BLK_XFR (F05B0E) reads both each pass; TCBXP1I writes $0000001B across")
-y = note(c, y, "the pair at F07EC6 then $8000 to +$0E. Eight Am29705 16x4 two-port RAMs give exactly 32 bits. $FF0048 is NEVER READ by the ROM.")
+y = note(c, y, "the pair at F07EC6 then $8000 to +$0E. Eight Am29705 16x4 two-port RAMs give exactly 32 bits.")
+y = note(c, y, "CORRECTION: an earlier edition said $FF0048 is NEVER READ. It is - by the channel ISR, as $48(a5) with a5=$FF0000, so no")
+y = note(c, y, "absolute-address scan sees it. Reads only happen once a channel BIM interrupt is raised, which is why they were missed.")
+y -= 5
+
+y = sect(c, y, "What one channel transaction looks like on a trace   [MEASURED]")
+X2 = [M, M+56, M+150]
+y = row(c, y, ["PC", "cycle", "meaning"], X2, bold=True)
+for r in [("F07EEE", "RD +$0E", "read command reg  -> RAM $1066"),
+          ("F07EF6", "RD +$08", "read data HIGH    -> RAM $1068"),
+          ("F07EFE", "RD +$0A", "read data LOW     -> RAM $106A"),
+          ("F07F10", "WR BIM CR $4F", "IRE cleared: mute this channel for the transfer"),
+          ("F07F18", "WR +$08 = $0000", "write data HIGH back"),
+          ("F07F1E", "WR +$0A = d0", "write data LOW back"),
+          ("F07F22", "WR +$0E = $8004", "REQUEST-TRANSFER"),
+          ("F07F2E", "RD +$0E (poll)", "spin, 1000-iteration timeout in d5")]:
+    y = row(c, y, list(r), X2)
+y -= 3
+y = note(c, y, "Addresses are XP1I's; the other three channels are byte-identical copies at -$A00, -$1400, -$1E00. XP4I has this ISR too.")
+y = note(c, y, "The SEPARATE $8000 path (data pair <- $0000001B, then $8000) exists ONLY in XP1I/2/3 and needs command-reg bits 15,14,11 set.")
+y -= 5
+
+y = sect(c, y, "SBC RAM the chassis interacts with")
+X3 = [M, M+70, M+140]
+y = row(c, y, ["address", "owner", "role"], X3, bold=True)
+for r in [("$105E", "written by CPU", "count of channels with a NONZERO command reg; probe at $F0A202"),
+          ("$1062 / $1064", "shared", "scan state, all four XP tasks"),
+          ("$1066-$106A", "XP1I", "ISR snapshot: {command, data HI, data LO}"),
+          ("$106C-$1070", "XP2I", "same, stride 6"),
+          ("$1072-$1076", "XP3I", "same"),
+          ("$1078-$107C", "XP4I", "same"),
+          ("$107E / $1080", "shared", "scan state"),
+          ("$10A0-$10A6", "cmd-1 handler", "per-channel flag, (ch-1)*2, ch 1-4 ONLY"),
+          ("$10AA", "NOT WRITABLE BY CPU", "TCBIO1I dispatches on it; needs ch 6, which $105E forbids"),
+          ("$10000-$1FFFF", "S-record staging", "one 4K x 128-bit WCS bank")]:
+    y = row(c, y, list(r), X3)
 y -= 5
 
 y = sect(c, y, "XLTR control file  $FF0200-$FF021B")
