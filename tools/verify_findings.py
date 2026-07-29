@@ -96,6 +96,16 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- the $8000 path is gated on command-register bits 15, 14, 11 -----
+    trg, _ = run({'FPS3K_CHANNELS': '2', 'FPS3K_XPIRQ': '1',
+                  'FPS3K_CHCMD': 'C801'}, 400_000_000)
+    check('$8000/$1B sequence fires when command bits 15,14,11 are set',
+          trg.count('F07ED0\n') > 0)
+    trn, _ = run({'FPS3K_CHANNELS': '2', 'FPS3K_XPIRQ': '1',
+                  'FPS3K_CHCMD': 'C001'}, 400_000_000)
+    check('...and not with bit 11 clear, though $F07EB6 is still reached',
+          trn.count('F07ED0\n') == 0 and trn.count('F07EB6\n') > 0)
+
     # --- XP4I's ISR is identical; only the $8000 body path differs ------
     tr4, _ = run({'FPS3K_CHANNELS': '4', 'FPS3K_XPIRQ': '4'}, 400_000_000)
     check("XP4I's ISR runs and matches XP1I's shape",

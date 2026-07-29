@@ -389,7 +389,15 @@ static uint16_t apif_read(uint32_t addr) {
         if (nch < 0) { const char *e = getenv("FPS3K_CHANNELS"); nch = e ? atoi(e) : 0; }
         if (nch > 0 && (addr & 0x1F) == 0x0E && addr >= 0xFF0040 && addr <= 0xFF00AE) {
             int ch = ((addr - 0xFF0040) >> 5) + 1;
-            if (ch <= nch) return 0x0001;
+            /* FPS3K_CHCMD=<hex>: value the command port hands back.
+             * The firmware's presence probe only tests nonzero, but the XP
+             * task body gates its $8000/$1B sequence on bit 11 of the ISR's
+             * snapshot of this register (btst #$B,$1066 at $F07EB6), so the
+             * value decides whether that path runs. */
+            static long cv = -1;
+            if (cv < 0) { const char *v = getenv("FPS3K_CHCMD");
+                          cv = v ? strtol(v, NULL, 16) : 0x0001; }
+            if (ch <= nch) return (uint16_t)cv;
         }
     }
     /* FPS3K_DATAIN: the bulk data-in port at $FF0008 hands back an

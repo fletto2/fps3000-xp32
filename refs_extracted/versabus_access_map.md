@@ -1389,6 +1389,65 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The channel command word's high bits are a dispatch field
+
+The `$8000`/`$1B` sequence that only XP1I/2/3 have is reached through a chain
+of bit tests on `$1066` — which the ISR fills from the channel's **command
+register** at `+$0E`. Decoding the chain:
+
+```
+$F07E4C  btst #$F,$1066    ; bit 15
+$F07E54  bne  -> $F07E86
+$F07E86  btst #$E,$1066    ; bit 14
+$F07E8E  beq  -> $F07ED8   ; ...else fall through
+$F07E90  btst #$B,$1066    ; bit 11
+$F07E98  bne  -> $F07EB6
+$F07EB6  btst #$B,$1066
+$F07EBE  beq  -> $F07ED4
+$F07EC0  movea.l #$FF004E,a0
+$F07EC6  move.w  #$0,(a1)
+$F07ECA  move.w  #$1B,$2(a1)
+$F07ED0  move.w  #$8000,(a0)
+```
+
+So reaching the `$8000` write needs **bits 15, 14 and 11 all set**.
+
+`FPS3K_CHCMD=<hex>` sets what the command port hands back, and testing the
+bits one at a time confirms each one's role:
+
+| `CHCMD` | bits 15/14/11 | XP1I distinct PCs | reaches `$F07EB6` | fires `$8000` |
+|---|---|---|---|---|
+| `$0001` | – – – | 116 | no | no |
+| `$0801` | – – ✓ | 116 | no | no |
+| `$8001` | ✓ – – | 78 | no | no |
+| `$8801` | ✓ – ✓ | 78 | no | no |
+| `$C001` | ✓ ✓ – | 91 | **yes** | no |
+| `$C801` | ✓ ✓ ✓ | 75 | **yes** | **yes** |
+
+With `$C801` the bus log shows the sequence executing for the first time:
+
+```
+WR FF0048 = 0000
+WR FF004A = 001B
+WR FF004E = 8000
+```
+
+That is the `$0000001B` written across the 32-bit pair as two halves — the
+value CLAUDE.md records TCBXP1I as writing, now observed rather than read off
+the disassembly.
+
+Two things to note. The distinct-PC count is **not monotonic** (116, 78, 91,
+75): these are different paths through the task, not more or less of one path,
+so PC count is a discriminator here and not a progress metric. And an earlier
+attempt at this predicted bit 11 alone would be enough and was **wrong** — the
+`btst #$B` at `$F07EB6` is the last gate, not the only one, and setting bit 11
+by itself changes nothing because the code never reaches that test.
+
+**What is established** is that these three bits of the command register select
+this path, verified by isolating each. **What is not** is what they mean to the
+chassis: the register's semantics on real hardware are still unknown, and the
+values here were chosen to reach the code, not because the XP-32 presents them.
+
 ### The chassis register set is closed
 
 Redoing the access map with base-register tracking — the form the previous
