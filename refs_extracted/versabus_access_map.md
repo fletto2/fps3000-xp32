@@ -1389,6 +1389,54 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The TDTI table declares each task's entry point and exact code extent
+
+The six `!TCB` entries at `$F0A600`, `$60` apart, carry more than a name.
+Byte-exact field layout, relative to the `!TCB` marker:
+
+| Offset | Field |
+|---|---|
+| +`$00` | `!TCB` marker |
+| +`$04` | 4-char task name |
+| +`$1C` | **entry point** (longword) |
+| +`$20` | **region start**, high word (`<<8`) |
+| +`$22` | **region end**, high word (`<<8 | $FF`) |
+| +`$24` | `$00000001` |
+| +`$40` | `PROG` + `$80000000` — section marker |
+
+| task | entry | region | bytes |
+|---|---|---|---|
+| RDHC | `$F046F0` | `$F04600-$F05CFF` | 5888 |
+| IO1I | `$F05D36` | `$F05D00-$F05EFF` | 512 |
+| XP4I | `$F05F4A` | `$F05F00-$F068FF` | 2560 |
+| XP3I | `$F0694A` | `$F06900-$F072FF` | 2560 |
+| XP2I | `$F0734A` | `$F07300-$F07CFF` | 2560 |
+| XP1I | `$F07D4A` | `$F07D00-$F086FF` | 2560 |
+
+**The six regions partition `$F04600-$F086FF` exactly** — contiguous, no
+gaps, no overlaps. This is the ROM's own statement of the task layout, and
+it settles the region-boundary question completely.
+
+Three details follow from it.
+
+**All four XP tasks are exactly `$A00` bytes and all four enter at
+base+`$4A`.** The `$A00` spacing this project has used was inferred from
+code similarity; the table declares it. The identical entry offset is
+further evidence for the template-copy reading of the four channel tasks.
+
+**RDHC's entry `$F046F0` is the address already documented** as the TCBRDHC
+main loop, reached independently. The other five entry points —
+`$F05D36`, `$F05F4A`, `$F0694A`, `$F0734A`, `$F07D4A` — are the task bodies,
+distinct from the ISR handlers at +`$0C` of the descriptor blocks.
+
+**Entry point and interrupt handler are separate.** Each task has a body
+(from the TDTI table) and an ISR (from its descriptor block), and neither
+structure mentions the other's address. The RTOS uses the TDTI entry to
+create the task; the vector table gets the descriptor's handler.
+
+Together with the descriptor blocks and the BIM programming, there are now
+three independent structural declarations in the ROM, and they agree.
+
 ### The ROM declares the vector-to-task mapping itself
 
 Each task's region does not merely *begin* at the addresses this project

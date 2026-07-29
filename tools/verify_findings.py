@@ -100,6 +100,23 @@ else:
           tr.count('F0F0F0F0') == 0 and 'F08B88\n' not in tr)
     check('self-tests: diagnostic region executes',
           len({l for l in tr.split() if 'F08D00' <= l <= 'F09BFF'}) > 500)
+    # --- TDTI table: entry points and exact region extents ---------------
+    TDTI = [('RDHC',0xF046F0,0xF04600,0xF05CFF),('IO1I',0xF05D36,0xF05D00,0xF05EFF),
+            ('XP4I',0xF05F4A,0xF05F00,0xF068FF),('XP3I',0xF0694A,0xF06900,0xF072FF),
+            ('XP2I',0xF0734A,0xF07300,0xF07CFF),('XP1I',0xF07D4A,0xF07D00,0xF086FF)]
+    def tdti(i):
+        o = 0xA600 + i*0x60
+        return (d[o+4:o+8].decode(), struct.unpack('>I', d[o+0x1C:o+0x20])[0],
+                struct.unpack('>H', d[o+0x20:o+0x22])[0] << 8,
+                (struct.unpack('>H', d[o+0x22:o+0x24])[0] << 8) | 0xFF)
+    check('TDTI: name, entry point and region extent for all 6 tasks',
+          [tdti(i) for i in range(6)] == TDTI)
+    check('TDTI regions partition $F04600-$F086FF with no gaps',
+          all(TDTI[i][3] + 1 == TDTI[i+1][2] for i in range(5)))
+    check('TDTI: all four XP tasks are $A00 bytes, entry at base+$4A',
+          all(hi - lo + 1 == 0xA00 and e - lo == 0x4A
+              for n, e, lo, hi in TDTI if n.startswith('XP')))
+
     # --- TCB headers: the ROM's own vector-to-task declaration -----------
     TCB = [(0xF04600,b'RDHC',0x41,0xF04930),(0xF05D00,b'IO1I',0x4A,0xF05DD6),
            (0xF05F00,b'XP4I',0x48,0xF060CE),(0xF06900,b'XP3I',0x47,0xF06AE6),
