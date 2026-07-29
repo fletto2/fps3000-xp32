@@ -1389,6 +1389,47 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The mailbox class field, confirmed properly
+
+The retraction below stands as to the *numbers*. The **substance** is now
+confirmed, on a machine that boots, at the firmware's own interrupt level.
+
+The missing ingredient was that the class bits must be presented with
+**bit 29 clear** — the original account had bit 29 set, which selects the
+other arm of the ISR entirely, so the reply path could never have run in that
+configuration.
+
+`FPS3K_XPIRQ=5 FPS3K_DMA10AA=2 FPS3K_MBOX=000n0000`:
+
+| class bits 16-17 | `$F05E2C` | `$F05E40` | ISRExit |
+|---|---|---|---|
+| 0 | 1468 | **0** | 1468 |
+| **1** | 1468 | **1468** | 1468 |
+| 2 | 1468 | **0** | 1468 |
+| 3 | 1468 | **0** | 1468 |
+
+Exactly what `swap` + `andi #3` predicts: the field must read **1**, and the
+other three values write nothing. The ISR runs and returns in all four cases —
+only the reply is gated.
+
+And the reply itself:
+
+```
+MAILBOX: host=00000000 reply=00010002
+WR 4-byte 700020 = 00010002   (x1468)
+final PC = F00FCC             (in the RTOS, not the diagnostics)
+```
+
+`$00010002` is the mailbox word with bit 1 set — precisely what `bset #1,d1`
+predicts, and precisely the value the retracted account gave.
+
+So the sequence of events on this claim is worth stating plainly: the original
+**conclusion was right**, the **evidence offered for it was not** — it came
+from a machine that had hung in the power-on diagnostics — and re-deriving it
+required finding that bit 29 must be *clear*, which the original account had
+backwards. Retracting the result did not cost the finding; it produced a
+better one.
+
 ### Retraction: the "F05E40 executes 46,511 times" result does not reproduce
 
 CLAUDE.md records this as the reply path being driven for the first time:

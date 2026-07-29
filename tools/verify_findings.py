@@ -96,6 +96,17 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- mailbox class field: only bits 16-17 == 1 writes the reply ------
+    cls = {}
+    for n in range(4):
+        tc, _ = run({'FPS3K_XPIRQ': '5', 'FPS3K_DMA10AA': '2',
+                     'FPS3K_MBOX': '000%d0000' % n}, 150_000_000)
+        cls[n] = (tc.count('F05E40\n'), tc.count('F05E4C\n'))
+    check('mailbox class field: only value 1 writes the reply',
+          cls[0][0] == 0 and cls[2][0] == 0 and cls[3][0] == 0 and cls[1][0] > 100)
+    check('...and the ISR returns in all four cases',
+          all(v[1] > 100 for v in cls.values()))
+
     # --- TCBIO1I at level 7; mailbox bit 29 selects the ISR arm ----------
     tio, _ = run({'FPS3K_XPIRQ': '5', 'FPS3K_DMA10AA': '2'}, 400_000_000)
     check('TCBIO1I ISR runs at level 7 and returns ($10AA=2, mailbox clear)',
