@@ -1473,6 +1473,44 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The run now reports its own instrumentation
+
+Three measurements this session came back **empty for instrumental reasons
+rather than machine ones**, and each initially read as a finding:
+
+- the bus log does not record the `$400000` window, so phases `$20`-`$29` looked
+  as though they touched nothing but board status;
+- `FPS3K_LOGCHASSIS` writes to **stderr** while `-bus` redirects only the bus
+  file, so two attempts at the MODE2 correlation returned nothing;
+- `FPS3K_SEQ` silently overrode `FPS3K_RESP`, so a five-point sweep returned five
+  identical values and looked like "this variable has no effect".
+
+An empty result that looks like a finding is the expensive failure, so every run
+now ends by stating what was instrumented and where each channel went:
+
+```
+[done] hooks active: (none - DEFAULT configuration)
+[done] log channels: bus=(off)  chassis-mem=(off - NOT in the bus log)
+                     uninit=(off)  chassis-uninit=(off)
+```
+
+and with hooks set:
+
+```
+[done] hooks active: FPS3K_XPIRQ=1 FPS3K_LOGCHASSIS=1
+[done] log channels: bus=(off)  chassis-mem=stderr  ...
+```
+
+The `chassis-mem=(off - NOT in the bus log)` wording is deliberate: that channel's
+absence from the bus log is the specific trap that cost two attempts, so the
+summary names it rather than merely omitting it.
+
+*And the inventory immediately contaminated a measurement of its own. The
+vector-write check counted the string `VECWATCH` in stderr; the new summary
+prints `FPS3K_VECWATCH` when that hook is set, taking a count of 4 to 5. The
+check now matches the bracketed log tag `[VECWATCH]`. Adding an instrument
+changed a reading — which is the same lesson, arriving one level up.*
+
 ### The firmware never pages the chassis window — so do not model paging
 
 The previous section noted a latent gap: the model backs `$400000-$4FFFFF` with a

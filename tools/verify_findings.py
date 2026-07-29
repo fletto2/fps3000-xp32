@@ -223,7 +223,7 @@ else:
         return subprocess.run([EMU, '-rom', ROM, '-cycles', '300000000'],
                               capture_output=True, text=True,
                               env={**os.environ, 'FPS3K_VECWATCH': 'post',
-                                   **env2}).stderr.count('VECWATCH')
+                                   **env2}).stderr.count('[VECWATCH]')
     check('a plain boot makes exactly 4 post-boot vector writes (all benign)',
           vecwrites({}) == 4)
     check('the $281 deadlock config overruns the stack into the vector table',
@@ -279,6 +279,19 @@ else:
           not any(moveb_abs(struct.unpack('>H', d[a2:a2+2])[0]) and
                   0xFF0000 <= struct.unpack('>I', d[a2+2:a2+6])[0] <= 0xFF02FF
                   for a2 in range(0, 0xA600, 2)))
+
+    # --- the run reports its own instrumentation ---------------------------
+    _inv = subprocess.run([EMU, '-rom', ROM, '-cycles', '5000000'],
+                          capture_output=True, text=True).stderr
+    check('a default run states that no hooks are active',
+          'hooks active: (none - DEFAULT configuration)' in _inv)
+    check('the summary warns that chassis-mem is not in the bus log',
+          'chassis-mem=(off - NOT in the bus log)' in _inv)
+    _inv2 = subprocess.run([EMU, '-rom', ROM, '-cycles', '5000000'],
+                           capture_output=True, text=True,
+                           env={**os.environ, 'FPS3K_XPIRQ': '1'}).stderr
+    check('an instrumented run names the active hook',
+          'FPS3K_XPIRQ=1' in _inv2)
 
     # --- all chassis-memory access happens on MODE2 page 0 -----------------
     with tempfile.TemporaryDirectory() as _td6:

@@ -668,6 +668,38 @@ int main(int argc, char **argv) {
     fprintf(stderr, "[done] chassis window $400000: %llu reads, %llu writes, %llu BERR\n",
             (unsigned long long)chassis_mem_reads, (unsigned long long)chassis_mem_writes,
             (unsigned long long)chassis_mem_berrs);
+    /* Instrumentation inventory.
+     *
+     * Three measurements this session came back EMPTY for instrumental
+     * reasons rather than machine ones: the bus log does not record the
+     * $400000 window, FPS3K_LOGCHASSIS writes to stderr while -bus redirects
+     * only the bus file, and two hooks silently overrode each other.  An
+     * empty result that looks like a finding is the expensive failure, so the
+     * run now states what was instrumented and where each channel went. */
+    {
+        static const char *const hooks[] = {
+            "FPS3K_CHANNELS","FPS3K_CHCMD","FPS3K_XPIRQ","FPS3K_DMA10AA",
+            "FPS3K_DMA10AA_FROM_RESET","FPS3K_MBOX","FPS3K_SEQ","FPS3K_SEQGAP",
+            "FPS3K_RESP","FPS3K_RESP_INSVC","FPS3K_CHSEL_RD","FPS3K_SREC",
+            "FPS3K_DATAIN","FPS3K_INJECT","FPS3K_HOSTLVL","FPS3K_POKE",
+            "FPS3K_RAMWATCH","FPS3K_VECWATCH","FPS3K_UNINIT",
+            "FPS3K_CHASSIS_UNINIT","FPS3K_LOGCHASSIS","FPS3K_BUSPC",
+            "FPS3K_BSTAT19_B5","FPS3K_PCLOG","FPS3K_REGLOG","FPS3K_APIF_LEGACY",
+        };
+        int any = 0;
+        fprintf(stderr, "[done] hooks active:");
+        for (size_t k = 0; k < sizeof hooks / sizeof hooks[0]; k++) {
+            const char *v = getenv(hooks[k]);
+            if (v) { fprintf(stderr, " %s=%s", hooks[k], *v ? v : "1"); any = 1; }
+        }
+        fprintf(stderr, "%s\n", any ? "" : " (none - DEFAULT configuration)");
+        fprintf(stderr, "[done] log channels: bus=%s  chassis-mem=%s  "
+                        "uninit=%s  chassis-uninit=%s\n",
+                bus_path ? bus_path : "(off)",
+                getenv("FPS3K_LOGCHASSIS") ? "stderr" : "(off - NOT in the bus log)",
+                getenv("FPS3K_UNINIT") ? getenv("FPS3K_UNINIT") : "(off)",
+                getenv("FPS3K_CHASSIS_UNINIT") ? getenv("FPS3K_CHASSIS_UNINIT") : "(off)");
+    }
     fprintf(stderr, "[done] final PC=%06X SR=%04X\n",
             m68k_get_reg(NULL, M68K_REG_PC),
             m68k_get_reg(NULL, M68K_REG_SR));
