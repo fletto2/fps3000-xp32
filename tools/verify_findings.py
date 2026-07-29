@@ -280,6 +280,20 @@ else:
                   0xFF0000 <= struct.unpack('>I', d[a2+2:a2+6])[0] <= 0xFF02FF
                   for a2 in range(0, 0xA600, 2)))
 
+    # --- hook conflicts are announced, not silent -------------------------
+    def warns(env2):
+        return subprocess.run([EMU, '-rom', ROM, '-cycles', '1000000'],
+                              capture_output=True, text=True,
+                              env={**os.environ, **env2}).stderr.count('[WARN]')
+    check('all four known hook conflicts warn at startup',
+          all(warns(e2) >= 1 for e2 in (
+              {'FPS3K_RESP': '2', 'FPS3K_SEQ': '00:0028'},
+              {'FPS3K_CHSEL_RD': '28', 'FPS3K_SEQ': '00:0028'},
+              {'FPS3K_RESP': '2', 'FPS3K_INJECT': '2'},
+              {'FPS3K_MBOX': '1', 'FPS3K_APIF_LEGACY': '1'})))
+    check('a clean run emits no hook-conflict warning',
+          warns({}) == 0)
+
     # --- $F0891C is the self-test checkpoint, most-called routine ---------
     check('$F0891C tests d7 and on failure clears VMOD bit 6 + MODE1 $1000',
           d[0x8936:0x894C].hex().upper() ==

@@ -1473,6 +1473,38 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### Auditing the hooks against each other: four silent conflicts
+
+Four defects in a row were hooks overriding each other, so the interactions
+themselves were audited rather than waiting for the fifth. Scanning both emulator
+sources for `getenv("FPS3K_*")` sites and recording which module-level state each
+one writes finds **four genuine conflicts** (the rest of the matrix is
+loop-variable noise):
+
+| ignored | wins | shared state |
+|---|---|---|
+| `FPS3K_RESP` | `FPS3K_SEQ` | the MODE0 response code |
+| `FPS3K_CHSEL_RD` | `FPS3K_SEQ` | the `CHANNEL_SELECT` readback |
+| `FPS3K_RESP` | `FPS3K_INJECT` | MODE0 + the BIM0 ch0 request |
+| `FPS3K_MBOX` | `FPS3K_APIF_LEGACY` | `mailbox.host_status` |
+
+The second is the same shape as the one already found: `versabus_seq_chsel` is
+consulted **before** the `FPS3K_CHSEL_RD` branch, so a scripted sequence silently
+wins there too. Nothing had exercised that pair.
+
+All four now warn at startup, naming which hook is ignored and what state is
+contested. The reasoning is recorded in the code: **the dangerous failure is not
+a wrong value but a flat one.** A sweep run with a conflicting hook set returns
+identical results at every point, and identical results read as "this variable
+has no effect" rather than as a broken experiment — which is precisely what the
+`FPS3K_RESP` sweep did before the conflict was removed, five identical
+measurements that became a 17-PC spread.
+
+For whole-machine emulation this is the standing hazard rather than an incident:
+**24 hooks stand in for absent hardware**, and the pairs that quietly cancel each
+other cost more than the ones that are simply wrong, because a wrong value
+eventually contradicts something and a cancelled hook never does.
+
 ### The chassis's default response code is the worst one for exploration
 
 With commands now interpreted, the response code the chassis returns is the

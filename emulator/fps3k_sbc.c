@@ -565,6 +565,33 @@ int main(int argc, char **argv) {
     }
     { const char *u = getenv("FPS3K_UNINIT");
       if (u) uninit_fp = fopen(u, "w"); }
+
+    /* Hook-conflict check.
+     *
+     * Four defects this project has hit were hooks silently overriding each
+     * other.  The worst case is not a wrong value but a FLAT one: a sweep run
+     * with a conflicting hook set returns identical results at every point,
+     * and a flat result reads as "this variable has no effect" rather than as
+     * a broken experiment.  A sweep of FPS3K_RESP taken with FPS3K_SEQ set did
+     * exactly that -- five identical measurements, which became a 17-PC spread
+     * once the conflict was removed.
+     *
+     * Each pair below is (loser, winner, what is shared). */
+    {
+        static const char *const conflicts[][3] = {
+            { "FPS3K_RESP",     "FPS3K_SEQ",     "the MODE0 response code" },
+            { "FPS3K_CHSEL_RD", "FPS3K_SEQ",     "the CHANNEL_SELECT readback" },
+            { "FPS3K_RESP",     "FPS3K_INJECT",  "MODE0 + the BIM0 ch0 request" },
+            { "FPS3K_MBOX",     "FPS3K_APIF_LEGACY", "mailbox.host_status" },
+        };
+        for (size_t k = 0; k < sizeof conflicts / sizeof conflicts[0]; k++)
+            if (getenv(conflicts[k][0]) && getenv(conflicts[k][1]))
+                fprintf(stderr,
+                        "[WARN] %s and %s both set: %s wins, %s is IGNORED "
+                        "(shared state: %s)\n",
+                        conflicts[k][0], conflicts[k][1], conflicts[k][1],
+                        conflicts[k][0], conflicts[k][2]);
+    }
     fprintf(stderr, "[init] ROM loaded: %zu bytes from %s\n", n, rom_path);
 
     /* Open trace files */
