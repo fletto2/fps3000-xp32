@@ -574,6 +574,38 @@ chassis says "nothing more" by clearing it, or by raising bit 15.
 Our model returns `$4000` there permanently, so the drain never
 terminates — which is what the run actually did.
 
+### The outbound half, verified
+
+The other direction works exactly as the static decode predicts. Driving
+it alone:
+
+```
+FPS3K_SEQ="01:0010,41:0001,02:0008,42:0000,20:0000"
+```
+
+- `$01`/`$41` set the source address: `$E58 = $00010010`
+- `$02`/`$42` set the word count: `$E64 = $00000008`
+- `$20` is opcode `0` with **bit 5 set** — the outbound selector
+
+Result: F04C62 executes **8 times** and the bus log records **8 writes to
+`$FF0008`**. Programmed address and count are both confirmed in the RAM
+dump.
+
+So the complete microcode chain is now exercised in both directions:
+
+```
+  host ASCII S-records --> $FF0008 --> SRecordDataHandler --> $10010+
+  $10010+ --> $FF0008 --> XLTR --> UNIV FMT --> XP-32 WCS
+```
+
+**One limitation, and it is the harness.** Chaining a load and a push in
+a single scripted run does not work: the parameter-loading responses
+interleave with the long S-record parse and land wrong (`$E58` came out
+`$00010001` and `$E64` zero). Each half verifies cleanly on its own. A
+sequencer that waits for the SBC to finish one command before arming the
+next would fix it; the current one re-arms on acknowledgement, which is
+too eager for a command that runs for millions of cycles.
+
 ### The record address is an OFFSET — the firmware adds `$10000` itself
 
 The address accumulation loop settles it:
