@@ -541,6 +541,46 @@ word count, and the chassis programs both by pushing (code, argument)
 pairs. That makes the whole thing a small command language, not a status
 report.
 
+### All 16 opcodes of the F05102 dispatcher
+
+The response byte splits into fields rather than being a flat code:
+
+```
+   bit 7    selects the dispatcher (0 = this table, 1 = the 0..$14 path)
+   bits 6-5 modifiers — half-select for the 32-bit loaders, mode elsewhere
+   bits 3-0 the opcode, indexing F05102
+```
+
+| Code | Target | What it does |
+|---|---|---|
+| `$0` | F04A84 | read CHANNEL_SELECT; `$28` runs the bulk transfer, else validate 0..`$10` into `$E5C`/`$E5E` |
+| `$1` | F04CF2 | load destination-address half (bit 6 selects) into `$E58`/`$E5A` |
+| `$2` | F04D20 | load word-count half (bit 6 selects) into `$E64`/`$E66` |
+| `$3` | F04D4E | MODE2 / WCS page setup; `$E87` bits 5-6 pick a 20-bit address shifted by 14 or by 2 |
+| `$4` | F04E3A | validate `$E60` against `$105E`; overflow issues panel cmd `$25C` |
+| `$5` | F04EE4 | validate CHANNEL_SELECT as a channel number against `$105E` |
+| `$6` | F04F30 | `a1 <- $E58`, join the shared tail at F04EA0 |
+| `$7` | F04F3A | **clear IRE (bit 4) of BIM0 CR0** — disable the dispatcher's own interrupt |
+| `$8` | F04F52 | test MODE1 bit 14 with CHANNEL_SELECT == 0 |
+| `$9` | F04FA0 | load a **third** 32-bit parameter half into `$E68`/`$E6A` |
+| `$A` | F04FBA | range-check `$E7A` against 0..`$C` |
+| `$B` | F05002 | compute `$10010`, store under `$E87` bit 6 |
+| `$C` | F0502C | index a table by `$E7A << 2` |
+| `$D` | F05092 | validate CHANNEL_SELECT 0..`$F` |
+| `$E` | F050CA | if CHANNEL_SELECT == 0, clear MODE1 bit 7 |
+| `$F` | F050F8 | **return from interrupt** — `movem.l (a7)+,d0-d7/a0-a7`, `ccr`, `trap #1` |
+
+Six are confirmed by execution, not just by reading: `$0` (drives the
+8-word transfer), `$1` and `$2` (address and count), `$B` (traced to
+F05002), `$7` (BIM0 CR0 observed going `$5E` -> `$4E`, exactly bit 4),
+and `$F` (F050F8 then the `trap #1`, once each).
+
+So the language has three 32-bit parameter registers (`$E58` address,
+`$E64` count, `$E68` unknown), a set of validators, an interrupt-disable,
+and an explicit terminator. `$F` being the return explains the shape of
+every other handler: they all end in `bra ChannelConfigDispatch` and only
+`$F` unwinds the frame.
+
 ### End-to-end: the staging path driven through the firmware
 
 Scripting that sequence runs the ROM's reason for existing:
