@@ -670,6 +670,47 @@ The high word of the opcode selects the destination style — packed for a
 port, strided for memory — which is the only use found for the upper half
 of the opcode word.
 
+## `+$0E` is a command register, not "Read B"
+
+The same three task copies that write the 32-bit pair go on to write
+`$8000` to the channel's `+$0E`:
+
+| Task | `+$08`/`+$0A` | `+$0E` |
+|---|---|---|
+| TCBXP1I F07EC6 | `$FF0048`/`$FF004A` <- `$0000001B` | `$FF004E` <- `$8000` |
+| TCBXP2I F074C6 | `$FF0068`/`$FF006A` <- `$0000001B` | `$FF006E` <- `$8000` |
+| TCBXP3I F06AC6 | `$FF0088`/`$FF008A` <- `$0000001B` | `$FF008E` <- `$8000` |
+
+Load a 32-bit value, then write a bit-15-set word to `+$0E`. That is a
+**command/trigger register**, and `$8000` is the trigger. `+$0E` is also
+read once per channel during init (F0A204-F0A21C), so it is read/write.
+
+Both this file and CLAUDE.md label the per-channel window as
+`Write +$04 / Read A +$08 / Status +$0A / Read B +$0E`. Three of those
+four labels are wrong. The evidence supports:
+
+| Offset | Corrected role |
+|---|---|
+| +`$04` | write port (tasks write `0` here at init, F07E00) |
+| +`$08` | 32-bit data register, **high half** |
+| +`$0A` | 32-bit data register, **low half** |
+| +`$0E` | **command/trigger** — `$8000` fires it; also readable |
+
+## The AP I/F opcode names are ours, not sourced
+
+`$8004` and `$8005` are real: 30 and 20 occurrences, both written to
+`$FF0000`, and they are the only two values that port receives. But the
+names **REQUEST-TRANSFER** and **CONTINUE-TRANSFER**, used throughout
+these documents as though they were part numbers, appear in no primary
+source — not the M68KVM02 manual, not the VERSAdos sources. They are our
+own labels, chosen from observed behaviour.
+
+The behaviour that justifies them is real enough — `$8004` precedes the
+ready/error poll that starts an operation, `$8005` appears only in the
+finalize path before `PCMD_RELEASE` — so the labels are reasonable. They
+should simply not be mistaken for documented FPS terminology, and no
+FPS-3000 manual exists to confirm them.
+
 ## `$4F` has no connection to `$FF004A`
 
 CLAUDE.md's host-protocol section states that the host "presents status
