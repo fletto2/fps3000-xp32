@@ -93,6 +93,12 @@ static int sbc_ready(void) {
                   | ((uint32_t)ram[0x12A] << 8)  |  (uint32_t)ram[0x12B];
     /* Faithful gate: the BIM channel must be enabled. */
     if (!versabus_bim_enabled(BIM_HOST_UNIT, BIM_HOST_CH)) return 0;
+    /* TCBRDHC's channel must be live too.  A panel command parks the CPU
+     * in `bra .` at F05E86, and only a BIM0 ch0 interrupt gets it out; if
+     * the host interrupts before TCBRDHC has written $5E to $FF0230, the
+     * machine deadlocks in that spin.  On real hardware the boot finishes
+     * long before a host sends anything. */
+    if (!versabus_bim_enabled(0, 0)) return 0;
     return v128 == 0xF05DD6;
 }
 

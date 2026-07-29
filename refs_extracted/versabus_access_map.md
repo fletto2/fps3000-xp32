@@ -355,6 +355,100 @@ code the current chassis model never provokes.
 
 ---
 
+## The panel-status handshake, closed
+
+The mechanism CLAUDE.md long recorded as "one good IRQ-handler
+implementation away from end-to-end S-record loading" is identified and
+now runs in the emulator.
+
+Sequence, all read off the disassembly:
+
+| Step | Actor | Action |
+|---|---|---|
+| 1 | SBC | clear `MODE0` bit 10 (`bclr #$a,d1` at F05E7A) |
+| 2 | SBC | write the command code to `CHANNEL_SELECT` |
+| 3 | SBC | park in `bra .` |
+| 4 | chassis | 5-bit code into `MODE0` bits 0-4, set bit 11, assert a BIM channel |
+| 5 | handler | read code, clear bit 11, set bit 10, dispatch, rewrite the saved PC |
+
+There are **two tiers of spin**, which is why two interrupt levels exist:
+
+| Spin | Enclosing | Context | Woken by |
+|---|---|---|---|
+| `F04530` | task__init_misc | task, IPL 0 | BIM0 ch0, level 6 |
+| `F056B8` | PanelIOConfigure_25A | task, IPL 0 | BIM0 ch0, level 6 |
+| `F05E86` | TCBIO1I | **ISR, IPL 7** | that channel, level 7 |
+| `F068D8` | TCBXP4I | **ISR, IPL 7** | that channel, level 7 |
+| `F072F0`, `F07CF0` | TCBXP2I/3I | **ISR, IPL 7** | that channel, level 7 |
+| `F086F0` | TCBXP1I | **ISR, IPL 7** | that channel, level 7 |
+
+The five ISR spins sit on the same `$A00` stride as the task bodies, one
+per channel. A trace confirms the ISR never returns before parking:
+`F05E4C` (ISRExit) and `F05E50` (the `trap #1` return-from-interrupt)
+execute zero times, and a sweep of the whole ROM finds only seven writes
+to `SR`, all of them in MainInit/HardwareInit/RTOSKernelInit. No task or
+handler ever changes the interrupt mask. So an ISR-context spin sits at
+IPL 7 and only a fresh level-7 edge reaches it, which is exactly what
+makes level 7 (edge-triggered on a 68000) the right choice for the
+per-channel channels and level 6 sufficient for the task-context ones.
+
+Modelling this needed one further fix: the BIM must **release the IRQ
+line during IACK**, as the datasheet's Figure 10 shows. Without that the
+level never drops, no new edge forms, and a later response on the same
+channel is swallowed. With it, the SBC escapes the spin and reads
+`$FF0048` for the first time, consuming a host byte.
+
+## The dispatch table is executable code
+
+`PanelStatusDispatchTable` at `F05BA4` is not a table of addresses. It is
+42 four-byte slots that `jmp (a4,d0.w)` lands in and executes, each
+holding either `4E75 4E71` (`rts; nop`) or `4EFA xxxx` (`jmp d16(pc)`).
+Decoding the displacements gives every reachable code:
+
+| Code | Handler | Code | Handler |
+|---|---|---|---|
+| `$00` | no-op | `$0A` | POLL (`F05A12`) |
+| `$01` | POLL | `$0B`, `$0C` | no-op |
+| `$02`-`$07` | D1_SEND (`F058B2`) | `$0D`-`$10` | D1_SEND |
+| `$08`, `$09` | BLK_XFR (`F05B0E`) | `$11`-`$13` | no-op |
+| | | `$14` | D2_FIN (`F05738`) |
+
+Counts within the range check are POLL 9, D1_SEND 10, BLK_XFR 9, D2_FIN 1
+and **13 no-ops**. Earlier notes give 12/10/11 and omit the no-ops. The
+range check stops at `$14`, so 21 of the 42 slots are unreachable by this
+path.
+
+## Measured behaviour per code
+
+With the handshake closed the codes can be driven directly
+(`FPS3K_INJECT=<code>` fires one response on BIM0 ch0). Writes observed
+after injection:
+
+| Code | Predicted | Registers written |
+|---|---|---|
+| `$00` | no-op | `FF0200`, `FF020C` |
+| `$01`, `$02`, `$0A`, `$0B`, `$0D`, `$11` | mixed | `FF0200`, `FF0204`, `FF0230` |
+| `$08` | BLK_XFR | `FF000E`, `FF0200`, `FF0202`, `FF0204` |
+| `$14` | D2_FIN | `FF000E`, `FF0200`, `FF0202`, `FF0204` |
+
+Only `$08` and `$14` write `FF000E`, the command register: those are the
+codes that issue a further panel command. The no-op slots return into
+their caller, which then runs its own `FF0200`/`FF0204`/`FF0230`
+sequence, so a `rts` slot does not mean nothing happens.
+
+The code is **inert on the host byte path**: sweeping all 21 values there
+produced identical behaviour every time. Only the task-context dispatch
+at `F04930` reads it. Two mechanisms share `MODE0`, which is why the
+level split exists.
+
+## Open lead: the 92-word window sweep
+
+After consuming a host byte the SBC reads 92 consecutive words from
+`$FF0048` to `$FF00FE`, straight through the channel boundaries to the
+end of the AP I/F window. That does not fit a byte-at-a-time port and
+may indicate the window is a buffer the SBC drains, which would fit the
+eight Am29705 dual-port SRAMs on the card. Not yet explained.
+
 ## Corrections this analysis implies
 
 1. `XLTR_CH{1..4}_CONFIG` are BIM control registers, and a fifth exists

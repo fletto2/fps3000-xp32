@@ -467,12 +467,15 @@ int main(int argc, char **argv) {
         host_sim_tick(&host_sim, n);
         /* Highest pending interrupt wins.  Host attention (L5) is
          * AP-I/F vectored — takes priority over chassis/PTM (L4). */
-        if (host_sim.pending) {
-            /* Level comes from the BIM control register the firmware
-             * programmed, not from a hard-coded 5.  Falls back to 5 only
-             * if the firmware has not enabled the channel yet. */
-            int lvl = versabus_bim_pending_level();
-            m68k_set_irq(lvl ? lvl : 5);
+        int bim_lvl = versabus_bim_pending_level();
+
+        if (bim_lvl) {
+            /* Any BIM channel with a pending request wins, at the level
+             * its control register selects.  Covers both the host link
+             * (BIM2 ch2) and the panel-status path (BIM0 ch0). */
+            m68k_set_irq(bim_lvl);
+        } else if (host_sim.pending) {
+            m68k_set_irq(5);   /* channel not enabled yet: legacy fallback */
         } else if (versabus_chassis_irq_pending() || versabus_ptm_irq_pending()) {
             m68k_set_irq(4);
         } else {

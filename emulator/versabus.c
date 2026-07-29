@@ -58,6 +58,16 @@ static struct {
 static uint32_t board_status;
 static void bim_reset(void);   /* defined with the BIM model below */
 
+/* Which BIM channel's handler is currently running.  The panel-command
+ * spins live in two tiers: task-context ones (F04530, F056B8) park at
+ * IPL 0 and a level-6 BIM0 ch0 interrupt wakes them, but the five
+ * per-channel ones (F05E86, F068D8, F072F0, F07CF0, F086F0, one per
+ * channel task on the $A00 stride) park INSIDE a level-7 ISR having
+ * never returned, so only a fresh level-7 edge reaches them.  The
+ * response therefore has to come back on the channel whose handler
+ * issued the command. */
+static int      bim_in_service_unit = -1, bim_in_service_ch = -1;
+
 /* VERSAmodule control register */
 static uint16_t vmod_ctrl;
 
@@ -373,6 +383,11 @@ static void apif_write(uint32_t addr, uint16_t val) {
          * cmd queued at $FF000E and produces an ack. */
         if (val == 0x8004) {
             chassis_process_panel_cmd(last_panel_cmd);
+            /* The chassis answers a panel command by returning a status
+             * code and interrupting on BIM0 ch0.  $14 is D2_FIN, the
+             * finalize code; it is the one code whose meaning we know, so
+             * it is what we return until the others are decoded. */
+            versabus_arm_panel_response(0x14, 400);
         }
         /* CONTINUE-TRANSFER (0x8005) — re-fire current cmd with the
          * same args (used to fetch successive bytes in a stream). */
@@ -515,6 +530,7 @@ int versabus_bim_iack(int level) {
             if (log_fp)
                 fprintf(log_fp, "[BIM] IACK L%d -> unit %d ch %d vector $%02X\n",
                         level, u, c, bim[u].vr[c]);
+            bim_in_service_unit = u; bim_in_service_ch = c;
             /* Drop the request once acknowledged.  Without this the input
              * latches high forever and versabus_bim_pending_level() keeps
              * reporting the level, so a caller trusting the BIM alone would
@@ -525,6 +541,13 @@ int versabus_bim_iack(int level) {
              * channel stays armed.  Nothing to do here.  A firmware that
              * sets bit 5 would need IRE cleared at this point. */
             bim[u].req[c] = 0;
+            /* Release the IRQ line now.  The datasheet's Figure 10 shows
+             * IRQX negated at the end of the acknowledge cycle, and the
+             * CPU needs to see that deassertion: a level-7 request only
+             * re-triggers on a fresh <7-to-7 edge, so if the line never
+             * drops, a later response on the same channel is silently
+             * swallowed.  Without this the SBC parks in `bra .` forever. */
+            m68k_set_irq(0);
             return bim[u].vr[c];
         }
     return -1;
@@ -562,7 +585,22 @@ static void xltr_write(uint32_t addr, uint16_t val) {
             }
             xltr.mode1 = val;
             break;
-        case XLTR_CHANNEL_SELECT: xltr.channel_select = val; break;
+        case XLTR_CHANNEL_SELECT:
+            xltr.channel_select = val;
+            /* The SBC issues a panel command by clearing MODE0 bit 10,
+             * writing the command code here, then parking in `bra .` at
+             * F05E86.  The chassis answers with a status code and an
+             * interrupt, and the handler rewrites the saved PC to step
+             * the CPU past the spin.  Arm that response now. */
+            if (val >= 0x258 && val <= 0x2A0) {
+                /* FPS3K_RESP overrides the returned status code, so the
+                 * 0..$14 code space can be swept experimentally.  With the
+                 * handshake closed, the firmware itself tells us what each
+                 * code means. */
+                const char *e = getenv("FPS3K_RESP");
+                versabus_arm_panel_response(e ? (uint8_t)strtoul(e, NULL, 0) : 0x14, 400);
+            }
+            break;
         case XLTR_COUNTER:        xltr.counter = val; break;
         case XLTR_MODE2:          xltr.mode2 = val; break;
         case XLTR_DATA_LO:        xltr.data_lo = val; break;
@@ -916,11 +954,100 @@ void versabus_write(uint32_t addr, uint32_t val, int size) {
     }
 }
 
+/* ============== panel-status response path ==============
+ *
+ * The mechanism the firmware has been waiting on.  Vector $41 (BIM0 ch0,
+ * level 6) reaches F04930, which does:
+ *
+ *     move.w  $200(a0),d0        read XLTR_MODE0
+ *     bclr.b  #$b,d0             clear bit 11
+ *     move.w  d0,$e86.l          keep it as g__channel_mode
+ *     bset.b  #$a,d0             set bit 10
+ *     move.w  d0,$200(a0)        write back: acknowledge
+ *     andi.w  #$1f,d0            5-bit response code
+ *     cmpi.w  #$0 / blt          reject below 0
+ *     cmpi.w  #$14 / bgt         reject above $14
+ *     cmpi.w  #$14 / beq         $14 dispatches to ChannelConfigDispatch
+ *
+ * So the chassis returns a 5-bit code in XLTR_MODE0 bits 0-4 and raises
+ * BIM0 ch0.  Bit 11 reads as the "response valid" flag the handler
+ * clears; bit 10 is the acknowledgement it sets on the way out.  Codes
+ * run 0..$14, and $14 is the D2_FIN finalize code that
+ * PanelStatusDispatchTable documents.
+ *
+ * Everything above is read off the disassembly.  What the individual
+ * codes below $14 mean, and which one belongs to which panel command, is
+ * NOT established: this returns a single benign code so the path can be
+ * exercised at all. */
+#define MODE0_RESP_VALID  (1u << 11)
+#define MODE0_RESP_ACK    (1u << 10)
+#define MODE0_RESP_MASK   0x1Fu
+
+static int      panel_resp_armed;      /* response scheduled */
+static uint32_t panel_resp_delay;      /* cycles until it lands */
+static uint8_t  panel_resp_code;
+
+void versabus_arm_panel_response(uint8_t code, uint32_t delay_cycles) {
+    panel_resp_code  = code & MODE0_RESP_MASK;
+    panel_resp_delay = delay_cycles;
+    panel_resp_armed = 1;
+}
+
+static void panel_resp_tick(uint32_t cycles) {
+    /* The handler acknowledges by setting bit 10.  Drop the request and
+     * clear both flags so the next command starts clean. */
+    if ((xltr.mode0 & MODE0_RESP_ACK) && !panel_resp_armed) {
+        xltr.mode0 &= ~(MODE0_RESP_ACK | MODE0_RESP_VALID);
+        xltr.raw[(XLTR_MODE0 - XLTR_BASE) / 2] = xltr.mode0;
+        versabus_bim_clear(0, 0);
+        if (log_fp) fprintf(log_fp, "[PANEL] response acknowledged\n");
+    }
+    if (!panel_resp_armed) return;
+    if (panel_resp_delay > cycles) { panel_resp_delay -= cycles; return; }
+
+    xltr.mode0 = (uint16_t)((xltr.mode0 & ~MODE0_RESP_MASK)
+                            | panel_resp_code | MODE0_RESP_VALID);
+    xltr.raw[(XLTR_MODE0 - XLTR_BASE) / 2] = xltr.mode0;
+    panel_resp_armed = 0;
+    int u = 0, c = 0;
+    if (bim_in_service_unit >= 0) { u = bim_in_service_unit; c = bim_in_service_ch; }
+    int lvl = versabus_bim_assert(u, c);
+    if (log_fp)
+        fprintf(log_fp, "[PANEL] response code $%02X in MODE0, BIM%d ch%d -> level %d\n",
+                panel_resp_code, u, c, lvl);
+}
+
+/* Experiment hook: FPS3K_INJECT=<code> fires one panel-status response on
+ * BIM0 ch0 (TCBRDHC's channel, level 6) once the machine is idle, so the
+ * task-context dispatch at F04930 can be driven directly and the 0..$14
+ * code space swept.  The host byte path does not read the code, so this
+ * is the only way to see what the codes mean. */
+static uint64_t inject_countdown;
+static int      inject_done;
+
 void versabus_tick(uint32_t cycles) {
     mc6840_tick(&ptm_dev, cycles);
     upd7201_tick(&sio_dev, cycles);
     if (xltr.busy_ticks > cycles) xltr.busy_ticks -= cycles;
     else                          xltr.busy_ticks = 0;
+    panel_resp_tick(cycles);
+
+    if (!inject_done) {
+        const char *e = getenv("FPS3K_INJECT");
+        if (e) {
+            if (inject_countdown < 20000000ull) { inject_countdown += cycles; }
+            else if (versabus_bim_enabled(0, 0)) {
+                uint8_t code = (uint8_t)strtoul(e, NULL, 0) & MODE0_RESP_MASK;
+                xltr.mode0 = (uint16_t)((xltr.mode0 & ~MODE0_RESP_MASK)
+                                        | code | MODE0_RESP_VALID);
+                xltr.raw[(XLTR_MODE0 - XLTR_BASE) / 2] = xltr.mode0;
+                int lvl = versabus_bim_assert(0, 0);
+                if (log_fp)
+                    fprintf(log_fp, "[INJECT] code $%02X on BIM0 ch0 -> level %d\n", code, lvl);
+                inject_done = 1;
+            }
+        } else inject_done = 1;
+    }
 }
 
 int versabus_ptm_irq_pending(void) {

@@ -64,6 +64,9 @@ int      versabus_bim_iack(int level);
 int      versabus_bim_pending_level(void);
 /* Has the firmware enabled this channel (IRE set and level != 0)? */
 int      versabus_bim_enabled(int unit, int ch);
+/* Chassis returns a panel-status response: 5-bit code into XLTR_MODE0
+ * bits 0-4 plus BIM0 ch0 asserted, after delay_cycles. */
+void     versabus_arm_panel_response(uint8_t code, uint32_t delay_cycles);
 
 #define XLTR_MODE0          0xFF0200
 #define XLTR_MODE1          0xFF0202
