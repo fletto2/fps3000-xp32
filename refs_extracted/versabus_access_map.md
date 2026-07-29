@@ -696,6 +696,70 @@ four labels are wrong. The evidence supports:
 | +`$0A` | 32-bit data register, **low half** |
 | +`$0E` | **command/trigger** — `$8000` fires it; also readable |
 
+## What a clean emulator boot actually proves
+
+CLAUDE.md describes the emulator as booting "cleanly all the way through
+MainInit's 16+ self-test phases, Phase2Init, RTOSKernelInit, and TDTI
+task creation". The first clause is **false**, and the consequences run
+through several other claims.
+
+Measured over a plain boot to the RMS68K idle loop (6,975,885
+instructions, final PC `F00FE6`):
+
+| Device | Bus accesses |
+|---|---|
+| PTM | 81,100 |
+| XLTR | **27** |
+| BIM | 22 |
+| VMOD_CTRL | 4 |
+| AP I/F | **4** |
+| BOARD_STATUS | **2** |
+
+Of the 27 XLTR accesses, 22 are `RTOSKernelInit` stamping BIM vectors and
+control registers. `$FF020C`, `$FF0214`, `$FF0218` and `$FF021A` are
+touched **zero** times. The region `F08D00-F09BFF` — the whole diagnostic
+suite — executes **zero instructions**.
+
+### The gate
+
+`F08732` is `btst.b #5,$F70019`, and `F0873A` branches past the entire
+self-test sequence when that bit is **set**. Our chassis model returns
+`$35` for that byte, and `$35` has bit 5 set. The tests are skipped by
+construction.
+
+### What happens when the gate is opened
+
+Forcing the byte to `$15` (bit 5 clear) makes XLTR traffic jump from 27
+accesses to **287,771**. But the suite still does not complete: the trace
+shows `F0873E`, `F0874E` (HardwareInit) and `F0876A` executing exactly
+once each, and `F08772` never — so the **first** test called, `F08C4A`,
+is entered and never returns. It lands in `PollBoardStatus` at `F0892C`,
+which spins 287,768 times on MODE1 and a board-status bit the model never
+supplies.
+
+So the chassis model cannot satisfy even the first self-test. The clean
+boot is clean *because* the firmware skips them.
+
+### What this calibrates
+
+- The chassis bit-mapping equations in CLAUDE.md, each annotated
+  "verified against phase `$1100`/`$1200`", "phase `$1400` stage 3",
+  "phase `$800`" — **those phases do not run**. Whatever verification
+  produced those equations is not reproducible in the current build, and
+  they should be read as derived-from-static-reading, not validated.
+- A green boot demonstrates the CPU core, RAM, ROM, vector table, RMS68K
+  and the PTM. It demonstrates almost nothing about the VersaBus
+  interface, because the boot barely touches it.
+- Every register description written from boot behaviour was written from
+  a sample of 27 XLTR accesses. That is why `$20C`, `$216` and the
+  channel-window labels were all wrong: the operational values live in
+  code the boot never reaches.
+
+The actionable item is concrete: make `PollBoardStatus` pass, and the
+entire `F08D00-F09BFF` diagnostic suite becomes available as a **test
+harness for the chassis model** — several thousand instructions of the
+firmware's own checks on hardware behaviour. Hook: `FPS3K_BSTAT19`.
+
 ## Two XLTR register descriptions cite diagnostics as operation
 
 CLAUDE.md's XLTR table describes `$20C` as "Counter/Config, written

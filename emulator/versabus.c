@@ -805,6 +805,14 @@ static void sio_write(uint32_t addr, uint8_t val) {
  * go through chassis-mediated VERSAbus interrupter logic.  The
  * chassis exposes its handshake state via bit 3 of board status. */
 static uint32_t board_status_read(uint32_t addr) {
+    /* FPS3K_BSTAT19 forces the $F70019 byte.  F08732 does
+     * btst #5,$F70019 and skips the ENTIRE self-test suite when the bit
+     * is set, so the value here decides whether the diagnostic region
+     * F08D00-F09BFF runs at all. */
+    if (addr == 0xF70019) {
+        const char *e = getenv("FPS3K_BSTAT19");
+        if (e) return (uint32_t)strtoul(e, NULL, 16) & 0xFF;
+    }
     int byte_off = addr - BOARD_STATUS_BASE;
 
     /* F7001B is ILLEGAL per Motorola Figure 2 — handled in bus_read8 */
