@@ -541,6 +541,54 @@ word count, and the chassis programs both by pushing (code, argument)
 pairs. That makes the whole thing a small command language, not a status
 report.
 
+### Code `$3` is the chassis-memory access primitive
+
+The `$3` handler at F04D4E is a **paged 32-bit read/write of chassis
+memory**, and it is where the SBC's address translation lives:
+
+```
+d1 = $E58                    ; the 32-bit address parameter
+d1 >>= 20                    ; top 12 bits
+MODE2 ($FF0210) = d1         ; <- page / bank register
+d1 = $E58 & $FFFFF           ; low 20 bits
+d1 <<= 2                     ; longword-scaled
+a1 = d1;  access (a1 + $400000)
+```
+
+Bits 5 and 6 of the code pick the operation, and `$E70`/`$E72` are a
+32-bit data register the same way `$E58`/`$E5A` are an address register:
+
+| Code | bit 6 | bit 5 | Action |
+|---|---|---|---|
+| `$43` | 1 | 0 | `$E70 <- CHANNEL_SELECT` (data high) |
+| `$03` | 0 | 0 | `$E72 <- CHANNEL_SELECT` (data low), then **write** `$E70` to chassis |
+| `$63` | 1 | 1 | **read** chassis into `$E70` |
+| `$23` | 0 | 1 | `$E74 <- $E72` (return the low half) |
+
+A round trip confirms all of it. Driving
+`01:0000,41:0000,43:DEAD,03:BEEF,63:0000` writes `$DEADBEEF` to chassis
+address 0 and reads it back: the RAM dump shows **`$E70 = DEADBEEF`**.
+
+The page register is confirmed separately by varying only the address:
+
+| `$E58` | MODE2 written | read-back |
+|---|---|---|
+| `$00300000` | `3` | `12345678` |
+| `$00500000` | `5` | `12345678` |
+
+So `$FF0210` — which earlier docs list only as "Mode Register 2, cleared
+during channel setup" — is the **chassis page/bank select**, carrying
+address bits 20-31. The `<<2` says the address parameter counts
+**longwords**, not bytes, which fits a 32-bit machine whose SCM is
+addressed in words of its own width.
+
+This is the primitive behind EXPUT/EXGET and XPDMAR/XTMDMA: one address
+register, one data register, a page select, and a read/write bit. Which
+memory a page maps to (SCM, WCS write port, TCM) is not settled here —
+but the fact that the API distinguishes XPDMAR (SCM<->LMD) from XTMDMA
+(SCM<->TCM) while the ROM has only this one primitive suggests the page
+field is what picks between them.
+
 ### All 16 opcodes of the F05102 dispatcher
 
 The response byte splits into fields rather than being a flat code:
