@@ -800,18 +800,34 @@ buffer holds exactly one bank. Neither transfer loop touches a bank
 register: both use only `$E58` (address) and `$E64` (count), and the
 destination within the chassis is not expressed in either.
 
-So the bank must be carried by the surrounding command state. The
-candidates, in order:
+### Resolved: there is no SBC-side bank select
 
-1. **`$E68`/`$E6A`**, the third 32-bit parameter, loaded by response code
-   `$9` and passed to `PanelSendAndWait` as `d3`. It is the only
-   parameter in the whole command set with no established purpose.
-2. **`$E60`**, the channel number — but that selects which AC, and the
-   four ACs each have four banks, so it cannot also select the bank.
-3. A field in the opcode itself, in the bits above the low nibble.
+The earlier guess here was that `$E68`/`$E6A`, the third 32-bit
+parameter, carried the bank "by elimination". **That is wrong and is
+retracted.** `$E68` has exactly two references in the ROM: response code
+`$9` writes it at F04FA0, and F04CDC reads it into `d3` for
+`PanelSendAndWait`, where the dispatch handlers push it to the channel
+status port (`move.w d3,$2(a1)` at F05886, F059D0, F062C6). It is a data
+value for the panel engine, not an address.
 
-`$E68` is the natural fit by elimination. Confirming it needs a chassis
-that reports where data landed, which the emulator cannot currently do.
+More decisively, the outbound bulk loop references **only** `$FF0000`,
+`$FF0008`, `$E58`, `$E64` and the constant 1. There is no destination
+register of any kind in it.
+
+So the SBC streams words at `$FF0008` **with no notion of where they
+land**. That is exactly what the bus-mastership finding predicts: the SBC
+is a slave conduit, and the chassis — which is the master — decides the
+destination. There is no WCS bank select in the SBC's command set because
+the SBC does not address the WCS.
+
+**Practical consequence.** A revival attempt cannot choose the target bank
+from the SBC side, and no amount of further ROM analysis will find a way
+to. Bank selection has to come from whatever configures the XLTR or the
+UNIV FMT before the transfer starts — the host-side command, or a panel
+command whose effect is inside the chassis rather than in SBC RAM. The
+monitor's `L` command has the same limitation: it fills the staging
+buffer, but what happens to those bytes afterwards is not the SBC's
+decision.
 
 ### The bulk data-in port is `$FF0008`
 

@@ -53,11 +53,20 @@ something to send.
 
 ### What would still have to be worked out
 
-The AU WCS is 4K × 128 bits × **4 banks** per AC. One staging buffer
-holds one bank, so a full load is four sessions with a bank select
-between them. Which register selects the bank is not established; the
-chassis-side command set (`versabus_access_map.md`) is the place it
-would live.
+The AU WCS is 4K × 128 bits × **4 banks** per AC, and one staging buffer
+holds one bank, so a full load is four sessions.
+
+**The bank cannot be selected from the SBC.** The outbound transfer loop
+carries only a source address and a word count — no destination of any
+kind — and the SBC never asserts bus mastership, so the chassis places
+the data. Bank selection must therefore come from whatever configures the
+XLTR or UNIV FMT ahead of the transfer, which is outside this ROM. See
+"Resolved: there is no SBC-side bank select" in
+`refs_extracted/versabus_access_map.md`.
+
+This is worth knowing early: it means a revival attempt needs the
+chassis-side command that sets the bank, and that command is not
+discoverable from the firmware.
 
 ---
 
