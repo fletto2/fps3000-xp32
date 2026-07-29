@@ -611,10 +611,25 @@ it is recorded here as a dead end rather than a suggestion. Gating on
 between commands, not only when the task is genuinely idle, so it is not
 the completion signal it looks like. The change was reverted.
 
-A working fix needs a real completion signal. The candidates worth trying
-are the `PCMD_CH1_ACK` (`$25A`) the handler issues at F05224 on a
-successful record, or the panel-command write at `$FF000E`, both of which
-mark the end of a command rather than a moment during one.
+The `$FF000E` panel-command write was tried too, on the reasoning that
+F05224 issues `PCMD_CH1_ACK` that way after a successful record. **It
+also failed**, and worse: it broke the isolated cases as well. The reason
+is the same one that defeated `F04736` — the SBC writes `$FF000E` when it
+*starts* a command as well as when it finishes one, so the flag fires
+immediately and the next response still lands mid-command.
+
+Two attempts, one cause: **there is no single observable event that means
+"the SBC has finished"**. Every candidate so far is a point the firmware
+passes through both during and between commands.
+
+What would actually work is a sequencer that models the protocol instead
+of guessing at it — tracking which command it issued and what response
+that command is supposed to produce, and only advancing when it sees the
+matching reply. That is a redesign, not a patch, and it is not needed for
+any result here: both halves are demonstrated in isolation, and chaining
+them is a convenience.
+
+Recorded so the next person does not spend the same two attempts.
 
 ### The record address is an OFFSET — the firmware adds `$10000` itself
 
