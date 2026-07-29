@@ -96,6 +96,17 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- RDHC's $12 name table -------------------------------------------
+    check('$F0467E holds a 6-entry 8-byte name table, XP1I..XP4I then USER x2',
+          [d[0x467E+8*i:0x467E+8*i+8] for i in range(6)] ==
+          [b'XP1I\0\0\0\0', b'XP2I\0\0\0\0', b'XP3I\0\0\0\0',
+           b'XP4I\0\0\0\0', b'USER\0\0\0\0', b'USER\0\0\0\0'])
+    check('RDHC issues directive $12 five times, XP4I..XP1I then USER',
+          [d[a2:a2+8].hex().upper() for a2 in
+           (0x4854, 0x4866, 0x4878, 0x4884, 0x4904)]
+          == ['701241F900F04696', '701241F900F0468E', '701241F900F04686',
+              '701241F900F0467E', '701241F900F0469E'])
+
     # --- runtime ASQ name construction and the pattern table -------------
     check("RDHC builds ASQ names: move.l #'HXP0',d1 then add.b d4,d1",
           d.count(b'\x22\x3c\x48\x58\x50\x30') == 2 and

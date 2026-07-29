@@ -1389,6 +1389,50 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### RDHC's five exclusive directives
+
+Resolving the parameter block at each of RDHC's own directive sites:
+
+| site | directive | parameter block |
+|---|---|---|
+| `$F0477C` | `$0B` | `$F04614` — `USER`, then `$6464`, `$08000001` |
+| `$F047C8` | `$0D` | `$F04630` — `USER`, then zeros |
+| `$F04854` | `$12` | `$F04696` — **`XP4I`** |
+| `$F04866` | `$12` | `$F0468E` — **`XP3I`** |
+| `$F04878` | `$12` | `$F04686` — **`XP2I`** |
+| `$F04884` | `$12` | `$F0467E` — **`XP1I`** |
+| `$F04904` | `$12` | `$F0469E` — `USER` |
+| `$F05664` | `$29` | none loaded by `lea` |
+| `$F0566E` | `$2A` | none loaded by `lea` |
+
+The five `$12` calls draw from a **6-entry, 8-byte-per-entry name table** at
+`$F0467E`, each entry a 4-character name followed by four zero bytes:
+
+```
+$F0467E  XP1I
+$F04686  XP2I
+$F0468E  XP3I
+$F04696  XP4I
+$F0469E  USER
+$F046A6  USER
+```
+
+So RDHC names each of the four XP tasks in turn — **in reverse channel order,
+4, 3, 2, 1** — and then `USER`. This is the clearest structural expression yet
+of RDHC's master role: the other five tasks each talk only about themselves and
+their own channel, while RDHC is the only code in the ROM that addresses the XP
+tasks *by name*.
+
+What `$12` does is not established. It takes a task name and RDHC is the only
+caller, which is consistent with a start, resume or task-lookup operation —
+TDTI has already created all six tasks by this point, so it is not creation.
+`$29` and `$2A` are called once each with no `lea`-loaded block, so their
+arguments are in registers or they take none.
+
+The sixth table entry, a second `USER` at `$F046A6`, has no `$12` call. It sits
+immediately before RDHC's `$01` block at `$F046B0` and may belong to that
+block rather than to the table.
+
 ### RDHC builds the per-channel ASQ names at runtime
 
 A census of 4-character A-Z0-9 sequences turns up `HXP0` twice, at `$F053B8`
