@@ -108,6 +108,18 @@ NOTES = {
  0xF08DF8:'BoardStatusPoll_3F11 - polls (status & $3F31) == $3F11. NEVER reads ROM.',
  0xF098EC:'phase $2000: RAM address uniqueness, move.l a0,(a0)+ over $0-$10000',
  0xF046E0:'4-entry table: XP channel -> BIM control register ($244,$246,$250,$252)',
+ # ---- TCBRDHC host command interface: 4-way dispatch on a 3-bit code ----
+ 0xF05344:'HOST COMMAND DISPATCH: andi #7,d1; subq #1; mulu #6; jmp (F05358,d1.w).',
+ 0xF05358:'  4-entry jump table, jmp abs.l per entry. Codes 1-4 only; 5-7 fall into code',
+ 0xF05370:'  cmd 1: attach/configure a channel. Defaults d4 from $E62, validates',
+ 0xF05384:'    1 <= channel <= $105E, then $1080[ch] = &$101E, $10A0[ch] = 2, and',
+ 0xF053B6:'    builds the ASQ name from $48585030 = "HXP0" + channel',
+ 0xF054A2:'  cmd 2: register-file copy to/from $101E. Descriptor = direction, index,',
+ 0xF054D4:'    count; the exg a1,a0 makes one loop serve both directions',
+ 0xF054E8:'  cmd 3: same shape, block at $E8A',
+ 0xF05502:'  cmd 4: start a transfer - load count into $E64, then bset #4 on DATA_HI',
+ 0xF05678:'  shared exit: restore MODE2 from the stack (every handler saves it on entry)',
+ 0xF05684:'  moveq #$F,d0 / trap #1 - RMS68K directive $F',
  # ---- self-test phase entry points (d6 = phase, written to CHANNEL_SELECT) ----
  0xF08C4A:'phase $0200: VMOD bit 6 <-> board-status bit 3 inverse wiring',
  0xF08D1A:'phase $0300: ROM readback walk $F00000-$F10000',

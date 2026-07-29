@@ -1532,6 +1532,51 @@ transfer loop.
 consistent with the emulator's bit-5 BERR gate derived from the boot
 self-tests.
 
+## TCBRDHC's host command interface — a four-command API
+
+`F05356-F05687`, flagged as the highest-value unattributed run, turns out
+to be the SBC's **command interface**: what a host can ask it to do.
+
+The dispatch at F05344 is a jump table on a **3-bit code**:
+
+```
+F05344  andi.w #$7,d1        ; command code
+F05348  subq.w #1,d1         ; 1-based
+F0534A  mulu.w #$6,d1        ; 6 bytes per entry (jmp abs.l)
+F0534E  lea    F05358,a1
+F05354  jmp    (a1,d1.w)
+```
+
+The table holds **four** entries, so codes 5-7 would jump into handler
+code — either the caller guarantees 1-4, or that is a latent bug.
+
+| code | handler | what it does |
+|---|---|---|
+| 1 | `F05370` | **attach/configure a channel**. Takes the channel from `$4(a6)`, defaults to `$E62`, validates `1 <= ch <= $105E`, then sets `$1080[ch] = &$101E`, `$10A0[ch] = 2`, and builds the ASQ name from `$48585030` = `"HXP0"` + channel |
+| 2 | `F054A2` | **register-file access** — copy to or from the 16-longword block at `$101E`, by a (direction, index, count) descriptor. The `exg a1,a0` makes one loop serve both directions |
+| 3 | `F054E8` | same shape, for the block at `$E8A` |
+| 4 | `F05502` | **start a transfer** — load the word count into `$E64`, then `bset #4` on `DATA_HI` |
+
+Every handler saves MODE2 on entry and the shared exit at `F05678`
+restores it (`move.w (a7)+,$210(a0)`), so a command cannot leave the
+chassis page register disturbed. The entry from the main loop, `F05684`,
+is `moveq #$F,d0 / trap #1` — RMS68K directive `$F`.
+
+**`DATA_HI` bit 4 is a transfer enable.** Code 4 sets it to start a
+transfer, and the self-tests write `$10` — bit 4 — to `DATA_HI` in phases
+`$1700` and `$1800`. Two independent uses of the same bit for the same
+purpose.
+
+That is the fourth distinct command surface in this firmware, and worth
+keeping separate from the others:
+
+| surface | who drives it | where |
+|---|---|---|
+| chassis response codes | chassis -> SBC | F05102 table, 16 opcodes |
+| panel commands `$258`-`$2A0` | SBC -> chassis | via `$FF000E` |
+| 42-slot dispatch | chassis opcode via `PanelSendAndWait` | five copies |
+| **host commands 1-4** | **host -> SBC** | **F05344, this section** |
+
 ### Coverage map: what is left to analyse
 
 Combining the replication map with the named routines and finding notes
@@ -1544,11 +1589,11 @@ apart and would make any proximity metric meaningless:
 | | bytes |
 |---|---|
 | unique logic (replication removed) | 14,792 |
-| attributed to a named routine or finding | 10,204 — **69%** |
+| attributed to a named routine or finding | 10,904 — **74%** |
 | unattributed, in runs of 200 B or more | 2,848 |
 
-*(was 53% / 5,304 B before the self-test phase routines were named — see
-below.)*
+*(53% before the self-test phases were named, 69% before the host command
+interface below.)*
 
 **The ten largest unattributed runs**, which are the work queue:
 

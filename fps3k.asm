@@ -1703,6 +1703,7 @@ loc_F05334:
   f0533e: 4e f9 00 f0 56 78       jmp      loc_F05678.l
 
 loc_F05344:
+;### HOST COMMAND DISPATCH: andi #7,d1; subq #1; mulu #6; jmp (F05358,d1.w).
   f05344: 02 41 00 07             andi.w   #$7, d1
   f05348: 53 41                   subq.w   #$1, d1
   f0534a: c2 fc 00 06             mulu.w   #$6, d1
@@ -1710,6 +1711,7 @@ loc_F05344:
   f05354: 4e f1 10 00             jmp      (a1, d1.w)
 
 loc_F05358:
+;###   4-entry jump table, jmp abs.l per entry. Codes 1-4 only; 5-7 fall into code
   f05358: 4e f9 00 f0 53 70       jmp      loc_F05370.l
   f0535e: 4e f9                   DC.W     0x4ef9
   f05360: 00 f0                   DC.W     0x00f0
@@ -1724,6 +1726,7 @@ loc_F05358:
 loc_F05370:
 ;>>>> [R1/BOTH] Saves the current data pointer (a0) in a6 for S-record processing during microcode upload to the XP-32 staging buffer.
 ;>>>> [R1/DS] Loads a TCB field offset 4 into d4, defaulting to a word from $e62 if zero, then bounds-checks it against 1 and a limit at $105e.
+;###   cmd 1: attach/configure a channel. Defaults d4 from $E62, validates
   f05370: 2c 48                   movea.l  a0, a6
 ;>>>> [R2/BOTH] This instruction loads a 32-bit value from offset 4 of the structure pointed to by a6, which is used as a channel number or index parameter; it is part of the validation logic that checks whether the channel index is within the valid range (1 to 0x105E) before proceeding with panel command dispatch.
   f05372: 28 2e 00 04             move.l   $4(a6), d4
@@ -1732,6 +1735,7 @@ loc_F05370:
   f0537e: 38 39 00 00 0e 62       move.w   $e62.l, d4
 
 loc_F05384:
+;###     1 <= channel <= $105E, then $1080[ch] = &$101E, $10A0[ch] = 2, and
   f05384: 0c 44 00 01             cmpi.w   #$1, d4
 ;>>>> [R2/BOTH] Branches on channel index underflow (d4 < 1) to send abort panel command 0x25C.
   f05388: 6d 08                   blt.b    loc_F05392
@@ -1753,6 +1757,7 @@ loc_F053A2:
   f053ae: 08 29 00 01 10 a1       btst.b   #$1, $10a1(a1)
   f053b4: 67 0e                   beq.b    loc_F053C4
 ;>>>> [R3/BOTH] This instruction loads the immediate value 0x48585030 ("HXP0" ASCII) into d1, which is used as a marker or identifier for the XP-32 channel being configured, likely for diagnostic or status reporting during microcode upload or channel initialization.
+;###     builds the ASQ name from $48585030 = "HXP0" + channel
   f053b6: 22 3c 48 58 50 30       move.l   #$48585030, d1
   f053bc: d2 04                   add.b    d4, d1
   f053be: 4e b9 00 f0 56 52       jsr      loc_F05652.l
@@ -1848,6 +1853,7 @@ loc_F0549E:
   f0549e: 00 00 00 00             ori.b    #$0, d0
 ;>>>> [R1/BOTH] This instruction loads a 32-bit value from memory pointed to by a0 into d1, then increments a0, as part of a loop that processes a data structure (likely a TCB or configuration table) containing pairs of addresses and sizes, used in the XP-32 microcode upload or DMA setup routine.
 ;>>>> [R1/BOTH] This instruction loads a 32-bit microcode data word from source buffer (a0 post-incremented) into d1 during S-Record parsing for storage in the XP-32 microcode staging buffer (0x10000-0x1FFFF).
+;###   cmd 2: register-file copy to/from $101E. Descriptor = direction, index,
   f054a2: 22 18                   move.l   (a0)+, d1
 ;>>>> [R1/DS] This `move.l (a0)+, d2` at `f054a4` loads a 32-bit value from the data pointed to by a0 into d2, part of a loop that processes configuration data for XP-32 panel commands, likely extracting address or length fields for a subsequent `PanelIOConfigure_25A` call.
 ;>>>> [R1/BOTH] Loads a base address field (d2) from the XP-32 channel configuration table at a0 for command argument validation in PanelIOConfigure_25A (cmd 0x25B).
@@ -1870,6 +1876,7 @@ loc_F054CE:
   f054ce: 0c 41 00 00             cmpi.w   #$0, d1
   f054d2: 67 02                   beq.b    loc_F054D6
 ;>>>> [R5/BOTH] Conditionally exchanges a1 and a0 based on d1 being zero, used in a memory copy routine that copies microcode data between source and destination buffers during XP-32 WCS upload preparation.
+;###     count; the exg a1,a0 makes one loop serve both directions
   f054d4: c3 48                   exg.l    a1, a0
 
 loc_F054D6:
@@ -1885,6 +1892,7 @@ loc_F054DE:
   f054de: bc 82                   cmp.l    d2, d6
   f054e0: 6f f8                   ble.b    loc_F054DA
   f054e2: 4e f9 00 f0 56 78       jmp      loc_F05678.l
+;###   cmd 3: same shape, block at $E8A
   f054e8: 24 18                   move.l   (a0)+, d2
   f054ea: 45 f9 00 00 0e 8a       lea.l    $e8a.l, a2
   f054f0: 72 01                   moveq    #$1, d1
@@ -1898,6 +1906,7 @@ loc_F054F8:
   f054f8: b2 82                   cmp.l    d2, d1
   f054fa: 6f f8                   ble.b    loc_F054F4
   f054fc: 4e f9 00 f0 56 78       jmp      loc_F05678.l
+;###   cmd 4: start a transfer - load count into $E64, then bset #4 on DATA_HI
   f05502: 24 18                   move.l   (a0)+, d2
   f05504: 23 c2 00 00 0e 64       move.l   d2, $e64.l
   f0550a: 34 2d 02 16             move.w   $216(a5)  [XLTR_DATA_HI], d2
@@ -2083,11 +2092,13 @@ loc_F05652:
 
 loc_F05678:
 ;>>>> [R11/GLM] Loads the XLTR base address ($ff0000  [APIF_CMD_STATUS]) into a0 for accessing XP-32 interface registers.
+;###   shared exit: restore MODE2 from the stack (every handler saves it on entry)
   f05678: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
   f0567e: 31 5f 02 10             move.w   (a7)+, $210(a0)  [XLTR_MODE2_PAGE]
   f05682: 4e 75                   rts      
 
 loc_F05684:
+;###   moveq #$F,d0 / trap #1 - RMS68K directive $F
   f05684: 70 0f                   moveq    #$f, d0
   f05686: 4e 41                   trap     #$1
 
