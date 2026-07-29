@@ -301,7 +301,28 @@ phase `$0400`'s spot checks would miss. Note it deliberately destroys the
 vector table, which is why the caller saves `$0-$400` to `$1F000` first
 and rebuilds the stack at `$800` afterwards.
 
-### Phases `$2100`, `$2200` (F09AD6), `$2300` (F09B20) — not reached
+### Phases `$2100`-`$2900` — the rest of block 3
+
+An earlier revision said these were "not reached". They are, once the
+checkpoint indication is modelled as a **pulse** rather than a level: the
+suite now runs `$0100` through `$2903` and ends in Phase2Init.
+
+The bug was in our chassis model, not the firmware. Board bit 5 was
+latched permanently after the second `$D0` marker, and `PollBoardStatus`
+aborts whenever bit 4 **and** bit 5 are both set — so every call in
+block 3 took the `bra F088F4` exit and cut the block short. The marker is
+consumed by the next non-`$D0` write to `$1FFF1` (block 3 opens with
+`clr.w (a5)` at F0885A) and re-asserted by the next `$D0`. Three markers
+are written in a full boot: F087AA, F08832 and F088CC.
+
+**Phase `$2500`-ish contains a DRAM retention test.** F09AA4 loads
+`d5 = $493E0` — exactly **300,000** — and spins it down before
+`cmp.l (a2)+,d0`. Write a pattern, wait roughly 0.4 s at 8 MHz, then
+re-read and compare. It is not a hang, and an emulator run needs a cycle
+budget past ~200 M to get through it; shorter runs stop inside the delay
+and look wedged.
+
+### Phases `$2200` (F09AD6) and `$2300` (F09B20)
 
 **These do not execute in a normal boot**, and an earlier revision of
 this file listed them as phases `$1C00`/`$1D00`, which was wrong on both
@@ -309,13 +330,16 @@ the numbering and the fact. Tracing `d6` gives `$2200` and `$2300`; the
 measured trace shows F08886 never executing, so control leaves F08992
 without returning and arrives at F088F4 (`jmp Phase2Init`).
 
-Their content, read statically only:
-
 - **`$2200` (F09AD6)** — `MODE2 <- 0`, `a0 = $400000`, length `$4000`,
   4 passes. Sustained 16 KB access to chassis memory.
 - **`$2300` (F09B20)** — `a2 = $400000`, `a1 = $404000`, `d2 = 4`, also
-  touching `$403FFC`. Would assert that `$400000` and `$404000` are
-  distinct memory, i.e. A14 decoded and no 16 KB wrap.
+  touching `$403FFC`. Asserts `$400000` and `$404000` are distinct
+  memory, i.e. A14 decoded and no 16 KB wrap.
+
+Both now execute. Note the bus log records **zero** accesses in the
+`$4xxxxx` range across a full boot, so whatever these two do with
+`$400000` is being satisfied without reaching our chassis-memory backing
+— worth resolving before treating them as validating the window.
 
 Why control never returns from the `$2000` test is unresolved. The stack
 at `$1FFD0` is above the test's `$0-$10000` range so it is not

@@ -80,6 +80,7 @@ static int      bim_in_service_unit = -1, bim_in_service_ch = -1;
 
 /* Count of $D0 checkpoint markers the SBC has written to $1FFF1. */
 static int      vmod_d0_writes;
+static int      vmod_d0_ack;      /* checkpoint indication consumed */
 
 /* VERSAmodule control register */
 static uint16_t vmod_ctrl;
@@ -933,7 +934,7 @@ static uint32_t board_status_read(uint32_t addr) {
              * second (run block 3).  The SBC marks each checkpoint by
              * writing $D0 to $1FFF1 (F087AA, F08832), so the chassis
              * tracking those is the behaviour that fits. */
-            int b5 = e ? (int)strtoul(e, NULL, 0) & 1 : (vmod_d0_writes >= 2);
+            int b5 = e ? (int)strtoul(e, NULL, 0) & 1 : (vmod_d0_writes >= 2 && !vmod_d0_ack);
             if (b5) live |=  0x00200000;
             else    live &= ~0x00200000;
         }
@@ -1047,7 +1048,14 @@ void versabus_write(uint32_t addr, uint32_t val, int size) {
             vmod_ctrl = (vmod_ctrl & 0xFF00) | (val & 0xFF);
         }
         uint8_t new_lo = vmod_ctrl & 0xFF;
-        if (new_lo == 0xD0 && prev_lo != 0xD0) vmod_d0_writes++;
+        if (new_lo == 0xD0 && prev_lo != 0xD0) { vmod_d0_writes++; vmod_d0_ack = 0; }
+        /* The checkpoint indication is a pulse, not a level.  Block 3
+         * opens with clr.w (a5) at F0885A, and if bit 5 stayed latched
+         * past that every PollBoardStatus in block 3 would take its
+         * bra F088F4 abort (bit 4 set + bit 5 set) and cut the block
+         * short -- which is exactly what happened.  Any non-$D0 write to
+         * $1FFF1 consumes the indication. */
+        else if (new_lo != 0xD0 && vmod_d0_writes >= 2) vmod_d0_ack = 1;
         /* nothing */
         /* Phase 0x1300 (F09338, PanelBusInterruptDiagnostic): writing
          * any of bits 0..2 of $1FFF1 with bit 7 set triggers a level-4
