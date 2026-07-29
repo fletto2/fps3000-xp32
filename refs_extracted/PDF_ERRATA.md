@@ -1,0 +1,89 @@
+# Errata for `versabus_address_map.pdf` and `versabus_trace_worksheet.pdf`
+
+**Read this before using either PDF at the bench.** Both were generated
+before several findings that contradict them, and their generator scripts
+are `*.py`, which `.gitignore` excludes — so the PDFs cannot currently be
+regenerated from anything in the repo. Until they are rebuilt, the
+corrections below override them.
+
+The prose in `versabus_access_map.md` is current; the PDFs are not.
+
+---
+
+## 1. The per-channel window labels are wrong (both PDFs)
+
+Both carry a table reading:
+
+```
+  +$04   W   write port
+  +$08   R   read A: this read consumes a host byte      <-- WRONG
+  +$0A   R   status; host presents $4F                   <-- WRONG
+  +$0E   R   read B                                      <-- WRONG
+```
+
+Corrected:
+
+| Offset | Actual role |
+|---|---|
+| +`$04` | write port (unchanged) |
+| +`$08` | **32-bit data register, HIGH half** |
+| +`$0A` | **32-bit data register, LOW half** |
+| +`$0E` | **command / trigger register** (`$8000` fires it) |
+
+`BLK_XFR` (F05B0E) reads `+$08` and `+$0A` every iteration and deposits
+them at one address or at consecutive addresses — the signature of a
+32-bit value. TCBXP1I writes `$0000001B` across the pair as two halves at
+F07EC6, then writes `$8000` to `+$0E`. Eight Am29705 16×4 two-port RAMs
+on the AP I/F give exactly a 32-bit-wide register.
+
+## 2. "This read consumes a host byte" is wrong — and self-contradictory
+
+`$FF0048` is **never read anywhere in the ROM**. The address-map PDF says
+so itself further down the same page ("`$FF0048` is never read"), so the
+document contradicts itself. The only absolute reference to `$FF0048` in
+the firmware is at F07E2C, in TCBXP1I, and it is a **write**.
+
+Nothing consumes a host byte by reading. The chassis is a **bus master**
+and DMAs into SBC RAM; the SBC is a slave. That is also why `$10AA` and
+`$105E` are read but never written by CPU code.
+
+## 3. `$4F` is our own invention, not a hardware value
+
+Both PDFs describe `+$0A` as "status; host presents `$4F`", and the
+worksheet asks as an open question "What generates the `$4F` status
+value?"
+
+**Do not spend bench time on it.** `$4F` occurs in the ROM exactly five
+times, always as `move.w #$4f,(a3)` where `a3` is a **BIM control
+register** — the IRE-cleared form of `$5F` that `PanelSendAndWait` writes
+to suppress a channel's interrupt during a transfer. It has no connection
+to `$FF004A`. The value entered our documentation from
+`emulator/host_sim.c`, and the docs then cited the emulator as evidence.
+
+## 4. Board-status bits will never be in a datasheet
+
+Motorola's Table 1 (M68KVM02-3 p. 2-59) gives the board status/control
+registers as 28 bits: 12 status inputs and 16 control outputs. **Six of
+the twelve status inputs are "User-Defined."** Every bit this project has
+reverse-engineered — `$F70019` bits 1-5 — is in that user-defined set,
+i.e. FPS's own wiring. Any worksheet step that suggests looking them up
+is a dead end; they can only be inferred from firmware behaviour or
+traced on the board.
+
+## 5. Things the PDFs get right and are worth keeping
+
+- the `$FF0000-$FF00FF` / `$FF0200-$FF025F` / `$70001C` window split
+- the BIM control-register bit decode (0-2 level, 4 IRE, 5 IRAC, 7 Flag)
+  and the channel-to-vector table
+- the A4/A5/A6 decode note about separating BIM1 from the XLTR file
+- the "look for three 40-pin DIPs" MC68153 step — still open, and the
+  parts survey did **not** find them, so it is a genuine bench question
+
+## What a rebuild should add
+
+- the phase beacon: every self-test writes `phase<<8 | subtest` to
+  `$FF0204`, so scoping that register during reset identifies the failing
+  test with no debugger (`selftest_reference.md` has the lookup table)
+- `$FF0008` as the bulk data port, bidirectional, with three modes
+- S-record addresses are **offsets**: the firmware computes
+  `$10 + addr + $10000`
