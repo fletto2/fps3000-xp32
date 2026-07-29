@@ -1455,6 +1455,51 @@ original was right in substance and my re-verification of it was wrong in
 method. Both were caught by doing the arithmetic or the decode rather than
 trusting a summary.*
 
+### No panel command is issued during a clean boot
+
+A whole boot writes `$FF000E` **exactly once**, and the value is `$AAAA` — a
+self-test RAM pattern, not a panel code. **None of the 41 panel codes is ever
+issued in normal operation**, and no directive-failure path (`$26D`-`$271`,
+`$27E`-`$280`) executes.
+
+So the entire panel-command apparatus — eight replicated issuer copies, 41
+codes, the exception table, the `bra .` spins — is **dormant by design in a
+healthy machine**. It is an error-and-command path, entered only when the
+chassis asks for something or when something goes wrong.
+
+That explains part of the 19% execution coverage recorded below, and it is
+reassuring rather than alarming: a board that issues *any* panel command during
+a quiet boot is telling you something. It also means the panel port doubles as
+a fault beacon with a very low false-positive rate — Check 0b's exception codes
+sit on a channel that is otherwise silent.
+
+### Which RTOS structures actually get created
+
+Searching post-boot RAM for the five RMS68K markers:
+
+| marker | in ROM | **created in RAM** |
+|---|---|---|
+| `!TCB` | 13 sites | **6** — `$1E900 + $200*n` |
+| `!TST` | 1 site | **6** — `$1EA60 + $200*n`, i.e. TCB+`$160` |
+| `!ASQ` | 2 sites | **0** |
+| `!CCB` | 1 site | **0** |
+| `!DLY` | 1 site | **0** |
+
+Only task control blocks and `!TST` structures exist at runtime, both one per
+task on the same `$200` grid.
+
+**No `!ASQ` structure is created, although every task attaches two.** Each XP
+task calls directive `$2D` twice with `AXPn`/`HXPn`, TCBIO1I once with `HIO1`,
+and **none of those calls fails** — the failure paths would issue a panel code
+and nothing is issued. So either `$2D` is not "create ASQ", or ASQs are
+allocated lazily on first use and nothing in a quiet boot ever uses one. The
+kernel does carry `!ASQ` code, at `$F015EA` and `$F023B6`.
+
+The 164-byte companion block at `$1E9F8 + $200*n` is not marker-tagged. Its
+contents point back into the task's own ROM structures — XP1I's copy holds
+`$00F07E1C`, `$00F07D00` and `$00F07D34`, which are its body, its descriptor
+base and its ASQ-name area.
+
 ### Complete post-boot RAM map: 3% touched, 115.5 KB free
 
 Scanning the whole 128 KB at longword granularity after a clean boot:

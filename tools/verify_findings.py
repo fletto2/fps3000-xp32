@@ -166,6 +166,11 @@ else:
     check('a clean boot uses well under half the 1 KB supervisor stack',
           all(_r[x:x+4] == _P for x in range(0x404, 0x600, 4)))
 
+    check('RTOS creates only !TCB x6 and !TST x6, no !ASQ/!CCB/!DLY',
+          [sum(1 for x in range(0, 0x20000) if _r[x:x+4] == tg)
+           for tg in (b'!TCB', b'!TST', b'!ASQ', b'!CCB', b'!DLY')]
+          == [6, 6, 0, 0, 0])
+
     check('post-boot RAM: $01110-$1DEFF is entirely untouched (115.5 KB)',
           not any(_r[x] for x in range(0x1110, 0x1DF00)))
     check('post-boot RAM: only ~3% of the 128 KB is touched',
