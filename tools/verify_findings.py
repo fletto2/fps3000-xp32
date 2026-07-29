@@ -108,6 +108,21 @@ else:
     except FileNotFoundError:
         check('fps3k.asm present', False)
 
+    # --- the phase beacon: 29 phases, $29 dominates ----------------------
+    import subprocess as _sp
+    with tempfile.TemporaryDirectory() as _td:
+        _sp.run([EMU, '-rom', ROM, '-cycles', '400000000', '-bus', _td+'/b'],
+                stdout=_sp.DEVNULL, stderr=_sp.DEVNULL,
+                env={**os.environ, 'FPS3K_BUSPC': '1'})
+        _v = [int(m2.group(1), 16) for m2 in
+              re.finditer(r'WR 2-byte FF0204 = 0*([0-9A-F]+)\s', open(_td+'/b').read())]
+    _ph = sorted({x >> 8 for x in _v})
+    check('phase beacon covers 30 phases: $01-$09, $10-$1A, $20-$29',
+          _ph == list(range(1, 10)) + list(range(0x10, 0x1B))
+                 + list(range(0x20, 0x2A)))
+    check('phase $29 is a 32768-iteration loop dominating the beacon',
+          sum(1 for x in _v if x >> 8 == 0x29) == 32768)
+
     # --- vector 140 is made non-fatal, not serviced ----------------------
     check('F00896 tests a flag, optionally bsr, and rte -- it ignores the IRQ',
           d[0x896:0x8A6].hex().upper().startswith('08380' + '00E0C346706' + '61000DE8')

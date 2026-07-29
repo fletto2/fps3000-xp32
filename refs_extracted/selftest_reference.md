@@ -30,6 +30,52 @@ on any failure. A test that fails generally re-runs its current subtest
 rather than aborting, so a hang with a stable beacon value is a failed
 assertion, not a crash.
 
+### Measured phase table — 30 phases, and their sub-step counts
+
+Logging every write to `$FF0204` over a full boot gives the complete beacon
+sequence. This is the bench fingerprint: a hang at `$0605` is phase 6, sub-step
+5, and the table below says phase 6 has 8 sub-steps, so it died two short of
+finishing.
+
+| phase | sub-steps | writes | | phase | sub-steps | writes |
+|---|---|---|---|---|---|---|
+| `$01` | 0..104 | 105 | | `$16` | 0..0 | 1 |
+| `$02` | 0..5 | 6 | | `$17` | 0..3 | 4 |
+| `$03` | 0..0 | 1 | | `$18` | 0..3 | 4 |
+| `$04` | 0..0 | 1 | | `$19` | 0..4 | 5 |
+| `$05` | 0..0 | 1 | | `$1A` | 0..2 | 4 |
+| `$06` | 0..7 | 8 | | `$20` | 0..1 | 2 |
+| `$07` | 0..0 | 1 | | `$21` | 0..5 | 6 |
+| `$08` | 0..3 | 4 | | `$22` | 0..0 | 1 |
+| `$09` | 0..4 | 5 | | `$23` | 0..0 | 1 |
+| `$10` | 0..0 | 1 | | `$24` | 0..1 | 2 |
+| `$11` | 0..5 | 6 | | `$25` | 0..5 | 6 |
+| `$12` | 0..3 | 4 | | `$26` | 0..0 | 1 |
+| `$13` | 0..6 | 7 | | `$27` | 0..0 | 1 |
+| `$14` | 0..3 | 4 | | `$28` | 0..0 | 1 |
+| `$15` | 0..5 | 6 | | **`$29`** | 0..3 | **32,768** |
+
+**30 phases: `$01`-`$09`, `$10`-`$1A`, `$20`-`$29`.** The numbering is **BCD**
+— `$0A`-`$0F` and `$1B`-`$1F` do not exist — with exactly one exception,
+`$1A`, which is a twentieth test squeezed in after `$19` rather than rolling
+over to `$20`.
+
+Two things stand out for bench use.
+
+**Phase `$29` is a 32,768-iteration loop** and accounts for **99.4%** of the
+32,967 beacon writes in a full boot. On a scope the beacon will appear to sit
+in `$29xx` for essentially the whole self-test run; that is normal, not a hang.
+Anything that stops *below* `$29` stopped early.
+
+**Phase `$01` has 105 sub-steps**, far more than any other. It is the only
+phase where a stable low byte is informative on its own — everywhere else the
+phase number alone nearly identifies the test.
+
+*Method note: read from a short sample this beacon looks like a plain
+monotonically-incrementing counter, because the first hundred values are all
+inside phase `$01`'s run. The `phase << 8 | subtest` structure only appears
+once the log reaches `$0168 -> $0200`.*
+
 ## Control flow and the two checkpoints
 
 ```
