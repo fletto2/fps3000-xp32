@@ -635,6 +635,61 @@ The BIM row reproduces the F046E0 table exactly, and the data-port rows
 reproduce the `$20` channel stride. This is a sixth independent
 confirmation of the mapping.
 
+### `PanelSendAndWait` — and who really calls the 42-slot table
+
+An earlier section records that `F0572C`, the `PanelStatusDispatchTable`
+dispatch site, is never reached from `F04930` and "belongs to a different
+caller". The caller is **`PanelSendAndWait` (F056BA)**, and it has only
+three call sites (F04CE8, F05436, F05468), none of which a stock boot
+reaches. That is why the table never executes.
+
+The engine, in order:
+
+```
+(a3) <- $4F              ; a3 = this channel's BIM CR — clears IRE bit 4
+(a1) <- 0                ; a1 = channel data port
+$2(a1) <- d0             ; the command word
+(a0) <- $8004            ; REQUEST-TRANSFER
+poll (a0) bit 14         ; ready, with a 1000-iteration timeout in d5
+  bit 13 set -> error path
+  else       -> F0572C:  lsl.w #2,d0 ; jmp (PanelStatusDispatch, d0.w)
+(a3) <- $5F              ; restore IRE on the way out
+```
+
+Two things follow. First, `a3` is the **BIM control register** obtained
+from the F046E0 channel table, and the engine **disables that channel's
+interrupt for the duration of the transfer** and re-enables it after —
+`$4F` and `$5F` differ only in bit 4, the IRE bit. Second, the index into
+the 42-slot table is **`d0`, the command code passed in**, not a status
+code returned by the chassis. The table is a command dispatch, not a
+status dispatch, and its name in these docs is misleading.
+
+### `XLTR_IRQ_MASK` bit assignment
+
+On the error path the engine reads `$FF021A`, clears one bit and writes
+it back. The bit number comes from `PanelErrorMaskTable` at F05C4C,
+indexed by the channel number in `d4`:
+
+```
+   F05C4C:  00 05 04 03 02 00 00 00 ...
+```
+
+| Channel | `$FF021A` bit cleared |
+|---|---|
+| 1 | 5 |
+| 2 | 4 |
+| 3 | 3 |
+| 4 | 2 |
+
+So the IRQ-mask register carries one enable bit per XP channel in bits
+5-2, descending as the channel number ascends. Earlier docs record this
+register only as "IRQ Mask, written `$FFF`". A channel that errors gets
+masked off individually.
+
+That descending order is the same relationship the BIM control registers
+show, and it is a seventh independent confirmation of the channel
+identities.
+
 ### `$101E` is a 16-longword register file with a direction flag
 
 F0549E takes a descriptor from the command stream and copies to or from
