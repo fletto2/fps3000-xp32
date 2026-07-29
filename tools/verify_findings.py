@@ -108,6 +108,17 @@ else:
     except FileNotFoundError:
         check('fps3k.asm present', False)
 
+    # --- $10AA is out of reach of the only code that writes that array ---
+    check('cmd-1 writes $10A0[(ch-1)*2] and is bounded by $105E',
+          d[0x53CC:0x53D2].hex().upper() == '20045380E588' and
+          d[0x53DE:0x53E0].hex().upper() == 'E288' and
+          d[0x53E2:0x53E8].hex().upper() == '337C000210A0' and
+          d[0x538A:0x5392].hex().upper() == 'B879' + '0000105E' + '6F10')
+    check('$10AA needs channel 6; $F0A202 probes only four ports',
+          (0x10AA - 0x10A0) // 2 + 1 == 6 and
+          [struct.unpack('>H', d[0xA206+i:0xA208+i])[0] for i in (0,8,16,24)]
+          == [0x4E, 0x6E, 0x8E, 0xAE])
+
     # --- RDHC's $12 name table -------------------------------------------
     check('$F0467E holds a 6-entry 8-byte name table, XP1I..XP4I then USER x2',
           [d[0x467E+8*i:0x467E+8*i+8] for i in range(6)] ==

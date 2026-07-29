@@ -1389,6 +1389,72 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### `$10AA` cannot be written by this ROM after all — a retraction retracted
+
+CLAUDE.md currently says:
+
+> But "the value cannot come from this ROM", as an earlier revision of this
+> file put it, is **wrong and retracted**. F053E2 writes `#$2` into a word
+> array at `$10A0` indexed by `(d4-1)*2`, and index 6 lands exactly on
+> `$10AA` — with `#$2` being precisely the value TCBIO1I dispatches on.
+
+**The arithmetic is wrong, so the retraction is wrong, and the original claim
+stands.** Decoding the host-command-1 handler exactly:
+
+```
+$F05384  cmpi.w  #1,d4              ; channel
+$F05388  blt     -> error
+$F0538A  cmp.w   $105E,d4
+$F05390  ble     -> proceed         ; so 1 <= ch <= $105E
+...
+$F053CC  move.l  d4,d0
+$F053CE  subq.l  #1,d0
+$F053D0  lsl.l   #2,d0              ; (ch-1)*4
+$F053DA  move.l  a2,$1080(a1)       ; longword array, stride 4
+$F053DE  lsr.l   #1,d0              ; (ch-1)*2
+$F053E2  move.w  #$2,$10A0(a1)      ; word array, stride 2
+```
+
+The `$10A0` array is indexed by `(ch-1)*2`, so:
+
+| ch | address |
+|---|---|
+| 1 | `$10A0` |
+| 2 | `$10A2` |
+| 3 | `$10A4` |
+| 4 | `$10A6` |
+| 5 | `$10A8` |
+| **6** | **`$10AA`** |
+
+Reaching `$10AA` requires **channel 6**. "Index 6 lands exactly on `$10AA`" is
+an off-by-two-entries slip: index 6 is `$10A6`, which is channel 4. `$10AA` is
+index 10.
+
+And channel 6 cannot pass the guard. `$105E` is the count of nonzero command
+ports among **exactly four** probed at `$F0A202`, so `$105E ≤ 4` and
+`cmp.w $105E,d4 / ble` rejects anything above 4. The handler can write
+`$10A0`, `$10A2`, `$10A4` and `$10A6` and nothing else.
+
+So the position returns to where it was two revisions ago, with a firmer
+reason than it had then:
+
+- `$F053E2` **cannot** write `$10AA` — not "does not in tested configurations",
+  but is arithmetically barred by its own bounds check.
+- A write watchpoint over a full boot catches only zeros at `$10AA-$10AD`,
+  from the two bulk-clear routines at `$F0A1D2` and `$F0A33C`.
+- Nothing else in the ROM references `$10AA` at all except TCBIO1I's read.
+
+**Therefore a nonzero `$10AA` must come from off-board**, which puts the
+chassis-as-bus-master reading back as the only candidate rather than one of
+two. That matters for bring-up: it is a hard prediction that a bus trace can
+check.
+
+*This is the second time this session that a documented correction has turned
+out to need correcting — the other being the `$FF0048` claim, where the
+original was right in substance and my re-verification of it was wrong in
+method. Both were caught by doing the arithmetic or the decode rather than
+trusting a summary.*
+
 ### Two corrections found while propagating notes into `fps3k.asm`
 
 **A silent data-loss bug in the note table.** `NOTES` in
