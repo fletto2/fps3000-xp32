@@ -448,6 +448,41 @@ displacement: code `$00` runs `F05102 → F04A84`, code `$0B` runs
 seen in the sweep below, and is the reason that sweep's results split the
 way they do.
 
+### The host payload rides in the mailbox, not the data ports
+
+Following the negative result above — `$FF0048` never read — to its
+conclusion changes the host-link model.
+
+`$FF0048` has exactly one absolute reference in the ROM, at F07E2C, and
+it is inside **TCBXP1I**, which *writes* the port group: `$FF0048 <- 0`,
+`$FF004A <- $1B`, `$FF004E <- $8000`. The channel-1 data ports are that
+task's output, not the host's inbox.
+
+TCBIO1I instead works the mailbox pair. It reads `$70001C`, and at F05E2C
+takes that same word, `swap`s it and masks `#3` — **bits 16-17 are a
+class field** which must read `1`. The gate is `$10AA`, read at F05E12,
+with `d2 == 2` selecting the reply path. Drive both and the path runs:
+
+| `$10AA` | mailbox bits 16-17 | F05E40 (reply write) | `$700020` |
+|---|---|---|---|
+| 2 | 1 | 46,511 | **`$00010002`** |
+| 2 | 0 | 0 | — |
+| 2 | 2 | 0 | — |
+
+`$00010002` is the mailbox word with bit 1 set, which is exactly what
+`bset #1,d1` at F05E3C produces. This is also the first configuration in
+which the ISR *returns*: `F05E4C` (ISRExit) and the `trap #1` at F05E50
+had executed zero times in every earlier run.
+
+`$10AA` cannot come from this ROM. A write watchpoint over a full boot
+catches 8 writes to `$10AA-$10AD`, **all zeros**, from two bulk-clear
+routines (F0A1D2, F0A33C). The natural reading is a chassis-side
+**VersaBus master** DMAing a descriptor into SBC RAM, which would also
+explain why no MMIO read ever consumes a byte — but that is an
+inference. What is measured is only that the CPU never writes it.
+
+Reproduce with `FPS3K_DMA10AA=2 FPS3K_MBOX=00010000 FPS3K_HOSTLVL=5`.
+
 ### What the response does not do
 
 Sweeping every response value in `$00`-`$14` and `$80`-`$94` (both

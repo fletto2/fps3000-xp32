@@ -75,7 +75,24 @@ static uint64_t total_instr  = 0;
 
 /* ============== bus ============== */
 
+/* FPS3K_DMA10AA=<hex> makes reads of $10A8-$10AB return that longword,
+ * modelling the chassis writing it as a VersaBus master.  TCBIO1I
+ * dispatches on $10AA at F05E12 and no executed code ever stores a
+ * nonzero value there, so if the transfer completes under this
+ * injection, off-board delivery is the mechanism. */
+static int dma10aa_active(uint32_t *out) {
+    const char *e = getenv("FPS3K_DMA10AA");
+    if (!e) return 0;
+    *out = (uint32_t)strtoul(e, NULL, 16);
+    return 1;
+}
+
 static uint8_t bus_read8(uint32_t a) {
+    {
+        uint32_t dv;
+        if (a >= 0x10AA && a <= 0x10AD && dma10aa_active(&dv))
+            return (uint8_t)(dv >> (8 * (3 - (a - 0x10AA))));
+    }
     a &= 0xFFFFFFu;
 
     /* Reset overlay: ROM aliased at 0x000000 for the first 8 byte-fetches
@@ -170,6 +187,22 @@ static void bus_write8(uint32_t a, uint8_t v) {
     if (getenv("FPS3K_VECWATCH") && a >= 0x128 && a <= 0x12B)
         fprintf(stderr, "[VECWATCH] write %06X <- %02X from PC=%06X\n",
                 a, v, m68k_get_reg(NULL, M68K_REG_PPC));
+
+    /* FPS3K_RAMWATCH=<hex addr> logs every CPU write to that longword.
+     * $10AA is read by TCBIO1I at F05E12 and — per a full-ROM search —
+     * written nowhere, which is the evidence for the chassis DMAing it
+     * in as a bus master.  This watchpoint tests that from the other
+     * side: if the CPU never writes it either, the value can only come
+     * from off-board. */
+    {
+        const char *rw = getenv("FPS3K_RAMWATCH");
+        if (rw) {
+            uint32_t w = (uint32_t)strtoul(rw, NULL, 16);
+            if (a >= w && a <= w + 3)
+                fprintf(stderr, "[RAMWATCH] write %06X <- %02X from PC=%06X\n",
+                        a, v, m68k_get_reg(NULL, M68K_REG_PPC));
+        }
+    }
 
     /* Device check FIRST — VMOD_CTRL at $1FFF0 lives inside RAM range. */
     if (versabus_is_device(a)) {

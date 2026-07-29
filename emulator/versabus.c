@@ -247,6 +247,14 @@ void versabus_inject_apif_byte(uint8_t a, uint8_t b, uint8_t status) {
      * needs attention").  Set it so the ISR proceeds into the byte-
      * receive path. */
     mailbox.host_status |= (1u << 29);
+    /* TCBIO1I at F05E2C takes this same word, swaps it and masks #3 —
+     * i.e. bits 16-17 are a payload/class field that must read 1 for the
+     * reply at F05E40 to be written.  FPS3K_MBOX ORs extra bits in so
+     * that field can be driven. */
+    {
+        const char *e = getenv("FPS3K_MBOX");
+        if (e) mailbox.host_status = (uint32_t)strtoul(e, NULL, 16);
+    }
 }
 
 void versabus_set_apif_consumed_cb(void (*cb)(void *ctx), void *ctx) {
