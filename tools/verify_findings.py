@@ -153,6 +153,19 @@ else:
               0xA240 + 8*i + struct.unpack('>H', d[0xA240+8*i:0xA242+8*i])[0]
               == 0xA57E for i in range(9)))
 
+    # --- two-trap architecture; TRAP #2-#15 unused ------------------------
+    tr_sites = {}
+    for a2 in range(0, 0xA600, 2):
+        w = struct.unpack('>H', d[a2:a2+2])[0]
+        if (w & 0xFFF0) == 0x4E40:
+            tr_sites.setdefault(w & 0xF, []).append(a2)
+    check('only TRAP #0 and TRAP #1 are used anywhere in the ROM',
+          sorted(tr_sites) == [0, 1])
+    check('TRAP #0 x12 (init only), TRAP #1 x71 (tasks only)',
+          len(tr_sites[0]) == 12 and len(tr_sites[1]) == 71 and
+          all(0x4600 <= x <= 0x86FF for x in tr_sites[1]) and
+          not any(0x4600 <= x <= 0x86FF for x in tr_sites[0]))
+
     # --- the exception-code table at $F0A23A -----------------------------
     check('9-entry exception table at $F0A23A: codes $29E-$2A6, 8 bytes apart',
           [struct.unpack('>H', d[0xA23A+8*i+2:0xA23C+8*i+2])[0] for i in range(9)]

@@ -1455,6 +1455,36 @@ original was right in substance and my re-verification of it was wrong in
 method. Both were caught by doing the arithmetic or the decode rather than
 trusting a summary.*
 
+### The two-trap architecture, and TRAP #2-#15 are free
+
+Sweeping **every** `TRAP #n` in the image, not just `TRAP #1`:
+
+| trap | sites | where | directives |
+|---|---|---|---|
+| **#0** | 12 | kernel ×2, RTOS-init ×9, pre-task ×1 — **never in a task** | `$04` ×8, `$06`, `$16`, `$18`, `$1F` |
+| **#1** | 71 | the six tasks only — **never in the kernel or init** | 14 distinct |
+| **#2-#15** | **0** | — | — |
+
+The split is exact and it is the cleanest architectural statement in the ROM:
+
+- **`TRAP #0` is initialisation-time.** Eight of its twelve sites carry
+  directive `$04` and sit between `$F09E78` and `$F0A020` — the stretch that
+  builds the `!GST` and `!UST` segment tables — so `$04` is plausibly a
+  segment or allocation call. The remaining four are one each of `$06`, `$16`,
+  `$18` and `$1F`.
+- **`TRAP #1` is runtime.** Every one of its 71 sites is inside a task region.
+
+**No task ever issues `TRAP #0`, and no initialisation code ever issues
+`TRAP #1`.** Combined with the earlier boundary test — no direct calls in
+either direction, one hand-placed stub excepted — the firmware's internal
+interfaces are: traps for kernel services, and a single panel-command issuer
+replicated eight times for chassis I/O. Nothing else crosses.
+
+**Practical consequence: `TRAP #2` through `TRAP #15` are entirely unused.**
+The in-ROM monitor takes `TRAP #14` for breakpoints, and this confirms there is
+no conflict — not by assumption but by sweep. It also means fourteen trap
+vectors are available to anyone instrumenting this firmware.
+
 ### Definitive panel-code census: 41 codes
 
 Tracing every site that loads `d0` and then reaches one of the **eight issuer
