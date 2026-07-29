@@ -601,6 +601,58 @@ naming convention.
 A related array sits at `$10A0`, word-per-channel, written by F053E2 at
 index `(d4 - 1) * 2`.
 
+### The four XP tasks are three template copies and one original
+
+Diffing the task bodies against TCBXP1I over `$9FA` bytes (the smallest
+inter-task stride):
+
+| Task | bytes differing | share |
+|---|---|---|
+| TCBXP2I | 305 / 2554 | 11.9% |
+| TCBXP3I | 306 / 2554 | 12.0% |
+| TCBXP4I | 2303 / 2554 | **90.2%** |
+
+TCBXP2I and TCBXP3I are the same code as TCBXP1I with per-channel
+constants substituted. TCBXP4I is not a copy at all — it diverges into
+different code (its abort path calls F068A8 where the others call a
+helper in their own region), which is what makes its ISR sit at `+$B6`
+from the CR write instead of `+$D4` and its body `$9FA` away instead of
+`$A00`. That asymmetry was previously noted and unexplained; this is the
+explanation.
+
+The substituted constants are exactly what the channel identity requires:
+
+| Offset | Meaning | ch1 | ch2 | ch3 | ch4 |
+|---|---|---|---|---|---|
+| +`$005` | BIM CR low byte | `$44` | `$46` | `$50` | `$52` |
+| +`$00D` | channel number | `$01` | `$02` | `$03` | `$04` |
+| +`$019` | data port B low | `$4E` | `$6E` | `$8E` | `$AE` |
+| +`$01F` | data port A low | `$48` | `$68` | `$88` | `$A8` |
+| +`$013` | RAM slot | `$68` | `$6E` | `$74` | `$7A` |
+| +`$041` | RAM slot | `$66` | `$6C` | `$72` | `$78` |
+
+The BIM row reproduces the F046E0 table exactly, and the data-port rows
+reproduce the `$20` channel stride. This is a sixth independent
+confirmation of the mapping.
+
+### The 13-slot range check, explained
+
+The two RAM-slot rows above run at **stride 6**, giving a per-channel
+control block of 6 bytes (3 words) at `$1066 + 6*(ch-1)`:
+
+```
+   $1062   channel number (each task writes its own)
+   $1064   shared bitmask (all four tasks and/or into it)
+   $1066   ch1: 3 words        $1072   ch3: 3 words
+   $106C   ch2: 3 words        $1078   ch4: 3 words   ... ending $107D
+```
+
+Code `$A` indexes `$1064 + 2*$E7A` with `$E7A` range-checked 0..`$C`.
+That is 13 words spanning `$1064` to `$107C` — **the shared mask plus
+four channels of three words each**. The bound is not arbitrary: it is
+exactly this block, and the auto-increment under `$E87` bit 4 lets the
+chassis walk the whole thing with repeated codes.
+
 ### `$1062` records the channel number, per task
 
 Each XP task writes its own channel number to `$1062`:
