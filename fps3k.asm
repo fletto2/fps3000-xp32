@@ -6264,17 +6264,21 @@ loc_F07DB0:
   f07dba: 41 d5                   lea.l    (a5), a0
   f07dbc: 4e 41                   trap     #$1
   f07dbe: 2b 48 00 04             move.l   a0, $4(a5)
+;### XP task startup: a chain of guarded RMS68K syscalls. Each step tests the
   f07dc2: 0c 40 00 00             cmpi.w   #$0, d0
 ;>>>> [R1/BOTH] This conditional branch checks if d0 is zero after a trap #1 call (RMS68K system call), determining whether a TCB creation or resource allocation succeeded; if zero, it proceeds to set up TCBXP1I_Data, otherwise it issues panel command 0x26E (likely an error abort) — part of the XP-32 channel task initialization.
 ;>>>> [R1/BOTH] Branches if the RMS68K system call (TRAP #1) returned d0=0, indicating successful TCBXP1I creation; otherwise issues panel abort command 0x26E.
   f07dc6: 67 0e                   beq.b    loc_F07DD6
+;###   result and, on failure, loads a PANEL CODE IDENTIFYING THE STEP and aborts
   f07dc8: 30 3c 02 6e             move.w   #$26e, d0
   f07dcc: 4e b9 00 f0 86 c0       jsr      loc_F086C0.l
   f07dd2: 60 00 01 3a             bra.w    loc_F07F0E
 
 loc_F07DD6:
+;###   via the local panel issuer. $26E = step 1/2, $270 = step 3, $271 = step 4/5.
   f07dd6: 70 4c                   moveq    #$4c, d0
   f07dd8: 41 f9 00 f0 7d 00       lea.l    TCBXP1I_Data.l, a0
+;###   trap #1 with d0 = $4C. RMS68K directive numbers seen here: $4C, $2B, $13,
   f07dde: 4e 41                   trap     #$1
   f07de0: 67 0e                   beq.b    loc_F07DF0
   f07de2: 30 3c 02 70             move.w   #$270, d0
@@ -6283,8 +6287,10 @@ loc_F07DD6:
 
 loc_F07DF0:
   f07df0: 2a 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a5
+;###   $11 and $0F. Only $0F is identified: 15 = TERM, terminate task, per the
   f07df6: 0c 79 00 01 00 00 10 5e  cmpi.w   #$1, $105e.l  [g_ac_count]
   f07dfe: 6d 06                   blt.b    loc_F07E06
+;###   RMS68K source. Note this confirms $26E-$271 are per-STEP, not per-channel.
   f07e00: 3b 7c 00 00 00 44       move.w   #$0, $44(a5)
 
 loc_F07E06:

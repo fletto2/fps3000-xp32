@@ -1532,6 +1532,39 @@ transfer loop.
 consistent with the emulator's bit-5 BERR gate derived from the boot
 self-tests.
 
+### XP task startup: guarded syscalls with per-step failure codes
+
+`F07DC0-F07F05` is TCBXP1I's startup, and since XP1I is the template the
+same code runs in all four tasks. The shape is a chain of RMS68K
+syscalls, each guarded:
+
+```
+F07DC2  cmpi.w #0,d0          ; result of the previous directive
+F07DC6  beq    F07DD6         ; ok, continue
+F07DC8  move.w #$26E,d0       ; else: the code names WHICH STEP failed
+F07DCC  jsr    F086C0         ;       emit it via the local panel issuer
+F07DD2  bra    F07F0E         ;       and give up
+
+F07DD6  moveq  #$4C,d0        ; next directive
+F07DD8  lea    TCBXP1I_Data,a0
+F07DDE  trap   #1
+F07DE0  beq    F07DF0
+F07DE2  move.w #$270,d0       ; a different code for this step
+```
+
+**This confirms the `$26E`-`$271` correction from a second direction.**
+Those codes identify *which startup step failed*, not which channel — XP1I
+itself uses `$26E` for steps 1 and 2, `$270` for step 3 and `$271` for
+steps 4 and 5, and every other task uses the same codes at the same
+points. An earlier reading had them as `PCMD_CH{1..4}_TCB_FAIL`.
+
+Directive numbers used here: `$4C`, `$2B`, `$13`, `$11`, `$0F`. Only one
+is identified — `$0F` = 15 = **TERM**, terminate task, from the RMS68K
+source at `~/src/claude/versados/rms68k_source.SA`. The source names
+GTASQ 31, RDEVNT 34, WTEVNT 36, RTEVNT 37 and CMR 60, none of which
+match; the rest of the TRAP #1 numbering is not in the file, and the
+manual PDF has no text layer.
+
 ### One vector is deliberately spared the panic handler
 
 `RTOSKernelInit` fills the user vector table with the panic catch-all,

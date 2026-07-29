@@ -108,6 +108,13 @@ NOTES = {
  0xF08DF8:'BoardStatusPoll_3F11 - polls (status & $3F31) == $3F11. NEVER reads ROM.',
  0xF098EC:'phase $2000: RAM address uniqueness, move.l a0,(a0)+ over $0-$10000',
  0xF046E0:'4-entry table: XP channel -> BIM control register ($244,$246,$250,$252)',
+ # ---- XP task startup (TCBXP1I is the template; the other three copy it) ----
+ 0xF07DC2:'XP task startup: a chain of guarded RMS68K syscalls. Each step tests the',
+ 0xF07DC8:'  result and, on failure, loads a PANEL CODE IDENTIFYING THE STEP and aborts',
+ 0xF07DD6:'  via the local panel issuer. $26E = step 1/2, $270 = step 3, $271 = step 4/5.',
+ 0xF07DDE:'  trap #1 with d0 = $4C. RMS68K directive numbers seen here: $4C, $2B, $13,',
+ 0xF07DF6:'  $11 and $0F. Only $0F is identified: 15 = TERM, terminate task, per the',
+ 0xF07E00:'  RMS68K source. Note this confirms $26E-$271 are per-STEP, not per-channel.',
  # ---- RTOSKernelInit ----
  0xF0A146:'RTOSKernelInit vector fill: install the panic catch-all F0A27A across every',
  0xF0A150:'  user vector $124-$3FF -- EXCEPT $230 (vector 140), which is stepped over and',
