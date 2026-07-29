@@ -22,8 +22,10 @@ is the machinery to receive microcode and place it:
 
 - **two** S-record parsers (F04B8A accepting S0/S1/S2/S3/S8/S9, F05522
   accepting S7 instead of S8)
-- `SRecordDataHandler` at F051A2, which constrains the destination to
-  **`$10000-$1FFFF`** — 64 KB, exactly one 4K × 128-bit WCS bank
+- `SRecordDataHandler` at F051A2, which computes
+  `$10 + <record address> + $10000` and range-checks the **result** to
+  `$10000-$1FFFF` — 64 KB, exactly one 4K × 128-bit WCS bank. Records are
+  therefore addressed **from zero**, not from `$10000`
 - a polled bulk-transfer loop at F04AE2 reading `$FF0008` a word at a
   time into that buffer
 - a chassis-driven command protocol that programs the destination
@@ -112,6 +114,7 @@ The division is:
   layout, still open (`notes/mc_xp32_microcode_inference.md`,
   `notes/xp32_layout_vs_amd_reference.md`).
 
-The bank-select question above is worth settling early, since it is
-cheap: it only requires driving the chassis command set in the emulator
-and watching which register changes the destination bank.
+The bank-select question is **settled and closed**: there is no SBC-side
+bank select at all, so the chassis-side command that sets it has to come
+from somewhere other than this firmware. Budget for that when planning a
+load of more than one bank.
