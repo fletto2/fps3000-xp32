@@ -336,10 +336,26 @@ without returning and arrives at F088F4 (`jmp Phase2Init`).
   touching `$403FFC`. Asserts `$400000` and `$404000` are distinct
   memory, i.e. A14 decoded and no 16 KB wrap.
 
-Both now execute. Note the bus log records **zero** accesses in the
-`$4xxxxx` range across a full boot, so whatever these two do with
-`$400000` is being satisfied without reaching our chassis-memory backing
-— worth resolving before treating them as validating the window.
+Both now execute, and the chassis window is genuinely exercised. An
+earlier revision flagged that the bus log records **zero** accesses in
+the `$4xxxxx` range; that was a **logging artifact**, not a behavioural
+gap. The `$400000` window is served inside `bus_read8`/`bus_write8`
+before the device dispatch, so it never passes through `log_access`.
+Counting it directly gives, over a full boot:
+
+```
+chassis window $400000: 131,144 reads, 131,148 writes, 1 BERR
+```
+
+Reads and writes are balanced to within four accesses, which is the
+signature of write-then-read-back testing, and the single bus error is
+the access-denied check. So phases `$1700`-`$2300` do exercise the window
+hard, and the model satisfying them is real validation.
+
+The lesson generalises: **`-bus` only logs device-window accesses**.
+Anything served directly from `ram[]` or `chassis_mem[]` is invisible to
+it, so "zero accesses in the log" never by itself means "never touched".
+The `FPS3K_UNINIT` and `FPS3K_RAMWATCH` hooks exist for that reason.
 
 Why control never returns from the `$2000` test is unresolved. The stack
 at `$1FFD0` is above the test's `$0-$10000` range so it is not

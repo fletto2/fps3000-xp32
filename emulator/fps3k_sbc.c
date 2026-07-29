@@ -67,6 +67,7 @@ uint8_t *host_sim_get_ram_ptr(void) { return ram; }
 #define CHASSIS_MEM_BASE  0x400000
 #define CHASSIS_MEM_SIZE  (1u << 20)        /* 1 MB */
 static uint8_t  chassis_mem[CHASSIS_MEM_SIZE];
+static uint64_t chassis_mem_reads, chassis_mem_writes, chassis_mem_berrs;
 static uint8_t  rom[ROM_SIZE];
 
 static int      reset_overlay = 1;     /* ROM aliased at 0x000000 until first stack-pop */
@@ -170,8 +171,10 @@ static uint8_t bus_read8(uint32_t a) {
      * BERR is gated by XLTR_DATA_HI bit 5 (see below). */
     if (a >= CHASSIS_MEM_BASE && a < CHASSIS_MEM_BASE + CHASSIS_MEM_SIZE) {
         if (!(versabus_xltr_data_hi() & 0x20)) {
+            chassis_mem_reads++;
             return chassis_mem[a - CHASSIS_MEM_BASE];
         }
+        chassis_mem_berrs++;
     }
 
     /* Per M68KVM02 manual Figure 2, anything outside the populated
@@ -258,7 +261,7 @@ static void bus_write8(uint32_t a, uint8_t v) {
     /* Chassis memory: write through when not BERR'd */
     if (a >= CHASSIS_MEM_BASE && a < CHASSIS_MEM_BASE + CHASSIS_MEM_SIZE) {
         if (!(versabus_xltr_data_hi() & 0x20)) {
-            chassis_mem[a - CHASSIS_MEM_BASE] = v;
+            chassis_mem_writes++; chassis_mem[a - CHASSIS_MEM_BASE] = v;
             return;
         }
     }
@@ -567,6 +570,9 @@ int main(int argc, char **argv) {
     fprintf(stderr, "\n[done] %llu cycles, %llu instructions\n",
             (unsigned long long)total_cycles,
             (unsigned long long)total_instr);
+    fprintf(stderr, "[done] chassis window $400000: %llu reads, %llu writes, %llu BERR\n",
+            (unsigned long long)chassis_mem_reads, (unsigned long long)chassis_mem_writes,
+            (unsigned long long)chassis_mem_berrs);
     fprintf(stderr, "[done] final PC=%06X SR=%04X\n",
             m68k_get_reg(NULL, M68K_REG_PC),
             m68k_get_reg(NULL, M68K_REG_SR));
