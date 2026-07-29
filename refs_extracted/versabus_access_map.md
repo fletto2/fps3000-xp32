@@ -522,6 +522,60 @@ layout: `$FF0004` bit 0 is polled as a ready flag (F04B22, F05A22), and
 `$FF0008` is the data-in port. So `$FF0000-$FF001F` is a channel window
 of the same shape as the four at `$FF0040 + $20*N`.
 
+### The response codes are a chassis-to-SBC command language
+
+Codes `$1` and `$2` load 32-bit parameters a half-word at a time, taking
+the value from the **CHANNEL_SELECT readback** and using **bit 6 of the
+code** to pick which half:
+
+| Code | bit 6 | Action |
+|---|---|---|
+| `$01` | 0 | `clr.w $E58` (addr high), `$E5A <- CHANNEL_SELECT` (addr low) |
+| `$41` | 1 | `$E58 <- CHANNEL_SELECT` (addr high) |
+| `$02` | 0 | `clr.w $E64` (count high), `$E66 <- CHANNEL_SELECT` (count low) |
+| `$42` | 1 | `$E64 <- CHANNEL_SELECT` (count high) |
+| `$00` | — | read CHANNEL_SELECT; if `$28`, run the transfer |
+
+So `$E58`/`$E5A` is the 32-bit destination and `$E64`/`$E66` the 32-bit
+word count, and the chassis programs both by pushing (code, argument)
+pairs. That makes the whole thing a small command language, not a status
+report.
+
+### End-to-end: the staging path driven through the firmware
+
+Scripting that sequence runs the ROM's reason for existing:
+
+```
+FPS3K_SEQ="01:0000,41:0001,02:0008,42:0000,00:0028"
+    $01 + $0000  -> destination low  = $0000, high cleared
+    $41 + $0001  -> destination high = $0001   (= $00010000)
+    $02 + $0008  -> count low  = 8
+    $42 + $0000  -> count high = 0             (= 8 words)
+    $00 + $0028  -> run
+```
+
+All five codes are delivered and dispatched (`F04CF2` twice, `F04D20`
+twice, `F04A84` once), the loop at F04AF8 executes **exactly 8 times**,
+and the bus log shows **8 reads of `$FF0008`**. With the port handing
+back an incrementing pattern, a RAM dump gives:
+
+```
+$10000: 1000 1001 1002 1003 1004 1005 1006 1007 0000 0000 ...
+```
+
+Eight words at the programmed address, nothing past the programmed
+count. Destination decode, count decode and transfer loop all confirmed
+together — the microcode staging path works through the firmware's own
+mechanism, with no monitor bypass.
+
+One modelling note: after the SBC acknowledges a response the emulator
+queues the next step itself rather than waiting for another
+CHANNEL_SELECT write. Driven the other way only the first code is ever
+delivered, because the address-setter path returns to
+`ChannelConfigDispatch` without re-issuing a panel command. A real
+chassis pushing its own stream is the natural reading, but the
+alternative — that some further SBC action re-arms it — is not excluded.
+
 ### What the response does not do
 
 Sweeping every response value in `$00`-`$14` and `$80`-`$94` (both

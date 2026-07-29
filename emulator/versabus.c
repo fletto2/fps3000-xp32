@@ -64,6 +64,8 @@ static struct {
 /* Board status/control register (M68KVM02 PAL-decoded) */
 static uint32_t board_status;
 static void bim_reset(void);   /* defined with the BIM model below */
+int versabus_seq_chsel(uint16_t *out);          /* scripted chassis responses */
+static int versabus_seq_take(uint8_t *code);
 
 /* Which BIM channel's handler is currently running.  The panel-command
  * spins live in two tiers: task-context ones (F04530, F056B8) park at
@@ -344,6 +346,13 @@ static void chassis_process_panel_cmd(uint16_t cmd) {
 }
 
 static uint16_t apif_read(uint32_t addr) {
+    /* FPS3K_DATAIN: the bulk data-in port at $FF0008 hands back an
+     * incrementing pattern, so the destination decode can be checked
+     * against a RAM dump. */
+    if (addr == 0xFF0008 && getenv("FPS3K_DATAIN")) {
+        static uint16_t n = 0x1000;
+        return n++;
+    }
     if (addr == APIF_CMD_STATUS || addr == APIF_CMD_STATUS+1) {
         /* When the ROM polls after writing 0x8004/0x8005, we automatically
          * advance the state to "ready, no error" so the loop terminates. */
@@ -428,6 +437,8 @@ static uint16_t xltr_read(uint32_t addr) {
      * and the bulk-transfer loop at F04AE2 only runs when it reads $28,
      * so this is how the chassis would signal "bulk transfer pending". */
     if (addr == XLTR_CHANNEL_SELECT) {
+        uint16_t sv;
+        if (versabus_seq_chsel(&sv)) return sv;
         const char *e = getenv("FPS3K_CHSEL_RD");
         if (e) return (uint16_t)strtoul(e, NULL, 16);
     }
@@ -1031,6 +1042,49 @@ static int      panel_resp_armed;      /* response scheduled */
 static uint32_t panel_resp_delay;      /* cycles until it lands */
 static uint8_t  panel_resp_code;
 
+/* FPS3K_SEQ="code:chsel,code:chsel,..." (hex) scripts the chassis side of
+ * the transfer-setup protocol.  Each panel response delivers the next
+ * code, and CHANNEL_SELECT reads back that step's value, which is how
+ * F04CF2/F04D20 load the 32-bit destination address and word count a
+ * half at a time (bit 6 of the code picks the half). */
+#define SEQ_MAX 32
+static struct { uint8_t code; uint16_t chsel; } seq[SEQ_MAX];
+static int seq_len = -1, seq_next = 0, seq_cur = -1;
+
+static void seq_init(void) {
+    if (seq_len >= 0) return;
+    seq_len = 0;
+    const char *e = getenv("FPS3K_SEQ");
+    if (!e) return;
+    char buf[512];
+    snprintf(buf, sizeof buf, "%s", e);
+    for (char *t = strtok(buf, ","); t && seq_len < SEQ_MAX; t = strtok(NULL, ",")) {
+        char *colon = strchr(t, ':');
+        if (!colon) continue;
+        *colon = 0;
+        seq[seq_len].code  = (uint8_t)strtoul(t, NULL, 16);
+        seq[seq_len].chsel = (uint16_t)strtoul(colon + 1, NULL, 16);
+        seq_len++;
+    }
+}
+
+/* Hand out the next scripted code and make it the one CHANNEL_SELECT
+ * reports, so the code and its argument stay paired. */
+static int versabus_seq_take(uint8_t *code) {
+    seq_init();
+    if (seq_next >= seq_len) return 0;
+    seq_cur = seq_next++;
+    *code = seq[seq_cur].code;
+    return 1;
+}
+
+int versabus_seq_chsel(uint16_t *out) {
+    seq_init();
+    if (seq_cur < 0 || seq_cur >= seq_len) return 0;
+    *out = seq[seq_cur].chsel;
+    return 1;
+}
+
 void versabus_arm_panel_response(uint8_t code, uint32_t delay_cycles) {
     panel_resp_code  = code & MODE0_RESP_MASK;
     panel_resp_delay = delay_cycles;
@@ -1045,10 +1099,19 @@ static void panel_resp_tick(uint32_t cycles) {
         xltr.raw[(XLTR_MODE0 - XLTR_BASE) / 2] = xltr.mode0;
         versabus_bim_clear(0, 0);
         if (log_fp) fprintf(log_fp, "[PANEL] response acknowledged\n");
+        /* A scripted chassis pushes its own command stream: once the SBC
+         * has acknowledged, queue the next step without waiting for it to
+         * write CHANNEL_SELECT again. */
+        seq_init();
+        if (seq_next < seq_len) versabus_arm_panel_response(0, 400);
     }
     if (!panel_resp_armed) return;
     if (panel_resp_delay > cycles) { panel_resp_delay -= cycles; return; }
 
+    {   /* A scripted sequence overrides the fixed response code. */
+        uint8_t sc;
+        if (versabus_seq_take(&sc)) panel_resp_code = sc;
+    }
     xltr.mode0 = (uint16_t)((xltr.mode0 & ~MODE0_RESP_MASK)
                             | panel_resp_code | MODE0_RESP_VALID);
     xltr.raw[(XLTR_MODE0 - XLTR_BASE) / 2] = xltr.mode0;
