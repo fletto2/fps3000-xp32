@@ -81,6 +81,11 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
  # ---- 2026-07-29 second pass: task structure, RTOS surface, channel path ----
+ (0xF0A332,'BulkClear: zeroes (d2 << 8) bytes ending at a0, working downward. The loop'),
+ (0xF0A33C,'  body is here -- this is the address CLAUDE.md cites for the $10AA zeros;'),
+ (0xF0A33C,'  it is not a separate routine. $F0A1D2 is the same shape.'),
+ (0xF05652,'issues directives $29 and $2A as a MATCHED PAIR with a stack-built PB (word'),
+ (0xF05664,'  $0002, zero longword, d1). RDHC-exclusive; called twice; purpose still open.'),
  (0xF0891C,'SELF-TEST CHECKPOINT -- the MOST-CALLED routine in the ROM, 65 calls, all'),
  (0xF0891C,'  from the init/test region: once per subtest. Reads board status $F70018,'),
  (0xF08936,'  tests d7 (the $F0F0F0F0 error flag) and on failure CLEARS VMOD ctrl bit 6'),

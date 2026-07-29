@@ -249,6 +249,26 @@ else:
           sum(1 for a2 in range(0x8700, 0x9C00, 2)
               if 0x400000 <= struct.unpack('>I', d[a2:a2+4])[0] <= 0x4FFFFF) == 9)
 
+    check('$F0A332 BulkClear: lsl.l #8 then move.l d6,-(a6) loop',
+          d[0xA332:0xA342].hex().upper() ==
+          '2C02E18E2C46DDC842862D06BDC86EFA')
+    check('$F05652 issues $29 and $2A as a pair',
+          d[0x5662:0x5666].hex().upper() == '70294E41' and
+          d[0x566C:0x5670].hex().upper() == '702A4E41')
+
+    # --- ds2 F.4: the firmware never byte-accesses the VersaBUS window ----
+    # The addressing mode must be tested, not just the size field: $11BC is
+    # move.b #imm,d16(An), whose immediate + displacement read as $00FF0000
+    # and yield a false positive.  Require absolute-long as source (mode 111
+    # reg 001 in the low 6 bits) or as destination (bits 8-6 = 001, 11-9 = 111).
+    def moveb_abs(op):
+        if (op >> 12) != 1: return False
+        return (op & 0x3F) == 0x39 or (op & 0x0FC0) == 0x03C0
+    check('no move.b anywhere carries an $FF00xx/$FF02xx absolute operand',
+          not any(moveb_abs(struct.unpack('>H', d[a2:a2+2])[0]) and
+                  0xFF0000 <= struct.unpack('>I', d[a2+2:a2+6])[0] <= 0xFF02FF
+                  for a2 in range(0, 0xA600, 2)))
+
     # --- $F0891C is the self-test checkpoint, most-called routine ---------
     check('$F0891C tests d7 and on failure clears VMOD bit 6 + MODE1 $1000',
           d[0x8936:0x894C].hex().upper() ==

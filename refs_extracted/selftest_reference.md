@@ -143,6 +143,14 @@ finishing.
 | `$14` | 0..3 | 4 | | `$28` | 0..0 | 1 |
 | `$15` | 0..5 | 6 | | **`$29`** | 0..3 | **32,768** |
 
+*An external review (`ds2/ERRATA.md` I5, `ADVERSARIAL_REVIEW.md` D.2)
+recommends standardising on "13 confirmed phases", listing `$0700`, `$0800`,
+`$0900`, `$1000`-`$1400`, `$1600`-`$1A00`. That set is derived statically from
+`CHANNEL_SELECT` values found in the disassembly, and it is a **strict subset**
+of the 30 measured here — it misses `$01`-`$06` entirely (including the
+105-subtest phase `$01`), `$15`, and the whole `$20`-`$29` block-3 range. The
+measured count supersedes it; 13 is an undercount, not a disagreement.*
+
 **30 phases: `$01`-`$09`, `$10`-`$1A`, `$20`-`$29`.** The numbering is **BCD**
 — `$0A`-`$0F` and `$1B`-`$1F` do not exist — with exactly one exception,
 `$1A`, which is a twentieth test squeezed in after `$19` rather than rolling

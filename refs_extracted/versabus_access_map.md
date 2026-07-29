@@ -1473,6 +1473,85 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### Byte accesses to the VersaBUS window never happen
+
+`ds2/ADVERSARIAL_REVIEW.md` F.4 flags that the emulator does not model what a
+**byte-sized** access to a `$FF00xx` register does, and that the convention is
+undocumented. Measured both ways, the gap is unreachable:
+
+- **Dynamically: 0 byte accesses** to `$FF0000-$FF02FF` or `$700000+` in a full
+  boot, against **33,095** word and long accesses to the same window.
+- **Statically: 0 sites.** No `move.b` anywhere in the ROM carries an
+  `$FF00xx`/`$FF02xx` absolute operand.
+
+  *The static check must test the addressing mode, not just the size field.
+  `$11BC` is `move.b #imm,d16(An)`, and at `$F03FF2` its immediate plus
+  displacement read as `$00FF0000` — the same false positive already recorded
+  above for the kernel-boundary scan, and the same instruction. A first version
+  of the regression check omitted the mode test and duly reported one hit.*
+
+So the firmware accesses the VersaBUS side exclusively in 16- and 32-bit units.
+The modelling gap is real but **the stock firmware cannot exercise it**, which
+moves it from "unmodelled behaviour" to "unmodelled behaviour that nothing
+reaches". It matters only for code this project writes — the monitor's `w`
+command can issue a byte write to a chassis register, and what that does on
+hardware is genuinely unknown.
+
+Note the contrast with the *on-board* peripherals, where byte access on odd
+addresses is the only correct form (`$F70001`, `$F70011`, …) and the emulator
+raises BERR on even-byte access. The two sides of the board have opposite
+access conventions, and the firmware observes both.
+
+### Naming the top unannotated routines
+
+**58 of the 100 call targets carry no annotation anywhere.** Working the
+backlog by call count:
+
+**`$F0A332` — BulkClear (8 calls).** Zeroes `d2 << 8` bytes ending at `a0`,
+working downward:
+
+```
+move.l  d2,d6
+lsl.l   #8,d6            ; d6 = d2 * 256
+movea.l d6,a6
+adda.l  a0,a6            ; a6 = a0 + d2*256
+clr.l   d6
+$F0A33C: move.l d6,-(a6) ; *--a6 = 0
+cmpa.l  a0,a6
+bgt     -> $F0A33C
+rts
+```
+
+This is one of the two routines CLAUDE.md names as the source of the zeros a
+write-watchpoint sees at `$10AA` — and `$F0A33C`, the address that document
+cites, is the **loop body inside it**, not a separate routine. The other,
+`$F0A1D2`, is the same shape.
+
+**`$F05652` — the `$29`/`$2A` caller (2 calls).** This is where RDHC's two
+otherwise-unexplained exclusive directives are issued, as a pair, with a small
+parameter block built on the stack:
+
+```
+move.l  a0,-(a7)
+move.w  #$0002,-(a7)
+move.l  #$00000000,-(a7)
+move.l  d1,-(a7)
+movea.l a7,a0            ; PB = the stack
+moveq   #$29,d0 / trap #1
+move.l  a0,$4(a7)
+movea.l a7,a0
+moveq   #$2A,d0          ; ...and immediately $2A
+```
+
+So `$29` and `$2A` are not independent calls but a **matched pair**, taking a
+stack-built block whose first fields are a word `$0002` and a zero longword.
+That is as far as inference goes — what they do is still open — but it removes
+them from the "called once each, arguments unknown" category: they are one
+operation in two steps, called from one routine, twice.
+
+**`$F055A2` (2 calls)** loads `#$10` and scales an index with `lsl`/`adda` — an
+address-computation helper, not independently interesting.
+
 ### The most-called routine in the ROM is the self-test checkpoint
 
 Censusing call targets — `jsr`, `jmp` and both `bsr` forms — finds **100
@@ -2603,10 +2682,24 @@ and a level-6 request cannot preempt. **TCBIO1I contains no SR-modifying
 instruction anywhere** — no `move #imm,SR`, no `andi #imm,SR` — so the ISR
 never lowers the mask.
 
-This matters because **the levels are written by this ROM, not set by
-straps**. It is not a board-wiring question that a bench session could
-resolve: as programmed, a panel command issued from inside the host-link ISR
-cannot be completed.
+This matters because **the CR values are written by this ROM, not set by
+straps** — the firmware itself chooses level 6 for the responder and level 7
+for the channels.
+
+**But an external review (`ds2/ADVERSARIAL_REVIEW.md` C.2) raises a fair
+refinement, and it is accepted here.** The CR level bits select which
+interrupt-request line the BIM asserts; how those BIM outputs are wired to the
+68000's `IPL0-2` pins is **board wiring, and unverified**. If the board routes
+the channel BIMs' requests at a level below 6, or the responder's above 7 (not
+possible — 7 is the maximum), the deadlock does not arise. So the correct
+statement is: **as programmed, and assuming conventional CR-to-IPL wiring, a
+panel command issued from inside the host-link ISR cannot be completed.** The
+firmware's contribution to the deadlock is established; the board's is not.
+
+The same review notes a second possibility worth recording: the chassis might
+answer `$281` by a mechanism that needs no interrupt at all — a bus cycle that
+modifies the saved PC directly, which it is capable of as a bus master. That
+would also dissolve the deadlock, and it is consistent with reading 1 below.
 
 Three readings, none established:
 

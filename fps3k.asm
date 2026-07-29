@@ -2092,6 +2092,7 @@ loc_F05632:
   f05650: 4e 75                   rts      
 
 loc_F05652:
+;### issues directives $29 and $2A as a MATCHED PAIR with a stack-built PB (word
   f05652: 2f 08                   move.l   a0, -(a7)
 ;>>>> [R2/BOTH] This instruction pushes the value 0x0002 onto the supervisor stack as a parameter for the subsequent TRAP #1 calls (functions 0x29 and 0x2A), which are part of the RMS68K RTOS kernel's memory allocation or task creation service used during microcode staging buffer management.
   f05654: 3f 3c 00 02             move.w   #$2, -(a7)
@@ -2102,6 +2103,7 @@ loc_F05652:
   f05660: 20 4f                   movea.l  a7, a0
 ;>>>> [R5/BOTH] Prepare abort command (0x29) via ROM monitor trap for panel interface
   f05662: 70 29                   moveq    #$29, d0
+;###   $0002, zero longword, d1). RDHC-exclusive; called twice; purpose still open.
   f05664: 4e 41                   trap     #$1
   f05666: 2f 48 00 04             move.l   a0, $4(a7)
   f0566a: 20 4f                   movea.l  a7, a0
@@ -10406,6 +10408,7 @@ loc_F0A32A:
 ; MemoryClear
 ; ============================================================
 MemoryClear:
+;### BulkClear: zeroes (d2 << 8) bytes ending at a0, working downward. The loop
   f0a332: 2c 02                   move.l   d2, d6
 ;>>>> [R8/DS] The `lsl.l #$8, d6` at 0xf0a334 left-shifts the size parameter by 8 bits in the MemoryClear subroutine, converting a block size in 256-byte units to the actual byte count for clearing a memory region.
   f0a334: e1 8e                   lsl.l    #$8, d6
@@ -10416,6 +10419,8 @@ loc_F0A336:
   f0a33a: 42 86                   clr.l    d6
 
 loc_F0A33C:
+;###   body is here -- this is the address CLAUDE.md cites for the $10AA zeros;
+;###   it is not a separate routine. $F0A1D2 is the same shape.
   f0a33c: 2d 06                   move.l   d6, -(a6)
   f0a33e: bd c8                   cmpa.l   a0, a6
   f0a340: 6e fa                   bgt.b    loc_F0A33C
