@@ -1,7 +1,39 @@
-# Errata for the bench PDFs
+# Bench PDFs — status and history
 
 | PDF | status |
 |---|---|
+| `versabus_address_map.pdf` | **REBUILT 2026-07-29 — current** |
+| `versabus_trace_worksheet.pdf` | **REBUILT 2026-07-29 — current** |
+
+**Both PDFs are now current.** This file is kept as a record of what was
+wrong in the 2026-07 editions and why, because the same mistakes are easy
+to reintroduce — every one of them came from trusting our own emulator or
+from documenting a boot-path sample as if it were the whole behaviour.
+
+Generator scripts are `*.py`, which `.gitignore` excludes, so neither PDF
+can be rebuilt from the repo alone; both rebuilds were produced from
+scripts kept outside it. That is the same repo rule CLAUDE.md flags for
+`disasm.py` and the generated `.asm` files.
+
+The prose in `versabus_access_map.md` is current, and
+`selftest_reference.md` is the detailed companion to the worksheet's
+Check 0.
+
+## What the rebuilt worksheet adds
+
+- **Check 0, the phase beacon** — read the machine's own self-test
+  progress off `$FF0204` with no debugger, with a beacon-to-suspect table
+  covering `$0100`-`$2903`
+- **Check 7b, bus mastership** — which card drives `BR*`/`BGACK*`, where
+  the DMA address counter lives, and what writes `$10AA`/`$105E` given
+  that the firmware never does
+- Check 1 now says plainly that the parts survey did **not** find the
+  three BIMs, so it is a real question rather than a formality
+- Check 8 states the Am29116 count dispute (survey 1, owner 2) as the
+  thing to settle before any PROM comes off
+
+---
+---|---|
 | `versabus_address_map.pdf` | **REBUILT 2026-07-29 — current, use it** |
 | `versabus_trace_worksheet.pdf` | **STALE — corrections below override it** |
 
