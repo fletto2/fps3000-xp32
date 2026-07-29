@@ -1473,6 +1473,50 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The firmware never pages the chassis window — so do not model paging
+
+The previous section noted a latent gap: the model backs `$400000-$4FFFFF` with a
+flat 1 MB array and ignores MODE2, so every page maps to the same megabyte, and
+the three unpopulated `MAIN DATA` slots are not modelled as absent. Before
+building that, it is worth asking whether the firmware uses paging at all.
+
+**It does not.** A full boot writes MODE2 (`$FF0210`) nine times:
+
+| value | PC | what |
+|---|---|---|
+| `$10` | `$F09560` | phase `$16`, the XLTR register-file walk |
+| `$0F` | `$F0A1E0` | init, immediately zeroed again at `$F0A1FE` |
+| `$00` | ×7, incl. `$F09AE2`, `$F09B24` | before each data walk |
+
+And correlating the page in force against every chassis-memory access —
+**262,292 of them, from six PCs** — puts **all of them on page 0**. The two
+non-zero writes are register tests, not page selects: phase `$16` walks the XLTR
+file, and init sets `$0F` then clears it eight instructions later.
+
+Two conclusions.
+
+**The flat 1 MB backing is adequate**, and implementing MODE2-indexed pages or
+absent card slots would change nothing observable for this firmware. That is the
+useful result: it is an argument against writing the code, not a gap to close.
+Building a paging model here would be speculative work whose correctness nothing
+could test.
+
+**And the firmware's reach matches the hardware population.** It only ever
+addresses page 0 — the first megabyte — which is exactly the one `MAIN DATA` card
+this chassis has. Whether that is configuration for this machine or simply
+because SCM paging is driven by the chassis rather than the SBC is not
+established, but the two facts agree.
+
+The bounded form of the claim: **for this firmware, on the boot and self-test
+paths that execute, chassis paging is never used to address beyond the first
+megabyte.** A microcode upload driving the chassis through the full command
+protocol might well page, and nothing here rules that out.
+
+*Method note: the first two attempts at this correlation returned nothing,
+because the bus log does not record the chassis window (the blind spot fixed
+earlier) and because `FPS3K_LOGCHASSIS` writes to stderr while `-bus` redirects
+only the bus file. Two separate output paths, and the measurement needed both.*
+
 ### Chassis memory: the zero-fill is safe too, for the same reason
 
 The SBC-side finding — the firmware never reads a DRAM byte it has not written,

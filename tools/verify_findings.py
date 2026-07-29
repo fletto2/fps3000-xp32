@@ -280,6 +280,22 @@ else:
                   0xFF0000 <= struct.unpack('>I', d[a2+2:a2+6])[0] <= 0xFF02FF
                   for a2 in range(0, 0xA600, 2)))
 
+    # --- all chassis-memory access happens on MODE2 page 0 -----------------
+    with tempfile.TemporaryDirectory() as _td6:
+        _r6 = subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000',
+                              '-bus', _td6+'/b'], capture_output=True, text=True,
+                             env={**os.environ, 'FPS3K_LOGCHASSIS': '1',
+                                  'FPS3K_BUSPC': '1'})
+        _page, _pages = 0, {}
+        _buslog = open(_td6+'/b').read().split('\n')
+        for _l in _r6.stderr.split('\n'):
+            if 'CHASSIS-MEM' in _l: _pages[_page] = _pages.get(_page, 0) + 1
+        _m2 = re.findall(r'WR 2-byte FF0210 = 0*([0-9A-F]*)\s', '\n'.join(_buslog))
+    check('MODE2 takes only three distinct values: 0, $0F, $10',
+          sorted({int(x or '0', 16) for x in _m2}) == [0x00, 0x0F, 0x10])
+    check('chassis memory is accessed >100k times, always with MODE2 = 0',
+          sum(_pages.values()) > 100000 and set(_pages) == {0})
+
     # --- chassis memory: only the BERR probe reads it unwritten ------------
     with tempfile.TemporaryDirectory() as _td5:
         subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000'],
