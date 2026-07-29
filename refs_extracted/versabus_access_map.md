@@ -727,18 +727,54 @@ self-test sequence when that bit is **set**. Our chassis model returns
 `$35` for that byte, and `$35` has bit 5 set. The tests are skipped by
 construction.
 
-### What happens when the gate is opened
+### Why the gate was closed — a model bug, found by inference
 
-Forcing the byte to `$15` (bit 5 clear) makes XLTR traffic jump from 27
-accesses to **287,771**. But the suite still does not complete: the trace
-shows `F0873E`, `F0874E` (HardwareInit) and `F0876A` executing exactly
-once each, and `F08772` never — so the **first** test called, `F08C4A`,
-is entered and never returns. It lands in `PollBoardStatus` at `F0892C`,
-which spins 287,768 times on MODE1 and a board-status bit the model never
-supplies.
+The sequence around the gate is a **chassis handshake**:
 
-So the chassis model cannot satisfy even the first self-test. The clean
-boot is clean *because* the firmware skips them.
+```
+F08720  $1FFF0 <- $0050        ; VMOD: $1FFF1 = $50, bits 4 and 6 set
+F08728  wait until bit 4 of $F70019 is SET     ; chassis says ready
+F08732  btst bit 5 of $F70019
+F0873A  if SET -> skip the entire diagnostic suite
+F0873E  $1FFF0 <- 0
+F0874E  HardwareInit, then the tests
+```
+
+The SBC raises two VMOD lines, waits for the chassis to acknowledge on
+bit 4, then samples bit 5 for the answer.
+
+The emulator modelled **bit 5 of `$F70019` as tracking bit 6 of
+`$1FFF1`**. That cannot be right. `$50` sets bit 6, so a direct mirror
+makes bit 5 read back set every time, and the firmware always skips its
+own diagnostics — leaving 3.8 KB of test code permanently dead. No ROM is
+built that way.
+
+**Bit 7 fits both uses of the signal.** The pre-test write `$50` has
+bit 7 clear, so the tests run; the post-test write `$D0` at F087AA has
+bit 7 set, and F088EE reads bit 5 to decide whether to advance to
+Phase2Init. One signal, two samplings, consistent in both directions.
+
+Changing the rule to bit 7 takes the diagnostic region from **0 to 109
+distinct PCs executed**, and six tests now run that never ran before:
+
+| MainInit call | Routine | Runs |
+|---|---|---|
+| F0874E | HardwareInit | yes |
+| F0876A | F08C4A | yes |
+| F08772 | F08D1A | yes |
+| F0877A | RAMAddressingTest | yes |
+| F08782 | F08DF8 (`BoardStatusPoll_3F11`) | yes |
+| F08786 | PTMInit | yes |
+| F0878E | F08E2E | entered, does not return |
+| F08796 onward | F08F1C, F08F70, F0905A, F09518+ | not reached |
+
+The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
+either way for experiments.
+
+**This is inference, not proof.** The bit-7 rule is consistent with both
+samplings and it makes the diagnostics reachable, which any correct model
+must; it is not confirmed against hardware. But the old rule is
+*refuted* — it makes the firmware's own self-test suite unreachable.
 
 ### What this calibrates
 

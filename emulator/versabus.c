@@ -809,10 +809,12 @@ static uint32_t board_status_read(uint32_t addr) {
      * btst #5,$F70019 and skips the ENTIRE self-test suite when the bit
      * is set, so the value here decides whether the diagnostic region
      * F08D00-F09BFF runs at all. */
-    if (addr == 0xF70019) {
-        const char *e = getenv("FPS3K_BSTAT19");
-        if (e) return (uint32_t)strtoul(e, NULL, 16) & 0xFF;
-    }
+    /* NOTE: forcing a constant here breaks the dynamic bit relationships
+     * the model implements (e.g. bit 3 must track the inverse of VMOD
+     * bit 6, which HardwareInit checks directly), so a constant override
+     * makes the self-tests fail for the wrong reason.  FPS3K_BSTAT19_CLR
+     * clears bits in the *computed* value instead, which is the right way
+     * to open the bit-5 self-test gate. */
     int byte_off = addr - BOARD_STATUS_BASE;
 
     /* F7001B is ILLEGAL per Motorola Figure 2 — handled in bus_read8 */
@@ -885,8 +887,23 @@ static uint32_t board_status_read(uint32_t addr) {
         /* Note: bit 6 of $1FFF1 is the same line that drives the
          * inverted bit 3 of $F70019 — they are the same chassis
          * signal observed at two different bit positions. */
-        if (b6_1FFF1) live |=  0x00200000;
-        else          live &= ~0x00200000;
+        /* Bit 5 was modelled as tracking bit 6 of $1FFF1.  That cannot be
+         * right: MainInit writes $50 to $1FFF0 at F08720 (setting bit 6
+         * of $1FFF1), waits for board bit 4, then at F08732 reads bit 5
+         * and SKIPS the entire diagnostic suite if it is set.  A direct
+         * bit-6 mirror would make the firmware always skip its own
+         * self-tests, leaving F08D00-F09BFF permanently dead.
+         *
+         * Bit 7 fits both uses: the pre-test write $50 has bit 7 clear
+         * (run the tests) and the post-test write $D0 at F087AA has bit 7
+         * set, which is what F088EE then reads to advance to Phase2Init.
+         * FPS3K_BSTAT19_B5 forces the bit for experiments. */
+        {
+            const char *e = getenv("FPS3K_BSTAT19_B5");
+            int b5 = e ? (int)strtoul(e, NULL, 0) & 1 : b7_1FFF1;
+            if (b5) live |=  0x00200000;
+            else    live &= ~0x00200000;
+        }
 
         /* Bit 1: NOT(bit4) OR (bit5 AND NOT bit0_of_1FFF0).
          * Phase 0x1100 tests bit 4 alone (bit 5 = bit 0 of $1FFF0 = 0):
