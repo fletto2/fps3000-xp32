@@ -81,6 +81,7 @@ static int      bim_in_service_unit = -1, bim_in_service_ch = -1;
 /* Count of $D0 checkpoint markers the SBC has written to $1FFF1. */
 static int      vmod_d0_writes;
 static int      vmod_d0_ack;      /* checkpoint indication consumed */
+static int      srec_exhausted;  /* S-record source ran out */
 static uint64_t seq_gap_left;     /* cycles until the next scripted command */
 static uint64_t seq_gap_cycles(void) {
     const char *e = getenv("FPS3K_SEQGAP");
@@ -372,7 +373,15 @@ static uint16_t apif_read(uint32_t addr) {
     /* $FF0004 bit 0 is the port-ready flag the firmware polls at F04B22
      * and F05A22 before every transfer.  With an S-record source
      * configured, data is always available. */
-    if (addr == 0xFF0004 && getenv("FPS3K_SREC")) return 0x0001;
+    if (addr == 0xFF0004 && getenv("FPS3K_SREC"))
+        return srec_exhausted ? 0x0000 : 0x0001;   /* bit 0 = data available */
+
+    /* END OF STREAM.  SRecordDataHandler's reject/drain loop at F05218
+     * reads $FF0000 and exits when it is <= 0 as a signed word, so the
+     * chassis says "nothing more" by clearing it.  Without this the drain
+     * never terminates -- which is exactly what the first S-record runs
+     * did.  Documented in versabus_access_map.md. */
+    if (addr == APIF_CMD_STATUS && srec_exhausted) return 0x0000;
 
     if (addr == 0xFF0008) {
         const char *fn = getenv("FPS3K_SREC");
@@ -381,7 +390,8 @@ static uint16_t apif_read(uint32_t addr) {
             if (!sf && !done) { sf = fopen(fn, "rb"); if (!sf) done = 1; }
             if (sf) {
                 int c1 = fgetc(sf), c2 = fgetc(sf);
-                if (c1 == EOF) { fclose(sf); sf = NULL; done = 1; return 0; }
+                if (c1 == EOF) { fclose(sf); sf = NULL; done = 1;
+                                 srec_exhausted = 1; return 0; }
                 if (c2 == EOF) c2 = 0x0A;
                 return (uint16_t)((c1 << 8) | c2);
             }

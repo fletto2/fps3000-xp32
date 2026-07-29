@@ -1561,7 +1561,7 @@ loc_F05212:
   f05212: 22 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a1
 
 loc_F05218:
-;### reject path drains $FF0008 until APIF_CMD_STATUS reads <= 0 (end of stream)
+;### REJECT path: drains $FF0008 until APIF_CMD_STATUS reads <= 0 (end of stream)
   f05218: 0c 69 00 00 00 00       cmpi.w   #$0, $0(a1)
 ;>>>> [R3/BOTH] This BLE.B instruction checks if the word at (a1) is less than or equal to zero, implementing a polling loop that waits for the panel interface to become ready (status register indicating completion) before proceeding with the next command in the microcode upload sequence.
   f0521e: 6f 04                   ble.b    loc_F05224
@@ -1570,6 +1570,7 @@ loc_F05218:
   f05222: 60 f4                   bra.b    loc_F05218
 
 loc_F05224:
+;###   ...and only then issues PCMD_CH1_ACK. This is the REJECT exit, not success.
   f05224: 30 3c 02 5a             move.w   #$25a, d0
 ;>>>> [R1/BOTH] This `jsr` at `f05228` calls `PanelIOConfigure_25A` with d0 set to `0x25a`, which is one of the 21 distinct panel command codes; this is part of the S-record finalization routine that sends a command to the XP-32 after a microcode upload sequence.
 ;>>>> [R1/BOTH] Sends panel command 0x25A (CONTINUE-TRANSFER) to the XP-32 via PanelIOConfigure_25A in SRecordFinalize to commit microcode block data.
@@ -1581,6 +1582,7 @@ loc_F05224:
 ; SRecordParseLoop
 ; ============================================================
 SRecordParseLoop:
+;### SRecordParseLoop: d4 counts the record body down; at d4 == 1 the last byte
   f05230: 52 80                   addq.l   #$1, d0
   f05232: 53 44                   subq.w   #$1, d4
   f05234: 0c 44 00 01             cmpi.w   #$1, d4
@@ -1594,8 +1596,10 @@ loc_F05240:
   f05244: 08 07 00 0f             btst.b   #$f, d7
   f05248: 67 f6                   beq.b    loc_F05240
   f0524a: 3b 7c 00 00 02 18       move.w   #$0, $218(a5)  [XLTR_STATUS_IRQ]
+;###   (the CHECKSUM) is read into d2 -- and DISCARDED. addq, rts, no comparison.
   f05250: 34 10                   move.w   (a0), d2
   f05252: 52 80                   addq.l   #$1, d0
+;###   SUCCESS exit. The firmware does NOT validate S-record checksums; the
   f05254: 4e 75                   rts      
 
 ; ============================================================

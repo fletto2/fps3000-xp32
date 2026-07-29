@@ -556,6 +556,22 @@ check, silently rejecting anything outside.
 
 ### `$FF0000` signals end-of-stream
 
+**Two exits, and an earlier note here had them backwards.** `F05254` is
+the **success** exit — reached when `d4` counts down to 1, the last byte
+is read, and the handler `rts`. In the verified two-record load it
+executes exactly twice, once per record. `F05224`, previously described
+as "the `PCMD_CH1_ACK` that ends a successful record", is the **reject**
+exit and executes zero times on a clean load.
+
+**The firmware does not validate S-record checksums.** At `F05250` the
+final byte — the record's checksum — is read into `d2`, and what follows
+is `addq.l #1,d0` then `rts`. It is never compared against anything.
+
+That matters for anyone generating microcode: a corrupt record will be
+stored, not rejected. The in-ROM monitor's `L` command *does* validate
+checksums, so the two paths differ in safety, and the safer one is ours
+rather than FPS's.
+
 The reject path is more interesting than a simple error exit:
 
 ```
