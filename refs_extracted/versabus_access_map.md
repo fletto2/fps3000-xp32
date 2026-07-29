@@ -635,6 +635,77 @@ The BIM row reproduces the F046E0 table exactly, and the data-port rows
 reproduce the `$20` channel stride. This is a sixth independent
 confirmation of the mapping.
 
+### The TDTI table gives exact task code regions
+
+The task definition table at `F0A600` has `$C0`-byte entries: `!TCB` plus
+a 4-character name at +0, a start/end address pair at +`$20`, and `PROG`
+at +`$40`. Decoding the pairs:
+
+| Task | Region |
+|---|---|
+| TCBRDHC | `F04600-F05CFF` |
+| TCBIO1I | `F05D00-F05EFF` |
+| TCBXP4I | `F05F00-F068FF` |
+| TCBXP3I | `F06900-F072FF` |
+| TCBXP2I | `F07300-F07CFF` |
+| TCBXP1I | `F07D00-F086FF` |
+
+Every known entry point falls in its own region — F046F0 in RDHC, F05DD6
+in IO1I, F06018 in XP4I, F07E12 in XP1I. This is **authoritative**
+attribution from the ROM's own table, replacing the approximate region
+bounds that `build_clean_disasm.py` uses and that CLAUDE.md flags as
+unreliable.
+
+### `$26E`-`$271` are failure types, not channels — correction
+
+CLAUDE.md names `$26E`-`$271` as `PCMD_CH{1..4}_TCB_FAIL` and records the
+channel numbering as unresolved, warning "do not rely on the channel
+numbers in this block". The block is not per-channel at all.
+
+| Code | Sites |
+|---|---|
+| `$26E` | F05F92, F05FC8, F06992, F069C8, F07392, F073C8, F07D92, F07DC8 |
+| `$26F` | **unused** |
+| `$270` | F05FE2, F069E2, F073E2, F07DE2 |
+| `$271` | F0607A, F060A0, F06A78, F06AAC, F07478, F074AC, F07E78, F07EAC |
+
+Each code appears in **all four** task regions, at the same offset within
+each: `$26E` at +`$92`, `$270` at +`$E2`. They are **failure-type** codes
+that every channel task emits, and the channel identity must travel
+separately — `$1062` or the channel select. `$26F` is never emitted.
+
+The old reading came from attributing one site to one task. With the TDTI
+regions above, all four sites per code are visible and the pattern is
+unambiguous.
+
+### Two S-record parsers, differing in terminator
+
+There are two independent type-code comparison chains:
+
+| Parser | Accepts |
+|---|---|
+| F04B8A-F04C06 | S0 S1 S2 S3 **S8** S9 |
+| F05522-F05560 | S0 S1 S2 S3 **S7** S9 |
+
+S7, S8 and S9 are the 32-, 24- and 16-bit start-address terminators, so
+the second parser is the one that pairs correctly with S3 data records.
+CLAUDE.md lists only "S0/S1/S2/S3/S8/S9" for the ROM.
+
+### RMS68K structure tags stamped by the application
+
+Beyond the `!TCB`/`!CCB`/`!ASQ`/`!TST`/`!DLY` markers already documented,
+the application's init code stamps six more:
+
+| Tag | Written at |
+|---|---|
+| `!VCT` | F09C9A |
+| `!GST` | F09E88 |
+| `!UST` | F09ECE |
+| `!IOV` | F09F52 |
+| `!IDV` | F09F80 |
+| `!PAT` | F09FB2 |
+| `!UDR` | F0A000 |
+
 ### `PanelSendAndWait` — and who really calls the 42-slot table
 
 An earlier section records that `F0572C`, the `PanelStatusDispatchTable`
