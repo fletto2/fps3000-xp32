@@ -1389,6 +1389,81 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The ROM declares the vector-to-task mapping itself
+
+Each task's region does not merely *begin* at the addresses this project
+has been using — it begins with a **task descriptor block** that states the
+task's identity and interrupt wiring in data:
+
+| Offset | Field | RDHC | IO1I | XP4I | XP3I | XP2I | XP1I |
+|---|---|---|---|---|---|---|---|
+| +`$00` | name (ASCII) | `RDHC` | `IO1I` | `XP4I` | `XP3I` | `XP2I` | `XP1I` |
+| +`$04` | zero | . | . | . | . | . | . |
+| +`$08` | **vector number** | `$41` | `$4A` | `$48` | `$47` | `$46` | `$45` |
+| +`$0C` | **handler address** | F04930 | F05DD6 | F060CE | F06AE6 | F074E6 | F07EE6 |
+| +`$10` | ISR exit / continuation | F050FC | F05E4C | F060F0 | F06B08 | F07508 | F07F08 |
+| +`$14` | owner string | `USER` | `IO1I` | `XP4I` | `XP3I` | `XP2I` | `XP1I` |
+
+Two consequences.
+
+**The vector-to-task mapping is no longer an inference.** It was derived
+originally from the BIM control- and vector-register writes, then
+corroborated by the F046E0 lookup table and by the constant-ownership map
+above. This is the machine's own declaration, in a fixed-offset field, and
+it agrees with all three.
+
+**The region boundaries are exact, not heuristic.** CLAUDE.md warns that
+"the region bounds in `build_clean_disasm.py` are approximate and a code
+address can be attributed to the neighbouring task". Anything starting at
+one of these six descriptor blocks and running to the next is exactly one
+task. The `+$10` field also names F05E4C directly — the address this
+project had already identified as TCBIO1I's ISR exit, reached for the first
+time only after the mailbox path was driven correctly.
+
+### Ten BIM vectors are programmed; six are enabled, four go nowhere
+
+A single routine at **F0A164-F0A1CA** programs the BIM file, and it covers
+considerably more than the six channels the firmware uses. It clears six
+control registers and then writes **ten vector registers with the
+contiguous block `$41`-`$4A`**, each value exactly once:
+
+| BIM | base | ch0 | ch1 | ch2 | ch3 |
+|---|---|---|---|---|---|
+| 0 | `$FF0230` | `$41` **en** ($5E) | `$42` dis | `$43` dis | `$44` dis |
+| 1 | `$FF0240` | — | `$49` dis | `$45` **en** ($5F) | `$46` **en** ($5F) |
+| 2 | `$FF0250` | `$47` **en** ($5F) | `$48` **en** ($5F) | `$4A` **en** ($5F) | — |
+
+Of the twelve BIM channels: **six enabled**, **four vectored but left
+disabled** (`$42`, `$43`, `$44`, `$49`), **two untouched** (BIM1 ch0, BIM2
+ch3).
+
+The four disabled ones have **no handler anywhere in the firmware**. Vector
+numbers are declared only in the six task descriptor blocks above, and none
+of them carries `$42`, `$43`, `$44` or `$49`. So these are provisioned but
+unimplemented: FPS allocated a contiguous ten-vector block across the three
+BIMs, and this configuration wires up six of them.
+
+The firmware is self-consistent about it — the four have their IRE bit
+clear, so they cannot fire, and a vector installed at the BIM for a source
+that can never assert is harmless. But it is worth knowing before a bring-up
+attempt: if any of those four channels *does* interrupt, on real hardware it
+dispatches through a DRAM vector the RTOS never wrote, which on a
+power-on-random board is a jump to a garbage address.
+
+The natural reading of the block is that BIM0's four channels serve the
+chassis command interface (ch0 = `$41` is the panel-status response handler)
+and that FPS provisioned three more sources there than this chassis uses.
+That is a reading, not a finding: nothing establishes what `$42`-`$44` would
+have been.
+
+### Correction: the TDTI table is at `$F0A600`
+
+CLAUDE.md gives the `TCBDefinitionTable` as `$F0A57E`. The `!TCB` marker is
+at **`$F0A600`** (`$F0A5FE` counting the two zero bytes before it).
+`$F0A57E` is code — a panel-command issuer that writes `$FF000E`, `$FF0202`,
+`$FF0204` and `$FF0200` and then ends in `60FE`, the documented `bra .`
+spin-wait. The consolidated `fps3k.asm` already uses `$F0A600`.
+
 ### Every chassis address constant, by owning task
 
 Scanning for `movea.l #imm,aN` (`2x7C`) and `lea imm.l,aN` (`4xF9`) with

@@ -100,6 +100,25 @@ else:
           tr.count('F0F0F0F0') == 0 and 'F08B88\n' not in tr)
     check('self-tests: diagnostic region executes',
           len({l for l in tr.split() if 'F08D00' <= l <= 'F09BFF'}) > 500)
+    # --- TCB headers: the ROM's own vector-to-task declaration -----------
+    TCB = [(0xF04600,b'RDHC',0x41,0xF04930),(0xF05D00,b'IO1I',0x4A,0xF05DD6),
+           (0xF05F00,b'XP4I',0x48,0xF060CE),(0xF06900,b'XP3I',0x47,0xF06AE6),
+           (0xF07300,b'XP2I',0x46,0xF074E6),(0xF07D00,b'XP1I',0x45,0xF07EE6)]
+    check('TCB headers: name/vector/handler at +$00/+$08/+$0C',
+          all(d[b-B:b-B+4] == nm and
+              struct.unpack('>I', d[b-B+8:b-B+12])[0] == vec and
+              struct.unpack('>I', d[b-B+12:b-B+16])[0] == h
+              for b, nm, vec, h in TCB))
+    check('TCB vector numbers match the BIM vector registers',
+          sorted(v for _,_,v,_ in TCB) == [0x41,0x45,0x46,0x47,0x48,0x4A])
+    check('four BIM vectors are programmed but belong to no TCB',
+          not ({0x42,0x43,0x44,0x49} & {v for _,_,v,_ in TCB}))
+    check('BIM vector registers hold the contiguous block $41-$4A',
+          sorted(struct.unpack('>H', d[i+2:i+4])[0]
+                 for i in range(0xA18E, 0xA1CA, 6)) == list(range(0x41, 0x4B)))
+    check("TDTI '!TCB' marker is at $F0A600, not $F0A57E",
+          d[0xA5FE:0xA60A] == b'\x00\x00!TCBRDHC\x00\x00')
+
     srec = f'{tmp}/u.s19'
     def s2(addr, data):
         p = [3+len(data)+1, (addr>>16)&255, (addr>>8)&255, addr&255] + list(data)
