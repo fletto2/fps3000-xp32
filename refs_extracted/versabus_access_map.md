@@ -1473,6 +1473,50 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The chassis's default response code is the worst one for exploration
+
+With commands now interpreted, the response code the chassis returns is the
+variable that changes SBC behaviour. Sweeping it — `FPS3K_RESP`, in a fixed
+`CHANNELS=2 XPIRQ=1` configuration:
+
+| response code | RDHC distinct PCs |
+|---|---|
+| `$02` | **65** |
+| `$0B` | **65** |
+| `$00` | 52 |
+| `$08` | 50 |
+| **`$14`** — the model's default | **48** |
+
+**The default is the least informative of the five.** `$14` is `D2_FIN`, the
+finalize code, and it was chosen because it is the one code whose meaning this
+project knows. That is a good reason for a default that must be *safe* and a bad
+one for a default that must be *informative*: answering every command with
+"transaction complete" ends the conversation immediately, which is exactly what
+the coverage shows.
+
+`$F0572C` — the 42-entry `PanelStatusDispatchTable` site — is **still never
+reached** at any code, consistent with the documented finding that the table
+belongs to a different caller.
+
+#### A fourth instrument defect: two hooks that silently conflicted
+
+The first attempt at this sweep produced **five identical results** and looked
+like proof that the response code has no effect. It was run with `FPS3K_SEQ`
+still set, and `versabus_seq_take` overwrites `panel_resp_code` — the scripted
+sequence wins, silently, and `FPS3K_RESP` is ignored. Removing the conflict
+turns "no effect" into a 17-PC spread.
+
+The emulator now prints a warning once when both hooks are set. That matters
+beyond this sweep: a hook that is silently ignored produces a *flat* result,
+and a flat result reads as a negative finding rather than as a broken
+experiment.
+
+*Four instrument defects this session: the bus log's blind spot on `$400000`,
+the write-tracking gate that treated zero writes as non-writes, the `arm=` line
+that reported a different decision from the code, and now two hooks that
+override each other without saying so. Each produced a confident wrong number,
+and the flat-result case is the most dangerous because it looks like knowledge.*
+
 ### The chassis never interpreted the commands the issuer sent
 
 Toward whole-machine emulation, the chassis model had a structural gap: it

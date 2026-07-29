@@ -516,8 +516,18 @@ static void apif_write(uint32_t addr, uint16_t val) {
             chassis_process_panel_cmd(last_panel_cmd);
             /* The chassis answers a panel command by returning a status
              * code and interrupting on BIM0 ch0.  $14 is D2_FIN, the
-             * finalize code; it is the one code whose meaning we know, so
-             * it is what we return until the others are decoded. */
+             * finalize code.
+             *
+             * NOTE: $14 is the WORST default for exploration, measured.
+             * Sweeping the code with FPS3K_RESP (and without FPS3K_SEQ, which
+             * silently overrides it) gives RDHC coverage of 65 distinct PCs at
+             * $02 and $0B, 52 at $00, 50 at $08, and only 48 at $14 -- the
+             * least of the five.  That makes sense: D2_FIN is the code that
+             * FINALIZES a transaction, so answering every command with it ends
+             * the conversation immediately.  It was chosen because it is the
+             * one code whose meaning is known, which is a good reason for a
+             * default that must be safe and a bad one for a default that must
+             * be informative. */
             versabus_arm_panel_response(0x14, 400);
         }
         /* CONTINUE-TRANSFER (0x8005) — re-fire current cmd with the
@@ -1333,9 +1343,22 @@ static void panel_resp_tick(uint32_t cycles) {
     if (!panel_resp_armed) return;
     if (panel_resp_delay > cycles) { panel_resp_delay -= cycles; return; }
 
-    {   /* A scripted sequence overrides the fixed response code. */
+    {   /* A scripted sequence overrides the fixed response code -- which used
+         * to happen SILENTLY, so setting FPS3K_SEQ and FPS3K_RESP together
+         * gave the sequence with no indication that FPS3K_RESP was ignored.
+         * A sweep of FPS3K_RESP run with FPS3K_SEQ still set produced five
+         * identical results and looked like "the response code has no
+         * effect"; it has a large effect once the conflict is removed. */
         uint8_t sc;
-        if (versabus_seq_take(&sc)) panel_resp_code = sc;
+        if (versabus_seq_take(&sc)) {
+            static int warned;
+            if (!warned && getenv("FPS3K_RESP")) {
+                warned = 1;
+                fprintf(stderr, "[WARN] FPS3K_SEQ overrides FPS3K_RESP -- "
+                                "the scripted code wins; FPS3K_RESP ignored\n");
+            }
+            panel_resp_code = sc;
+        }
     }
     xltr.mode0 = (uint16_t)((xltr.mode0 & ~MODE0_RESP_MASK)
                             | panel_resp_code | MODE0_RESP_VALID);
