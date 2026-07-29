@@ -635,6 +635,36 @@ The BIM row reproduces the F046E0 table exactly, and the data-port rows
 reproduce the `$20` channel stride. This is a sixth independent
 confirmation of the mapping.
 
+### Measured bit usage on the mode registers
+
+Scanning every read-modify-write sequence on the XLTR registers gives
+usage counts per bit, which confirms the existing decode quantitatively
+and adds three bits it does not mention:
+
+| Register | Bit | Operations | Reading |
+|---|---|---|---|
+| MODE0 `$200` | 10 | `bclr` x13, `bset` x1 | response-acknowledge |
+| MODE0 | 11 | `bset` x4, `bclr` x1 | response-valid |
+| MODE1 `$202` | 0 | `bset` x1 | **not previously noted** (F05E04, TCBIO1I) |
+| MODE1 | 6 | `bset` x4 | **not previously noted** |
+| MODE1 | 7 | `btst` x15, `bset` x1, `bclr` x1 | busy — by far the most-tested bit in the block |
+| MODE1 | 12 | `bset` x8 | enable |
+| MODE1 | 14 | `bclr` x12, `bset` x1, `btst` x1 | control |
+| STATUS_IRQ `$218` | 4 | `btst` x1 | **not previously noted** |
+| STATUS_IRQ | 15 | `btst` x22 | ready/done |
+| BIM0 CR0 `$230` | 4 | `bclr` x1 | IRE, cleared by response code `$7` |
+
+The busy/enable/control assignments for MODE1 bits 7/12/14 were already
+in the register table; the counts confirm them independently. Immediate
+writes are narrower than the bit operations: MODE1 takes only `$8000`,
+`$2000`, `$1000` and one `$8020`; `STATUS_IRQ` takes `$400` and `$0`
+exactly 22 times each, which is the arm/clear pairing of the polled
+transfer loop.
+
+`DATA_HI` `$216` takes `$10`, `$20`, `$40`, `$80`, `$C0` — page selects,
+consistent with the emulator's bit-5 BERR gate derived from the boot
+self-tests.
+
 ### The dispatch table exists five times, and is position-independent
 
 The 42-slot table decoded elsewhere in this document as
