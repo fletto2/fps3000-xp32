@@ -1102,6 +1102,64 @@ that happens to satisfy every test is still wrong. But it is a much
 narrower gap than before, and it is the firmware's own definition of a
 working chassis.
 
+## Bus mastership: the SBC is the slave, and that explains the dead ends
+
+Motorola's Table 1 lists among the **16 control outputs** at
+`$1FFF0`/`$1FFF1`: *System Controller VERSAbus Transfer Request*,
+*VERSAbus Block Transfer Request*, and *VERSAbus Resource Management (4)*
+— and among the 12 status inputs, *VERSAbus Available*. Bus arbitration
+lives in the same register pair this document has been decoding.
+
+**The firmware never uses the upper half of it.** Every write to
+`$1FFF0` puts `$00` in the high byte:
+
+| write | `$1FFF0` | `$1FFF1` |
+|---|---|---|
+| `move.w #$0050` | `$00` | `$50` |
+| `move.w #$00D0` | `$00` | `$D0` |
+| `move.w #$0000` | `$00` | `$00` |
+| the eight `F08E2E` pattern longs | `$00` in all eight | varies |
+
+There is no bit operation on `$1FFF0` anywhere, and no byte write to it.
+Every bit the firmware manipulates individually — 3, 5, 6, 7 — is in
+`$1FFF1`.
+
+So of Motorola's sixteen control outputs, this firmware drives at most
+the low eight, and **never asserts a VERSAbus transfer request**. The SBC
+does not take bus mastership for these transfers.
+
+### What follows
+
+The chassis is the master. That is consistent with, and explains, three
+things established separately:
+
+1. **`$10AA` and `$105E` are read but never written** by any executed
+   code. If the chassis DMAs into SBC RAM as a bus master, that is
+   exactly what the CPU's view looks like.
+2. **No MMIO read ever consumes a host byte.** There is nothing for the
+   CPU to consume — the data arrives in RAM by DMA.
+3. **There is no CPU-observable "command complete" event**, which
+   defeated two attempts at a smarter scripted chassis (`F04736`, then
+   the `$FF000E` write). Of course there is not: the CPU is not driving
+   the transfer. The chassis knows when it is finished because it is the
+   one doing it. Both attempts were trying to infer completion from the
+   reactive party.
+
+The control flow is **chassis-driven with the SBC reactive**, not a
+peer-to-peer handshake. A scripted chassis should therefore drive its own
+schedule and treat the SBC's responses as acknowledgements, rather than
+waiting for the SBC to signal readiness for the next step.
+
+### Emulator divergence
+
+`fps3k_sbc.c` models no bus arbitration at all — the CPU always owns the
+bus and never stalls. Real hardware would hold the 68000 off (`BGACK`)
+during chassis DMA cycles. Nothing measured here depends on that, since
+no result is timing-sensitive, but it belongs on the "Known divergences"
+list: any experiment that depends on *when* the CPU sees a DMA'd value
+land will be wrong in the emulator, because in the model the value simply
+appears between one instruction and the next.
+
 ## What a clean emulator boot actually proves
 
 CLAUDE.md describes the emulator as booting "cleanly all the way through
