@@ -70,6 +70,23 @@ def main():
         rom[0xA27A:0xA27A + len(patch)] = patch
         print(f'  panic vector F0A27A -> JMP ${target:08X} (monitor_entry)')
 
+    # ------------------------------------------------------------------
+    # Restore the image checksum.
+    #
+    # The stock ROM's final word ($F0FFFE) is the XOR of every preceding
+    # 16-bit word, so the whole image XORs to zero.  Nothing in the
+    # firmware verifies this -- see CLAUDE.md -- but an EPROM programmer,
+    # a factory tool or the VM02 monitor may, and every patched image
+    # this script produced before 2026-07-29 left it broken.
+    # Recompute so the patched image XORs to zero again.
+    x = 0
+    for i in range(0, len(rom) - 2, 2):
+        x ^= (rom[i] << 8) | rom[i + 1]
+    old_ck = (rom[-2] << 8) | rom[-1]
+    rom[-2] = (x >> 8) & 0xFF
+    rom[-1] = x & 0xFF
+    print(f'  image checksum: ${old_ck:04X} -> ${x:04X} (whole image now XORs to 0)')
+
     open(args.out, 'wb').write(bytes(rom))
     print(f'Wrote {args.out} ({len(rom)} bytes)')
 

@@ -31,6 +31,9 @@ def word(a): return struct.unpack('>H', d[a-B:a-B+2])[0]
 def long_(a): return struct.unpack('>I', d[a-B:a-B+4])[0]
 
 print('ROM structure')
+x = 0
+for i in range(0, len(d), 2): x ^= (d[i] << 8) | d[i+1]
+check('image XORs to zero (final word is an XOR checksum)', x == 0, f'${x:04X}')
 check('ROM md5 unchanged',
       hashlib.md5(d).hexdigest() == '47f133c1c2bab61f887e7e2a92a43dac')
 # seven byte-identical copies of the 50-byte panel-command issuer
