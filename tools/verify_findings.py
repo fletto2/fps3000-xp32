@@ -69,6 +69,12 @@ diff_a00 = sum(1 for i in range(N) if d[0xF06900-B+i] != d[0xF05F00-B+i])
 diff_a18 = sum(1 for i in range(N) if d[0xF06900-B+i] != d[0xF05EE8-B+i])
 check('XP4I aligns at $A18, not $A00', diff_a18 < diff_a00 // 2,
       f'{diff_a18} vs {diff_a00}')
+# XP4I lacks the second command-port constant that ch1-3 have
+import struct as _s
+for port, want in [(0xFF004E,2),(0xFF006E,2),(0xFF008E,2),(0xFF00AE,1)]:
+    pat = _s.pack('>I', port)
+    n = sum(1 for i in range(len(d)-3) if d[i:i+4] == pat)
+    check(f'${port:06X} appears {want}x (XP4I lacks the trigger site)', n == want, n)
 # TDTI task regions
 for name, off in [(b'RDHC', 0xF0A600), (b'IO1I', 0xF0A660), (b'XP4I', 0xF0A6C0)]:
     check(f'TDTI entry {name.decode()}', d[off-B+4:off-B+8] == name)

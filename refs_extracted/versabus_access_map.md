@@ -1389,6 +1389,43 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### What TCBXP4I's divergence actually consists of
+
+The task-body diff puts XP4I 19.5% different from XP3I without saying
+*what* differs. Counting address constants answers it precisely.
+
+Every channel-port constant appears as an explicit `movea.l #imm,aN`, and
+the counts are symmetric except in one place:
+
+| constant | ch1 | ch2 | ch3 | ch4 |
+|---|---|---|---|---|
+| data-hi `+$08` | 1 | 1 | 1 | 1 |
+| command `+$0E` | **2** | **2** | **2** | **1** |
+
+The site channel 4 lacks is the second `movea.l`, the one that precedes
+the trigger. Channels 1-3 each contain:
+
+```
+movea.l #$FF00xE,a0       ; the command port
+move.w  #$0,(a1)          ; 32-bit data, high half
+move.w  #$1B,$2(a1)       ; 32-bit data, low half
+move.w  #$8000,(a0)       ; fire
+```
+
+at F07EC2/F07EC6, F074C2/F074C6 and F06AC2/F06AC6. **TCBXP4I has no
+equivalent — it writes `$8000` nowhere in `F05F00-F068FF`.**
+
+So XP4I is not merely "the edited copy": it is missing the
+load-pair-then-trigger sequence that the other three use to hand a 32-bit
+value to their channel. Whether that is deliberate (channel 4 being
+driven differently) or an omission in the original source is not
+established, but it is a concrete, checkable difference rather than a
+percentage.
+
+It also explains the `$9FA` spacing seen between XP3I's and XP4I's port
+constants where the task bodies align at `$A18`: the missing site shifts
+everything after it.
+
 ### Bit 5 is not derived from VMOD at all
 
 The bit-7 rule above is also wrong, and the **pattern table at F08E8C
