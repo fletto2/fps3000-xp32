@@ -1118,6 +1118,48 @@ return the last value written rather than any hardware state. That is
 what `versabus.c` implements, and phase `$0600`'s eight-pattern
 round-trip test only passes because of it.
 
+## The ROM image carries an XOR checksum; the kernel region does not touch the chassis
+
+Two checks on regions this project had written off.
+
+### The "free" ROM is not entirely free
+
+`F0A826-F0FFFF` is 22,490 bytes, and **22,488 of them are `$00`**. The
+exception is the final word at `$F0FFFE`: **`$C12D`**, which is the XOR of
+every preceding 16-bit word. The stock image therefore XORs to **zero** —
+an image-integrity word.
+
+Nothing in the firmware verifies it, so the standing claim that there is
+no ROM checksum *in the boot path* still holds. But the image is
+checksummed for someone — an EPROM programmer, a factory tool, the VM02
+monitor — and **every monitor image this project produced before
+2026-07-29 left it broken**, including the one burned for the first
+hardware attempt. `monitor/patch_rom.py` now recomputes it;
+`tools/verify_findings.py` asserts the stock image still XORs to zero.
+
+### The kernel region really is stock — a scan said otherwise and was wrong
+
+A 32-bit scan of `F00000-F04487` for chassis addresses returned five
+hits, suggesting FPS had patched the RMS68K kernel. **All five are false
+positives** — the scan was reading instruction operand pairs as address
+constants:
+
+| site | bytes | actual instruction |
+|---|---|---|
+| F03DC8 | `0C2A 00FF 0008` | `cmpi.b #$FF,$8(a2)` |
+| F03F50 | `0C29 00FF 0018` | `cmpi.b #$FF,$18(a1)` |
+| F02802 | `48EE 00FF 0100` | `movem.l <$00FF>,$100(a6)` |
+| F028A0 | `4CEC 0070 0012` | `movem.l $12(a4),<$0070>` |
+
+Searching instead for genuine address loads — `movea.l #imm,aN` (`2x7C`)
+and `lea imm.l,aN` (`4xF9`) — finds **zero** chassis references in the
+kernel region. The kernel is unmodified, and all chassis access lives in
+the FPS application code above `$F04488`, as previously assumed.
+
+Worth keeping as a method note: scanning a byte range for 32-bit
+constants at every even offset will manufacture hits out of any
+instruction whose operands happen to align. Decode before believing.
+
 ## Regression harness for the findings in this document
 
 `tools/verify_findings.py` asserts **21 of the claims made here**, in the
