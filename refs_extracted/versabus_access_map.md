@@ -1544,8 +1544,11 @@ apart and would make any proximity metric meaningless:
 | | bytes |
 |---|---|
 | unique logic (replication removed) | 14,792 |
-| attributed to a named routine or finding | 7,812 — **53%** |
-| unattributed, in runs of 200 B or more | 5,304 |
+| attributed to a named routine or finding | 10,204 — **69%** |
+| unattributed, in runs of 200 B or more | 2,848 |
+
+*(was 53% / 5,304 B before the self-test phase routines were named — see
+below.)*
 
 **The ten largest unattributed runs**, which are the work queue:
 
@@ -1564,12 +1567,28 @@ apart and would make any proximity metric meaningless:
 
 Two observations worth acting on.
 
-**Nearly half the backlog is in the self-test region** (2,412 of 5,304
-bytes across three runs). Those phases are documented behaviourally in
-`selftest_reference.md` — what each asserts and what a hang there means —
-but the routines themselves are unnamed. Since the suite now runs to
-completion in the emulator, they can be analysed with live traces rather
-than by reading alone, which is the cheapest remaining work here.
+**The self-test backlog is now cleared.** It was 2,412 of the 5,304
+bytes, and naming its phase routines took the total from 53% to 69%. All
+twenty-two phase entry points now carry their phase number and what they
+assert, cross-referenced to `selftest_reference.md`.
+
+Two helpers found while doing it are worth recording on their own.
+`F096AC` and `F096B8` are one instruction each — a single word read, and
+a single word clear — followed by **four NOPs** and `rts`:
+
+```
+F096AC   move.w (a1),d0      F096B8   clr.w (a1)
+         nop nop nop nop              nop nop nop nop
+         rts                          rts
+```
+
+The padding is not filler. On a 68000 a bus error is **asynchronous** and
+arrives some cycles after the access that caused it. Isolating the access
+in a subroutine with four NOPs after it guarantees the exception is taken
+*inside the helper*, at a known point, rather than at whatever
+instruction the caller happens to be executing when it lands. That is
+what lets phases `$1700` and `$1800` test the `$400000` window's access
+gating reliably: the caller can tell whether its probe faulted.
 
 **`F05356-F05687` in TCBRDHC is the highest-value single run.** It sits
 immediately before `PanelIOConfigure_25A` and contains the descriptor

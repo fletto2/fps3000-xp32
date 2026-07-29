@@ -7728,6 +7728,7 @@ loc_F08C40:
   f08c48: 4e 75                   rts      
 
 loc_F08C4A:
+;### phase $0200: VMOD bit 6 <-> board-status bit 3 inverse wiring
   f08c4a: 48 e7 c0 0c             movem.l  d0-d1/a4-a5, -(a7)
   f08c4e: 4b f9 00 01 ff f0       lea.l    $1fff0.l  [VMOD_CTRL], a5
 ;>>>> [R7/BOTH] This instruction loads the address 0xF70018 (the board status/control register, PAL-decoded) into a4 during HardwareInit, preparing to manipulate board status bits for the XLTR channel configuration sequence.
@@ -7826,6 +7827,7 @@ loc_F08D0C:
   f08d18: 4e 75                   rts      
 
 loc_F08D1A:
+;### phase $0300: ROM readback walk $F00000-$F10000
   f08d1a: 48 e7 c0 c0             movem.l  d0-d1/a0-a1, -(a7)
   f08d1e: 42 06                   clr.b    d6
   f08d20: 3d 46 02 04             move.w   d6, $204(a6)  [XLTR_CHANNEL_SELECT]
@@ -7859,6 +7861,7 @@ loc_F08D50:
 ; ============================================================
 RAMAddressingTest:
 ;>>>> [R10/BOTH] This instruction saves working registers (d1, a0-a1) on the stack at the entry of the RAMAddressingTest subroutine, which tests the XP-32 microcode staging buffer at 0x10000-0x1FFFF.
+;### phase $0400: RAMAddressingTest - no aliasing between $8000 and $10000
   f08d5e: 48 e7 40 c0             movem.l  d1/a0-a1, -(a7)
   f08d62: 42 87                   clr.l    d7
   f08d64: 42 06                   clr.b    d6
@@ -7914,7 +7917,7 @@ loc_F08DE8:
 ; BoardStatusPoll_3F11
 ; ============================================================
 BoardStatusPoll_3F11:
-;### BoardStatusPoll_3F11 - polls (status & $3F31) == $3F11. NEVER reads ROM.
+;### phase $0500: BoardStatusPoll_3F11 - (status & $3F31) == $3F11. NEVER reads ROM.
   f08df8: 48 e7 e0 08             movem.l  d0-d2/a4, -(a7)
   f08dfc: 42 06                   clr.b    d6
   f08dfe: 3d 46 02 04             move.w   d6, $204(a6)  [XLTR_CHANNEL_SELECT]
@@ -7939,6 +7942,7 @@ loc_F08E20:
   f08e2c: 4e 75                   rts      
 
 loc_F08E2E:
+;### phase $0600: VMOD longword pattern walk, 8 patterns from F08E8C
   f08e2e: 48 e7 d0 7c             movem.l  d0-d1/d3/a1-a5, -(a7)
   f08e32: 4b f9 00 01 ff f0       lea.l    $1fff0.l  [VMOD_CTRL], a5
   f08e38: 49 f9 00 f0 8e 8c       lea.l    loc_F08E8C.l, a4
@@ -7993,6 +7997,7 @@ loc_F08E8C:
 ; MemBusProbe
 ; ============================================================
 MemBusProbe:
+;### phase $1000: MemBusProbe - address-space boundary map
   f08eac: 48 e7 c0 e0             movem.l  d0-d1/a0-a2, -(a7)
   f08eb0: 42 06                   clr.b    d6
   f08eb2: 3d 46 02 04             move.w   d6, $204(a6)  [XLTR_CHANNEL_SELECT]
@@ -8044,6 +8049,7 @@ loc_F08F16:
   f08f1a: 4e 73                   rte      
 
 loc_F08F1C:
+;### phase $0700: short-I/O probe at $F82001 - the BUS ERROR is the expected result
   f08f1c: 48 e7 c0 e0             movem.l  d0-d1/a0-a2, -(a7)
   f08f20: 42 06                   clr.b    d6
   f08f22: 3d 46 02 04             move.w   d6, $204(a6)  [XLTR_CHANNEL_SELECT]
@@ -8083,6 +8089,7 @@ loc_F08F5E:
   f08f6e: 4e 75                   rts      
 
 loc_F08F70:
+;### phase $0800: IOChannelDiagnostic
   f08f70: 48 e7                   DC.W     0x48e7
 
 ; ============================================================
@@ -8179,6 +8186,7 @@ loc_F09052:
 
 loc_F0905A:
 ;>>>> [R7/BOTH] This instruction saves registers d0-d2/a0-a2 to the stack at the start of an interrupt handler (likely for the MC6840 PTM timer or board status interrupt) during Phase2Init or PTM initialization, as noted in the prior MC annotation.
+;### phase $0900: PTM interrupt test - vector $150, all three timers latch $0FFF
   f0905a: 48 e7 e0 e0             movem.l  d0-d2/a0-a2, -(a7)
   f0905e: 41 f9 00 f7 00 01       lea.l    $f70001.l, a0
   f09064: 45 f9 00 01 ff f0       lea.l    $1fff0.l  [VMOD_CTRL], a2
@@ -8305,6 +8313,7 @@ PTMInit:
   f0918a: 4e 75                   rts      
 
 loc_F0918C:
+;### phase $1100: panel bus, VMOD bit 4 -> board-status bit 1
   f0918c: 48 e7 c0 0c             movem.l  d0-d1/a4-a5, -(a7)
   f09190: 4b f9 00 01 ff f0       lea.l    $1fff0.l  [VMOD_CTRL], a5
   f09196: 49 f9 00 f7 00 18       lea.l    $f70018.l, a4
@@ -8385,6 +8394,7 @@ loc_F0922C:
   f09234: 4e 75                   rts      
 
 loc_F09236:
+;### phase $1200: level-2 chassis interrupt via vector $14C
   f09236: 48 e7 80 1c             movem.l  d0/a3-a5, -(a7)
   f0923a: 4b f9 00 01 ff f0       lea.l    $1fff0.l  [VMOD_CTRL], a5
   f09240: 08 ad 00 07 00 01       bclr.b   #$7, $1(a5)
@@ -8476,6 +8486,7 @@ loc_F09330:
   f09336: 4e 73                   rte      
 
 loc_F09338:
+;### phase $1300: dual-vector interrupt, vectors $148 and $140
   f09338: 48 e7 f0 3c             movem.l  d0-d3/a2-a5, -(a7)
   f0933c: 47 f9 00 f0 93 c8       lea.l    loc_F093C8.l, a3
   f09342: 49 f9 00 f0 93 be       lea.l    loc_F093BE.l, a4
@@ -8535,6 +8546,7 @@ loc_F093C8:
   f093cc: 4e 73                   rte      
 
 loc_F093CE:
+;### phase $1400: panel-bus interrupt with board-status confirmation
   f093ce: 48 e7 70 3c             movem.l  d1-d3/a2-a5, -(a7)
   f093d2: 45 f9 00 f0 94 cc       lea.l    loc_F094CC.l, a2
   f093d8: 47 f9 00 f0 94 e4       lea.l    loc_F094E4.l, a3
@@ -8640,6 +8652,7 @@ loc_F094E4:
   f094ee: 4e 73                   rte      
 
 loc_F094F0:
+;### phase $1500: CHANNEL_SELECT must be a clean read/write register
   f094f0: 42 06                   clr.b    d6
 
 loc_F094F2:
@@ -8664,6 +8677,7 @@ loc_F09516:
   f09516: 4e 75                   rts      
 
 loc_F09518:
+;### phase $1600: XLTR register file walk. STATUS_IRQ b4 = BIM population (16 vs 24)
   f09518: 48 e7 c0 80             movem.l  d0-d1/a0, -(a7)
   f0951c: 42 87                   clr.l    d7
   f0951e: 42 06                   clr.b    d6
@@ -8751,6 +8765,7 @@ loc_F095EE:
   f09600: 4e 75                   rts      
 
 loc_F09602:
+;### phase $1700: $400000 window access gating via DATA_HI - expects BERR
   f09602: 48 e7 c0 c0             movem.l  d0-d1/a0-a1, -(a7)
   f09606: 20 78 00 08             movea.l  $8.w, a0
   f0960a: 21 fc 00 f0 98 e0 00 08  move.l   #loc_F098E0, $8.w
@@ -8823,6 +8838,7 @@ loc_F0969A:
   f096aa: 4e 75                   rts      
 
 loc_F096AC:
+;### ChassisProbe_Read: ONE read then four NOPs. The padding exists because a 68000
   f096ac: 30 11                   move.w   (a1), d0
   f096ae: 4e 71                   nop      
   f096b0: 4e 71                   nop      
@@ -8832,6 +8848,7 @@ loc_F096AC:
 
 loc_F096B8:
 ;>>>> [R5/BOTH] This is a utility subroutine that clears the word at (a1) — likely a panel bus command/status register — used as a "clear-and-wait" primitive before initiating a new panel command sequence.
+;### ChassisProbe_Write: ONE write then four NOPs - same reason: a bus error is
   f096b8: 42 51                   clr.w    (a1)
   f096ba: 4e 71                   nop      
   f096bc: 4e 71                   nop      
@@ -8840,6 +8857,7 @@ loc_F096B8:
   f096c2: 4e 75                   rts      
 
 loc_F096C4:
+;### phase $1800: $400000 gating, second pass with other DATA_HI values
   f096c4: 48 e7 c0 c0             movem.l  d0-d1/a0-a1, -(a7)
   f096c8: 20 78 00 08             movea.l  $8.w, a0
   f096cc: 21 fc 00 f0 98 e0 00 08  move.l   #loc_F098E0, $8.w
@@ -8916,6 +8934,7 @@ loc_F09764:
   f09774: 4e 75                   rts      
 
 loc_F09776:
+;### phase $1900: chassis memory data lines, $55555555 / $AAAA5555
   f09776: 48 e7 e0 80             movem.l  d0-d2/a0, -(a7)
   f0977a: 42 87                   clr.l    d7
   f0977c: 42 06                   clr.b    d6
@@ -9004,6 +9023,7 @@ loc_F0982C:
   f09830: 4e 75                   rts      
 
 loc_F09832:
+;### phase $1A00: AP I/F window, STATUS_IRQ and COUNTER
   f09832: 48 e7 40 80             movem.l  d1/a0, -(a7)
 ;>>>> [R15/GLM] Loads reset vector address ($8.w) into a0 for diagnostic vector setup.
   f09836: 20 78 00 08             movea.l  $8.w, a0
@@ -9360,6 +9380,7 @@ loc_F09AC8:
   f09ad4: 4e 75                   rts      
 
 loc_F09AD6:
+;### phase $2200: chassis block move, $400000 for $4000 bytes, 4 passes
   f09ad6: 48 e7 e0 80             movem.l  d0-d2/a0, -(a7)
   f09ada: 42 87                   clr.l    d7
 ;>>>> [R7/BOTH] This instruction clears byte register d6 to initialize the channel counter to 0 at the start of a DMA transfer parameter setup subroutine during hardware initialization, before writing it to the XLTR_CHANNEL_SELECT register at $204(a6)  [XLTR_CHANNEL_SELECT].
@@ -9397,6 +9418,7 @@ loc_F09B0C:
   f09b1e: 4e 75                   rts      
 
 loc_F09B20:
+;### phase $2300: chassis A14 decode - $400000 and $404000 must be distinct
   f09b20: 48 e7 e0 f0             movem.l  d0-d2/a0-a3, -(a7)
   f09b24: 42 6e 02 10             clr.w    $210(a6)  [XLTR_MODE2_PAGE]
   f09b28: 42 87                   clr.l    d7
