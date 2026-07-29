@@ -166,6 +166,17 @@ else:
     check('a clean boot uses well under half the 1 KB supervisor stack',
           all(_r[x:x+4] == _P for x in range(0x404, 0x600, 4)))
 
+    check('directive $2D creates per-task ASQ blocks in reverse task order',
+          [(_r[x:x+4], _r[x+10:x+14]) for x in
+           (0x1E700, 0x1E500, 0x1E300, 0x1E100)] ==
+          [(b'AXP1', b'HXP1'), (b'AXP2', b'HXP2'),
+           (b'AXP3', b'HXP3'), (b'AXP4', b'HXP4')] and
+          _r[0x1DF00:0x1DF04] == b'HIO1')
+    check('$1FB00 is a !UST directory of nine (task, queue) pairs',
+          _r[0x1FB00:0x1FB04] == b'!UST' and
+          _r[0x1FB14:0x1FB18] == b'XP1I' and _r[0x1FB1C:0x1FB20] == b'AXP1' and
+          _r[0x1FBC4:0x1FBC8] == b'IO1I' and _r[0x1FBCC:0x1FBD0] == b'HIO1')
+
     check('RTOS creates only !TCB x6 and !TST x6, no !ASQ/!CCB/!DLY',
           [sum(1 for x in range(0, 0x20000) if _r[x:x+4] == tg)
            for tg in (b'!TCB', b'!TST', b'!ASQ', b'!CCB', b'!DLY')]

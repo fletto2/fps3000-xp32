@@ -1488,12 +1488,40 @@ Searching post-boot RAM for the five RMS68K markers:
 Only task control blocks and `!TST` structures exist at runtime, both one per
 task on the same `$200` grid.
 
-**No `!ASQ` structure is created, although every task attaches two.** Each XP
-task calls directive `$2D` twice with `AXPn`/`HXPn`, TCBIO1I once with `HIO1`,
-and **none of those calls fails** — the failure paths would issue a panel code
-and nothing is issued. So either `$2D` is not "create ASQ", or ASQs are
-allocated lazily on first use and nothing in a quiet boot ever uses one. The
-kernel does carry `!ASQ` code, at `$F015EA` and `$F023B6`.
+**No `!ASQ`-tagged structure is created, but the queues do exist** — the
+question left open by the marker search is resolved by looking for the names
+instead of the tag. Directive `$2D` creates two things, neither tagged `!ASQ`:
+
+**A 20-byte per-task ASQ block**, on the `$200` grid, in **reverse task order**
+— the opposite of the TCB order:
+
+| address | task | queues |
+|---|---|---|
+| `$1E700` | XP1I | `AXP1` +0, `HXP1` +`$A` |
+| `$1E500` | XP2I | `AXP2`, `HXP2` |
+| `$1E300` | XP3I | `AXP3`, `HXP3` |
+| `$1E100` | XP4I | `AXP4`, `HXP4` |
+| `$1DF00` | IO1I | `HIO1` only |
+
+Each entry is the **same 10-byte shape the task header carries at `+$2C`/`+$36`**
+— name, two zero bytes, a 16-bit value, then `$0002`. The 16-bit values run
+`$14 $2A $40 $56 $6C $82 $98 $AE $C4` across the nine queues in task order:
+`$14 + index*$16`, so every queue has an index and something downstream is 22
+bytes per queue.
+
+**And a `!UST` directory at `$1FB00`** — the User Segment Table — holding nine
+14-byte `(task, queue)` pairs:
+
+```
+XP1I/AXP1  XP1I/HXP1  XP2I/AXP2  XP2I/HXP2  XP3I/AXP3
+XP3I/HXP3  XP4I/AXP4  XP4I/HXP4  IO1I/HIO1
+```
+
+So the attachments are recorded twice: once per task, once globally. `$2D` is
+therefore an **ASQ attach that registers a name**, and the absence of an
+`!ASQ` marker means RMS68K tags only some of its structures, not that the call
+did nothing. The kernel's `!ASQ` code at `$F015EA`/`$F023B6` presumably builds
+the tagged form when a queue is actually used.
 
 The 164-byte companion block at `$1E9F8 + $200*n` is not marker-tagged. Its
 contents point back into the task's own ROM structures — XP1I's copy holds
