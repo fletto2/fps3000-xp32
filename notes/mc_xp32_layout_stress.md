@@ -1347,3 +1347,27 @@ These three fixes are the minimum changes needed to make the layout *behaviorall
 ERROR: HTTP Error 429: Too Many Requests
 ```
 
+
+
+---
+
+## Two further objections from AMD's published 128-bit word (2026-07-29)
+
+Comparing the consensus against AMD's Am29500 reference-design microword
+— same width, same workload, overlapping parts — raises two more. Full
+argument in `notes/xp32_layout_vs_amd_reference.md`.
+
+1. **The S-Pad may not belong in the AU word at all.** Bits 1-23 are
+   inherited from the AP-120B, which had no separate EU. The XP-32 splits
+   EU (Am29116 + 2K x 80 PROM) from AU (FP pipes + 4K x 128 WCS), and the
+   Am29116 *is* an integer processor with a register file — the S-Pad's
+   job. AMD's design puts exactly that work in its Am29116. If so the AU
+   word has no S-Pad field and ~23 bits are free, and the `EU_ADDR`
+   objection above changes shape because the EU would be running its own
+   program rather than being addressed by the AU word.
+
+2. **A 9-bit Branch field cannot address a 4K store.** AMD spends 12 bits
+   on the branch address alone for a 2K store; the XP-32 WCS is 4K deep.
+   Not a refutation — short relative displacement plus a sequencer stack,
+   as on the AP-120B, resolves it — but the layout should say which
+   mechanism it assumes, since "it branches relatively" is load-bearing.
