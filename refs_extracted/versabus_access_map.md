@@ -1389,6 +1389,104 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The XP task templates, diffed at exact bounds
+
+With the TDTI table giving exact `$A00` extents, the four channel tasks can
+be diffed byte-for-byte for the first time. The result splits cleanly in two.
+
+#### XP1I / XP2I / XP3I: 77 single-byte patches, and nothing else
+
+The three differ in **77 of 2560 bytes (3.0%)**, and **76 of the 77 runs are
+a single byte**. Every one is a constant substitution, in a small number of
+classes:
+
+| bytes | what varies |
+|---|---|
+| `31`/`32`/`33` | ASCII channel digit in the task name |
+| `45`/`46`/`47` | interrupt vector number |
+| `01`/`02`/`03` | channel number as a literal |
+| `7D`/`73`/`69` | own-region high byte (self-references) |
+| `7E`/`74`/`6A`, `7F`/`75`/`6B` | handler / ISR-exit high bytes |
+| `86`/`7C`/`72`, `84`/`7A`/`70`, `85`/`7B`/`71`, `83`/`79`/`6F` | in-region routine addresses |
+| `48`/`68`/`88`, `4A`/`6A`/`8A`, `4E`/`6E`/`8E`, `68`/`6E`/`74` | channel port low bytes |
+| `44`/`46`/`50` | BIM control-register low byte |
+| `66`/`6C`/`72` | per-channel RAM variable low bytes |
+
+This is what "byte-identical block replication" means, quantified: one
+template, copied three times, with 77 constants patched. No structural
+difference of any kind.
+
+#### `$105E` is the chassis's channel selector
+
+Each task carries the same test against its own channel number:
+
+```
+XP1I  $F07DF6:  cmpi.w #$0001,$105E
+XP2I  $F073F6:  cmpi.w #$0002,$105E
+XP3I  $F069F6:  cmpi.w #$0003,$105E
+XP4I  $F05FF6:  cmpi.w #$0004,$105E
+```
+
+`$105E` is one of the two RAM locations CLAUDE.md lists as written by
+something other than the CPU (with `$10AA`). Its **role** is now identified:
+it holds a channel number, and each XP task compares it against its own. A
+chassis wanting to address channel *n* writes *n* there.
+
+There are also **per-channel RAM blocks at `$1066`, `$106C`, `$1072`,
+`$1078`** — stride 6, in channel order.
+
+#### XP4I is a different variant, not a degraded copy
+
+Sequence-aligning XP1I against XP4I shows XP4I both **adds and removes**
+code, netting −1 byte:
+
+| | XP1I | XP4I |
+|---|---|---|
+| `move.w #$8020,$202(a5)` (XLTR MODE1) | absent | **present** ($F06005) |
+| `$1F41`/`$1F45` constants | absent | **present** ($F060B4) |
+| `btst #$B,$1066` + `move.w #1,d0` (15 b) | present ($F07E8F) | absent |
+| load-pair + trigger (18 b) | present ($F07EBE) | **absent** |
+
+The 18-byte block XP4I lacks is exactly the sequence the previous commit
+identified from constant counts:
+
+```
+$F07EC0  movea.l #$FF004E,a0     ; command port
+$F07EC6  move.w  #$0,(a1)        ; 32-bit data, high half
+$F07ECA  move.w  #$1B,$2(a1)     ; 32-bit data, low half
+         move.w  #$8000,(a0)     ; fire
+```
+
+Counting the two halves separately makes the asymmetry exact:
+
+| | XP1I | XP2I | XP3I | XP4I |
+|---|---|---|---|---|
+| `movea.l #$FF00xE,a0` | 2 | 2 | 2 | **1** |
+| `move.w #$8000,(a0)` (fire) | 1 | 1 | 1 | **0** |
+
+XP4I still loads its command port once — so it is not that channel 4 is
+unaddressed — but it **never fires the trigger**.
+
+That confirms the earlier finding by an independent method, and corrects its
+framing. **XP4I is not "the same task minus a trigger".** It is a variant
+with its own XLTR MODE1 write and its own constants, which happens also to
+omit the load-and-fire sequence. The earlier "19.5% different" figure and
+the follow-up "XP4I lacks the trigger site" both pointed at this without
+resolving it; the exact-bounds diff resolves it.
+
+**What it means is open.** Two readings, neither established:
+
+1. **A different device on channel 4.** The `$8020` MODE1 write and the
+   absence of the XP-32 data-load-and-fire suggest channel 4 addresses
+   something that is not an XP-32 AC.
+2. **Version skew.** XP4I may be an older or newer revision of the same
+   template that the other three were not resynchronised with.
+
+Reading 1 is the more interesting and reading 2 the more likely, since
+`$8020` differs from the common `$8000` in one bit. Nothing here decides it,
+and the chassis populates only AC1 and AC2, so channel 4 is dormant either
+way.
+
 ### The TDTI table declares each task's entry point and exact code extent
 
 The six `!TCB` entries at `$F0A600`, `$60` apart, carry more than a name.

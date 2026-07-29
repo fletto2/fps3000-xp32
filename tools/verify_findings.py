@@ -100,6 +100,25 @@ else:
           tr.count('F0F0F0F0') == 0 and 'F08B88\n' not in tr)
     check('self-tests: diagnostic region executes',
           len({l for l in tr.split() if 'F08D00' <= l <= 'F09BFF'}) > 500)
+    # --- XP template diff at exact TDTI bounds ---------------------------
+    xp = {n: d[b-B:b-B+0xA00] for n, b in
+          [('1',0xF07D00),('2',0xF07300),('3',0xF06900),('4',0xF05F00)]}
+    check('XP1I/2/3 differ in exactly 77 bytes (template + constant patches)',
+          sum(1 for i in range(0xA00)
+              if len({xp[n][i] for n in '123'}) > 1) == 77)
+    check('$105E is the channel selector: each task tests its own number',
+          all(struct.unpack('>HHI', xp[n][0xF6:0xFE]) == (0x0C79, int(n), 0x105E)
+              for n in '1234'))
+    check('XP4I has the $8020 XLTR MODE1 write the others lack',
+          xp['4'][0x105:0x10C].hex().upper() == 'A43B7C80200202' and
+          all(xp[n][0x105:0x10C].hex().upper() != 'A43B7C80200202' for n in '123'))
+    check('XP4I lacks the 18-byte load-and-fire block',
+          xp['1'][0x1BE:0x1D0].hex().upper() ==
+          '6714207C00FF004E32BC0000337C001B0002' and
+          [xp[n].count(bytes([0x20,0x7c,0,0xff,0,c])) for n, c in
+           zip('1234', (0x4E,0x6E,0x8E,0xAE))] == [2,2,2,1] and
+          [xp[n].count(bytes.fromhex('30BC8000')) for n in '1234'] == [1,1,1,0])
+
     # --- TDTI table: entry points and exact region extents ---------------
     TDTI = [('RDHC',0xF046F0,0xF04600,0xF05CFF),('IO1I',0xF05D36,0xF05D00,0xF05EFF),
             ('XP4I',0xF05F4A,0xF05F00,0xF068FF),('XP3I',0xF0694A,0xF06900,0xF072FF),
