@@ -108,6 +108,18 @@ else:
     except FileNotFoundError:
         check('fps3k.asm present', False)
 
+    # --- the vector table is fully written; the spare BIMs split two ways -
+    _, ramv = run({}, 400_000_000)
+    vec = lambda n: struct.unpack('>I', ramv[n*4:n*4+4])[0]
+    check('every vector $000-$3FF is written (none left as power-on garbage)',
+          all(vec(n) != 0 for n in range(256)))
+    check('spare BIM vectors $42/$43/$44 -> F00896, $49 -> the panic catch-all',
+          [vec(0x42), vec(0x43), vec(0x44)] == [0xF00896]*3 and
+          vec(0x49) == 0xF0A27A)
+    check('the app fill starts at $124 and skips only $230',
+          d[0xA14A:0xA158].hex().upper() == '207C00000124B1FC000002306706'
+          and vec(0x8C) == 0xF00896)
+
     # --- $10AA is out of reach of the only code that writes that array ---
     check('cmd-1 writes $10A0[(ch-1)*2] and is bounded by $105E',
           d[0x53CC:0x53D2].hex().upper() == '20045380E588' and

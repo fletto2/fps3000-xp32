@@ -2810,11 +2810,47 @@ unimplemented: FPS allocated a contiguous ten-vector block across the three
 BIMs, and this configuration wires up six of them.
 
 The firmware is self-consistent about it — the four have their IRE bit
-clear, so they cannot fire, and a vector installed at the BIM for a source
-that can never assert is harmless. But it is worth knowing before a bring-up
-attempt: if any of those four channels *does* interrupt, on real hardware it
-dispatches through a DRAM vector the RTOS never wrote, which on a
-power-on-random board is a jump to a garbage address.
+clear, so they cannot fire.
+
+**A claim made here earlier is retracted.** This section originally said that
+if one of the four *did* interrupt it would "dispatch through a DRAM vector the
+RTOS never wrote … a jump to a garbage address". Dumping the whole vector table
+after a boot shows every one of the 256 vectors is written, and the four split
+two ways:
+
+| BIM channel | vector | address | handler |
+|---|---|---|---|
+| BIM0 ch1 | `$42` | `$108` | `F00896` — RMS68K generic handler |
+| BIM0 ch2 | `$43` | `$10C` | `F00896` |
+| BIM0 ch3 | `$44` | `$110` | `F00896` |
+| BIM1 ch1 | `$49` | `$124` | **`F0A27A` — the panic catch-all** |
+
+The split is an accident of one address. The application's vector fill at
+`$F0A146` starts at **`$124`** and runs 182 entries, so everything below it
+keeps whatever earlier initialisation left — the generic handler — and `$124`
+is *exactly* vector `$49`, the first entry the fill overwrites.
+
+So three of the four spare channels would be serviced harmlessly and the fourth
+would panic. That is a sharper and less alarming statement than the one it
+replaces, and it was only reachable by dumping the table rather than reasoning
+about it.
+
+#### The rest of the table
+
+| vectors | handler |
+|---|---|
+| 0, 1, 31 | `F088FC` |
+| 2, 3, 4, 5, 6 (bus error, address error, illegal, div0, CHK) | `F0A23A`, `F0A242`, `F0A24A`, `F0A252`, `F0A25A` — one each |
+| `$030`-`$110` assorted | `F00896` ×37 |
+| `$104`, `$114`-`$128` | the six task ISRs |
+| `$124`-`$3FF` | `F0A27A` ×182, **except `$230`** |
+
+**`$230` (vector 140) is the fill's only deliberate exception** —
+`cmpa.l #$230,a0 / beq` steps over it, preserving `F00896`. A watchpoint shows
+`$F09CF6` (`move.l a4,(a3)+`, a generic fill loop) put it there earlier in the
+same boot. So the firmware installs a handler at vector 140 and then takes care
+not to clobber it. What raises vector 140 remains unidentified — it is not a
+BIM channel, since the BIM vector registers only ever carry `$41`-`$4A`.
 
 The natural reading of the block is that BIM0's four channels serve the
 chassis command interface (ch0 = `$41` is the panel-status response handler)
