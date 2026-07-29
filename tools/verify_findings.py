@@ -153,6 +153,15 @@ else:
               0xA240 + 8*i + struct.unpack('>H', d[0xA240+8*i:0xA242+8*i])[0]
               == 0xA57E for i in range(9)))
 
+    # --- the firmware never reads never-written DRAM ---------------------
+    with tempfile.TemporaryDirectory() as _td3:
+        subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000'],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       env={**os.environ, 'FPS3K_UNINIT': _td3+'/u'})
+        _u = open(_td3+'/u').read()
+    check('firmware never reads a DRAM byte it has not written (parity-safe)',
+          _u.strip() == '')
+
     # --- FPS3K_LOGCHASSIS exposes the window; 4 PCs x 65536 --------------
     with tempfile.TemporaryDirectory() as _td2:
         _o = subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000'],

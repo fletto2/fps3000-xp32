@@ -1455,6 +1455,49 @@ original was right in substance and my re-verification of it was wrong in
 method. Both were caught by doing the arithmetic or the decode rather than
 trusting a summary.*
 
+### The firmware never reads untouched DRAM — parity is not a hazard for it
+
+CLAUDE.md's "Known divergences" table warns that real DRAM powers up with
+invalid byte parity, that reading never-written memory can raise a bus error
+if the parity strap is enabled, and that `clr` on untouched DRAM is a risk
+because a 68000 reads the destination first. The emulator has always carried a
+hook to detect exactly this (`FPS3K_UNINIT`), and it had never been run.
+
+Run, it reported **302,649 reads of never-written RAM** across a full boot —
+alarming, and wrong. The top offender was `$F08952`, which is
+`movem.l (a7)+,d1-d2`, a **stack pop**; 253,883 of the reads were in the stack
+page `$01Fxxx`.
+
+The cause was one gate in the instrument:
+
+```c
+if (a < RAM_SIZE && v) ram_written[a] = 1;   /* nonzero writes only */
+```
+
+**A write of zero did not mark the byte as written**, so every stack push of a
+zero byte — the high half of a small value, a cleared register — made the
+matching pop look like a read of untouched memory. On real hardware a write of
+zero establishes parity exactly like any other value.
+
+With the gate removed, a full boot reports **zero** reads of never-written
+DRAM. Not "few" — none.
+
+**So the stock firmware maintains the discipline the hardware requires**: every
+byte it reads, it has written first. The parity strap is not a hazard for it,
+and the "Known divergences" warning, while correct about the hardware, does not
+describe a risk this ROM takes.
+
+It also retroactively validates the in-ROM monitor's precautions — using
+`move.l #0` rather than `clr`, and having `cold_init` pre-write its whole
+workspace including `MON_REGS`. Those were adopted defensively; the stock
+firmware turns out to follow the same rule, so the monitor is consistent with
+the machine rather than merely careful.
+
+*Two instrument bugs in two consecutive investigations — the bus log's blind
+spot on `$400000` and this write-tracking gate — both of which produced
+confident, specific, wrong numbers. Neither was found by re-reading the
+firmware; both were found by asking what the tool could not see.*
+
 ### The two-trap architecture, and TRAP #2-#15 are free
 
 Sweeping **every** `TRAP #n` in the image, not just `TRAP #1`:

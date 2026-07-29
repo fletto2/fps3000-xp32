@@ -248,7 +248,12 @@ static uint8_t bus_read8(uint32_t a) {
 
 static void bus_write8(uint32_t a, uint8_t v) {
     a &= 0xFFFFFFu;
-    if (a < RAM_SIZE && v) ram_written[a] = 1;   /* nonzero writes only */
+    /* Any write establishes DRAM parity, including a write of zero.  This
+     * used to be gated on v != 0, which made every stack pop of a zero byte
+     * look like a read of untouched memory: it reported 302,649 such reads,
+     * 253,883 of them in the stack page $1Fxxx alone, and the top offender
+     * was a movem.l (a7)+ pop.  The gate is the bug, not the firmware. */
+    if (a < RAM_SIZE) ram_written[a] = 1;
     if (getenv("FPS3K_VECWATCH") && a >= 0x128 && a <= 0x12B)
         fprintf(stderr, "[VECWATCH] write %06X <- %02X from PC=%06X\n",
                 a, v, m68k_get_reg(NULL, M68K_REG_PPC));
