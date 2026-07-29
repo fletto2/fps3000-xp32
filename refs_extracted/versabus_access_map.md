@@ -635,6 +635,44 @@ The BIM row reproduces the F046E0 table exactly, and the data-port rows
 reproduce the `$20` channel stride. This is a sixth independent
 confirmation of the mapping.
 
+### The dispatch table exists five times, and is position-independent
+
+The 42-slot table decoded elsewhere in this document as
+`PanelStatusDispatchTable` at `F05BA4` is the TCBRDHC copy. There are
+**five**, one per task region, and they are **byte-for-byte identical**:
+
+| Copy | Region |
+|---|---|
+| `F05BA4` | TCBRDHC |
+| `F065E4` | TCBXP4I |
+| `F06FFC` | TCBXP3I |
+| `F079FC` | TCBXP2I |
+| `F083FC` | TCBXP1I |
+
+Identical bytes, different behaviour — because every slot is `4EFA`,
+`jmp d16(pc)`, which is **PC-relative**. The same bytes at a different
+address resolve to different targets, and each copy lands entirely inside
+its own task:
+
+| Copy | slot 1 | slot 2 | slot 8 | slot `$14` |
+|---|---|---|---|---|
+| RDHC | F05A12 | F058B2 | F05B0E | F05738 |
+| XP4I | F06452 | F062F2 | F0654E | F06178 |
+| XP3I | F06E6A | F06D0A | F06F66 | F06B90 |
+| XP2I | F0786A | F0770A | F07966 | F07590 |
+| XP1I | F0826A | F0810A | F08366 | F07F90 |
+
+This is why the table is built from PC-relative jumps rather than a list
+of addresses, and it completes the picture of how the four channel tasks
+were produced. A task body is a **relocatable block**: its internal jump
+tables need no relocation at all, so copying the block and patching the
+~45 per-channel constants listed above yields a working new channel. The
+FPS engineers wrote one channel task and replicated it — and TCBXP4I,
+the 90%-divergent one, is where that replication stopped being literal.
+
+An 82-byte companion table (`PanelErrorMaskTable` in the RDHC copy at
+`F05C4C`) is replicated the same way, once per region.
+
 ### The TDTI table gives exact task code regions
 
 The task definition table at `F0A600` has `$C0`-byte entries: `!TCB` plus
