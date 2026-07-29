@@ -80,6 +80,27 @@ static uint64_t total_instr  = 0;
  * dispatches on $10AA at F05E12 and no executed code ever stores a
  * nonzero value there, so if the transfer completes under this
  * injection, off-board delivery is the mechanism. */
+/* FPS3K_POKE="addr=word,addr=word,..." (hex) makes reads of those RAM
+ * words return the given value, modelling values the chassis supplies
+ * that this ROM never writes -- $105E (channel count) and $10AA are both
+ * in that class. */
+static int poke_lookup(uint32_t a, uint8_t *out) {
+    const char *e = getenv("FPS3K_POKE");
+    if (!e) return 0;
+    char buf[512];
+    snprintf(buf, sizeof buf, "%s", e);
+    for (char *t = strtok(buf, ","); t; t = strtok(NULL, ",")) {
+        char *eq = strchr(t, '=');
+        if (!eq) continue;
+        *eq = 0;
+        uint32_t base = (uint32_t)strtoul(t, NULL, 16);
+        uint32_t val  = (uint32_t)strtoul(eq + 1, NULL, 16);
+        if (a == base)     { *out = (uint8_t)(val >> 8); return 1; }
+        if (a == base + 1) { *out = (uint8_t)(val & 0xFF); return 1; }
+    }
+    return 0;
+}
+
 static int dma10aa_active(uint32_t *out) {
     const char *e = getenv("FPS3K_DMA10AA");
     if (!e) return 0;
@@ -88,6 +109,10 @@ static int dma10aa_active(uint32_t *out) {
 }
 
 static uint8_t bus_read8(uint32_t a) {
+    {
+        uint8_t pv;
+        if (a < 0x20000 && poke_lookup(a, &pv)) return pv;
+    }
     {
         uint32_t dv;
         if (a >= 0x10AA && a <= 0x10AD && dma10aa_active(&dv))

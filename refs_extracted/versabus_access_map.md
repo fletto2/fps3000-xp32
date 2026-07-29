@@ -474,12 +474,22 @@ with `d2 == 2` selecting the reply path. Drive both and the path runs:
 which the ISR *returns*: `F05E4C` (ISRExit) and the `trap #1` at F05E50
 had executed zero times in every earlier run.
 
-`$10AA` cannot come from this ROM. A write watchpoint over a full boot
-catches 8 writes to `$10AA-$10AD`, **all zeros**, from two bulk-clear
-routines (F0A1D2, F0A33C). The natural reading is a chassis-side
-**VersaBus master** DMAing a descriptor into SBC RAM, which would also
-explain why no MMIO read ever consumes a byte — but that is an
-inference. What is measured is only that the CPU never writes it.
+`$10AA` is not written by any path this emulator reaches. A write
+watchpoint over a full boot catches 8 writes to `$10AA-$10AD`, **all
+zeros**, from two bulk-clear routines (F0A1D2, F0A33C).
+
+**That is weaker than "the chassis must supply it", which an earlier
+revision of this file claimed.** F053E2 writes `#$2` into a word array at
+`$10A0` indexed by `(d4 - 1) * 2`, and index 6 lands on `$10AA` —
+`#$2` being exactly the value TCBIO1I dispatches on. So the ROM *does*
+contain code that writes a nonzero value there; it simply never runs in
+any configuration tested, because nothing reaches its enclosing function.
+`d4` is range-checked `1 <= d4 <= $105E`, so whether index 6 is even
+legal depends on `$105E`.
+
+A chassis-side VersaBus master remains a plausible source, but it is now
+one of two candidates rather than the only one, and the honest statement
+is that the value's origin is **unresolved**.
 
 Reproduce with `FPS3K_DMA10AA=2 FPS3K_MBOX=00010000 FPS3K_HOSTLVL=5`.
 
@@ -540,6 +550,55 @@ So `$E58`/`$E5A` is the 32-bit destination and `$E64`/`$E66` the 32-bit
 word count, and the chassis programs both by pushing (code, argument)
 pairs. That makes the whole thing a small command language, not a status
 report.
+
+### `$105E` is a chassis-supplied channel count
+
+`$105E` is compared in six places (F04838, F04C94, F04E46, F04EEE,
+F04F0A, F0538A) and **written nowhere**. It reads `$0000` after boot, and
+it bounds every channel loop: F0538A range-checks a channel number as
+`1 <= d4 <= $105E`, so at zero those loops never execute. It is the same
+class of value as `$10AA` — something the chassis tells the SBC.
+
+The channel number's meaning is pinned by F053B6, which loads
+`$48585030` and adds `d4` to the low byte. `$48585030` is ASCII
+**`"HXP0"`**, so this builds the `HXP1`..`HXP<n>` host-side ASQ names that
+CLAUDE.md lists. That is a fourth independent confirmation that these
+indices are XP channel numbers, and the first that ties them to the ASQ
+naming convention.
+
+A related array sits at `$10A0`, word-per-channel, written by F053E2 at
+index `(d4 - 1) * 2`.
+
+### `$1062` records the channel number, per task
+
+Each XP task writes its own channel number to `$1062`:
+
+| Site | Value | Task |
+|---|---|---|
+| F07E66 | 1 | TCBXP1I |
+| F07466 | 2 | TCBXP2I |
+| F06A66 | 3 | TCBXP3I |
+| F06018 | 4 | TCBXP4I |
+
+A third independent confirmation of the task-to-channel ordering, after
+the ISR/vector arithmetic and the F046E0 table. `$1064` is a separate
+shared word that all four tasks `and`/`or` bits into (F0683A, F07252,
+F07C52, F08652), so it is a per-channel bitmask rather than a per-channel
+slot.
+
+### Two indexed blocks the chassis can read and write
+
+Codes `$A` and `$C` operate on `$E7A`, a slot index range-checked
+0..`$C` (13 slots) and auto-incremented under `$E87` bit 4 — so the
+chassis can set that bit and walk a whole block with repeated codes.
+
+| Code | Block | Entry size | Access |
+|---|---|---|---|
+| `$A` | `$1064` | 2 bytes | read only |
+| `$C` | `$101E` | 4 bytes (high at `$101E+4N`, low at `$1020+4N`) | read and write, half selected by bit 6 |
+
+Thirteen slots, not four, so `$E7A` is not an XP channel number despite
+what some annotations in the disassembly say.
 
 ### A ROM table independently confirms the channel-to-BIM mapping
 
