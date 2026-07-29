@@ -407,8 +407,19 @@ static uint16_t apif_read(uint32_t addr) {
      * setting.  What a populated channel actually presents here is unknown
      * -- the firmware only tests nonzero -- so this returns a placeholder. */
     {
+        /* DEFAULT IS 2, not 0.  The machine being emulated is the 2-AC
+         * configuration from the chassis index plate: AC1 and AC2 populated,
+         * slots 7-10, with AC3/AC4 absent.  Defaulting to 0 modelled a chassis
+         * with NO XP cards at all -- not this machine -- and left the
+         * presence gate at $F07DF6 permanently taking the skip branch, so
+         * every XP task self-gated off in every run by default.
+         *
+         * Verified free: CHANNELS=0 and CHANNELS=2 both boot to final
+         * PC F00FCC with 1,032 self-test PCs and zero error-flag hits; =2
+         * merely adds the two present-path instructions.  Set
+         * FPS3K_CHANNELS=0 to model an empty chassis. */
         static int nch = -1;
-        if (nch < 0) { const char *e = getenv("FPS3K_CHANNELS"); nch = e ? atoi(e) : 0; }
+        if (nch < 0) { const char *e = getenv("FPS3K_CHANNELS"); nch = e ? atoi(e) : 2; }
         if (nch > 0 && (addr & 0x1F) == 0x0E && addr >= 0xFF0040 && addr <= 0xFF00AE) {
             int ch = ((addr - 0xFF0040) >> 5) + 1;
             /* FPS3K_CHCMD=<hex>: value the command port hands back.

@@ -280,6 +280,15 @@ else:
                   0xFF0000 <= struct.unpack('>I', d[a2+2:a2+6])[0] <= 0xFF02FF
                   for a2 in range(0, 0xA600, 2)))
 
+    # --- the model defaults to the real 2-AC machine ----------------------
+    _, rdef = run({}, 400_000_000)
+    check('default configuration reports $105E = 2 (AC1+AC2 populated)',
+          struct.unpack('>H', rdef[0x105E:0x1060])[0] == 2)
+    trdef, _ = run({}, 400_000_000)
+    check('by default XP1I and XP2I take the present path, XP3I/XP4I do not',
+          'F07E00\n' in trdef and 'F07400\n' in trdef
+          and 'F06A00\n' not in trdef)
+
     # --- hook conflicts are announced, not silent -------------------------
     def warns(env2):
         return subprocess.run([EMU, '-rom', ROM, '-cycles', '1000000'],

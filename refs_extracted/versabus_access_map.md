@@ -1473,6 +1473,41 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The model now defaults to the machine, not to an empty chassis
+
+`FPS3K_CHANNELS` defaulted to **0** — a chassis with no XP cards at all. That is
+not the machine being emulated: the chassis index plate shows the **2-AC
+configuration**, AC1 and AC2 populated in slots 7-10, AC3 and AC4 absent.
+
+The consequence was not cosmetic. `$105E` is the channel-present count, and with
+it at 0 the presence gate at `$F07DF6` took the skip branch in **every task, in
+every run, by default** — so the four XP tasks self-gated off unless someone
+happened to set the hook. The default configuration modelled a machine nobody
+has.
+
+The default is now **2**, and it is free: `CHANNELS=0` and `CHANNELS=2` both boot
+to `final PC = F00FCC` with 1,032 self-test PCs and **zero** error-flag hits, and
+the harness passes 132/132 either way. `=2` adds exactly the two present-path
+instructions.
+
+By default the model now reports:
+
+```
+$105E = 2                       (was 0)
+XP1I present path  F07E00  reached
+XP2I present path  F07400  reached
+XP3I / XP4I        skip path     (correct - not populated)
+probe increments   F0A20A, F0A212 both execute
+```
+
+`FPS3K_CHANNELS=0` still models an empty chassis when that is the experiment.
+
+This is a small change with a general point behind it: **for whole-machine
+emulation the default has to be the machine.** A hook whose default describes a
+configuration that does not exist is not a neutral starting point — it silently
+suppressed four of the six tasks, and every coverage figure this project has
+quoted was measured against it.
+
 ### Auditing the hooks against each other: four silent conflicts
 
 Four defects in a row were hooks overriding each other, so the interactions
