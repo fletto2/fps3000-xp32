@@ -96,6 +96,19 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- the $281 arm cannot be rescued: level 6 under a level-7 ISR -----
+    tr6, _ = run({'FPS3K_XPIRQ': '6'}, 150_000_000)
+    check('BIM0 ch0 responder F04930 runs when nothing is spinning',
+          tr6.count('F04930\n') > 0)
+    tsp, _ = run({'FPS3K_XPIRQ': '5,6', 'FPS3K_DMA10AA': '2',
+                  'FPS3K_MBOX': '20010000'}, 150_000_000)
+    check('...but never while TCBIO1I spins at $F05E86 (level 6 under 7)',
+          tsp.count('F05E86\n') > 1000 and tsp.count('F04930\n') == 0)
+    check('TCBIO1I contains no SR-modifying instruction (never lowers IPL)',
+          not any(struct.unpack('>H', d[a:a+2])[0] in (0x46FC, 0x027C, 0x007C)
+                  or 0x46C0 <= struct.unpack('>H', d[a:a+2])[0] <= 0x46C7
+                  for a in range(0x5D00, 0x5F00, 2)))
+
     # --- mailbox class field: only bits 16-17 == 1 writes the reply ------
     cls = {}
     for n in range(4):

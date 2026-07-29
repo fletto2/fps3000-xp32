@@ -1389,6 +1389,66 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The `$281` path is unserviceable as the firmware programs the BIMs
+
+TCBIO1I's host-request arm ends in the documented `bra .` spin, and the
+routine is short enough to give in full:
+
+```
+$F05E56  move.w  d0,$0E6E          ; stash the command code
+$F05E5C  movea.l #$FF0000,a0
+$F05E62  move.w  d0,$0E(a0)        ; $FF000E <- $281
+$F05E66  move.w  $202(a0),d1
+$F05E6A  bclr    #$E,d1            ; MODE1 bit 14 clear
+$F05E6E  bset    #$C,d1            ; MODE1 bit 12 set
+$F05E72  move.w  d1,$202(a0)
+$F05E76  move.w  $200(a0),d1
+$F05E7A  bclr    #$A,d1            ; MODE0 bit 10 clear
+$F05E7E  move.w  d1,$200(a0)
+$F05E82  move.w  d0,$204(a0)       ; CHANNEL_SELECT <- $281
+$F05E86  bra .                     ; spin
+```
+
+The spin is terminal. Escape is only by the panel-status responder `F04930`
+rewriting the saved PC — the mechanism documented for `PanelStatusDispatch`.
+
+**That responder can never run here.** Measured three ways:
+
+| configuration | spin `$F05E86` | rescuer `$F04930` |
+|---|---|---|
+| BIM0 ch0 raised, nothing spinning | – | **1** |
+| TCBIO1I ISR spinning (bit 29 set) | 18,135 | **0** |
+| both raised together | 18,135 | **0** |
+
+The responder works when it can be reached, and is shut out entirely once
+TCBIO1I is spinning. The reason is the level split the firmware itself
+programs: TCBIO1I's BIM channel carries `CR = $5F` (level 7) and BIM0 ch0
+carries `CR = $5E` (level 6), so on interrupt acknowledge the CPU masks to 7
+and a level-6 request cannot preempt. **TCBIO1I contains no SR-modifying
+instruction anywhere** — no `move #imm,SR`, no `andi #imm,SR` — so the ISR
+never lowers the mask.
+
+This matters because **the levels are written by this ROM, not set by
+straps**. It is not a board-wiring question that a bench session could
+resolve: as programmed, a panel command issued from inside the host-link ISR
+cannot be completed.
+
+Three readings, none established:
+
+1. **The chassis response does not arrive via BIM0 ch0.** The `$281` handshake
+   may complete through some other path — which would also explain why the
+   42-entry `PanelStatusDispatchTable` is never reached from `F04930`.
+2. **The `$281` arm is not taken in normal operation.** Bit 29 set means "host
+   needs attention"; if the real host link normally leaves it clear and works
+   through the `$10AA` arm — the one that *does* run to completion and write
+   `$00010002` — then this path is an edge case.
+3. **Something outside the firmware clears the spin.** A chassis-driven write
+   to the spinning task's stack frame would do it, and the chassis is a bus
+   master. Nothing establishes this.
+
+Reading 2 is the most economical, and it fits: the `$10AA` arm completes 1468
+times in the same run in which the `$281` arm deadlocks.
+
 ### The mailbox class field, confirmed properly
 
 The retraction below stands as to the *numbers*. The **substance** is now

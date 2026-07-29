@@ -1329,22 +1329,37 @@ void versabus_tick(uint32_t cycles) {
      * firmware's own: XP1I=BIM1 ch2, XP2I=BIM1 ch3, XP3I=BIM2 ch0,
      * XP4I=BIM2 ch1. */
     {
-        static int xpch = -1;
+        static int xpch = -1, xpmask;
         static uint64_t last;
         static uint64_t clk;
         clk += cycles;
-        if (xpch < 0) { const char *e = getenv("FPS3K_XPIRQ"); xpch = e ? atoi(e) : 0; }
+        if (xpch < 0) {
+            const char *e = getenv("FPS3K_XPIRQ");
+            xpch = e ? atoi(e) : 0;
+            /* accept a comma-separated list, so several channels can be
+             * raised together -- needed to test whether a task spinning at
+             * level 7 can be rescued by the level-6 panel responder */
+            for (const char *q = e; q; q = strchr(q, ','), q = q ? q + 1 : NULL) {
+                int v = atoi(q);
+                if (v >= 1 && v <= 6) xpmask |= 1 << v;
+            }
+        }
         /* 5 = TCBIO1I's host link, BIM2 ch2 ($FF0254, vector $4A).  Driving
          * it here raises the interrupt at the firmware's own level 7, which
          * is what the board does; earlier work had to force level 5 with
          * FPS3K_HOSTLVL because nothing raised the BIM. */
-        if (xpch >= 1 && xpch <= 5) {
-            static const int U[5] = {1,1,2,2,2}, C[5] = {2,3,0,1,2};
-            int u = U[xpch-1], c = C[xpch-1];
-            if (versabus_bim_enabled(u, c) && clk - last > 200000) {
-                last = clk;
-                versabus_bim_assert(u, c);
-            }
+        /* 6 = BIM0 ch0, the panel-status responder (level 6, vector $41,
+         * handler F04930).  It is the routine that rescues a "bra ." spin by
+         * rewriting the saved PC, so raising it is how to test whether a
+         * spinning task can be rescued at all. */
+        if (xpmask && clk - last > 200000) {
+            static const int U[6] = {1,1,2,2,2,0}, C[6] = {2,3,0,1,2,0};
+            last = clk;
+            for (int k = 1; k <= 6; k++)
+                if ((xpmask >> k) & 1) {
+                    int u = U[k-1], c = C[k-1];
+                    if (versabus_bim_enabled(u, c)) versabus_bim_assert(u, c);
+                }
         }
     }
     if (xltr.busy_ticks > cycles) xltr.busy_ticks -= cycles;
