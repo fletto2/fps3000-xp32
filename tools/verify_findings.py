@@ -96,6 +96,19 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- $F046E0 BIM table and RDHC's distinct prologue ------------------
+    check('$F046E0 is a 4-entry BIM CR table in channel order',
+          [struct.unpack('>I', d[0x46E0+i:0x46E4+i])[0] for i in (0,4,8,12)]
+          == [0x244, 0x246, 0x250, 0x252])
+    check("RDHC's $01 block is at $F046B0 with a UPGM tag, not base+$14",
+          d[0x46F0:0x46F8].hex().upper() == '700141F900F046B0' and
+          d[0x46B0:0x46B4] == b'RDHC' and d[0x46D4:0x46D8] == b'UPGM')
+    check("RDHC header +$14 -> directive $0B, +$30 -> directive $0D",
+          d[0x4774:0x477C].hex().upper() == '700B41F900F04614' and
+          d[0x47C0:0x47C8].hex().upper() == '700D41F900F04630')
+    check('RDHC enables its own BIM at level 6 right after connecting',
+          d[0x4730:0x4736].hex().upper() == '3B7C005E0230')
+
     # --- descriptor holds the whole prologue's parameter block -----------
     for b, nm, a1, a2_ in [(0xF07D00,b'XP1I',b'AXP1',b'HXP1'),
                            (0xF07300,b'XP2I',b'AXP2',b'HXP2'),

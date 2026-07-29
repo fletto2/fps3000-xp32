@@ -1389,6 +1389,72 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### RDHC's header, and the `$F046E0` BIM table located exactly
+
+RDHC's prologue differs from the XP tasks', and decoding it explains its odd
+header:
+
+```
+$F046F0  moveq #$01,d0 / lea $F046B0,a0 / trap #1   ; NOT base+$14
+$F046FC  fail -> panel $0276
+$F04710  moveq #$4C,d0 / lea $F04600,a0 / trap #1   ; interrupt triple, base+$00
+$F0471C  fail -> panel $0277
+$F0472A  movea.l #$FF0000,a5
+$F04730  move.w  #$5E,$230(a5)                      ; own BIM CR, level 6
+$F0473C  moveq #$13,d0 / trap #1                    ; block
+```
+
+RDHC connects its vector and then **immediately enables its own BIM at level
+6** — the value that later makes it unable to preempt a level-7 channel ISR.
+
+**Its `$01` block is at `$F046B0`, not `base+$14`**, and is richer than the XP
+tasks':
+
+```
+"RDHC"  $20000000  "STCK"  0  $00000190
+"USER"  $01000000  "UPGM"  $00010000  $0000D000
+```
+
+The first line is the same shape the XP tasks use. The second adds an owner,
+a second tag `UPGM`, and an address/size pair. `$00010000` is the WCS staging
+buffer base and `$0000D000` is 52 KB — suggestive of a program-segment
+declaration over that region, but **that is a guess from two numbers** and
+nothing here establishes it.
+
+So what is the odd material in RDHC's *header*? It is two more parameter
+blocks, for the directives only RDHC uses:
+
+| header offset | address | used by | failure code |
+|---|---|---|---|
+| `+$14` | `$F04614` | **directive `$0B`** at `$F04774` | `$0278` |
+| `+$30` | `$F04630` | **directive `$0D`** at `$F047C0` | `$027A` |
+
+Both are named `USER`. That completes the picture from the previous section:
+**a task's header holds parameter blocks for whatever directives that task
+calls**, and RDHC's look different because its directives are different.
+
+#### `$F046E0` is a four-entry BIM control-register table
+
+Immediately before RDHC's entry point:
+
+```
+$F046E0  00000244
+$F046E4  00000246
+$F046E8  00000250
+$F046EC  00000252
+$F046F0  <RDHC entry point>
+```
+
+These are the four **XP channel BIM control registers** — `$FF0244`,
+`$FF0246`, `$FF0250`, `$FF0252` — in channel order 1, 2, 3, 4. This project
+has cited "the F046E0 lookup table" as corroboration for the channel-to-BIM
+mapping; its exact location, extent and contents are now pinned: four
+longwords, offsets not full addresses, ending where RDHC's code begins.
+
+That makes **four** independent statements of the channel-to-BIM mapping in
+this ROM: this table, the per-task CR writes, the constant-ownership map, and
+the task descriptors' vector numbers.
+
 ### The task descriptor is the whole prologue's parameter block
 
 Reading past `+$14` shows the header is not just an interrupt declaration —
