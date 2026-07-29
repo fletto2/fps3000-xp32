@@ -1473,6 +1473,55 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The most-called routine in the ROM is the self-test checkpoint
+
+Censusing call targets — `jsr`, `jmp` and both `bsr` forms — finds **100
+distinct targets, of which this project had named 9**. The most-called is
+`$F0891C`, with **65 calls, every one from the init/self-test region**, and it
+had no name at all:
+
+```
+$F0891C  movem.l d1-d2,-(a7)
+$F08920  lea     $F70018,a2          ; board status
+$F08926  btst    #4,$1(a2)           ; $F70019 bit 4
+$F0892C  beq     -> $F08936
+$F0892E  btst    #5,$1(a2)           ; bit 5
+$F08934  bne     -> $F0894E          ; both set -> exit path $F088F4
+$F08936  tst.l   d7                  ; THE ERROR FLAG ($F0F0F0F0 on failure)
+$F08938  beq     -> $F08952          ; clean -> return
+$F0893A  lea     $1FFF0,a1
+$F08940  bclr    #6,$1(a1)           ; clear VMOD control bit 6
+$F08946  move.w  #$1000,$202(a6)     ; XLTR MODE1 <- $1000
+$F08952  movem.l (a7)+,d1-d2
+$F08956  rts
+```
+
+**This is where a self-test failure becomes externally visible.** It is called
+once per subtest — which is why 65 — and does two things when `d7` is set:
+clears **bit 6 of the VMOD control register at `$1FFF1`**, and writes **`$1000`
+to XLTR MODE1**. `$F08940` is the **only** bit-6 operation on that register
+anywhere in the ROM.
+
+Per this project's own chassis model, `$F70019` bit 5 mirrors `$1FFF1` bit 6
+directly, so clearing it changes what the board reports back. That pairs with
+the phase beacon: **the beacon at `$FF0204` says which subtest, and this routine
+is what signals that one failed.**
+
+In every configuration tested the error path at `$F0893A` **never executes** —
+no self-test failure in any run — so the signalling path itself is unexercised
+and its effect on real hardware is inferred from the two writes, not observed.
+
+*Correction made during this analysis: `$08A9` was first read as `bset`, which
+inverted the meaning — it is `bclr`. The encoding is bits 7-6 of the opcode
+word: `00` btst, `01` bchg, `10` bclr, `11` bset. The error path clears bit 6,
+it does not set it.*
+
+**91 of 100 call targets remain unnamed.** The nine named are the eight issuer
+copies plus the dispatch sites this project decoded; everything else — the
+`$F0A306` shared error path (16 calls), `$F0A332` (8), `$F05678` (7), the
+`$F096AC`/`$F096B8` chassis probes (4 each) — is either annotated in the asm
+without being in any table, or genuinely unlabelled.
+
 ### Complete RMS68K marker census: 12 tags, 7 undocumented
 
 CLAUDE.md lists five structure markers. Scanning both ROM and post-boot RAM for

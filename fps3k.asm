@@ -7446,6 +7446,8 @@ loc_F08916:
 ; PollBoardStatus
 ; ============================================================
 PollBoardStatus:
+;### SELF-TEST CHECKPOINT -- the MOST-CALLED routine in the ROM, 65 calls, all
+;###   from the init/test region: once per subtest. Reads board status $F70018,
 ;### PollBoardStatus: bit 4 set AND bit 5 set -> abandon the suite
   f0891c: 48 e7 00 60             movem.l  a1-a2, -(a7)
   f08920: 45 f9 00 f7 00 18       lea.l    $f70018.l, a2
@@ -7456,10 +7458,13 @@ PollBoardStatus:
   f08934: 66 18                   bne.b    loc_F0894E
 
 loc_F08936:
+;###   tests d7 (the $F0F0F0F0 error flag) and on failure CLEARS VMOD ctrl bit 6
   f08936: 4a 87                   tst.l    d7
   f08938: 67 18                   beq.b    loc_F08952
   f0893a: 43 f9 00 01 ff f0       lea.l    $1fff0.l  [VMOD_CTRL], a1
+;###   at $1FFF1 and writes $1000 to XLTR MODE1. This is where a failed subtest
   f08940: 08 a9 00 06 00 01       bclr.b   #$6, $1(a1)
+;###   becomes externally visible; the beacon at $FF0204 says WHICH subtest.
   f08946: 3d 7c 10 00 02 02       move.w   #$1000, $202(a6)  [XLTR_MODE1]
   f0894c: 60 04                   bra.b    loc_F08952
 

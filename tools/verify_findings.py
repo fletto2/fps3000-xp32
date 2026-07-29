@@ -249,6 +249,13 @@ else:
           sum(1 for a2 in range(0x8700, 0x9C00, 2)
               if 0x400000 <= struct.unpack('>I', d[a2:a2+4])[0] <= 0x4FFFFF) == 9)
 
+    # --- $F0891C is the self-test checkpoint, most-called routine ---------
+    check('$F0891C tests d7 and on failure clears VMOD bit 6 + MODE1 $1000',
+          d[0x8936:0x894C].hex().upper() ==
+          '4A87' + '6718' + '43F90001FFF0' + '08A900060001' + '3D7C10000202')
+    check('$F08940 is the only bit-6 operation on the VMOD control register',
+          d.count(bytes.fromhex('08A900060001')) == 1)
+
     # --- two-trap architecture; TRAP #2-#15 unused ------------------------
     tr_sites = {}
     for a2 in range(0, 0xA600, 2):

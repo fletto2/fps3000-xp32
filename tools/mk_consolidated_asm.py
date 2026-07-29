@@ -81,6 +81,11 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
  # ---- 2026-07-29 second pass: task structure, RTOS surface, channel path ----
+ (0xF0891C,'SELF-TEST CHECKPOINT -- the MOST-CALLED routine in the ROM, 65 calls, all'),
+ (0xF0891C,'  from the init/test region: once per subtest. Reads board status $F70018,'),
+ (0xF08936,'  tests d7 (the $F0F0F0F0 error flag) and on failure CLEARS VMOD ctrl bit 6'),
+ (0xF08940,'  at $1FFF1 and writes $1000 to XLTR MODE1. This is where a failed subtest'),
+ (0xF08946,'  becomes externally visible; the beacon at $FF0204 says WHICH subtest.'),
  (0xF04500,'PANEL-COMMAND ISSUER, copy 1 of 8. All 8 are byte-identical over 48 bytes:'),
  (0xF04506,'  stash d0 at $E6E, cmd -> $FF000E, MODE1 b14 clr / b12 set, MODE0 b10 clr,'),
  (0xF04530,'  CHANNEL_SELECT <- d0, then "bra ." -- escape only via F04930 rewriting the PC.'),
