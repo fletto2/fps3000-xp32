@@ -1558,12 +1558,44 @@ itself uses `$26E` for steps 1 and 2, `$270` for step 3 and `$271` for
 steps 4 and 5, and every other task uses the same codes at the same
 points. An earlier reading had them as `PCMD_CH{1..4}_TCB_FAIL`.
 
-Directive numbers used here: `$4C`, `$2B`, `$13`, `$11`, `$0F`. Only one
-is identified — `$0F` = 15 = **TERM**, terminate task, from the RMS68K
-source at `~/src/claude/versados/rms68k_source.SA`. The source names
-GTASQ 31, RDEVNT 34, WTEVNT 36, RTEVNT 37 and CMR 60, none of which
-match; the rest of the TRAP #1 numbering is not in the file, and the
-manual PDF has no text layer.
+### The firmware's complete RTOS call inventory
+
+`trap #1` occurs at **68 sites** using **13 distinct directive numbers**.
+The RMS68K TRAP #1 handler takes the number in **`d0`**, masks it to a
+word, range-checks it and scales it by 4 into a jump table — so `d0` is
+the directive and `a0`, where present, points at a parameter block.
+
+| directive | sites | | directive | sites |
+|---|---|---|---|---|
+| `$2D` | 9 | | `$10` | 5 |
+| `$2B` | 9 | | `$01` | 5 |
+| `$0F` | 6 | | `$43` | 4 |
+| `$4C` | 6 | | `$11` | 4 |
+| `$13` | 6 | | `$0D`, `$2A`, `$29` | 1 each |
+| `$12` | 5 | | | |
+
+**Only `$0F` is identified: 15 = TERM, terminate task.**
+
+The other twelve are **deliberately left unnamed**. A search of
+`rms68k_source.SA` for equates matching their values returns plausible
+hits for almost all of them — and every one checked was a false positive:
+
+| number | tempting match | why it is wrong |
+|---|---|---|
+| 43 | `NTSRSEQD EQU $43` | hex/decimal mismatch — `$43` is 67, not 43 |
+| 17 | `T0DASQX EQU 17` | a task-*stop cleanup* function code, not a directive |
+| 16 | `T0DSEMX EQU 16` | same family |
+| 19 | `T0EXEQDQ EQU 19` | same family |
+| 13 | `W_BRK1 EQU 13` | a terminal-driver function |
+
+The source does carry real directive equates — GTASQ 31, RDEVNT 34,
+WTEVNT 36, RTEVNT 37, CMR 60 — and **none of them matches any number this
+firmware uses**, which is itself informative: the FPS tasks are not using
+the event or ASQ-query directives. The rest of the TRAP #1 numbering is
+not in that file, and the RMS68K manual PDF has no text layer, so naming
+the remaining twelve needs a source this project does not have.
+
+
 
 ### One vector is deliberately spared the panic handler
 
