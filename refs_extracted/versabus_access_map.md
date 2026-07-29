@@ -696,6 +696,41 @@ four labels are wrong. The evidence supports:
 | +`$0A` | 32-bit data register, **low half** |
 | +`$0E` | **command/trigger** — `$8000` fires it; also readable |
 
+## Two XLTR register descriptions cite diagnostics as operation
+
+CLAUDE.md's XLTR table describes `$20C` as "Counter/Config, written
+`0x01`, `0xFF`" and `$216` as "Command Register, single-bit cmds
+`0x10`/`0x20`/`0x40`/`0x80`". Both take their values from the boot
+self-test and miss what the register does in service.
+
+**`$20C`** is written `$4` **seven times**, and that is the operational
+value — F04AC2 immediately before the bulk-transfer loop, F04B2C, F05A2C
+inside POLL, and the four task copies at F0646C, F06E84, F07884, F08284.
+`$1` and `$FF` occur once each, both inside the boot diagnostics (F09546,
+F098C4), and `$1` is read back and compared at F0959A, so the register is
+also readable. The documented values are the two that never run outside
+self-test; the one that matters is absent.
+
+**`$216`** takes `$10`, `$20`, `$40` and `$80` exactly **twice each**,
+all of them between F09626 and F09872 — the panel-bus diagnostic phases.
+They are set-then-test probe pairs, not commands. The one value written
+outside that range is `$C0` at F0A22A, in `RTOSKernelInit`, and `$C0` is
+`$80|$40` — not single-bit at all, which contradicts the "single-bit
+cmds" characterisation directly.
+
+In service `$216` is **read-modify-written**: F04EA0/F04EAA,
+F0550A/F05512, F05582/F0558A — three reads and thirteen writes in total.
+That is the behaviour of a mode or page register, which is what the
+emulator already treats it as (`xltr_data_hi() & $20` gates BERR on the
+`$400000` window, derived from diagnostic phase `$1700`). Calling it a
+command register with single-bit commands describes only the probe
+sequence.
+
+Note this leaves **two** page-like registers: `$210` (MODE2), which code
+`$3` loads with address bits 20-31, and `$216`, which gates `$400000`
+access. Whether they are independent or one qualifies the other is not
+settled here.
+
 ## The AP I/F opcode names are ours, not sourced
 
 `$8004` and `$8005` are real: 30 and 20 occurrences, both written to
