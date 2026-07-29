@@ -108,6 +108,14 @@ NOTES = {
  0xF08DF8:'BoardStatusPoll_3F11 - polls (status & $3F31) == $3F11. NEVER reads ROM.',
  0xF098EC:'phase $2000: RAM address uniqueness, move.l a0,(a0)+ over $0-$10000',
  0xF046E0:'4-entry table: XP channel -> BIM control register ($244,$246,$250,$252)',
+ # ---- RMS68K segment management ----
+ 0xF09D98:'SEGMENT TABLE SEARCH: 10-byte entries -- flags byte at +1, start longword at',
+ 0xF09DA4:'  +2, end longword at +6. Walks until d6, testing whether d2 falls in a range.',
+ 0xF09DB6:'  On no-match, bsr F0A306, the shared error path.',
+ 0xF09E88:'builds the !GST global segment table (tag $21475354) ...',
+ 0xF09ECE:'  ... and the !UST user segment table (tag $21555354)',
+ 0xF0A306:'SHARED ERROR PATH. Saves context to $800 (g_ctx_save). Reached two ways:',
+ 0xF0A30E:'  by direct bsr from the allocator, and as the "BE" bus-error recovery target',
  # ---- RMS68K bus-error recovery convention ----
  0xF0A44A:'BUS-ERROR GUARD: pea <recovery>(pc) then move.w #$4245,-(a7). $4245 is ASCII',
  0xF0A44E:'  "BE" -- the RMS68K bus error return flag (rms68k_source.SA: PEA KILLER(PC) /',

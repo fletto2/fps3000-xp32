@@ -9725,11 +9725,13 @@ loc_F09D7C:
 
 loc_F09D98:
 ;>>>> [R8/BOTH] Compares the marker field of the first TCB in the chain against the current VCT marker.
+;### SEGMENT TABLE SEARCH: 10-byte entries -- flags byte at +1, start longword at
   f09d98: b2 28 00 01             cmp.b    $1(a0), d1
   f09d9c: 67 18                   beq.b    loc_F09DB6
   f09d9e: b4 a8 00 02             cmp.l    $2(a0), d2
 ;>>>> [R9/BOTH] This conditional branch (beq) in Phase2Init_VCTscan checks if d2 (TCB address) matches the address at offset $2 of the current TCB chain entry during task initialization.
   f09da2: 67 20                   beq.b    loc_F09DC4
+;###   +2, end longword at +6. Walks until d6, testing whether d2 falls in a range.
   f09da4: b4 a8 00 06             cmp.l    $6(a0), d2
   f09da8: 6d 0c                   blt.b    loc_F09DB6
   f09daa: 41 e8 00 0a             lea.l    $a(a0), a0
@@ -9739,6 +9741,7 @@ loc_F09D98:
   f09db4: 6e 04                   bgt.b    loc_F09DBA
 
 loc_F09DB6:
+;###   On no-match, bsr F0A306, the shared error path.
   f09db6: 61 00 05 4e             bsr.w    loc_F0A306
 
 loc_F09DBA:
@@ -9827,6 +9830,7 @@ loc_F09E80:
 ; Init_GST_StoreTag
 ; ============================================================
 Init_GST_StoreTag:
+;### builds the !GST global segment table (tag $21475354) ...
   f09e88: 20 bc 21 47 53 54       move.l   #$21475354, (a0)
   f09e8e: 31 7c 00 01 00 08       move.w   #$1, $8(a0)
   f09e94: 31 42 00 0a             move.w   d2, $a(a0)
@@ -9855,6 +9859,7 @@ loc_F09EC6:
 ; Init_UST_StoreTag
 ; ============================================================
 Init_UST_StoreTag:
+;###   ... and the !UST user segment table (tag $21555354)
   f09ece: 20 bc 21 55 53 54       move.l   #$21555354, (a0)
 ;>>>> [R4/BOTH] This instruction writes the value 1 to offset 8 of the UST (User System Table) structure being initialized, which sets the entry count field in the RMS68K marker-tagged data structure during RTOS kernel initialization.
   f09ed4: 31 7c 00 01 00 08       move.w   #$1, $8(a0)
@@ -10306,9 +10311,11 @@ loc_F0A2F4:
   f0a304: 4e 75                   rts      
 
 loc_F0A306:
+;### SHARED ERROR PATH. Saves context to $800 (g_ctx_save). Reached two ways:
   f0a306: 48 56                   pea.l    (a6)
 ;>>>> [R10/BOTH] This `lea.l $800.l, a6` at 0xf0a308 loads the address of the context save area (g__ctx_save) into a6 during RTOSKernelInit, setting up the RMS68K kernel's task context storage for the supervisor mode initialization sequence.
   f0a308: 4d f9 00 00 08 00       lea.l    $800.l, a6
+;###   by direct bsr from the allocator, and as the "BE" bus-error recovery target
   f0a30e: 2c af 00 04             move.l   $4(a7), (a6)
   f0a312: 40 ee 00 04             move.w   sr, $4(a6)
   f0a316: 46 fc 27 00             move.w   #$2700, sr

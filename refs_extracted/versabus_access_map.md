@@ -1532,6 +1532,25 @@ transfer loop.
 consistent with the emulator's bit-5 BERR gate derived from the boot
 self-tests.
 
+### RMS68K segment management, and a shared error path
+
+`F09D96-F09E87` is the segment allocator's lookup: a table of **10-byte
+entries** — a flags byte at +1, a start longword at +2, an end longword
+at +6 — walked until `d6`, testing whether the address in `d2` falls
+inside a range.
+
+What follows confirms it. `F09E88` stamps `!GST` (`$21475354`, the global
+segment table) and `F09ECE` stamps `!UST` (`$21555354`, the user segment
+table) — two of the six RMS68K structure tags found in the strings sweep.
+
+**`F0A306` is a shared error path reached two different ways.** The
+allocator `bsr`s it directly when a lookup fails, and it is also the
+recovery address pushed by the `'BE'` bus-error guard at `F09D0E`. It
+saves context to `$800` (`g_ctx_save`) and continues. So a segment lookup
+that walks off a table and one that faults on a bad pointer converge on
+the same handler — which is why the guard and the search sit in the same
+few hundred bytes.
+
 ### Two different bus-error strategies, and `$4245` is `'BE'`
 
 A pattern occurring five times in the application region and three more
@@ -1721,11 +1740,12 @@ apart and would make any proximity metric meaningless:
 | | bytes |
 |---|---|
 | unique logic (replication removed) | 14,792 |
-| attributed to a named routine or finding | 11,284 — **76%** |
-| unattributed, in runs of 200 B or more | 2,848 |
+| attributed to a named routine or finding | 12,162 — **82%** |
+| unattributed, in runs of 200 B or more | 678 |
 
 *(53% before the self-test phases were named, 69% before the host command
-interface below.)*
+interface, 76% before RTOSKernelInit and the segment manager. Three runs
+remain: `F08B5C-F08C49`, `F099EE-F09AD5`, `F08832-F08901`.)*
 
 **The ten largest unattributed runs**, which are the work queue:
 
