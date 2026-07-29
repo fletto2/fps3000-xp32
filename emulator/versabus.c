@@ -900,7 +900,15 @@ static uint32_t board_status_read(uint32_t addr) {
          * FPS3K_BSTAT19_B5 forces the bit for experiments. */
         {
             const char *e = getenv("FPS3K_BSTAT19_B5");
-            int b5 = e ? (int)strtoul(e, NULL, 0) & 1 : b7_1FFF1;
+            /* Bit 5 is an INDEPENDENT chassis line, not derived from
+             * VMOD at all.  The pattern table at F08E8C settles it: every
+             * one of the eight patterns has bit 6 of $1FFF1 clear, but
+             * bit 7 varies ($9F, $9A set it).  So a bit-6 mirror blocks
+             * the F08732 gate and a bit-7 mirror makes PollBoardStatus
+             * abort mid-test on the second pattern.  Neither can be
+             * right.  Read as a chassis status line -- 0 = no fault, run
+             * diagnostics -- it satisfies both sites. */
+            int b5 = e ? (int)strtoul(e, NULL, 0) & 1 : 0;
             if (b5) live |=  0x00200000;
             else    live &= ~0x00200000;
         }

@@ -771,10 +771,54 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
-**This is inference, not proof.** The bit-7 rule is consistent with both
-samplings and it makes the diagnostics reachable, which any correct model
-must; it is not confirmed against hardware. But the old rule is
-*refuted* — it makes the firmware's own self-test suite unreachable.
+### Bit 5 is not derived from VMOD at all
+
+The bit-7 rule above is also wrong, and the **pattern table at F08E8C
+settles the question**. F08E2E walks eight longwords through `$1FFF0`
+and reads each back:
+
+```
+0010FFFF  009F00FF  0F1F0F0F  33133333
+AA9AAAAA  55155555  FF9FFFFF  00100000
+```
+
+The byte landing in `$1FFF1` is `$10, $9F, $1F, $13, $9A, $15, $9F, $10`.
+**Every one has bit 6 clear**, and several (`$9F`, `$9A`) have bit 7 set.
+So:
+
+- a **bit-6 mirror** reads back set at F08732 (because the gate write
+  `$50` sets bit 6) and blocks the diagnostics entirely;
+- a **bit-7 mirror** stays clear at the gate but goes set on the second
+  pattern, and `PollBoardStatus` then takes its `bra F088F4` abort path
+  in the middle of the test.
+
+Neither can be the design. Read instead as an **independent chassis
+status line** — 0 meaning no fault, run the diagnostics — both sites are
+satisfied simultaneously. That the pattern author kept bit 6 clear in all
+eight patterns is itself evidence the register's upper bits carry chassis
+meaning that the test deliberately avoids disturbing.
+
+With bit 5 modelled that way:
+
+| | diagnostic PCs | XLTR accesses | MainInit reaches |
+|---|---|---|---|
+| original (bit-6 mirror) | 0 | 27 | gate skips everything |
+| bit-7 mirror | 109 | 151 | F0878E |
+| **independent line** | **351** | **142** | **F087AA** |
+
+`F087AA` is `move.w #$d0,(a5)` — the "tests complete" write. The first
+test block now runs to completion and execution proceeds into the
+panel-bus diagnostics, ending at `F09126` in `IOChannelDiagnostic`, which
+spins 331,919 times reading `$2(a0)` on the I/O Channel window. Per the
+M68KVM02 memory map this chassis has **no I/O Channel boards**, so that
+test may need an absent-board response modelled, or may not be intended
+to pass here at all.
+
+Hook: `FPS3K_BSTAT19_B5` forces the bit either way.
+
+**Still inference, not proof.** What is established is negative and
+solid: bit 5 is a mirror of neither bit 6 nor bit 7 of `$1FFF1`, because
+each choice breaks one of the two sites that read it.
 
 ### What this calibrates
 
