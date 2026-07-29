@@ -1389,6 +1389,84 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The chassis register set is closed
+
+Redoing the access map with base-register tracking — the form the previous
+absolute-address scans were blind to — gives a complete picture, and it turns
+up **no undocumented registers**. Every access resolves to one of:
+`$FF0004`, `$FF000E`, the four channel windows, and
+`$FF0200`/`$0202`/`$0204`/`$020C`/`$0210`/`$0218`/`$021A` plus the BIM file.
+
+| register | RDHC | IO1I | XP4I | XP3I | XP2I | XP1I | init |
+|---|---|---|---|---|---|---|---|
+| `$FF0004` ready | R | . | R | R | R | R | . |
+| `$FF000E` panel cmd | W | W | W | W | W | W | W |
+| channel `+$04` | . | . | W | W | W | W | . |
+| channel `+$08` `+$0A` `+$0E` | . | . | R | R | R | R | . |
+| `$FF0200` `$FF0202` | RW | RW | RW | RW | RW | RW | RW |
+| `$FF0204` | W | W | W | W | W | W | W |
+| `$FF020C` | W | . | W | W | W | W | . |
+| `$FF0210` | RW | RW | . | . | . | . | . |
+| `$FF0218` | RW | . | . | . | . | . | . |
+| `$FF021A` | RW | . | RW | RW | RW | RW | . |
+| own BIM CR | W | W | W | W | W | W | W |
+
+Two limits on reading this as exhaustive. It only covers accesses made as a
+displacement off a register holding `$FF0000`, so ports addressed through
+their own base — `$FF0008`, the bulk data port — do not appear here; they are
+in the constant-ownership map instead, and the two are complementary. And
+`$FF0218` being RDHC-only while `$FF021A` is shared is a real asymmetry worth
+noting rather than an artefact: the XP tasks manipulate the IRQ mask but not
+the status register.
+
+**Two candidate registers were rejected during this pass.** A first run with
+a 600-instruction lookahead reported `$FF000C` (written) and `$FF0018` (read).
+Checking the sites showed both were false: `$F0A49E` is
+`movea.l $8A(pc),a0`, so `$18(a0)` there is a struct field, and the `$F0A3F0`
+/`$F0A440` sites are RTOS structure initialisation. The scan had walked past
+routine boundaries. Terminating on `rts`/`rte`/`bra` and on **any** reload of
+the base register — not only `movea.l #imm` — removes them.
+
+### XP4I again: the ISR is identical; only the `$8000` path is missing
+
+Running XP4I's own interrupt (`FPS3K_CHANNELS=4 FPS3K_XPIRQ=4`) shows its ISR
+at `$F060CE` doing exactly what XP1I's does — **117 distinct PCs against
+XP1I's 116**:
+
+```
+RD FF00AE @F060D6    WR FF00A8 = 0000 @F06100
+RD FF00A8 @F060DE    WR FF00AA = 0010 @F06106
+RD FF00AA @F060E6    WR FF00AE = 8004 @F0610A
+```
+
+So the earlier framing needs one more correction. XP4I is **not** receive-only
+and its channel handling is not degraded: the interrupt-driven transaction,
+including the `$8004` REQUEST-TRANSFER, is present and identical.
+
+What XP4I lacks is a **separate, non-ISR** sequence that the other three have
+in their task body:
+
+```
+movea.l #$FF00xE,a0
+move.w  #$0,(a1)        ; data HI
+move.w  #$1B,$2(a1)     ; data LO = $1B
+move.w  #$8000,(a0)     ; a different command from the ISR's $8004
+```
+
+Counting both commands across the image settles it exactly:
+
+| | XP4I | XP3I | XP2I | XP1I | RDHC | total |
+|---|---|---|---|---|---|---|
+| `move.w #$8004,(a0)` | **6** | 6 | 6 | 6 | 6 | 30 |
+| `move.w #$8000,(a0)` | **0** | 1 | 1 | 1 | 0 | **3** |
+
+`$8004` is equally present in all four channel tasks. `$8000` occurs three
+times in the whole ROM — once each in XP1I, XP2I and XP3I — and the constant
+`$1B` appears only alongside it. The precise statement is therefore: **XP1I/2/3 can issue an
+`$8000` command carrying the constant `$1B`; XP4I cannot. Everything
+interrupt-driven is the same.** Whether `$8000` is an initialisation or a
+mode-set is not established.
+
 ### `$FF0048` IS read — the claim was wrong, and so was my re-verification
 
 Driving the XP channel interrupt runs the XP-32 channel ISR for the first

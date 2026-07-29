@@ -96,6 +96,21 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- XP4I's ISR is identical; only the $8000 body path differs ------
+    tr4, _ = run({'FPS3K_CHANNELS': '4', 'FPS3K_XPIRQ': '4'}, 400_000_000)
+    check("XP4I's ISR runs and matches XP1I's shape",
+          tr4.count('F060CE\n') > 0 and
+          len({l for l in tr4.split() if 'F05F00' <= l <= 'F068FF'}) > 100)
+    def n_in(pat, lo, hi):
+        return d[lo-B:hi-B].count(pat)
+    XPR = [(0xF05F00,0xF068FF),(0xF06900,0xF072FF),
+           (0xF07300,0xF07CFF),(0xF07D00,0xF086FF)]
+    check('$8004 (REQUEST-TRANSFER) appears 6x in every XP task, XP4I included',
+          [n_in(b'\x30\xbc\x80\x04', lo, hi) for lo, hi in XPR] == [6,6,6,6])
+    check('$8000 appears 3x total -- once each in XP1I/2/3, never in XP4I',
+          [n_in(b'\x30\xbc\x80\x00', lo, hi) for lo, hi in XPR] == [0,1,1,1] and
+          d.count(b'\x30\xbc\x80\x00') == 3)
+
     # --- XP channel ISR: reads $FF0048 via a base register --------------
     tr2, _ = run({'FPS3K_CHANNELS': '2', 'FPS3K_XPIRQ': '1'}, 400_000_000)
     check('XP1I ISR runs when its BIM channel is raised',
