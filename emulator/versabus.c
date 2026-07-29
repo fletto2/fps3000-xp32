@@ -98,6 +98,19 @@ static int      chassis_irq_pending;
 static int      chassis_irq_vector;
 static int      chassis_irq_level = 4;
 
+/* Unmapped-region accounting.  Counting these separately is what makes an
+ * unmodelled card distinguishable from a card that answered zero. */
+static uint64_t unmapped_reads, unmapped_writes;
+static void versabus_note_unmapped(const char *op, uint32_t addr) {
+    if (op[0] == 'R') unmapped_reads++; else unmapped_writes++;
+    if (log_fp)
+        fprintf(log_fp, "[UNMAPPED    ] %s %06X -- no card modelled here\n",
+                op, addr);
+}
+void versabus_unmapped_counts(uint64_t *r, uint64_t *w) {
+    *r = unmapped_reads; *w = unmapped_writes;
+}
+
 /* ============== logging helpers ============== */
 
 /* Channel-window roles per refs_extracted/versabus_access_map.md:
@@ -1188,12 +1201,41 @@ uint32_t versabus_read(uint32_t addr, int size) {
         }
     }
 
+    else {
+        /* Unmapped inside a chassis window.  This used to fall through and
+         * return 0, which is indistinguishable from a card answering 0 -- so a
+         * future measurement could read an unmodelled region as a real result.
+         * Count and name it instead.  The known gaps are $FF0100-$FF01FF (256
+         * bytes between the AP I/F and the XLTR) and $FF0260 upward. */
+        versabus_note_unmapped("RD", addr);
+    }
+
     log_access("RD", addr, val, size);
     return val;
 }
 
 void versabus_write(uint32_t addr, uint32_t val, int size) {
     log_access("WR", addr, val, size);
+
+    /* A device-range write that matches no handler is silently dropped, which is
+     * indistinguishable from a card accepting it.  Tested as an explicit range
+     * check rather than an else-branch on the dispatch chain: the chain's tail
+     * is nested, so an appended `else` binds to an inner `if` and is wrong.
+     *
+     * Two earlier attempts at this detector failed in instructive ways -- the
+     * first tested !versabus_is_device(addr), which is never true here because
+     * versabus_write is only reached FOR device addresses, so it was dead code;
+     * the second broke the brace structure and the results came from a stale
+     * binary.  An instrument that cannot fire reports zero, and zero reads as
+     * "no problem". */
+    if (!((addr >= APIF_BASE    && addr < APIF_END)    ||
+          (addr >= XLTR_BASE    && addr < XLTR_END)    ||
+          (addr >= MAILBOX_BASE && addr < MAILBOX_END) ||
+          (addr >= PTM_BASE     && addr < PTM_END)     ||
+          (addr >= UART_BASE    && addr < UART_END)    ||
+          (addr >= BOARD_STATUS_BASE && addr < BOARD_STATUS_END) ||
+          addr == VMOD_CTRL || addr == VMOD_CTRL + 1))
+        versabus_note_unmapped("WR", addr);
 
     if (addr >= APIF_BASE && addr < APIF_END) {
         if (size == 2) apif_write(addr, val);

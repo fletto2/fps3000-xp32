@@ -153,3 +153,4 @@ int      versabus_chassis_byte_queued(void);
 void     versabus_dump_state(FILE *out);
 
 #endif /* VERSABUS_H */
+void versabus_unmapped_counts(uint64_t *r, uint64_t *w);

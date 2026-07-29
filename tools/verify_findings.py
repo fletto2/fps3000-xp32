@@ -280,6 +280,15 @@ else:
                   0xFF0000 <= struct.unpack('>I', d[a2+2:a2+6])[0] <= 0xFF02FF
                   for a2 in range(0, 0xA600, 2)))
 
+    # --- the chassis address map is complete for this firmware -------------
+    for _e in ({}, {'FPS3K_XPIRQ': '1,5,6', 'FPS3K_CHCMD': 'C801'},
+               {'FPS3K_CHSEL_RD': '28'}):
+        _um = subprocess.run([EMU, '-rom', ROM, '-cycles', '300000000'],
+                             capture_output=True, text=True,
+                             env={**os.environ, **_e}).stderr
+        check('no unmapped chassis access (%s)' % (list(_e) or 'default'),
+              'unmapped chassis accesses: 0 reads, 0 writes' in _um)
+
     # --- the run reports its own instrumentation ---------------------------
     _inv = subprocess.run([EMU, '-rom', ROM, '-cycles', '5000000'],
                           capture_output=True, text=True).stderr

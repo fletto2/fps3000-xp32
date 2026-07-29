@@ -1473,6 +1473,41 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### Unmapped chassis regions now announce themselves — and none is touched
+
+The model returned **0** for any chassis-window address matching no handler,
+which is indistinguishable from a card answering 0. Two regions are unmapped:
+**`$FF0100-$FF01FF`**, the 256 bytes between the AP I/F and the XLTR
+(`ds2/INDEX.md` item 18, "unaccounted"), and `$FF0260` upward.
+
+Both sides now count and name such accesses, and every run reports the total:
+
+```
+[done] unmapped chassis accesses: 0 reads, 0 writes  (address map complete for this run)
+```
+
+**Zero across every configuration tested** — default, `XPIRQ=1,5,6` with
+`CHCMD=C801`, and `CHSEL_RD=28`. So ds2's item 18 resolves the same way F.4 did:
+the gap is real in the model but **the firmware never touches it**. The chassis
+address map is complete for every path that executes.
+
+*Three failed attempts at this detector, all instructive, all in one sitting:*
+
+1. The write-side check tested `!versabus_is_device(addr)` — **never true**,
+   because `versabus_write` is only reached *for* device addresses. Dead code
+   reporting zero.
+2. Replacing it with an `else` on the dispatch chain broke the braces, and the
+   chain's tail is nested so the `else` would have bound to an inner `if` even
+   once braced. It is now an explicit range test, independent of the chain shape.
+3. **Twice I read results from a stale binary** after a failed compile, and both
+   times the numbers looked plausible — zeros, which is what the working
+   detector also reports. The build now gets checked before anything is measured.
+
+The through-line matches the rest of this session: **an instrument that cannot
+fire reports zero, and zero reads as "no problem".** Three of the five
+instrument defects found today had exactly that shape, and the only defence is
+to establish that the instrument *can* fire before believing that it did not.
+
 ### The run now reports its own instrumentation
 
 Three measurements this session came back **empty for instrumental reasons

@@ -693,7 +693,15 @@ int main(int argc, char **argv) {
             if (v) { fprintf(stderr, " %s=%s", hooks[k], *v ? v : "1"); any = 1; }
         }
         fprintf(stderr, "%s\n", any ? "" : " (none - DEFAULT configuration)");
-        fprintf(stderr, "[done] log channels: bus=%s  chassis-mem=%s  "
+        {
+        uint64_t ur, uw;
+        versabus_unmapped_counts(&ur, &uw);
+        fprintf(stderr, "[done] unmapped chassis accesses: %llu reads, %llu writes"
+                        "%s\n", (unsigned long long)ur, (unsigned long long)uw,
+                (ur || uw) ? "  <-- A REGION WITH NO CARD MODELLED WAS TOUCHED"
+                           : "  (address map complete for this run)");
+    }
+    fprintf(stderr, "[done] log channels: bus=%s  chassis-mem=%s  "
                         "uninit=%s  chassis-uninit=%s\n",
                 bus_path ? bus_path : "(off)",
                 getenv("FPS3K_LOGCHASSIS") ? "stderr" : "(off - NOT in the bus log)",
