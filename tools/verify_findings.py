@@ -99,8 +99,10 @@ else:
     # --- the consolidated asm carries this session's findings ------------
     try:
         asm = open('fps3k.asm').read()
-        check('fps3k.asm carries >=140 ;### finding notes',
-              asm.count('\n;### ') >= 140)
+        check('fps3k.asm carries >=160 ;### finding notes',
+              asm.count('\n;### ') >= 160)
+        check('NOTES merges duplicate addresses instead of dropping them',
+              'NOTES.setdefault' in open('tools/mk_consolidated_asm.py').read())
         check('fps3k.asm annotates the $FF0048 read and the presence gate',
               'FF0048 IS READ' in asm and 'PRESENCE GATE' in asm)
     except FileNotFoundError:

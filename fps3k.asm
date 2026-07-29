@@ -129,6 +129,7 @@ loc_F044D6:
   f044fa: 00 00                   DC.W     0x0000
   f044fc: 00 00                   DC.W     0x0000
   f044fe: 00 00                   DC.W     0x0000
+;### PANEL-COMMAND ISSUER, copy 1 of 8. All 8 are byte-identical over 48 bytes:
 ;### PanelIOConfigure copy 1/7 - pre-task init. Seven BYTE-IDENTICAL copies of
   f04500: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
 ;###   stash d0 at $E6E, cmd -> $FF000E, MODE1 b14 clr / b12 set, MODE0 b10 clr,
@@ -144,6 +145,7 @@ loc_F044D6:
   f0452c: 31 40 02 04             move.w   d0, $204(a0)  [XLTR_CHANNEL_SELECT]
 
 loc_F04530:
+;###   CHANNEL_SELECT <- d0, then "bra ." -- escape only via F04930 rewriting the PC.
 ;###   this 50-byte routine exist: F04500 F05688 F05E56 F068A8 F072C0 F07CC0 F086C0,
   f04530: 60 fe                   bra.b    loc_F04530
   f04532: 00 00                   DC.W     0x0000
@@ -402,6 +404,7 @@ TCBDefEntry_UPGM:
   f046de: d0 00                   DC.W     0xd000
 
 loc_F046E0:
+;### BIM CR TABLE: $244 $246 $250 $252 = XP1I..XP4I control registers, channel order.
 ;### 4-entry table: XP channel -> BIM control register ($244,$246,$250,$252)
   f046e0: 00 00 02 44             ori.b    #$44, d0
   f046e4: 00 00 02 46             ori.b    #$46, d0
@@ -1417,6 +1420,8 @@ loc_F050EC:
 ChannelConfigDispatch:
 ;### code $F: return from interrupt - the only slot that unwinds the frame
   f050f8: 4c df ff ff             movem.l  (a7)+, d0-d7/a0-a7
+;### ISR EXIT SEQUENCE, five of six tasks: move #$0C,ccr / trap #1 / moveq #$0F,d0
+;###   / trap #1. RDHC is the exception -- it traps then jmp back into its own code.
 ;### ISR EXIT STUB (task descriptor +$10): move #$0C,ccr / trap #1. Identical in all 6
   f050fc: 44 fc 00 0c             move.w   #$c, ccr
 ;###   tasks. NOT directive-numbered -- the CCR is the argument; d0 is never loaded.
@@ -1773,6 +1778,7 @@ loc_F053A2:
   f053ae: 08 29 00 01 10 a1       btst.b   #$1, $10a1(a1)
   f053b4: 67 0e                   beq.b    loc_F053C4
 ;>>>> [R3/BOTH] This instruction loads the immediate value 0x48585030 ("HXP0" ASCII) into d1, which is used as a marker or identifier for the XP-32 channel being configured, likely for diagnostic or status reporting during microcode upload or channel initialization.
+;### move.l #'HXP0',d1 then add.b d4,d1 -> HXP1..HXP4. RDHC BUILDS the queue name.
 ;###     builds the ASQ name from $48585030 = "HXP0" + channel
   f053b6: 22 3c 48 58 50 30       move.l   #$48585030, d1
   f053bc: d2 04                   add.b    d4, d1
@@ -2122,6 +2128,7 @@ loc_F05684:
 ; PanelIOConfigure_25A
 ; ============================================================
 PanelIOConfigure_25A:
+;### panel-command issuer, copy 2 of 8 (the "PanelIOCommand processor").
 ;### PanelIOConfigure copy 2/7 - TCBRDHC. ...one per task region plus this pre-task one.
   f05688: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
   f0568e: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
@@ -2931,6 +2938,7 @@ loc_F05DD4:
 ; TCBIO1I_ASQHandler
 ; ============================================================
 TCBIO1I_ASQHandler:
+;### TCBIO1I ISR. Two arms, selected by mailbox bit 29 at $F05DF8.
 ;### TCBIO1I ISR. Reads mailbox $70001C; payload is bits 16-17 of that word.
   f05dd6: 48 e7 61 0c             movem.l  d1-d2/d7/a4-a5, -(a7)
   f05dda: 2a 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a5
@@ -2970,6 +2978,7 @@ loc_F05E22:
   f05e3c: 08 c1 00 01             bset.b   #$1, d1
 ;>>>> [R1/BOTH] This instruction stores the modified d1 value (with bit 1 set) into offset 0x20 of the structure pointed to by a4, part of the TCBIO1I host I/O channel task that configures a per-channel data port parameter for XP-32 communication.
 ;>>>> [R1/DS] Conditionally sets bit 1 in d1 (based on swapped upper bits of d2) and stores the result into $20(a4) — part of XP-32 channel configuration data assembly.
+;###   0, 2 and 3 write nothing. Verified: class 1 -> reply $00010002 to $700020.
 ;###   reply: mailbox word with bit 1 set, written to $700020
   f05e40: 29 41 00 20             move.l   d1, $20(a4)
 
@@ -2990,6 +2999,7 @@ loc_F05E52:
   f05e54: 4e 41                   trap     #$1
 
 loc_F05E56:
+;### panel-command issuer, copy 3 of 8 -- the one TCBIO1I calls from inside its ISR.
 ;### PanelIOConfigure copy 3/7 - TCBIO1I (this one spins inside a level-7 ISR)
   f05e56: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
   f05e5c: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
@@ -6311,7 +6321,11 @@ loc_F07DD6:
 
 loc_F07DF0:
   f07df0: 2a 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a5
-;###   $11 and $0F. Only $0F is identified: 15 = TERM, terminate task, per the
+;### PRESENCE GATE: cmpi.w #<own channel>,$105E / blt skip. $105E is the count of
+;###   $11 and $0F. RETRACTED: "$0F = 15 = TERM (terminate task)" is a numeric
+;###   coincidence with the RMS68K source and does not fit. $0F is called exactly
+;###   once per task, at the TAIL OF THE ISR-EXIT PATH in five of six tasks --
+;###   terminating the task there would end it on its first interrupt.
   f07df6: 0c 79 00 01 00 00 10 5e  cmpi.w   #$1, $105e.l  [g_ac_count]
 ;###   channels the chassis presents, written by the CPU at $F0A224. Task n runs if count>=n.
   f07dfe: 6d 06                   blt.b    loc_F07E06
@@ -7224,6 +7238,7 @@ loc_F086BE:
   f086be: 4e 75                   rts      
 
 loc_F086C0:
+;### panel-command issuer, copy 7 of 8 -- the jsr target all over XP1I.
 ;### PanelIOConfigure copy 7/7 - TCBXP1I
   f086c0: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
   f086c6: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
@@ -7975,6 +7990,7 @@ loc_F08DE8:
 ; BoardStatusPoll_3F11
 ; ============================================================
 BoardStatusPoll_3F11:
+;### BoardStatusPoll_3F11 - polls (status & $3F31) == $3F11. NEVER reads ROM.
 ;### phase $0500: BoardStatusPoll_3F11 - (status & $3F31) == $3F11. NEVER reads ROM.
   f08df8: 48 e7 e0 08             movem.l  d0-d2/a4, -(a7)
   f08dfc: 42 06                   clr.b    d6
@@ -9160,6 +9176,7 @@ loc_F098E0:
 
 loc_F098EC:
 ;### phase $2000: RAM address uniqueness, move.l a0,(a0)+ over $0-$10000
+;### phase $2000: RAM address uniqueness, move.l a0,(a0)+ over $0-$10000
   f098ec: 48 e7                   DC.W     0x48e7
 
 ; ============================================================
@@ -10202,6 +10219,7 @@ loc_F0A15E:
 loc_F0A160:
 ;###   to be serviced, not panicked on; which device that is, is not established.
   f0a160: 51 c8 ff ee             dbra     d0, loc_F0A150
+;### BIM PROGRAMMING: clears 6 CRs, then writes TEN vector registers $41-$4A across
 ;### BIM programming: zero six control registers, then load ten vector registers
   f0a164: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
   f0a16a: 31 7c 00 00 02 32       move.w   #$0, $232(a0)  [BIM0_CR1]
@@ -10210,6 +10228,7 @@ loc_F0A160:
   f0a17c: 31 7c 00 00 02 42       move.w   #$0, $242(a0)  [BIM1_CR1]
   f0a182: 31 7c 00 00 02 54       move.w   #$0, $254(a0)  [BIM2_CR2_IO1]
   f0a188: 31 7c 00 00 02 56       move.w   #$0, $256(a0)  [BIM2_CR3]
+;###   all three BIMs. Six channels are enabled; $42,$43,$44,$49 are vectored but
 ;###   with $41-$4A. Each task later enables its own channel by writing $5F (or $5E
   f0a18e: 31 7c 00 41 02 38       move.w   #$41, $238(a0)  [BIM0_VR0]
   f0a194: 31 7c 00 42 02 3a       move.w   #$42, $23a(a0)  [BIM0_VR1]
@@ -10222,6 +10241,7 @@ loc_F0A160:
   f0a1be: 31 7c 00 49 02 4a       move.w   #$49, $24a(a0)  [BIM1_VR1]
   f0a1c4: 31 7c 00 4a 02 5c       move.w   #$4a, $25c(a0)  [BIM2_VR2_IO1]
 ;>>>> [R8/BOTH] The `movea.l #$e58, a1` at 0xf0a1ca loads the address 0xE58 (g__srec_addr) into a1, initializing the pointer for the S-record address buffer clearing loop during RTOSKernelInit's memory setup for microcode staging.
+;###   disabled and have NO handler in any task descriptor.
 ;###   for BIM0 ch0) to its CR -- see the BIM channel table in the access map.
   f0a1ca: 22 7c 00 00 0e 58       movea.l  #$e58, a1
   f0a1d0: 60 06                   bra.b    loc_F0A1D8

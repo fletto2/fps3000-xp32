@@ -1389,6 +1389,47 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### Two corrections found while propagating notes into `fps3k.asm`
+
+**A silent data-loss bug in the note table.** `NOTES` in
+`tools/mk_consolidated_asm.py` was a dict literal, so when this session's
+entries collided with pre-existing ones at the same address, Python kept the
+last and the other vanished with no warning. **Fifteen addresses collided**
+and thirteen of this session's notes were dropped. It is now a list of pairs
+merged into a dict of lists, so both notes at an address emit. Note count went
+143 -> 158 on that change alone.
+
+**`$0F` is not `TERM`.** A pre-existing note at `$F07DF6` reads *"Only `$0F`
+is identified: 15 = TERM, terminate task, per the RMS68K source."* The
+directive census places `$0F` **once per task, at the tail of the ISR-exit
+path**, and five of the six tasks share the exact sequence
+
+```
+44FC 000C   move #$0C,ccr
+4E41        trap #1
+700F        moveq #$0F,d0
+4E41        trap #1
+```
+
+Terminating the task there would end it on its first interrupt. `TERM EQU 15`
+matching `$0F` is a numeric coincidence with a source file whose other
+directive numbers — `GTASQ 31`, `WTEVNT 36`, `RDEVNT 34`, `RTEVNT 37`,
+`CMR 60` — match nothing in this ROM either. The identification is retracted in
+the asm.
+
+RDHC is the exception: its stub is `move #$0C,ccr / trap #1` followed by a
+**`jmp` back into its own code**, not the `$0F` call. So the ISR-exit
+*sequence* is five of six, while the two-instruction *stub* is six of six.
+
+**And an honesty note on the `$26E-$271` finding.** A pre-existing note at
+`$F07DD6` already said *"`$26E` = step 1/2, `$270` = step 3, `$271` = step
+4/5 … this confirms `$26E`-`$271` are per-STEP, not per-channel."* The
+annotated asm had it right before this session did. What this session added
+was an independent confirmation by a different method — identical panel-code
+multisets across all four XP tasks — and the propagation of the correction
+into CLAUDE.md, which still carried the per-channel labels. The finding was a
+rediscovery, not a discovery.
+
 ### RDHC's five exclusive directives
 
 Resolving the parameter block at each of RDHC's own directive sites:
