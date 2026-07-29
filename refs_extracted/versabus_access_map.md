@@ -1455,6 +1455,63 @@ original was right in substance and my re-verification of it was wrong in
 method. Both were caught by doing the arithmetic or the decode rather than
 trusting a summary.*
 
+### The live TCBs sit INSIDE the WCS staging buffer — the 64 KB claim is unsafe
+
+Sweeping post-boot RAM for repeated longwords turns up `$21544342` six times —
+`!TCB` — and they are **live task control blocks, inside the staging buffer**:
+
+| address | task | entry point at `+$6C` |
+|---|---|---|
+| `$1E900` | XP1I | `$F07D4A` |
+| `$1EB00` | XP2I | `$F0734A` |
+| `$1ED00` | XP3I | `$F0694A` |
+| `$1EF00` | XP4I | `$F05F4A` |
+| `$1F100` | IO1I | `$F05D36` |
+| `$1F300` | RDHC | `$F046F0` |
+
+Stride `$200`. Each carries the marker `$969696` at `+$24`, the task name at
+`+$10`, its entry point at `+$6C`, and a forward link at `+$04` — `$1E900` →
+`$1EB00` → … → `$1F300` → `$0`, so they are a null-terminated list in task
+order.
+
+**Live RTOS data occupies `$1DF00-$1FFFF`** — 794 nonzero bytes spread across
+the top **8.25 KB** of what this project calls the microcode staging buffer.
+
+#### Two load-bearing claims are unsafe as written
+
+CLAUDE.md says:
+
+> The 64 KB staging buffer at `0x10000–0x1FFFF` exactly equals one WCS bank —
+> so each S-record session loads one bank.
+
+and, of the monitor:
+
+> the full 64 KB WCS bank at `$10000-$1FFFF` is loadable end to end (verified
+> by loading `$1FFE0` and `$1FFF0`)
+
+**Loading `$1FFE0` and `$1FFF0` overwrites live RTOS data, and filling the
+buffer end to end destroys all six TCBs.** The verification held only because
+nothing in that emulator run subsequently scheduled a task. On hardware it
+would take the RTOS down.
+
+The genuinely usable staging region is **`$10000-$1DEFF`, about 56.75 KB** —
+**less than one 64 KB WCS bank.**
+
+#### The architectural consequence
+
+If a WCS bank really is 4K × 128 bits = 64 KB, **it cannot be staged in a
+single pass.** Three ways out, none established:
+
+1. the bank is uploaded in two or more pieces;
+2. the "staging buffer = exactly one bank" correspondence is a coincidence of
+   round numbers rather than a design fact — the firmware's own range check
+   allows `$10010-$1FFFF`, which is not 64 KB either;
+3. the RTOS relocates or the upload happens with tasks stopped.
+
+`SRecordDataHandler`'s range check permits writing over the TCBs, so the
+firmware does not protect them. Anyone driving a real upload should treat
+`$1DF00` as the ceiling until this is settled.
+
 ### The firmware fills its stack with `$09ABCDEF` — a free high-water gauge
 
 `$F08886` is `lea $0800,a7`, so the supervisor stack top is **`$0800`**, and the

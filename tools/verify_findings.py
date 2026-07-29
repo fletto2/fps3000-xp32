@@ -166,6 +166,19 @@ else:
     check('a clean boot uses well under half the 1 KB supervisor stack',
           all(_r[x:x+4] == _P for x in range(0x404, 0x600, 4)))
 
+    # --- live TCBs sit inside the WCS staging buffer ----------------------
+    TCBRAM = [(0x1E900, b'XP1I', 0xF07D4A), (0x1EB00, b'XP2I', 0xF0734A),
+              (0x1ED00, b'XP3I', 0xF0694A), (0x1EF00, b'XP4I', 0xF05F4A),
+              (0x1F100, b'IO1I', 0xF05D36), (0x1F300, b'RDHC', 0xF046F0)]
+    check('six live !TCBs at $1E900+$200*n, inside the staging buffer',
+          all(_r[b2:b2+4] == b'!TCB' and _r[b2+0x10:b2+0x14] == nm and
+              struct.unpack('>I', _r[b2+0x6C:b2+0x70])[0] == ep
+              for b2, nm, ep in TCBRAM))
+    check('the staging buffer is NOT free above $1DF00',
+          any(_r[x] for x in range(0x1DF00, 0x20000)) and
+          not any(_r[x] for x in range(0x10000, 0x1DF00)))
+
+
     # --- vector-table integrity across configurations --------------------
     def vecwrites(env2):
         return subprocess.run([EMU, '-rom', ROM, '-cycles', '300000000'],

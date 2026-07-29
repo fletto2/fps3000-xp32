@@ -150,6 +150,14 @@ y=tbl(y,["question","finding"],[M,M+230],
   ("Which pins carry the host-side 32-bit path?","")])
 y=note(y,"The host-side counterpart card is missing, so its pinout has to come off this card.")
 y-=3
+y=chk(y,"Check 0d - do NOT load microcode above $1DF00")
+y=para(y,"The WCS staging buffer is documented as $10000-$1FFFF, 64 KB, exactly one bank. The top 8.25 KB is NOT free:")
+y=para(y,"live RTOS data occupies $1DF00-$1FFFF, including the SIX LIVE TCBs at $1E900/$1EB00/$1ED00/$1EF00/$1F100/$1F300")
+y=para(y,"(stride $200; task name at +$10, entry point at +$6C). Filling the buffer end to end destroys them and takes the")
+y=para(y,"RTOS down. Usable region: $10000-$1DEFF, about 56.75 KB - LESS THAN ONE BANK. The firmware does not protect")
+y=para(y,"them: SRecordDataHandler happily accepts records up to $1FFFF.")
+y=note(y,"Treat $1DF00 as the ceiling until a real upload proves otherwise.")
+y-=4
 y=chk(y,"Check 0c - stack high-water mark, from one memory dump")
 y=para(y,"The supervisor stack top is $0800 and the kilobyte below it is pre-filled with $09ABCDEF, from $0404 up.")
 y=para(y,"Dump that range and count surviving $09ABCDEF longwords. 236 of 256 = normal (a clean boot uses 76 bytes).")
