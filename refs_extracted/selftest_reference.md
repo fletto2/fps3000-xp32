@@ -271,18 +271,59 @@ arm/poll/clear cycle on `STATUS_IRQ` works.
 
 ---
 
-## Block 3 — bulk memory
+## Block 3 — RAM integrity, and two tests that never run
 
-### Phase `$1C00` — chassis block move (F09AD6-F09B1F)
+Block 3 starts at F0885A with `$1FFF0 <- 0`, `MODE1 <- $2000`,
+`d6 = $2000`, then:
 
-`MODE2 <- 0`, `a0 = $400000`, length `$4000`, 4 passes (`d2 = 4`).
-**Asserts:** sustained 16 KB access to chassis memory.
+```
+a0=$0, a1=$400, a2=$1F000
+F08878  bsr F08A4C     ; save the vector table $0-$400 to $1F000
+a1=$10000
+F08882  bsr F08992     ; -> F098EC, the RAM address-uniqueness test
+F08886  a7 <- $800     ; rebuild the stack afterwards
+F0888A  restore $400 from $1F800
+        ... further block moves over $1F000/$1F400/$10000/$20000
+F088B8  phase $2100    ; F08992 again
+F088C0  phase $2200    ; F09AD6
+F088C8  phase $2300    ; F09B20
+```
 
-### Phase `$1D00` — chassis address aliasing (F09B20-...)
+### Phase `$2000` — RAM address uniqueness (F098EC)
 
-`a2 = $400000`, `a1 = $404000`, `d2 = 4`, also references `$403FFC`.
-**Asserts:** `$400000` and `$404000` are **distinct** memory, i.e. A14 is
-decoded and the window does not wrap every 16 KB.
+`move.l a0,(a0)+` from `$0` to `$10000`, writing **each address into
+itself**, with `$1FFF0` explicitly skipped (F098FE) so the VMOD control
+register is not clobbered. Then reads back and compares.
+
+**Asserts:** every RAM location is independently addressable — the
+strongest form of the address-decode test, catching any aliasing that
+phase `$0400`'s spot checks would miss. Note it deliberately destroys the
+vector table, which is why the caller saves `$0-$400` to `$1F000` first
+and rebuilds the stack at `$800` afterwards.
+
+### Phases `$2100`, `$2200` (F09AD6), `$2300` (F09B20) — not reached
+
+**These do not execute in a normal boot**, and an earlier revision of
+this file listed them as phases `$1C00`/`$1D00`, which was wrong on both
+the numbering and the fact. Tracing `d6` gives `$2200` and `$2300`; the
+measured trace shows F08886 never executing, so control leaves F08992
+without returning and arrives at F088F4 (`jmp Phase2Init`).
+
+Their content, read statically only:
+
+- **`$2200` (F09AD6)** — `MODE2 <- 0`, `a0 = $400000`, length `$4000`,
+  4 passes. Sustained 16 KB access to chassis memory.
+- **`$2300` (F09B20)** — `a2 = $400000`, `a1 = $404000`, `d2 = 4`, also
+  touching `$403FFC`. Would assert that `$400000` and `$404000` are
+  distinct memory, i.e. A14 decoded and no 16 KB wrap.
+
+Why control never returns from the `$2000` test is unresolved. The stack
+at `$1FFD0` is above the test's `$0-$10000` range so it is not
+overwritten, but the vector table within that range is, so any interrupt
+taken during the window dispatches through garbage. The boot recovers and
+completes — zero error flags, all six task vectors correct — but the last
+two chassis-memory tests are skipped, and on real hardware they would be
+the ones that exercise the `$400000` window hardest.
 
 ---
 
