@@ -96,6 +96,25 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- RAM map: 4 x 6-byte per-channel array, shared globals around ----
+    def refs(base, lo, hi):
+        return {v for a in range(base, base+0xA00, 2)
+                for v in [struct.unpack('>I', d[a-B:a-B+4])[0]] if lo <= v <= hi}
+    XPB = [(0xF07D00,0x1066),(0xF07300,0x106C),(0xF06900,0x1072),(0xF05F00,0x1078)]
+    check('per-channel RAM array is 4 x 6 bytes at $1066-$107D',
+          all(refs(b, 0x1066, 0x107D) == {c, c+2, c+4} for b, c in XPB))
+    check('$105E,$1062,$1064,$107E,$1080 are shared by all four XP tasks',
+          all(all(x in refs(b, 0x1050, 0x1090) for b, _ in XPB)
+              for x in (0x105E, 0x1062, 0x1064, 0x107E, 0x1080)))
+    def btsts(base, cmd):
+        return [struct.unpack('>H', d[a-B+2:a-B+4])[0]
+                for a in range(base, base+0xA00, 2)
+                if struct.unpack('>H', d[a-B:a-B+2])[0] == 0x0839
+                and struct.unpack('>I', d[a-B+4:a-B+8])[0] == cmd]
+    check('XP1I/2/3 test command bits 15,14,11,11; XP4I only 15,14',
+          [btsts(b, c) for b, c in XPB] ==
+          [[15,14,11,11],[15,14,11,11],[15,14,11,11],[15,14]])
+
     # --- the $8000 path is gated on command-register bits 15, 14, 11 -----
     trg, _ = run({'FPS3K_CHANNELS': '2', 'FPS3K_XPIRQ': '1',
                   'FPS3K_CHCMD': 'C801'}, 400_000_000)

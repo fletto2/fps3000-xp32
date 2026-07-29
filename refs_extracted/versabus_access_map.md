@@ -1389,6 +1389,73 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The XP tasks' RAM map
+
+Classifying every absolute reference to `$1050`-`$1090` by which tasks make it
+gives a complete and very regular picture:
+
+```
+$105E   SHARED    channel-present count (written at $F0A224)
+$1062   SHARED
+$1064   SHARED
+$1066 ┐
+$1068 ├ XP1I     { command, data HI, data LO }  <- filled by the ISR
+$106A ┘
+$106C ┐
+$106E ├ XP2I
+$1070 ┘
+$1072 ┐
+$1074 ├ XP3I
+$1076 ┘
+$1078 ┐
+$107A ├ XP4I
+$107C ┘
+$107E   SHARED
+$1080   SHARED
+```
+
+A contiguous **24-byte array at `$1066-$107D`, four entries of six bytes**,
+bracketed by shared globals. Each entry is the three-word snapshot the channel
+ISR takes of `{+$0E, +$08, +$0A}`, which is why the stride is 6.
+
+The reference counts are identical across XP1I, XP2I and XP3I — 5 on the
+command word, 2 on data-HI, 1 on data-LO — the template-copy signature again.
+**XP4I references its command word 3 times, not 5**, and that difference is
+the whole story of the next section.
+
+### XP4I implements a strict subset of the dispatch
+
+Listing every `btst` against each task's own command word:
+
+| task | bits tested |
+|---|---|
+| XP1I | 15 `$F07E4C`, 14 `$F07E86`, 11 `$F07E90`, 11 `$F07EB6` |
+| XP2I | 15 `$F0744C`, 14 `$F07486`, 11 `$F07490`, 11 `$F074B6` |
+| XP3I | 15 `$F06A4C`, 14 `$F06A86`, 11 `$F06A90`, 11 `$F06AB6` |
+| **XP4I** | 15 `$F06052`, 14 `$F06088` — **and nothing else** |
+
+XP4I has **no bit-11 test anywhere**. Its dispatch is a strict prefix of the
+other three: bit 15 and bit 14 are handled identically, and the bit-11
+sub-case — both its tests and the `$8000`/`$1B` action they guard — is absent
+entirely.
+
+This is the final form of a finding that took four passes to get right, and
+it is worth setting out what each pass got wrong:
+
+1. "XP4I is 19.5% different" — an **alignment artefact**; XP4I's body sits
+   `$18` off the grid the other three share.
+2. "XP4I lacks the trigger site" — true but framed as a degraded copy, when
+   XP4I also *adds* code the others lack.
+3. "XP4I is receive-only" — **wrong**: its ISR is identical, reads all three
+   registers and issues `$8004` exactly as the others do.
+4. Correct: **the ISR is identical; the task body implements bits 15 and 14
+   but not the bit-11 sub-case.**
+
+Every one of the earlier readings was consistent with the evidence available
+at the time. What settled it was counting the same thing four different ways —
+byte diff, port-constant count, command-word reference count, and `btst` site
+list — and requiring them to agree.
+
 ### The channel command word's high bits are a dispatch field
 
 The `$8000`/`$1B` sequence that only XP1I/2/3 have is reached through a chain
