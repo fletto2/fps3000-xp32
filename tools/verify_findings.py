@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """Assert the verified claims in refs_extracted/versabus_access_map.md.
 
+    python3 tools/verify_findings.py [rom]
+
+Pass an alternate ROM path to test the harness itself: mutating two bytes
+(one in a panel-issuer copy, one in SRecordDataHandler's $10000 addend)
+takes it from 21/21 to 12/21, so the checks are not vacuous.
+
 Run from the repo root after any change to disasm.py, the emulator, or the
 ROM image.  Every check here corresponds to a documented finding; if one
 fails, either the change is wrong or the documentation needs updating --
 both worth knowing before the discrepancy is discovered months later.
 
-    python3 tools/verify_findings.py
 """
 import hashlib, os, re, struct, subprocess, sys, tempfile
 
-ROM = 'FPS3K_U11_U12_JOIN.bin'
+ROM = sys.argv[1] if len(sys.argv) > 1 else 'FPS3K_U11_U12_JOIN.bin'
 B   = 0xF00000
 d   = open(ROM, 'rb').read()
 EMU = 'emulator/fps3k_sbc'
@@ -31,14 +36,16 @@ check('ROM md5 unchanged',
 # seven byte-identical copies of the 50-byte panel-command issuer
 ref = d[0xF05688-B:0xF05688-B+0x32]
 copies = [a for a in range(0xF04488, 0xF0A000, 2) if d[a-B:a-B+0x32] == ref]
-check('panel issuer: exactly 7 byte-identical copies', len(copies) == 7, copies)
+check('panel issuer: exactly 7 byte-identical copies', len(copies) == 7,
+      ' '.join(f'{a:06X}' for a in copies))
 check('  ... at the documented addresses',
       copies == [0xF04500, 0xF05688, 0xF05E56, 0xF068A8, 0xF072C0, 0xF07CC0, 0xF086C0])
 # five byte-identical copies of the 42-slot dispatch table
 t = d[0xF05BA4-B:0xF05BA4-B+0xA8]
 tabs = [a for a in (0xF05BA4, 0xF065E4, 0xF06FFC, 0xF079FC, 0xF083FC)
         if d[a-B:a-B+0xA8] == t]
-check('dispatch table: 5 identical copies', len(tabs) == 5, tabs)
+check('dispatch table: 5 identical copies', len(tabs) == 5,
+      ' '.join(f'{a:06X}' for a in tabs))
 # the F05102 dispatcher is 16 jmp d16(pc) entries
 check('F05102 dispatcher: 16 x 4EFA',
       all(word(0xF05102+4*i) == 0x4EFA for i in range(16)))

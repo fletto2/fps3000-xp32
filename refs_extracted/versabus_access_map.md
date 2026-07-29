@@ -1140,6 +1140,23 @@ self-tests execute and hit **zero** error flags; that an S-record load
 produces exactly 16 stores with the right bytes at `$10010`; and that it
 exits via `F05254` (success) rather than `F05224` (reject).
 
+**The harness is itself tested.** A check suite that has never failed
+proves nothing, so `verify_findings.py` takes an optional ROM path.
+Mutating two bytes — one inside panel-issuer copy 4 at `F068A8`, one in
+`SRecordDataHandler`'s `$10000` addend at `F051DC` — takes it from 21/21
+to **12/21**, with the issuer count dropping 7 to 6 and every runtime
+check failing:
+
+```
+python3 tools/verify_findings.py mutant.bin
+  FAIL  panel issuer: exactly 7 byte-identical copies
+        F04500 F05688 F05E56 F072C0 F07CC0 F086C0     <- F068A8 missing
+  12/21 passed
+```
+
+Nine checks still pass on that ROM, which is correct: each targets a
+specific claim, and those nine are untouched by these mutations.
+
 **Why this exists.** Several findings in this document were wrong for
 days before anything caught them — a `ROMChecksumTest` label that
 outlived its correction by three days, an XP4I "90% divergent" reading
