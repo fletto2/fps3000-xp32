@@ -108,6 +108,14 @@ NOTES = {
  0xF08DF8:'BoardStatusPoll_3F11 - polls (status & $3F31) == $3F11. NEVER reads ROM.',
  0xF098EC:'phase $2000: RAM address uniqueness, move.l a0,(a0)+ over $0-$10000',
  0xF046E0:'4-entry table: XP channel -> BIM control register ($244,$246,$250,$252)',
+ # ---- RTOSKernelInit ----
+ 0xF0A146:'RTOSKernelInit vector fill: install the panic catch-all F0A27A across every',
+ 0xF0A150:'  user vector $124-$3FF -- EXCEPT $230 (vector 140), which is stepped over and',
+ 0xF0A15E:'  keeps the RMS68K generic handler F00896. Whatever raises vector 140 is meant',
+ 0xF0A160:'  to be serviced, not panicked on; which device that is, is not established.',
+ 0xF0A164:'BIM programming: zero six control registers, then load ten vector registers',
+ 0xF0A18E:'  with $41-$4A. Each task later enables its own channel by writing $5F (or $5E',
+ 0xF0A1CA:'  for BIM0 ch0) to its CR -- see the BIM channel table in the access map.',
  # ---- TCBRDHC host command interface: 4-way dispatch on a 3-bit code ----
  0xF05344:'HOST COMMAND DISPATCH: andi #7,d1; subq #1; mulu #6; jmp (F05358,d1.w).',
  0xF05358:'  4-entry jump table, jmp abs.l per entry. Codes 1-4 only; 5-7 fall into code',

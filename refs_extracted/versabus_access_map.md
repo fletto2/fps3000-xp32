@@ -1532,6 +1532,36 @@ transfer loop.
 consistent with the emulator's bit-5 BERR gate derived from the boot
 self-tests.
 
+### One vector is deliberately spared the panic handler
+
+`RTOSKernelInit` fills the user vector table with the panic catch-all,
+and the loop has an explicit exception:
+
+```
+F0A146  d0 = $B6                    ; 183 vectors
+F0A14A  a0 = $124
+F0A150  cmpa.l #$230,a0
+F0A156  beq    F0A15E               ; skip this one
+F0A158  move.l a1,(a0)+             ; a1 = F0A27A, the panic catch-all
+F0A15E  addq.l #4,a0                ; ... stepped over, not written
+F0A160  dbra   d0,F0A150
+```
+
+So every user vector from `$124` to `$3FF` gets `F0A27A` **except
+`$230`**, vector number **140** (`$8C`), which keeps whatever the RMS68K
+kernel put there. A post-boot dump confirms it: `$22C` and `$234` hold
+`F0A27A`, `$230` holds **`F00896`**, the RMS68K generic handler.
+
+The firmware therefore expects *something* to raise vector 140 and wants
+it **serviced rather than panicked on**. Which device that is, is not
+established — it is not one of the ten BIM vectors (`$41`-`$4A`, at
+`$104`-`$128`), and nothing else in the ROM writes `$230` as a vector
+address.
+
+Worth not confusing with a coincidence: `$230` also appears twice in
+phase `$1600` (F09570, F095D2) as `movea.w #$230,a0`, but there it is an
+**offset into the XLTR window** (`$FF0230`, BIM0 CR0), not a vector.
+
 ## TCBRDHC's host command interface — a four-command API
 
 `F05356-F05687`, flagged as the highest-value unattributed run, turns out
@@ -1589,7 +1619,7 @@ apart and would make any proximity metric meaningless:
 | | bytes |
 |---|---|
 | unique logic (replication removed) | 14,792 |
-| attributed to a named routine or finding | 10,904 — **74%** |
+| attributed to a named routine or finding | 11,284 — **76%** |
 | unattributed, in runs of 200 B or more | 2,848 |
 
 *(53% before the self-test phases were named, 69% before the host command

@@ -10129,20 +10129,25 @@ loc_F0A0FE:
   f0a13e: 43 fa 01 3a             lea.l    loc_F0A27A(pc), a1
   f0a142: 21 c9 00 60             move.l   a1, $60.w
 ;>>>> [R11/GLM] Loads a RMS68K system service vector number ($B6) into d0 for initializing the global system table (GST) during RTOS kernel setup.
+;### RTOSKernelInit vector fill: install the panic catch-all F0A27A across every
   f0a146: 30 3c 00 b6             move.w   #$b6, d0
   f0a14a: 20 7c 00 00 01 24       movea.l  #$124, a0
 
 loc_F0A150:
+;###   user vector $124-$3FF -- EXCEPT $230 (vector 140), which is stepped over and
   f0a150: b1 fc 00 00 02 30       cmpa.l   #$230, a0
   f0a156: 67 06                   beq.b    loc_F0A15E
   f0a158: 20 c9                   move.l   a1, (a0)+
   f0a15a: 60 00 00 04             bra.w    loc_F0A160
 
 loc_F0A15E:
+;###   keeps the RMS68K generic handler F00896. Whatever raises vector 140 is meant
   f0a15e: 58 88                   addq.l   #$4, a0
 
 loc_F0A160:
+;###   to be serviced, not panicked on; which device that is, is not established.
   f0a160: 51 c8 ff ee             dbra     d0, loc_F0A150
+;### BIM programming: zero six control registers, then load ten vector registers
   f0a164: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
   f0a16a: 31 7c 00 00 02 32       move.w   #$0, $232(a0)  [BIM0_CR1]
   f0a170: 31 7c 00 00 02 34       move.w   #$0, $234(a0)  [BIM0_CR2]
@@ -10150,6 +10155,7 @@ loc_F0A160:
   f0a17c: 31 7c 00 00 02 42       move.w   #$0, $242(a0)  [BIM1_CR1]
   f0a182: 31 7c 00 00 02 54       move.w   #$0, $254(a0)  [BIM2_CR2_IO1]
   f0a188: 31 7c 00 00 02 56       move.w   #$0, $256(a0)  [BIM2_CR3]
+;###   with $41-$4A. Each task later enables its own channel by writing $5F (or $5E
   f0a18e: 31 7c 00 41 02 38       move.w   #$41, $238(a0)  [BIM0_VR0]
   f0a194: 31 7c 00 42 02 3a       move.w   #$42, $23a(a0)  [BIM0_VR1]
   f0a19a: 31 7c 00 43 02 3c       move.w   #$43, $23c(a0)  [BIM0_VR2]
@@ -10161,6 +10167,7 @@ loc_F0A160:
   f0a1be: 31 7c 00 49 02 4a       move.w   #$49, $24a(a0)  [BIM1_VR1]
   f0a1c4: 31 7c 00 4a 02 5c       move.w   #$4a, $25c(a0)  [BIM2_VR2_IO1]
 ;>>>> [R8/BOTH] The `movea.l #$e58, a1` at 0xf0a1ca loads the address 0xE58 (g__srec_addr) into a1, initializing the pointer for the S-record address buffer clearing loop during RTOSKernelInit's memory setup for microcode staging.
+;###   for BIM0 ch0) to its CR -- see the BIM channel table in the access map.
   f0a1ca: 22 7c 00 00 0e 58       movea.l  #$e58, a1
   f0a1d0: 60 06                   bra.b    loc_F0A1D8
 
