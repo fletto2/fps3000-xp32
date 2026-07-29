@@ -7297,6 +7297,7 @@ loc_F087D2:
 ;>>>> [R12/BOTH] This `addi.w #$100, d6` instruction increments the test pattern value in d6 by 0x100 (256) as part of a sequence of hardware diagnostic tests, preparing the next pattern for the subsequent subroutine call (loc_F09832) during MainInit phase 1 hardware initialization.
   f0882a: 06 46 01 00             addi.w   #$100, d6
   f0882e: 61 00 10 02             bsr.w    loc_F09832
+;### SECOND CHECKPOINT: $1FFF0 <- $D0, then the board-status branch that selects
   f08832: 3a bc 00 d0             move.w   #$d0, (a5)
   f08836: 3d 7c 80 00 02 02       move.w   #$8000, $202(a6)  [XLTR_MODE1]
   f0883c: 23 fc 00 f0 88 fa 00 00 01 54  move.l   #loc_F088FA, $154.l
@@ -7311,10 +7312,12 @@ loc_F08846:
   f08852: 60 06                   bra.b    loc_F0885A
 
 loc_F08854:
+;###   the next block -- bit4 clear + bit5 clear -> block 2, bit4 clear + bit5 set
   f08854: 0b 03                   btst.l   d5, d3
   f08856: 67 00 ff 7a             beq.w    loc_F087D2
 
 loc_F0885A:
+;###   -> block 3. See "Control flow and the two checkpoints" in the access map.
   f0885a: 42 55                   clr.w    (a5)
   f0885c: 3d 7c 20 00 02 02       move.w   #$2000, $202(a6)  [XLTR_MODE1]
   f08862: 3c 3c 20 00             move.w   #$2000, d6
@@ -7670,6 +7673,7 @@ loc_F08B7A:
   f08b86: 66 06                   bne.b    loc_F08B8E
 
 loc_F08B88:
+;###   each guarded by the $F0F0F0F0 error flag and a PollBoardStatus call.
   f08b88: 2e 3c f0 f0 f0 f0       move.l   #loc_F0F0F0f0, d7
 
 loc_F08B8E:
@@ -9260,6 +9264,7 @@ loc_F099DC:
 
 loc_F099EC:
   f099ec: b5 c8                   cmpa.l   a0, a2
+;### register data-path test: propagate a value d0 -> d1 -> d2 -> d3 -> d4 and
   f099ee: 66 de                   bne.b    loc_F099CE
   f099f0: 52 46                   addq.w   #$1, d6
 ;>>>> [R13/DS] This `rts` instruction at `0xf099f2` terminates the ROM checksum verification subroutine, returning to the caller after the checksum loop at `loc_F099CE` has completed comparing the computed XOR checksum against the stored value, as part of the `ROMChecksum_XOR` routine that validates firmware integrity during the `HardwareInit` phase.
@@ -9320,6 +9325,7 @@ loc_F09A4C:
   f09a4c: 48 e7 03 00             movem.l  d6-d7, -(a7)
 ;>>>> [R7/BOTH] Performs bitwise rotation as part of ROM checksum calculation algorithm.
   f09a50: e7 98                   rol.l    #$3, d0
+;###   check it survives. Not a RAM verify despite sitting beside the RAM tests.
   f09a52: 22 00                   move.l   d0, d1
   f09a54: e7 99                   rol.l    #$3, d1
 ;>>>> [R7/BOTH] Moves rotated data to next register during XOR checksum calculation.

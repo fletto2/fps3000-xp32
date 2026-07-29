@@ -1740,12 +1740,20 @@ apart and would make any proximity metric meaningless:
 | | bytes |
 |---|---|
 | unique logic (replication removed) | 14,792 |
-| attributed to a named routine or finding | 12,162 — **82%** |
-| unattributed, in runs of 200 B or more | 678 |
+| attributed to a named routine or finding | 12,796 — **87%** |
+| unattributed, in runs of 200 B or more | **0** |
 
-*(53% before the self-test phases were named, 69% before the host command
-interface, 76% before RTOSKernelInit and the segment manager. Three runs
-remain: `F08B5C-F08C49`, `F099EE-F09AD5`, `F08832-F08901`.)*
+*(53% -> 69% -> 74% -> 76% -> 82% -> 87% as the backlog was worked. No
+unattributed run of 200 bytes or more remains; what is left is scattered
+fragments below that size, mostly RMS68K glue.)*
+
+The last three runs closed were the tail of phase `$0100` (a
+bit-manipulation test — 9 `bset.b`, 5 `bclr.b`, a `bchg.b` and an
+`asl.l`, each guarded by the error flag), the second checkpoint at
+`F08832` with its block-selection branch, and a register data-path test
+at `F099EE` that propagates a value `d0`->`d1`->`d2`->`d3`->`d4` and
+checks it survives — **not** a RAM verify, despite sitting next to the
+RAM tests, which is what its position suggested before reading it.
 
 **The ten largest unattributed runs**, which are the work queue:
 

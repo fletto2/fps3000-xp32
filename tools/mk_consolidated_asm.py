@@ -108,6 +108,14 @@ NOTES = {
  0xF08DF8:'BoardStatusPoll_3F11 - polls (status & $3F31) == $3F11. NEVER reads ROM.',
  0xF098EC:'phase $2000: RAM address uniqueness, move.l a0,(a0)+ over $0-$10000',
  0xF046E0:'4-entry table: XP channel -> BIM control register ($244,$246,$250,$252)',
+ # ---- remaining MainInit / self-test blocks ----
+ 0xF08B5C:'phase $0100 tail: bit-manipulation test. 9 bset.b, 5 bclr.b, 1 bchg.b, 1 asl.l,',
+ 0xF08B88:'  each guarded by the $F0F0F0F0 error flag and a PollBoardStatus call.',
+ 0xF08832:'SECOND CHECKPOINT: $1FFF0 <- $D0, then the board-status branch that selects',
+ 0xF08854:'  the next block -- bit4 clear + bit5 clear -> block 2, bit4 clear + bit5 set',
+ 0xF0885A:'  -> block 3. See "Control flow and the two checkpoints" in the access map.',
+ 0xF099EE:'register data-path test: propagate a value d0 -> d1 -> d2 -> d3 -> d4 and',
+ 0xF09A52:'  check it survives. Not a RAM verify despite sitting beside the RAM tests.',
  # ---- RMS68K segment management ----
  0xF09D98:'SEGMENT TABLE SEARCH: 10-byte entries -- flags byte at +1, start longword at',
  0xF09DA4:'  +2, end longword at +6. Walks until d6, testing whether d2 falls in a range.',
