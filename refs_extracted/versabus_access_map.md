@@ -696,6 +696,54 @@ four labels are wrong. The evidence supports:
 | +`$0A` | 32-bit data register, **low half** |
 | +`$0E` | **command/trigger** — `$8000` fires it; also readable |
 
+## Validation record: the self-test suite as a chassis-model test harness
+
+With the four chassis-stub fixes in place the firmware's own diagnostics
+run end to end, and they are a far better check on the chassis model than
+anything hand-written. Measured over a full boot:
+
+**Every subtest passes on the first attempt.** The suite signals failure
+by loading the marker `$F0F0F0F0` into `d7`; there are **65 such sites**
+in the ROM and **none of them execute**. No test retries, and no test
+falls into an error path silently. That is a stronger statement than the
+run merely completing, and it is the claim the emulator could not make
+before.
+
+**Bus errors are deliberate and counted.** `F098E0` — the handler phase
+`$1700` installs at vector `$8` before it starts (F09606 saves the old
+one, F0960A installs its own) — executes exactly **3** times. The
+firmware is testing that the chassis *denies* out-of-range access, so
+those three BERRs are the expected result, not a fault. A model that let
+those accesses succeed would fail the test.
+
+**The phase beacon walks cleanly.** Every test writes its phase number to
+CHANNEL_SELECT as `phase<<8 | subtest`, giving an externally visible
+progress trace. The observed walk is monotonic with no repeats:
+`$0100`-`$0168` (105 subtests), `$0200`-`$0205`, `$0300`, `$0400`,
+`$0500`, `$0600`-`$0605`, and so on through `$1A00`, then `$2000`.
+
+That beacon is worth noting as a **hardware bring-up aid in its own
+right**: on a real board, watching `$FF0204` during reset tells you
+exactly which self-test the firmware is executing and which subtest it
+died on, with no debugger and no serial port. The value that sticks is
+the last one written.
+
+`PollBoardStatus` takes its `bra F088F4` abort exactly once, at the end,
+which is the normal exit from the final block rather than a fault.
+
+### What this does and does not establish
+
+It establishes that the chassis model now satisfies every behavioural
+check the firmware knows how to make — several hundred assertions about
+timer behaviour, VMOD/board-status bit relationships, XLTR register
+round-tripping, chassis-window addressing and access denial.
+
+It does not establish that the model matches the real FPS-3000. The
+firmware only tests what its authors chose to test, and a wrong model
+that happens to satisfy every test is still wrong. But it is a much
+narrower gap than before, and it is the firmware's own definition of a
+working chassis.
+
 ## What a clean emulator boot actually proves
 
 CLAUDE.md describes the emulator as booting "cleanly all the way through
