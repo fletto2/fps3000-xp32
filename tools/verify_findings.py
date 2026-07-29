@@ -96,6 +96,18 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- descriptor +$10 is the ISR exit stub ----------------------------
+    STUBS = [0xF050FC, 0xF05E4C, 0xF060F0, 0xF06B08, 0xF07508, 0xF07F08]
+    check("descriptor +$10 points at a 'move #$0C,ccr / trap #1' exit stub",
+          all(struct.unpack('>I', d[b-B+16:b-B+20])[0] == st and
+              d[st-B:st-B+6].hex().upper() == '44FC000C4E41'
+              for b, st in zip([0xF04600,0xF05D00,0xF05F00,
+                                0xF06900,0xF07300,0xF07D00], STUBS)))
+    check('XP1I ISR never writes d0, so the exit trap is not directive-numbered',
+          not any((struct.unpack('>H', d[a2-B:a2-B+2])[0] & 0xFF00) == 0x7000 or
+                  struct.unpack('>H', d[a2-B:a2-B+2])[0] in (0x303C, 0x203C)
+                  for a2 in range(0xF07EE6, 0xF07F0C, 2)))
+
     # --- RTOS directive surface: 14 distinct, recovered from trap #1 -----
     def directives():
         out = {}

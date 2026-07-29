@@ -1389,6 +1389,51 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The descriptor's `+$10` field is the ISR **exit stub**
+
+Six `trap #1` sites resisted directive recovery, and they turn out to be the
+most structurally interesting ones. All six have the identical form:
+
+```
+44FC 000C     move #$0C,ccr
+4E41          trap #1
+```
+
+and they sit at `$F050FC`, `$F05E4C`, `$F060F0`, `$F06B08`, `$F07508` and
+`$F07F08` — **exactly the six addresses each task descriptor carries at
+`+$10`**:
+
+| task | `+$0C` ISR entry | `+$10` | bytes at `+$10` |
+|---|---|---|---|
+| RDHC | `$F04930` | `$F050FC` | `44FC000C4E41` |
+| IO1I | `$F05DD6` | `$F05E4C` | `44FC000C4E41` |
+| XP4I | `$F060CE` | `$F060F0` | `44FC000C4E41` |
+| XP3I | `$F06AE6` | `$F06B08` | `44FC000C4E41` |
+| XP2I | `$F074E6` | `$F07508` | `44FC000C4E41` |
+| XP1I | `$F07EE6` | `$F07F08` | `44FC000C4E41` |
+
+So the task descriptor declares an interrupt **triple** — vector number at
+`+$08`, handler entry at `+$0C`, **exit stub at `+$10`** — and directive `$4C`
+registers all three. The exit stub is a byte-identical 6-byte routine in every
+task, a seventh replicated block on top of the eight issuer copies.
+
+When this document first described the descriptor blocks it called `+$10`
+"ISR exit / continuation", inferred only from the address landing just past
+the handler. It is now identified: a stub whose whole body is *set the
+condition codes, then trap*.
+
+**The condition codes are the argument, not `d0`.** XP1I's ISR contains no
+write to `d0` anywhere between its entry at `$F07EE6` and this trap, so
+whatever `d0` holds is left over from the interrupted code and cannot be a
+directive. `$0C` sets N and Z. TCBIO1I's ISR *does* write `d0` — `$281` or
+`$282` on the two arms — but it writes those for the panel-command issuer, not
+for this call.
+
+This is a distinct calling convention from the other 65 `trap #1` sites, all
+of which load `d0` immediately beforehand, and it is worth flagging for anyone
+matching this firmware against RMS68K documentation: **the ISR-exit call is
+not directive-numbered.**
+
 ### The firmware's complete RTOS API surface: 14 directives
 
 Recovering the directive from every `trap #1` site — walking back for the last
