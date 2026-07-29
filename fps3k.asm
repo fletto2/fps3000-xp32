@@ -10477,15 +10477,20 @@ loc_F0A446:
   f0a448: 4e 75                   rts      
 
 loc_F0A44A:
+;### BUS-ERROR GUARD: pea <recovery>(pc) then move.w #$4245,-(a7). $4245 is ASCII
   f0a44a: 48 7a 00 70             pea.l    loc_F0A4BC(pc)
+;###   "BE" -- the RMS68K bus error return flag (rms68k_source.SA: PEA KILLER(PC) /
   f0a44e: 3f 3c 42 45             move.w   #$4245, -(a7)
+;###   MOVE.W #'BE',-(A7)). The kernel handler finds the marker on the stack and
   f0a452: 43 fa 00 f6             lea.l    loc_F0A54A(pc), a1
+;###   resumes at the address below it instead of panicking. Five app sites: F09D0E,
   f0a456: 20 29 00 06             move.l   $6(a1), d0
   f0a45a: 52 80                   addq.l   #$1, d0
   f0a45c: 08 80 00 00             bclr.b   #$0, d0
 ;>>>> [R8/BOTH] Adjusts kernel data structure pointer size for alignment.
   f0a460: 53 80                   subq.l   #$1, d0
   f0a462: 02 80 ff ff f0 00       andi.l   #$fffff000, d0
+;###   F0A290, F0A39E, F0A414, F0A44A; plus F00D02/F01F06/F03E40 in the kernel.
   f0a468: 43 fa 00 54             lea.l    loc_F0A4BE(pc), a1
   f0a46c: 24 7c 00 00 00 00       movea.l  #$0, a2
   f0a472: 78 03                   moveq    #$3, d4

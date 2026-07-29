@@ -108,6 +108,12 @@ NOTES = {
  0xF08DF8:'BoardStatusPoll_3F11 - polls (status & $3F31) == $3F11. NEVER reads ROM.',
  0xF098EC:'phase $2000: RAM address uniqueness, move.l a0,(a0)+ over $0-$10000',
  0xF046E0:'4-entry table: XP channel -> BIM control register ($244,$246,$250,$252)',
+ # ---- RMS68K bus-error recovery convention ----
+ 0xF0A44A:'BUS-ERROR GUARD: pea <recovery>(pc) then move.w #$4245,-(a7). $4245 is ASCII',
+ 0xF0A44E:'  "BE" -- the RMS68K bus error return flag (rms68k_source.SA: PEA KILLER(PC) /',
+ 0xF0A452:'  MOVE.W #\'BE\',-(A7)). The kernel handler finds the marker on the stack and',
+ 0xF0A456:'  resumes at the address below it instead of panicking. Five app sites: F09D0E,',
+ 0xF0A468:'  F0A290, F0A39E, F0A414, F0A44A; plus F00D02/F01F06/F03E40 in the kernel.',
  # ---- XP task startup (TCBXP1I is the template; the other three copy it) ----
  0xF07DC2:'XP task startup: a chain of guarded RMS68K syscalls. Each step tests the',
  0xF07DC8:'  result and, on failure, loads a PANEL CODE IDENTIFYING THE STEP and aborts',

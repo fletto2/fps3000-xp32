@@ -1532,6 +1532,43 @@ transfer loop.
 consistent with the emulator's bit-5 BERR gate derived from the boot
 self-tests.
 
+### Two different bus-error strategies, and `$4245` is `'BE'`
+
+A pattern occurring five times in the application region and three more
+in the RMS68K kernel:
+
+```
+pea    <recovery>(pc)        ; where to resume if this faults
+move.w #$4245,-(a7)          ; $4245 = ASCII "BE"
+... an access that might bus-error ...
+```
+
+`rms68k_source.SA` names it outright:
+
+```
+    PEA    KILLER(PC)     PUT ERROR RETURN ON STACK
+    MOVE.W #'BE',-(A7)    BUS ERROR RETURN FLAG
+```
+
+So this is RMS68K's **software bus-error recovery convention**: the
+kernel's handler scans the supervisor stack for the `'BE'` marker and, if
+it finds one, resumes at the address pushed below it instead of
+panicking. Application sites are F09D0E, F0A290, F0A39E, F0A414 and
+F0A44A; the kernel's own are at F00D02, F01F06 and F03E40.
+
+**The firmware uses two incompatible strategies for the same problem.**
+The self-tests do *not* use this convention — phases `$0700`, `$1000`,
+`$1700` and `$1800` save vector `$8` and install their own handler
+(F08F06, F098E0) around each probe, restoring it afterwards. That is why
+those phases can count faults precisely, and why F096AC/F096B8 pad their
+single access with four NOPs: a custom handler needs the fault to land
+inside a known window, whereas the `'BE'` convention only needs a marker
+to be somewhere on the stack.
+
+Worth keeping straight when reading probe code: seeing no `pea`/`'BE'`
+pair does not mean an access is unguarded — check whether vector `$8` was
+redirected first.
+
 ### XP task startup: guarded syscalls with per-step failure codes
 
 `F07DC0-F07F05` is TCBXP1I's startup, and since XP1I is the template the
