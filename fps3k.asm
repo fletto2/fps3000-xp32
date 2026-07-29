@@ -3033,7 +3033,7 @@ loc_F05E86:
 TCBXP4I_Data:
 
 ; ============================================================================
-; $F05F00-$F068FF   TCBXP4I  - XP-32 channel 4  (the divergent copy)
+; $F05F00-$F068FF   TCBXP4I  - XP-32 channel 4  (shifted $18 off the $A00 grid)
 ; ============================================================================
   f05f00: 58 50                   addq.w   #$4, (a0)
   f05f02: 34 49                   movea.w  a1, a2
@@ -6160,7 +6160,7 @@ loc_F07CF0:
 TCBXP1I_Data:
 
 ; ============================================================================
-; $F07D00-$F086FF   TCBXP1I  - XP-32 channel 1  (the template)
+; $F07D00-$F086FF   TCBXP1I  - XP-32 channel 1  (the template the other three copy)
 ; ============================================================================
   f07d00: 58 50                   addq.w   #$4, (a0)
 ;>>>> [R11/BOTH] This instruction stores the address register `a1` into memory at offset `$0(a0)`, but within the `TCBXP1I_Data` section (starting at `f07d00`), this is actually data (likely part of a TCB or configuration table) rather than executable code, as the preceding `addq.w #$4, (a0)` and subsequent `ori.b` instructions are misaligned data fields.

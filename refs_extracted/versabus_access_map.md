@@ -939,22 +939,34 @@ index `(d4 - 1) * 2`.
 
 ### The four XP tasks are three template copies and one original
 
-Diffing the task bodies against TCBXP1I over `$9FA` bytes (the smallest
-inter-task stride):
+Diffing the task bodies pairwise, **each at its own stride**:
 
-| Task | bytes differing | share |
-|---|---|---|
-| TCBXP2I | 305 / 2554 | 11.9% |
-| TCBXP3I | 306 / 2554 | 12.0% |
-| TCBXP4I | 2303 / 2554 | **90.2%** |
+| comparison | stride | bytes differing | share |
+|---|---|---|---|
+| XP1I vs XP2I | `$A00` | 76 / 2528 | 3.0% |
+| XP2I vs XP3I | `$A00` | 77 / 2528 | 3.0% |
+| XP3I vs XP4I | **`$A18`** | 493 / 2528 | 19.5% |
 
-TCBXP2I and TCBXP3I are the same code as TCBXP1I with per-channel
-constants substituted. TCBXP4I is not a copy at all — it diverges into
-different code (its abort path calls F068A8 where the others call a
-helper in their own region), which is what makes its ISR sit at `+$B6`
-from the CR write instead of `+$D4` and its body `$9FA` away instead of
-`$A00`. That asymmetry was previously noted and unexplained; this is the
-explanation.
+All four are near-copies of one template. XP4I is the most divergent but
+is still 80% identical to XP3I.
+
+**An earlier revision of this table reported TCBXP4I as "2303 / 2554,
+90.2% — not a copy at all". That was an alignment artefact and is
+retracted.** XP4I sits **`$18` bytes off the `$A00` grid** — XP3I to XP4I
+is `$A18`, while XP1I to XP2I to XP3I are exactly `$A00`. Comparing at a
+fixed `$A00` stride misaligns every byte after the first shift and
+reports 81.5% difference for what is really 19.5%.
+
+The `$18` shift is also why XP4I's ISR sits at `+$B6` from its CR write
+instead of `+$D4`, and it is confirmed independently: each task calls its
+own copy of a helper — F060FA, F06B12, F07512, F07F12 — and those are
+spaced `$A18`, `$A00`, `$A00`, exactly matching.
+
+Two conclusions elsewhere in this document inherit the correction. The
+replication measurement counts only **exact** repeats, so XP4I's shifted
+near-copies are invisible to it and **28.6% is a lower bound**. And the
+advice to skip XP2I/XP3I as redundant applies to XP4I too — it is a
+copy with a shift, not a separate routine.
 
 The substituted constants are exactly what the channel identity requires:
 
@@ -1558,9 +1570,13 @@ the same code seen again.
 
 Practically, it means a routine found in one task region can be assumed
 present in the other four unless shown otherwise, and that time spent
-analysing XP2I or XP3I is largely wasted — TCBXP1I is the template and
-TCBXP4I is the only one that genuinely diverges (90% different, per the
-task-body diff above).
+analysing XP2I, XP3I **or XP4I** is largely wasted — TCBXP1I is the
+template and all three others are near-copies (3%, 3% and 19.5%
+different, each measured at its own stride).
+
+Note this measurement counts **exact** repeats only. TCBXP4I sits `$18`
+off the `$A00` grid, so its near-copies never hash-match and are counted
+as unique. **28.6% is therefore a lower bound on the real replication.**
 
 ### The panel-command issuer exists seven times, byte for byte
 
