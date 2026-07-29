@@ -100,19 +100,27 @@ static int      chassis_irq_level = 4;
 
 /* ============== logging helpers ============== */
 
+/* Channel-window roles per refs_extracted/versabus_access_map.md:
+ *   +$04 write   +$08 data HIGH   +$0A data LOW   +$0E command/trigger
+ * The old DATA_A / DATA_B naming encoded the superseded
+ * "write / read A / status / read B" model and is not used for logging.
+ * The XP1I ISR at $F07EE6 reads +$0E, +$08 and +$0A in that order and
+ * writes the same three back, which is what fixed the roles. */
 static const char *apif_offset_name(uint32_t addr) {
+    static char buf[32];
+    if (addr >= 0xFF0040 && addr <= 0xFF00BF) {
+        int ch  = ((addr - 0xFF0040) >> 5) + 1;
+        int off = addr & 0x1F;
+        const char *r = off == 0x04 ? "WRITE"   : off == 0x08 ? "DATA_HI"
+                      : off == 0x0A ? "DATA_LO" : off == 0x0E ? "CMD" : NULL;
+        if (r) { snprintf(buf, sizeof buf, "APIF_CH%d_%s", ch, r); return buf; }
+    }
     switch (addr) {
         case APIF_CMD_STATUS:  return "APIF_CMD_STATUS";
         case APIF_CMD_ARG_LO:  return "APIF_CMD_ARG_LO";
         case APIF_CMD_ARG_HI:  return "APIF_CMD_ARG_HI";
-        case APIF_CH1_DATA_A:  return "APIF_CH1_DATA_A";
-        case APIF_CH1_DATA_B:  return "APIF_CH1_DATA_B";
-        case APIF_CH2_DATA_A:  return "APIF_CH2_DATA_A";
-        case APIF_CH2_DATA_B:  return "APIF_CH2_DATA_B";
-        case APIF_CH3_DATA_A:  return "APIF_CH3_DATA_A";
-        case APIF_CH3_DATA_B:  return "APIF_CH3_DATA_B";
-        case APIF_CH4_DATA_A:  return "APIF_CH4_DATA_A";
-        case APIF_CH4_DATA_B:  return "APIF_CH4_DATA_B";
+        case 0xFF0004:         return "APIF_READY";
+        case 0xFF0008:         return "APIF_BULK_DATA";
         default:               return "APIF_unknown";
     }
 }
@@ -1269,6 +1277,31 @@ static int      inject_done;
 void versabus_tick(uint32_t cycles) {
     mc6840_tick(&ptm_dev, cycles);
     upd7201_tick(&sio_dev, cycles);
+
+    /* FPS3K_XPIRQ=<ch>: raise channel <ch>'s BIM interrupt once its task
+     * has enabled it, then re-raise periodically.
+     *
+     * Every XP task finishes its prologue by connecting its ISR (directive
+     * $4C) and blocking on directive $13, waiting for exactly this
+     * interrupt.  Nothing in the chassis model ever raised it, so each task
+     * executed ~45 of its 2560 bytes.  Channel-to-BIM mapping is the
+     * firmware's own: XP1I=BIM1 ch2, XP2I=BIM1 ch3, XP3I=BIM2 ch0,
+     * XP4I=BIM2 ch1. */
+    {
+        static int xpch = -1;
+        static uint64_t last;
+        static uint64_t clk;
+        clk += cycles;
+        if (xpch < 0) { const char *e = getenv("FPS3K_XPIRQ"); xpch = e ? atoi(e) : 0; }
+        if (xpch >= 1 && xpch <= 4) {
+            static const int U[4] = {1,1,2,2}, C[4] = {2,3,0,1};
+            int u = U[xpch-1], c = C[xpch-1];
+            if (versabus_bim_enabled(u, c) && clk - last > 200000) {
+                last = clk;
+                versabus_bim_assert(u, c);
+            }
+        }
+    }
     if (xltr.busy_ticks > cycles) xltr.busy_ticks -= cycles;
     else                          xltr.busy_ticks = 0;
     panel_resp_tick(cycles);

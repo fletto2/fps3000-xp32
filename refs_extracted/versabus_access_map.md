@@ -1389,6 +1389,80 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### `$FF0048` IS read — the claim was wrong, and so was my re-verification
+
+Driving the XP channel interrupt runs the XP-32 channel ISR for the first
+time, and it reads `$FF0048`.
+
+`FPS3K_XPIRQ=<ch>` raises channel *ch*'s BIM request once its task has
+enabled it. With `FPS3K_XPIRQ=1`, XP1I goes from **45 to 116 distinct PCs**
+and the ISR at `$F07EE6` executes. The bus log, with PCs, shows:
+
+```
+RD 2-byte FF004E @F07EEE
+RD 2-byte FF0048 @F07EF6      <-- here
+RD 2-byte FF004A @F07EFE
+WR 2-byte FF0048 = 0000 @F07F18
+WR 2-byte FF004A = 0010 @F07F1E
+WR 2-byte FF004E = 8004 @F07F22
+```
+
+`$F07EF6` is sixteen bytes into the ISR — ordinary ROM code, not an
+instruction fetch from a corrupted vector, which is what the earlier
+retracted sighting turned out to be.
+
+**Two statements are retracted.** The documented one, "`$FF0048` is never
+read anywhere in the ROM"; and my own re-verification of it earlier in this
+session, which reported "exactly one occurrence of `$00FF0048` in the image,
+at F07E2E, and zero runtime reads". That count was correct and the conclusion
+did not follow: **the ISR reads the port as `$48(a5)` with `a5 = $FF0000`**,
+a displacement form no absolute-address scan can see. The same blind spot is
+already flagged in `fps3k.asm`'s own header, which declines to name short
+displacements because the base register is unknown — and then I ran exactly
+that scan and trusted it.
+
+The right statement is: *`$FF0048` is referenced by absolute address exactly
+once, as a write; every read of it goes through a base register.*
+
+**What this does not overturn.** The host↔SBC payload still rides in the
+mailbox pair, not the channel data ports — this is TCBXP1I, the XP-32 channel
+task, not TCBIO1I, the host link. The revised host protocol stands.
+
+### The XP-32 channel transaction
+
+The ISR is a complete, coherent transaction:
+
+```
+$F07EE6  move.l  a5,-(a7)
+$F07EE8  movea.l #$FF0000,a5
+$F07EEE  move.w  $4E(a5),$1066      ; command  -> per-channel RAM +0
+$F07EF6  move.w  $48(a5),$1068      ; data HI  -> per-channel RAM +2
+$F07EFE  move.w  $4A(a5),$106A      ; data LO  -> per-channel RAM +4
+         ... two RTOS calls ...
+$F07F10  move.w  #$004F,(a3)        ; BIM CR with IRE cleared
+$F07F16  move.w  #$0000,(a1)        ; data HI <- 0
+$F07F1C  move.w  d0,$2(a1)          ; data LO <- d0
+$F07F20  move.w  #$8004,(a0)        ; REQUEST-TRANSFER
+$F07F24  move.l  #$3E8,d5           ; 1000-iteration timeout
+$F07F2A  poll on $4E(a5)
+```
+
+It confirms four separate things that were previously established from other
+directions:
+
+1. **The channel window roles.** `+$08`/`+$0A` are read *and* written as a
+   pair and `+$0E` carries `$8004`, exactly as the corrected table says. The
+   old "read A / status / read B" labelling could not produce this.
+2. **The per-channel RAM blocks.** The 6-byte blocks at `$1066`/`$106C`/
+   `$1072`/`$1078` are a snapshot of `{command, data-hi, data-lo}` — three
+   words, which is why the stride is 6.
+3. **`$4F` is a BIM control-register value.** The ISR writes it to `(a3)`
+   while a transfer is outstanding, which is the IRE-cleared form documented
+   for `PanelSendAndWait`. This is a second, independent sighting of the
+   pattern that showed `$4F` was never an `$FF004A` status value.
+4. **`$8004` is REQUEST-TRANSFER**, the same command the `D1_SEND` handler in
+   `PanelStatusDispatchTable` issues.
+
 ### The XP task prologue, decoded
 
 Each XP task makes five `trap #1` calls and then blocks. Reading their

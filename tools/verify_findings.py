@@ -96,6 +96,15 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- XP channel ISR: reads $FF0048 via a base register --------------
+    tr2, _ = run({'FPS3K_CHANNELS': '2', 'FPS3K_XPIRQ': '1'}, 400_000_000)
+    check('XP1I ISR runs when its BIM channel is raised',
+          tr2.count('F07EE6\n') > 0 and
+          len({l for l in tr2.split() if 'F07D00' <= l <= 'F086FF'}) > 100)
+    check('the ISR reads $FF0048 -- via $48(a5), not an absolute address',
+          tr2.count('F07EF6\n') > 0 and
+          d[0x7EF6:0x7EFE].hex().upper() == '33ED0048' + '00001068')
+
     check('self-tests: zero error-flag hits',
           tr.count('F0F0F0F0') == 0 and 'F08B88\n' not in tr)
     check('self-tests: diagnostic region executes',
