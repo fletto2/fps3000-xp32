@@ -106,9 +106,16 @@ else:
     check('XP1I/2/3 differ in exactly 77 bytes (template + constant patches)',
           sum(1 for i in range(0xA00)
               if len({xp[n][i] for n in '123'}) > 1) == 77)
-    check('$105E is the channel selector: each task tests its own number',
+    check('$105E presence gate: each task tests its own channel number',
           all(struct.unpack('>HHI', xp[n][0xF6:0xFE]) == (0x0C79, int(n), 0x105E)
               for n in '1234'))
+    check('$105E is written by the CPU at $F0A224 (a channel-present count)',
+          d[0xA224:0xA22A].hex().upper() == '33C10000105E' and
+          [struct.unpack('>H', d[0xA204+i:0xA206+i])[0] for i in (0,8,16,24)]
+          == [0x3028]*4 and
+          [struct.unpack('>H', d[0xA206+i:0xA208+i])[0] for i in (0,8,16,24)]
+          == [0x4E,0x6E,0x8E,0xAE])
+
     check('XP4I has the $8020 XLTR MODE1 write the others lack',
           xp['4'][0x105:0x10C].hex().upper() == 'A43B7C80200202' and
           all(xp[n][0x105:0x10C].hex().upper() != 'A43B7C80200202' for n in '123'))

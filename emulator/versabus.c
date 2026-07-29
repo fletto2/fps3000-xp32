@@ -359,6 +359,31 @@ static void chassis_process_panel_cmd(uint16_t cmd) {
 }
 
 static uint16_t apif_read(uint32_t addr) {
+    /* FPS3K_CHANNELS=<n>: report the first n XP-32 channels as populated.
+     *
+     * The firmware counts channels at F0A202 by reading all four command
+     * ports ($FF004E/6E/8E/AE) and incrementing for each NONZERO one, then
+     * storing the count to $105E.  Each XP task then gates itself with
+     * "cmpi.w #<own channel>,$105E / blt skip", so task n runs only when
+     * the count is >= n.
+     *
+     * With these ports reading 0 the count is 0 and ALL FOUR XP tasks skip
+     * their work -- which is what every emulator run before this did, while
+     * reporting "all 6 tasks instantiated".  They were instantiated and
+     * immediately self-gated.
+     *
+     * Default stays 0 so existing results are unchanged; the documented
+     * chassis populates AC1 and AC2, so FPS3K_CHANNELS=2 is the realistic
+     * setting.  What a populated channel actually presents here is unknown
+     * -- the firmware only tests nonzero -- so this returns a placeholder. */
+    {
+        static int nch = -1;
+        if (nch < 0) { const char *e = getenv("FPS3K_CHANNELS"); nch = e ? atoi(e) : 0; }
+        if (nch > 0 && (addr & 0x1F) == 0x0E && addr >= 0xFF0040 && addr <= 0xFF00AE) {
+            int ch = ((addr - 0xFF0040) >> 5) + 1;
+            if (ch <= nch) return 0x0001;
+        }
+    }
     /* FPS3K_DATAIN: the bulk data-in port at $FF0008 hands back an
      * incrementing pattern, so the destination decode can be checked
      * against a RAM dump. */

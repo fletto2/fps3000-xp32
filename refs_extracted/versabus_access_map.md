@@ -1416,24 +1416,78 @@ This is what "byte-identical block replication" means, quantified: one
 template, copied three times, with 77 constants patched. No structural
 difference of any kind.
 
-#### `$105E` is the chassis's channel selector
+#### `$105E` is a channel-present count, written by the CPU
 
 Each task carries the same test against its own channel number:
 
 ```
-XP1I  $F07DF6:  cmpi.w #$0001,$105E
+XP1I  $F07DF6:  cmpi.w #$0001,$105E   ; blt.s -> skip
 XP2I  $F073F6:  cmpi.w #$0002,$105E
 XP3I  $F069F6:  cmpi.w #$0003,$105E
 XP4I  $F05FF6:  cmpi.w #$0004,$105E
 ```
 
-`$105E` is one of the two RAM locations CLAUDE.md lists as written by
-something other than the CPU (with `$10AA`). Its **role** is now identified:
-it holds a channel number, and each XP task compares it against its own. A
-chassis wanting to address channel *n* writes *n* there.
+**Two claims about `$105E` are retracted here**, one from CLAUDE.md and one
+from this document.
+
+CLAUDE.md lists `$105E` with `$10AA` as a location "read but never written
+by CPU code", set by the chassis acting as a bus master. **It is written by
+the CPU**, at `$F0A224`, and the routine that does it is unambiguous:
+
+```
+$F0A202  clr.w   d1
+$F0A204  move.w  $FF004E,d0      ; channel 1 command port
+$F0A208  beq.s   +2
+$F0A20A  addq.w  #1,d1
+$F0A20C  move.w  $FF006E,d0      ; channel 2
+   ... same for $FF008E, $FF00AE ...
+$F0A224  move.w  d1,$105E
+```
+
+It **probes all four channel command ports and counts the nonzero ones**.
+So `$105E` is the number of XP-32 channels the chassis presents, and the
+per-task test is a **presence gate**: task *n* proceeds only when the count
+is at least *n*. With AC1 and AC2 populated the count is 2, and XP3I and
+XP4I gate themselves off. The "dormant AC3/AC4 task slots" this project has
+described now have their actual mechanism.
+
+The second retraction is mine: an earlier revision of this section called
+`$105E` a "channel selector" written by the chassis. Same location, wrong
+direction and wrong meaning.
+
+Only `$10AA` remains in the "written by something other than the CPU"
+category, and even that one is qualified — F053E2 can write it, but never
+runs in any tested configuration.
 
 There are also **per-channel RAM blocks at `$1066`, `$106C`, `$1072`,
 `$1078`** — stride 6, in channel order.
+
+#### Emulator: the presence gate was never exercised
+
+The four channel command ports were unmodelled and read back 0, so every
+emulator run to date computed `$105E = 0` and every XP task took the skip
+branch. `FPS3K_CHANNELS=<n>` now reports the first *n* channels as
+populated; the default stays 0 so existing results are unchanged.
+
+Verified per channel — with `FPS3K_CHANNELS=2` the newly-reached PCs are
+exactly:
+
+| PC | what it is |
+|---|---|
+| `F0A20A`, `F0A212` | the two `addq.w #1,d1` increments, channels 1 and 2 |
+| `F07E00` | XP1I's present-path, previously skipped |
+| `F07400` | XP2I's present-path |
+
+and `F07E08`/`F07408` (the absent-path) drop out. XP3I and XP4I are
+unchanged, since 2 < 3. That is precisely what the gate predicts.
+
+**It does not unblock the XP tasks.** Each still executes about 45 distinct
+instructions from its entry point and then enters the RMS68K kernel at
+`$F00262` to wait — they are blocked on their BIM interrupt, which nothing
+in the model generates. The gate was a second, independent reason the tasks
+did nothing; removing it exposes the first. What a populated channel really
+presents at `+$0E` is also unknown, so the stub returns a placeholder `$0001`
+— the firmware only tests nonzero.
 
 #### XP4I is a different variant, not a degraded copy
 
