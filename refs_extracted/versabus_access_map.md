@@ -541,6 +541,40 @@ word count, and the chassis programs both by pushing (code, argument)
 pairs. That makes the whole thing a small command language, not a status
 report.
 
+### A ROM table independently confirms the channel-to-BIM mapping
+
+The channel ownership table in section 1 was built by reading CR write
+sites and doing vector arithmetic. There is a literal table in the ROM
+that says the same thing, reached from a different direction entirely.
+
+F04CC8 indexes a longword table at **F046E0** by `($E60 - 1) * 4`,
+dereferences it, and adds `$FF0000`. Dumping it:
+
+| index | value | resolves to | channel |
+|---|---|---|---|
+| 0 | `$00000244` | `$FF0244` | TCBXP1I |
+| 1 | `$00000246` | `$FF0246` | TCBXP2I |
+| 2 | `$00000250` | `$FF0250` | TCBXP3I |
+| 3 | `$00000252` | `$FF0252` | TCBXP4I |
+
+Index 4 reads `$700141F9`, which is `moveq #1,d0` — the table is exactly
+four entries and code follows it. So `$E60` is an **XP channel number
+1-4**, and the ROM itself maps channel to BIM control register in exactly
+the order section 1 derives. Two independent derivations agreeing is
+worth more than either alone, and this one needs no inference at all.
+
+The surrounding code also places the other two parameters. F04CAC builds
+`a0` from an index scaled by `$20` — the channel-window stride — plus
+`$E`, so `a1 = a0 - 6` lands on the channel's data port. It then loads
+`d3 = $E68` and `d4 = $E60` and calls `PanelSendAndWait`. So the third
+32-bit parameter that code `$9` loads is **a data value handed to the
+panel send/wait engine**, alongside the channel number.
+
+`$E7A`, the operand of codes `$A` and `$C`, is a separate **slot index**
+range-checked 0..`$C` and auto-incremented under `$E87` bit 4. It indexes
+tables at `$1064` and `$1020` — 13 slots, not 4, so it is not the XP
+channel number.
+
 ### Code `$3` is the chassis-memory access primitive
 
 The `$3` handler at F04D4E is a **paged 32-bit read/write of chassis
