@@ -126,6 +126,27 @@ else:
            zip('1234', (0x4E,0x6E,0x8E,0xAE))] == [2,2,2,1] and
           [xp[n].count(bytes.fromhex('30BC8000')) for n in '1234'] == [1,1,1,0])
 
+    # --- panel failure codes are directive-indexed, not per-channel -------
+    def codes(lo, hi):
+        c = []
+        for a in range(lo, hi, 2):
+            if struct.unpack('>H', d[a-B:a-B+2])[0] == 0x303C:
+                v = struct.unpack('>H', d[a-B+2:a-B+4])[0]
+                if 0x258 <= v <= 0x2FF: c.append(v)
+        return sorted(c)
+    xpc = [codes(lo, hi) for lo, hi in
+           [(0xF07D00,0xF086FF),(0xF07300,0xF07CFF),
+            (0xF06900,0xF072FF),(0xF05F00,0xF068FF)]]
+    check('all four XP tasks emit an identical panel-code multiset',
+          xpc[0] == xpc[1] == xpc[2] == xpc[3] and len(xpc[0]) == 25)
+    check('$26F appears in no task (the per-channel block is not a block)',
+          all(0x26F not in c for c in xpc))
+    check('XP prologue: directive $01->$26D, $2D->$26E, $4C->$270',
+          [(struct.unpack('>H', d[m-B:m-B+2])[0] & 0xFF,
+            struct.unpack('>H', d[t2-B+6:t2-B+8])[0])
+           for m, t2 in [(0xF07D4A,0xF07D52),(0xF07DD6,0xF07DDE)]]
+          == [(0x01,0x26D),(0x4C,0x270)])
+
     # --- TDTI table: entry points and exact region extents ---------------
     TDTI = [('RDHC',0xF046F0,0xF04600,0xF05CFF),('IO1I',0xF05D36,0xF05D00,0xF05EFF),
             ('XP4I',0xF05F4A,0xF05F00,0xF068FF),('XP3I',0xF0694A,0xF06900,0xF072FF),

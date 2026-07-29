@@ -1389,6 +1389,68 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The `$26E-$271` panel codes are not per-channel
+
+CLAUDE.md labels `0x26E-0x271` as `PCMD_CH{1..4}_TCB_FAIL` and flags the
+result as unresolved:
+
+> **`0x26E` is labelled CH1 but appears in TCBXP4I context.** ... Either the
+> CH1 label is wrong or the function attribution is. Unresolved — do not rely
+> on the channel numbers in this block.
+
+**The label is wrong; the attribution was fine.** Counting every
+`move.w #$0nnn,d0` with `nnn` in the panel range, per task:
+
+| task | codes emitted |
+|---|---|
+| XP1I | `$262 $263 $264 $269 $26A`×4 `$26B`×2 `$26C`×9 `$26D $26E`×2 `$270 $271`×2 |
+| XP2I | *identical* |
+| XP3I | *identical* |
+| XP4I | *identical* |
+| IO1I | `$27D $27E $27F $280` |
+| RDHC | `$258 $259`×2 `$25A`×3 `$25C`×5 `$25D`×2 `$25E $25F`×2 `$260`×2 `$269 $26A`×4 `$26B`×2 `$26C`×9 `$276`-`$27B` `$27D` |
+
+All four XP tasks emit **exactly the same multiset**. A code that every
+channel emits cannot identify a channel. This follows necessarily from the
+template-copy finding — the 77 differing bytes do not include any of these
+constants — but it is worth stating separately because the per-channel
+reading is load-bearing in the docs.
+
+**What they actually index is the RTOS directive that failed.** The XP task
+prologue makes five `trap #1` calls, and each failure path loads its own code:
+
+| site | directive in `d0` | failure code |
+|---|---|---|
+| `$F07D52` | `$01` | `$26D` |
+| `$F07D86` | `$2D` | `$26E` |
+| `$F07DBC` | `$2D` | `$26E` |
+| `$F07DDE` | `$4C` | `$270` |
+| `$F07E1A` | `$13` | — (this is where the task blocks) |
+
+The same directive gets the same code at two different sites, which is what a
+directive-indexed scheme predicts and a site-indexed one does not.
+
+`$26F` appears nowhere in any task, so the "block of four, only endpoints
+named" reading was also an artefact of assuming a per-channel run.
+
+#### The shared helper block
+
+`$269`, `$26A`×4, `$26B`×2 and `$26C`×9 appear with **identical counts** in
+RDHC and in all four XP tasks. That is replicated helper code — the abort and
+release paths — copied into each task rather than called, consistent with how
+the rest of the template was built.
+
+#### What the XP tasks are waiting for
+
+The prologue is five RTOS calls and then a block on directive `$13`. Every
+XP task reaches `$F07E1A` (and its equivalents) and enters the kernel at
+`$F00262` to wait. Nothing in the emulator's chassis model ever wakes them,
+which is why each executes only ~45 instructions of its 2560 bytes.
+
+Directive `$13` is therefore the single thing standing between the model and
+live XP channel behaviour. Naming it against the RMS68K directive set is the
+obvious next step, and does not need hardware.
+
 ### The XP task templates, diffed at exact bounds
 
 With the TDTI table giving exact `$A00` extents, the four channel tasks can
