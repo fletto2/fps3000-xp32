@@ -3,9 +3,17 @@
 
     python3 tools/verify_findings.py [rom]
 
-Pass an alternate ROM path to test the harness itself: mutating two bytes
-(one in a panel-issuer copy, one in SRecordDataHandler's $10000 addend)
-takes it from 21/21 to 12/21, so the checks are not vacuous.
+Pass an alternate ROM path to test the harness itself.  Measured 2026-07-29 at
+144 checks: the real image gives 144/144, a two-byte mutation (an issuer copy
+plus SRecordDataHandler) gives 100/144 so 44 checks catch it, and a random 64 KB
+image gives 97/144 so 47 do.
+
+The 97 that survive noise are mostly checks of the TOOLING rather than the ROM,
+which is legitimate.  But three were vacuous when this was last audited --
+"zero error-flag hits", "$01110-$1DEFF untouched", and "$10AA from reset never
+boots" -- because a ROM that does nothing satisfies all three.  Each now carries
+a liveness guard requiring that the run actually got somewhere.  An absence claim
+without a presence precondition cannot fail.
 
 Run from the repo root after any change to disasm.py, the emulator, or the
 ROM image.  Every check here corresponds to a documented finding; if one
@@ -199,8 +207,12 @@ else:
            for tg in (b'!TCB', b'!TST', b'!ASQ', b'!CCB', b'!DLY')]
           == [6, 6, 0, 0, 0])
 
-    check('post-boot RAM: $01110-$1DEFF is entirely untouched (115.5 KB)',
-          not any(_r[x] for x in range(0x1110, 0x1DF00)))
+    # LIVENESS-GUARDED: "this range is untouched" passes on a ROM that touches
+    # NO ram.  Require that the ranges known to be occupied really are.
+    check('post-boot RAM: $01110-$1DEFF untouched, and the RTOS areas ARE used',
+          not any(_r[x] for x in range(0x1110, 0x1DF00))
+          and _r[0x1E900:0x1E904] == b'!TCB'
+          and any(_r[x] for x in range(0x400, 0x808)))
     check('post-boot RAM: only ~3% of the 128 KB is touched',
           400 < sum(1 for x in range(0, 0x20000, 4)
                     if _r[x:x+4] != b'\x00\x00\x00\x00') < 1600)
@@ -539,8 +551,11 @@ else:
           tb29.count('F05DFA\n') > 0 and tb29.count('F05E2C\n') == 0)
     chk, _ = run({'FPS3K_DMA10AA': '2', 'FPS3K_DMA10AA_FROM_RESET': '1'},
                  400_000_000)
-    check('$10AA injection from reset hangs the diagnostics (never boots)',
-          'F00262\n' not in chk)
+    # LIVENESS-GUARDED: "never reaches the scheduler" is satisfied by any ROM
+    # that cannot boot.  Require that it DID reach the diagnostics it hangs in.
+    check('$10AA from reset reaches the diagnostics but never the scheduler',
+          'F00262\n' not in chk
+          and len({l for l in chk.split() if 'F08D00' <= l <= 'F09BFF'}) > 100)
 
     # --- RAM map: 4 x 6-byte per-channel array, shared globals around ----
     def refs(base, lo, hi):
@@ -595,8 +610,12 @@ else:
           tr2.count('F07EF6\n') > 0 and
           d[0x7EF6:0x7EFE].hex().upper() == '33ED0048' + '00001068')
 
-    check('self-tests: zero error-flag hits',
-          tr.count('F0F0F0F0') == 0 and 'F08B88\n' not in tr)
+    # LIVENESS-GUARDED.  "zero error-flag hits" passes trivially on a ROM that
+    # never runs the self-tests at all -- a random 64 KB image satisfies it.  An
+    # absence claim needs a presence precondition, or it cannot fail.
+    _diag = len({l for l in tr.split() if 'F08D00' <= l <= 'F09BFF'})
+    check('self-tests ran AND hit zero error flags',
+          _diag > 500 and tr.count('F0F0F0F0') == 0 and 'F08B88\n' not in tr)
     check('self-tests: diagnostic region executes',
           len({l for l in tr.split() if 'F08D00' <= l <= 'F09BFF'}) > 500)
     # --- XP template diff at exact TDTI bounds ---------------------------

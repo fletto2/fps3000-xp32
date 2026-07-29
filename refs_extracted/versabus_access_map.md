@@ -1473,6 +1473,45 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### Auditing the harness: three checks could not fail
+
+The harness has grown from 21 checks to 144, and its own falsifiability test was
+validated at 21. Re-establishing it:
+
+| ROM | result |
+|---|---|
+| the real image | **144/144** |
+| two bytes mutated (an issuer copy + `SRecordDataHandler`) | **100/144** — 44 catch it |
+| a random 64 KB image | **97/144** — 47 catch it |
+
+Forty-four checks are sensitive to a two-byte change, which is healthy. The
+interesting number is the other direction: **97 checks pass on pure noise.** Most
+legitimately so — they test the tooling rather than the ROM (that `fps3k.asm`
+carries its notes, that `NOTES` merges duplicates, that hook conflicts warn, that
+the run reports its instrumentation, that no unmapped chassis region is touched).
+
+But **three were vacuous**, and all three had the same shape as the instrument
+defects found earlier today — an absence claim with no presence precondition:
+
+| check | why a garbage ROM satisfied it |
+|---|---|
+| "self-tests: zero error-flag hits" | a ROM that never runs the self-tests raises no error flag |
+| "`$01110-$1DEFF` is entirely untouched" | a ROM that writes no RAM touches nothing |
+| "`$10AA` from reset never boots" | a ROM that cannot boot never boots |
+
+Each now carries a liveness guard: the self-test check requires >500 diagnostic
+PCs *and* zero flags; the RAM check requires the RTOS areas to *be* occupied
+(`!TCB` at `$1E900`, the stack region non-empty) as well as the free span to be
+clear; and the `$10AA` check requires the run to have *reached* the diagnostics
+it is supposed to hang in. All three now fail on noise, as they should.
+
+**This is the same defect as the dead write-detector and the silently-overridden
+hook, one level further out.** "Nothing bad happened" and "nothing happened" are
+indistinguishable to an unguarded absence check — so a test suite full of them
+reports health most reliably when the machine is most broken. For an emulator
+whose correctness rests on 26 hooks, the harness needed the same audit as the
+hooks.
+
 ### Unmapped chassis regions now announce themselves — and none is touched
 
 The model returned **0** for any chassis-window address matching no handler,
