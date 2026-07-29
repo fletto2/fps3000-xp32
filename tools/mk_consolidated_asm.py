@@ -1,0 +1,198 @@
+#!/usr/bin/env python3
+"""Build fps3k.asm - the single consolidated FPS-3000 disassembly.
+
+Input : fps3k_custom_annotated.asm  (frozen; its own generator reads a
+        /tmp file and cannot be rerun - see CLAUDE.md)
+Output: fps3k.asm
+
+Supersedes fps3k_clean.asm.  Symbol tables here are corrected against the
+2026-07-29 findings; the old cleaner's names for the AP I/F channel ports
+and several $E5x/$E6x globals were wrong.
+"""
+import re, datetime
+
+IN  = 'fps3k_custom_annotated.asm'
+OUT = 'fps3k.asm'
+
+# ---- AP I/F + XLTR, corrected -------------------------------------------
+# The channel window is NOT write/readA/status/readB.  +$08 and +$0A are the
+# high and low halves of one 32-bit data register; +$0E is a command/trigger.
+IO = {
+    0x0000:'APIF_CMD_STATUS',     # $8004/$8005 out; reads <=0 = END OF STREAM
+    0x0004:'APIF_READY',          # bit 0 = port ready, polled before transfers
+    0x0008:'APIF_BULK_DATA',      # bidirectional: S-record ASCII / binary in / binary out
+    0x000E:'APIF_PANEL_CMD',
+    0x0010:'APIF_CMD_ARG_HI',
+    0x0044:'APIF_CH1_WRITE', 0x0048:'APIF_CH1_DATA_HI', 0x004A:'APIF_CH1_DATA_LO', 0x004E:'APIF_CH1_CMD',
+    0x0064:'APIF_CH2_WRITE', 0x0068:'APIF_CH2_DATA_HI', 0x006A:'APIF_CH2_DATA_LO', 0x006E:'APIF_CH2_CMD',
+    0x0084:'APIF_CH3_WRITE', 0x0088:'APIF_CH3_DATA_HI', 0x008A:'APIF_CH3_DATA_LO', 0x008E:'APIF_CH3_CMD',
+    0x00A4:'APIF_CH4_WRITE', 0x00A8:'APIF_CH4_DATA_HI', 0x00AA:'APIF_CH4_DATA_LO', 0x00AE:'APIF_CH4_CMD',
+    0x0200:'XLTR_MODE0', 0x0202:'XLTR_MODE1', 0x0204:'XLTR_CHANNEL_SELECT',
+    0x020C:'XLTR_COUNTER', 0x0210:'XLTR_MODE2_PAGE', 0x0214:'XLTR_DATA_LO',
+    0x0216:'XLTR_DATA_HI', 0x0218:'XLTR_STATUS_IRQ', 0x021A:'XLTR_IRQ_MASK',
+    # $FF0230-$FF025F are BIM registers, not "channel config"
+    0x0230:'BIM0_CR0', 0x0232:'BIM0_CR1', 0x0234:'BIM0_CR2', 0x0236:'BIM0_CR3',
+    0x0238:'BIM0_VR0', 0x023A:'BIM0_VR1', 0x023C:'BIM0_VR2', 0x023E:'BIM0_VR3',
+    0x0240:'BIM1_CR0', 0x0242:'BIM1_CR1', 0x0244:'BIM1_CR2_XP1', 0x0246:'BIM1_CR3_XP2',
+    0x0248:'BIM1_VR0', 0x024A:'BIM1_VR1', 0x024C:'BIM1_VR2_XP1', 0x024E:'BIM1_VR3_XP2',
+    0x0250:'BIM2_CR0_XP3', 0x0252:'BIM2_CR1_XP4', 0x0254:'BIM2_CR2_IO1', 0x0256:'BIM2_CR3',
+    0x0258:'BIM2_VR0_XP3', 0x025A:'BIM2_VR1_XP4', 0x025C:'BIM2_VR2_IO1', 0x025E:'BIM2_VR3',
+}
+
+# ---- SBC RAM globals, corrected -----------------------------------------
+RAM = {
+    0x000400:'g_sched_save_d0', 0x000800:'g_ctx_save',
+    0x000C00:'g_tcb_chain_ptr', 0x000C08:'g_saved_sp',
+    0x000C36:'g_apif_base',     0x000C3A:'g_apif_ptr', 0x000C66:'g_current_tcb',
+    0x000E58:'g_xfer_addr_hi',  0x000E5A:'g_xfer_addr_lo',   # 32-bit destination
+    0x000E5C:'g_opcode_latch',  0x000E5E:'g_opcode_lo',      # $28 = bulk transfer
+    0x000E60:'g_xp_channel',    0x000E62:'g_xp_channel_lo',  # XP channel 1-4
+    0x000E64:'g_xfer_count_hi', 0x000E66:'g_xfer_count_lo',  # 32-bit word count
+    0x000E68:'g_data_param_hi', 0x000E6A:'g_data_param_lo',  # -> d3 of PanelSendAndWait
+    0x000E6E:'g_last_panel_arg',
+    0x000E70:'g_chassis_data_hi',0x000E72:'g_chassis_data_lo',# code $3 read/write data
+    0x000E74:'g_result',        # returned to the chassis via CHANNEL_SELECT
+    0x000E7A:'g_slot_index',    # codes $A/$C, range-checked 0..$C
+    0x000E86:'g_response_word', 0x000E87:'g_response_byte',  # b7 dispatcher, b6/b5 modifiers
+    0x00101E:'g_regfile',       # 16 longwords, $101E-$105D
+    0x00105E:'g_ac_count',      # installed-AC count, chassis-supplied
+    0x001062:'g_task_channel',  # each XP task writes its own number
+    0x001064:'g_channel_mask',  # shared bitmask, all four tasks and/or into it
+    0x001066:'g_ch_block',      # 4 x 3 words, stride 6
+    0x001080:'g_ch_ptr_table', 0x0010A0:'g_ch_word_array',
+    0x0010AA:'g_io1_gate',      # TCBIO1I dispatches on this; chassis-supplied
+    0x01FFF0:'VMOD_CTRL',       0x01FFF1:'VMOD_CTRL_LO',
+}
+
+# ---- task regions, from the TDTI table at $F0A600 ------------------------
+REGIONS = [(0xF04600,0xF05CFF,'TCBRDHC  - master dispatch, panel cmds, SLC loader'),
+           (0xF05D00,0xF05EFF,'TCBIO1I  - host link, mailbox $70001C/$700020'),
+           (0xF05F00,0xF068FF,'TCBXP4I  - XP-32 channel 4  (the divergent copy)'),
+           (0xF06900,0xF072FF,'TCBXP3I  - XP-32 channel 3'),
+           (0xF07300,0xF07CFF,'TCBXP2I  - XP-32 channel 2'),
+           (0xF07D00,0xF086FF,'TCBXP1I  - XP-32 channel 1  (the template)'),
+           (0xF08700,0xF08CFF,'MainInit - self-test dispatcher, two checkpoints'),
+           (0xF08D00,0xF09BFF,'Self-test suite - phases $0100-$2903'),
+           (0xF09C00,0xF0A5FF,'Reset entry, Phase2Init, RTOSKernelInit, TDTI'),
+           (0xF0A600,0xF0A825,'TDTI task definition table, $C0 per entry'),
+           (0xF0A826,0xF0FFFF,'free ROM - the monitor is patched here')]
+
+# ---- sites worth a note, from this session's analysis --------------------
+NOTES = {
+ 0xF04930:'chassis response handler (vector $41). Latches MODE0 -> $E86, sets ack b10,',
+ 0xF04A6E:'  then btst #7,$E87 picks the dispatcher: 0 -> this 16-entry table at F05102',
+ 0xF05102:'16-entry jump table, index = (response & $F) << 2. All 4EFA jmp d16(pc).',
+ 0xF04A84:'code $0: read CHANNEL_SELECT back. $28 -> bulk transfer, else 0..$10 -> $E5C',
+ 0xF04AE2:'INBOUND bulk: arm STATUS_IRQ $400, poll b15, clear, move.w $FF0008 -> (a1)+',
+ 0xF04C50:'OUTBOUND bulk: same port, opposite direction. Selected by $E87 bit 5.',
+ 0xF04B22:'S-RECORD receiver: two ASCII chars per word from $FF0008, "S0"=$5330',
+ 0xF04CF2:'code $1: load destination address half; bit 6 picks high/low',
+ 0xF04D20:'code $2: load word count half; bit 6 picks high/low',
+ 0xF04D4E:'code $3: paged chassis-memory access. MODE2 <- addr>>20; (addr & $FFFFF)<<2 + $400000',
+ 0xF04EE4:'code $5: arg 0 reports $105E (AC count); arg N selects channel N',
+ 0xF04F3A:'code $7: clear IRE (bit 4) of BIM0 CR0 - the chassis can mute the dispatcher',
+ 0xF050F8:'code $F: return from interrupt - the only slot that unwinds the frame',
+ 0xF051A2:'SRecordDataHandler. a1 seeds $10; F051DC adds $10000, so RECORD ADDRESSES',
+ 0xF051DC:'  ARE OFFSETS. Usable record range $0000-$FFEF -> lands $10010-$1FFFF.',
+ 0xF0520E:'the store, guarded by the $10000-$1FFFF check on the COMPUTED address',
+ 0xF05218:'reject path drains $FF0008 until APIF_CMD_STATUS reads <= 0 (end of stream)',
+ 0xF056BA:'PanelSendAndWait. a3 = this channel BIM CR: $4F on entry (IRE off), $5F on exit.',
+ 0xF0572C:'  dispatch on d0 = the latched opcode, into the 42-slot table below',
+ 0xF05BA4:'42-slot dispatch table. FIVE identical copies exist, one per task region;',
+ 0xF05C4C:'  PanelErrorMaskTable: channel -> IRQ_MASK bit (ch1..4 = bits 5,4,3,2)',
+ 0xF05DD6:'TCBIO1I ISR. Reads mailbox $70001C; payload is bits 16-17 of that word.',
+ 0xF05E40:'  reply: mailbox word with bit 1 set, written to $700020',
+ 0xF08732:'btst #5,$F70019 - if SET, skip the ENTIRE self-test suite',
+ 0xF0891C:'PollBoardStatus: bit 4 set AND bit 5 set -> abandon the suite',
+ 0xF08DF8:'BoardStatusPoll_3F11 - polls (status & $3F31) == $3F11. NEVER reads ROM.',
+ 0xF098EC:'phase $2000: RAM address uniqueness, move.l a0,(a0)+ over $0-$10000',
+ 0xF046E0:'4-entry table: XP channel -> BIM control register ($244,$246,$250,$252)',
+}
+
+src = open(IN).read().split('\n')
+out = []
+stamp = datetime.date.today().isoformat()
+out += [
+ '; ============================================================================',
+ '; FPS-3000 Control Processor firmware - consolidated disassembly',
+ f'; FPS3K_U11_U12_JOIN.bin   MD5 47f133c1c2bab61f887e7e2a92a43dac   built {stamp}',
+ '; ============================================================================',
+ ';',
+ '; THE file to read. Supersedes fps3k_clean.asm. Built by',
+ '; tools/mk_consolidated_asm.py from fps3k_custom_annotated.asm.',
+ ';',
+ '; Symbol names are corrected against the 2026-07-29 findings. Where an',
+ '; earlier name was wrong it is NOT preserved, because a half-renamed file is',
+ '; worse than either name alone. The notable corrections:',
+ ';',
+ ';   AP I/F channel window is not write/readA/status/readB.',
+ ';     +$08 / +$0A are the HIGH and LOW halves of one 32-bit data register',
+ ';     +$0E is a command/trigger register ($8000 fires it)',
+ ';     $FF0048 is never read anywhere in this ROM',
+ ';   $FF0008 is a bidirectional bulk port with three modes (see F04AE2/F04C50/F04B22)',
+ ';   $FF0230-$FF025F are BIM registers, not per-channel config',
+ ';   $E60 is the XP channel number, not an S-record count',
+ ';   $E64 is a transfer word count, not an expected panel response',
+ ';   $E74 is the result register returned to the chassis via CHANNEL_SELECT',
+ ';   $E86/$E87 hold the latched chassis response, not a "channel mode"',
+ ';   F08DF8 is BoardStatusPoll_3F11, not ROMChecksumTest - it never reads ROM',
+ ';',
+ '; Task region boundaries are from the ROM\'s own TDTI table at $F0A600, so',
+ '; they are authoritative rather than heuristic.',
+ ';',
+ '; ANNOTATIONS: lines beginning ";>>>>" are Monte Carlo pass output and are',
+ '; NOT verified. Lines beginning ";### " are this session\'s findings, each',
+ '; traceable to refs_extracted/versabus_access_map.md.',
+ '; ============================================================================',
+ '']
+
+def io_name(off):
+    return IO.get(off)
+
+cur_region = None
+n_notes = n_io = n_ram = 0
+for line in src:
+    m = re.match(r'^\s*(f0[0-9a-f]{4}):', line)
+    if m:
+        addr = int(m.group(1), 16)
+        for lo, hi, name in REGIONS:
+            if lo <= addr <= hi and (lo, hi) != cur_region:
+                cur_region = (lo, hi)
+                out += ['', '; ' + '='*76,
+                        f'; ${lo:06X}-${hi:06X}   {name}',
+                        '; ' + '='*76]
+                break
+        if addr in NOTES:
+            out.append(';### ' + NOTES[addr]); n_notes += 1
+    # symbol substitution on IO offsets written as $xxx(aN)
+    def sub_io(mm):
+        # Only 3-digit displacements >= $200 are safe to name: those are the
+        # XLTR/BIM file, and no other base register in this firmware is
+        # indexed that far.  Short displacements like $8(a5) or $4e(a2) are
+        # ambiguous -- the base may be a channel window, a TCB, or a stack
+        # frame -- so they are left alone rather than mislabelled.
+        global n_io
+        off = int(mm.group(1), 16)
+        if off < 0x200: return mm.group(0)
+        nm = io_name(off)
+        if nm: n_io += 1; return f'{mm.group(0)}  [{nm}]'
+        return mm.group(0)
+    line = re.sub(r'\$([0-9a-f]{3})\(a[0-7]\)', sub_io, line)
+    def sub_abs(mm):
+        global n_io
+        v = int(mm.group(1), 16)
+        nm = IO.get(v & 0xFFFF)
+        if nm and (v & 0xFF0000) == 0xFF0000: n_io += 1; return f'{mm.group(0)}  [{nm}]'
+        return mm.group(0)
+    line = re.sub(r'\$(ff0[0-9a-f]{3})\b', sub_abs, line)
+    def sub_ram(mm):
+        global n_ram
+        v = int(mm.group(1), 16)
+        nm = RAM.get(v)
+        if nm: n_ram += 1; return f'{mm.group(0)}  [{nm}]'
+        return mm.group(0)
+    line = re.sub(r'\$([0-9a-f]{4,6})\.l\b', sub_ram, line)
+    out.append(line)
+
+open(OUT, 'w').write('\n'.join(out))
+print(f'wrote {OUT}: {len(out)} lines, {n_notes} finding notes, {n_io} I/O symbols, {n_ram} RAM symbols')
