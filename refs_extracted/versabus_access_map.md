@@ -1389,6 +1389,49 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### Every chassis address constant, by owning task
+
+Scanning for `movea.l #imm,aN` (`2x7C`) and `lea imm.l,aN` (`4xF9`) with
+a chassis operand gives a complete map of which task references which
+address:
+
+| constant | pre | RDHC | IO1I | XP4I | XP3I | XP2I | XP1I | init | RTOS |
+|---|---|---|---|---|---|---|---|---|---|
+| `$700000` | . | . | **1** | . | . | . | . | . | . |
+| `$FF0000` | 1 | 15 | 4 | 9 | 9 | 9 | 9 | 4 | 2 |
+| `$FF0048` / `$FF004E` | . | . | . | . | . | . | **1 / 2** | . | . |
+| `$FF0068` / `$FF006E` | . | . | . | . | . | **1 / 2** | . | . | . |
+| `$FF0088` / `$FF008E` | . | . | . | . | **1 / 2** | . | . | . | . |
+| `$FF00A8` / `$FF00AE` | . | . | . | **1 / 1** | . | . | . | . | . |
+| `$FF0244` | . | . | . | . | . | . | **1** | . | . |
+| `$FF0246` | . | . | . | . | . | **1** | . | . | . |
+| `$FF0250` | . | . | . | **·** | **1** | . | . | . | . |
+| `$FF0252` | . | . | . | **1** | . | . | . | . | . |
+
+Three things fall out.
+
+**Channel isolation is total.** Each XP task references exactly three
+chassis constants — its own data-hi port, its own command port, and its
+own BIM control register — and never another channel's. There is no
+cross-channel access anywhere in the firmware.
+
+**`$700000` is loaded by TCBIO1I alone**, confirming from a third
+direction that the host mailbox belongs exclusively to that task.
+
+**The BIM column is a third independent confirmation** of the
+channel-to-BIM mapping, after the F046E0 table and the CR write sites:
+`$FF0244`→XP1I, `$FF0246`→XP2I, `$FF0250`→XP3I, `$FF0252`→XP4I.
+
+`$FF0000` is simply the base register every region loads before using
+displacements, which is why it dominates.
+
+*Method note: the first run of this scan used the wrong opcode mask —
+`movea.l #imm,aN` masks to `$207C`, not `$217C` — and returned four hits
+in total. It was caught because the result contradicted an established
+fact (that `$FF0048` appears once as a `movea.l` operand). Having
+verified claims to check a new tool against is what makes the tool
+trustworthy.*
+
 ### What TCBXP4I's divergence actually consists of
 
 The task-body diff puts XP4I 19.5% different from XP3I without saying
