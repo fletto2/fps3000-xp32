@@ -791,6 +791,8 @@ static int versabus_boot_complete(void) {
     return v == 0xF05DD6;
 }
 
+static int mbox_consumed;
+
 static uint32_t mailbox_read(uint32_t addr, int size) {
     /* FPS3K_MBOX also applies here, so the host status word can be driven
      * without going through host_sim's byte-queue path.  Raising TCBIO1I's
@@ -798,7 +800,17 @@ static uint32_t mailbox_read(uint32_t addr, int size) {
      * word still has to carry bit 29 plus the class field in bits 16-17. */
     if (addr == MAILBOX_HOST_STATUS && versabus_boot_complete()) {
         const char *e = getenv("FPS3K_MBOX");
-        if (e) return (uint32_t)strtoul(e, NULL, 16);
+        /* Present the word only while the request is outstanding.  A
+         * constant is what the earlier version returned, and a host status
+         * word that never clears is not a handshake -- it selects branches
+         * for reasons that have nothing to do with the firmware.  Here the
+         * SBC's reply write to $700020 consumes the request (mbox_consumed),
+         * after which bit 29 reads back clear, which is what a host that has
+         * been answered would present. */
+        if (e) {
+            uint32_t w = (uint32_t)strtoul(e, NULL, 16);
+            return mbox_consumed ? (w & ~(1u << 29)) : w;
+        }
     }
     if (addr == MAILBOX_HOST_STATUS) return mailbox.host_status;
     if (addr == MAILBOX_SBC_REPLY)   return mailbox.sbc_reply;
@@ -807,7 +819,8 @@ static uint32_t mailbox_read(uint32_t addr, int size) {
 
 static void mailbox_write(uint32_t addr, uint32_t val, int size) {
     if (addr == MAILBOX_HOST_STATUS) { mailbox.host_status = val; return; }
-    if (addr == MAILBOX_SBC_REPLY)   { mailbox.sbc_reply = val; return; }
+    if (addr == MAILBOX_SBC_REPLY)   { mailbox.sbc_reply = val;
+                                       mbox_consumed = 1; return; }
 }
 
 /* ============== PTM (MC6840) handler — delegated to mc6840.c ============== */

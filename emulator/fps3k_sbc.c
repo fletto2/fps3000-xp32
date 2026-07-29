@@ -123,7 +123,9 @@ static int dma10aa_active(uint32_t *out) {
     if (!e) return 0;
     uint32_t v128 = ((uint32_t)ram[0x128] << 24) | ((uint32_t)ram[0x129] << 16)
                   | ((uint32_t)ram[0x12A] << 8)  |  (uint32_t)ram[0x12B];
-    if (v128 != 0xF05DD6) return 0;
+    /* FPS3K_DMA10AA_FROM_RESET=1 reproduces the pre-fix behaviour, for
+     * checking older results against.  It hangs the diagnostics. */
+    if (v128 != 0xF05DD6 && !getenv("FPS3K_DMA10AA_FROM_RESET")) return 0;
     *out = (uint32_t)strtoul(e, NULL, 16);
     return 1;
 }

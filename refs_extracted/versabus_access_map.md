@@ -1389,6 +1389,73 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### Retraction: the "F05E40 executes 46,511 times" result does not reproduce
+
+CLAUDE.md records this as the reply path being driven for the first time:
+
+> Driving both in the emulator runs the path for the first time: with
+> `$10AA = 2` and mailbox bits 16-17 = `1`, F05E40 executes 46,511 times and
+> the SBC writes **`reply = $00010002`** to `$700020` … This is also the first
+> configuration in which the ISR ever *returns*.
+
+**It does not reproduce, and the configuration it describes never boots.**
+`FPS3K_DMA10AA_FROM_RESET=1` restores the pre-fix ungated injection, and with
+the described settings — `$10AA = 2` from reset, host ISR forced to level 5,
+`FPS3K_MBOX` supplying class bits `1` — the machine ends at
+**`final PC = F09904`**, inside the power-on diagnostics, having never reached
+the scheduler:
+
+```
+F05E40 x0    ISRExit x0    scheduler idle F00262 reached: no
+```
+
+The cause is the defect described above: `$10AA` lies in the RAM the
+diagnostics walk, and a constant-reading location fails a pattern test. Any
+run with the injection live from reset hangs there.
+
+**What is retracted** is the empirical result — the 46,511 count, the
+`$00010002` reply, and the claim that this was the first configuration in
+which the ISR returns. **What is not retracted** is the static reading behind
+it: `$F05E2C` really does `swap` the mailbox word and mask `#3`, so bits 16-17
+really are a two-bit field, and `bset #1,d1` really does predict a reply with
+bit 1 set. That code has not changed; only the claim to have executed it has.
+
+Two candidate explanations for the original numbers, neither checkable now:
+the injection range was `$10A8-$10AB` at the time (the off-by-two this project
+later fixed), so `$10AA` may not have been intercepted at all and the value
+came from somewhere else; or other hooks were active and went unrecorded. The
+lesson is the one this document keeps relearning — a result is only as good as
+the state the machine was in, and "final PC" is the cheapest possible check
+that it booted at all.
+
+### The ISR has two arms, selected by mailbox bit 29
+
+Testing bit 29 independently of everything else gives a clean split:
+
+| mailbox bit 29 | path taken |
+|---|---|
+| **set** | `$F05DFA` — issues `PCMD_HOST_REQUEST` (`$281`) |
+| **clear** | `$F05E12` → `$F05E2C` — the `$10AA`-dispatched reply path |
+
+So the two paths are **alternatives, not stages**. This is consistent with the
+documented reading of bit 29 as "host needs attention" — with it set the ISR
+asks the chassis for a byte; the `$10AA` dispatch is what it does when there
+is no such request outstanding.
+
+It also explains why the reply branch is reached with the mailbox left alone
+and not when the mailbox is driven: an untouched mailbox reads `0`, bit 29
+clear, which is precisely the arm that reaches `$F05E2C`.
+
+Reproducible now, at the firmware's own level 7 off the real BIM:
+
+```
+FPS3K_XPIRQ=5 FPS3K_DMA10AA=2     ->  F05E12 x1, F05E2C x1, ISRExit x1
+```
+
+`F05E40` still never executes. Reaching it needs the class field to read `1`
+*while* bit 29 is clear, and nothing in the model can currently present that
+combination — the only hook that sets the class bits sets bit 29 with them.
+
 ### TCBIO1I runs at the firmware's own interrupt level
 
 Every previous result on the host-link path carried this caveat: *"they were

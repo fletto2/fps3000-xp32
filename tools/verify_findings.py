@@ -96,6 +96,20 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- TCBIO1I at level 7; mailbox bit 29 selects the ISR arm ----------
+    tio, _ = run({'FPS3K_XPIRQ': '5', 'FPS3K_DMA10AA': '2'}, 400_000_000)
+    check('TCBIO1I ISR runs at level 7 and returns ($10AA=2, mailbox clear)',
+          tio.count('F05DD6\n') > 0 and tio.count('F05E2C\n') > 0
+          and tio.count('F05E4C\n') > 0)
+    tb29, _ = run({'FPS3K_XPIRQ': '5', 'FPS3K_DMA10AA': '2',
+                   'FPS3K_MBOX': '20010000'}, 400_000_000)
+    check('mailbox bit 29 set diverts the ISR to the host-request arm',
+          tb29.count('F05DFA\n') > 0 and tb29.count('F05E2C\n') == 0)
+    chk, _ = run({'FPS3K_DMA10AA': '2', 'FPS3K_DMA10AA_FROM_RESET': '1'},
+                 400_000_000)
+    check('$10AA injection from reset hangs the diagnostics (never boots)',
+          'F00262\n' not in chk)
+
     # --- RAM map: 4 x 6-byte per-channel array, shared globals around ----
     def refs(base, lo, hi):
         return {v for a in range(base, base+0xA00, 2)
