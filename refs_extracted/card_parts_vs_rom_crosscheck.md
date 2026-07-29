@@ -32,7 +32,7 @@ what that warning predicts.
 
 ## Conflicts
 
-### 1. The AP I/F shows no Am29705 — CLAUDE.md's 32-bit-host inference rests on them
+### 1. The AP I/F shows no Am29705 — RESOLVED, survey coverage gap
 
 CLAUDE.md states the AP I/F "carries eight **Am29705** 16-word × 4-bit
 dual-port SRAMs = 32 bits wide, which is the basis for believing the
@@ -43,17 +43,46 @@ no LSI**, listing only `74S175/S02/S74/S51/S20/S00/S04/S169A/S10/S64/
 S153/S374/S30`, `74LS377`, `74LS240`, `74LS00`, plus several unpopulated
 **SPARE** positions. No Am29705 appears.
 
-Given the coverage caveat an eight-chip array is unlikely to be missed
-entirely — arrays are what a representative crop *does* catch. So this
-should be treated as **unresolved and material**: the "32-bit host,
-probably a VAX" reading is one of the load-bearing claims in the project
-docs, and its stated basis is not visible in the photographs.
+**RESOLVED in favour of the parts being present.** The Am29705 claim did
+not come from the photographs at all — it comes from the machine's owner
+describing the board in front of them, reporting eight of them along the
+right-hand side of the AP I/F. The survey read one or two crops per card
+and evidently did not cover that region; its own caveat anticipates
+exactly this. Direct observation beats a partial crop, so the parts are
+there and the survey's silence is a coverage gap.
 
-Worth noting the ROM is neutral on it. What the firmware establishes
-independently is that the channel data ports are **32 bits wide** —
-`+$08`/`+$0A` are the high and low halves of one register (see
-`versabus_access_map.md`) — so a 32-bit datapath is supported by the
-firmware regardless of which parts implement it.
+Two things worth separating out now that the provenance is clear.
+
+**The part identification checks out.** AMD's Am2900 databook describes
+the Am29704/Am29705 as "16-word by 4-bit, two-port RAM's", the Am29705
+being the three-state version. Eight of them give a **16-word × 32-bit
+two-port RAM** — a textbook inter-processor mailbox. Its canonical
+application in the databook is register-file expansion for Am2903
+bit-slice systems, but a two-port RAM is a two-port RAM.
+
+**The VAX is explicitly a guess, and should be recorded as one.** The
+owner's own words make the 32-bit inference and the VAX identification
+two separate claims: eight 4-bit-wide dual-port RAMs really do give a
+32-bit path, but which 32-bit machine sat on the other end is
+acknowledged guesswork, with a DG Eagle or any other mid-80s 32-bit mini
+equally possible. CLAUDE.md carries "such as a VAX" without that hedge.
+
+### And it converges with the ROM finding
+
+The owner reads the array as holding very little at a time — on the order
+of one word outbound to the host and one word inbound from it.
+
+That is **exactly the shape the firmware shows**. The host↔SBC payload
+does not move through the AP I/F channel data ports; it rides in the
+**mailbox pair at `$70001C` (host→SBC) and `$700020` (SBC→host)** — one
+word each way — as established in `versabus_access_map.md`. Two
+independent routes, one from reading the board and one from reading the
+firmware, arrive at a one-word-each-way mailbox.
+
+The reasonable synthesis is that the Am29705 array **is** the physical
+implementation of that mailbox pair. Not proven — nothing here traces
+`$70001C` to those chips — but the width, the port count, the direction
+split and the depth all agree, and no other candidate on the card does.
 
 ### 2. No MC68153 found anywhere, but the ROM drives three BIMs
 
