@@ -43,19 +43,27 @@ y=para(y,"Costs nothing and needs no debugger. Every power-on self-test writes  
 y=para(y,"($FF0204) before it runs. Scope, latch or read that register during reset: the LAST value before a hang names")
 y=para(y,"the failing subtest. The suite runs $0100 through $2903 on a healthy machine and ends in the RTOS idle loop.")
 y=tbl(y,["beacon","what it was testing when it stopped"],[M,M+70],
- [("$01xx","CPU flags / arithmetic - fails before any chassis access"),
-  ("$02xx","$1FFF1 bit 6 <-> $F70019 bit 3 inverse wiring"),
-  ("$0300","ROM decode"),("$0400","RAM address decode / byte lanes"),
-  ("$0500","board status not reaching (x & $3F31) == $3F11"),
-  ("$0600","VMOD control register pattern round-trip"),
-  ("$0700","short-I/O window at $F82000 must BUS ERROR"),
-  ("$0800","I/O channel"),("$0900","MC6840 PTM, its IRQ path, or $1FFF1 bit 7 gating"),
-  ("$1000","address-space boundary map"),("$11xx-$14xx","panel-bus interrupts and vectors"),
-  ("$1500","CHANNEL_SELECT must be a clean read/write register"),
-  ("$1600","XLTR register file, or the BIM population bit"),
-  ("$17xx-$18xx","DATA_HI page gating on the $400000 window"),
-  ("$1900","chassis memory data lines"),("$1A00","AP I/F window"),
-  ("$2000","RAM address uniqueness"),("$22xx-$23xx","chassis bulk access / A14 decode")],rowh=9.2)
+ [("$01xx  (105)","CPU flags / arithmetic - fails before any chassis access"),
+  ("$02xx  (6)","$1FFF1 bit 6 <-> $F70019 bit 3 inverse wiring"),
+  ("$0300  (1)","ROM decode"),("$0400  (1)","RAM address decode / byte lanes"),
+  ("$0500  (1)","board status not reaching (x & $3F31) == $3F11"),
+  ("$06xx  (8)","VMOD control register pattern round-trip"),
+  ("$0700  (1)","short-I/O window at $F82000 must BUS ERROR"),
+  ("$08xx  (4)","I/O channel"),("$09xx  (5)","MC6840 PTM, its IRQ path, or $1FFF1 bit 7 gating"),
+  ("$1000  (1)","address-space boundary map"),("$11xx-$14xx","panel-bus interrupts and vectors"),
+  ("$15xx  (6)","CHANNEL_SELECT must be a clean read/write register"),
+  ("$1600  (1)","XLTR register file, or the BIM population bit"),
+  ("$17xx  (4)","DATA_HI page gating on the $400000 window"),
+  ("$18xx  (4)","XLTR mode/page register $FF0216"),
+  ("$19xx  (5)","XLTR data register $FF0214"),
+  ("$1Axx  (4)","XLTR status/IRQ $FF0218 + panel command port"),
+  ("$20xx-$23xx","RAM test, FIRST pass: $000400-$01F000"),
+  ("$24xx-$27xx","RAM test, SECOND pass: $010000-$01F000 = the WCS staging buffer"),
+  ("$28xx  (26)","short XLTR check"),
+  ("$29xx  (32768)","PTM-timed test - see the note below")],rowh=9.2)
+y=note(y,"(n) = number of subtests in that phase, measured. 30 phases exist: $01-$09, $10-$1A, $20-$29 (BCD, plus $1A).")
+y=note(y,"PHASE $29 IS 99.4% OF THE RUN (32,768 of 32,967 beacon writes). The beacon SITTING in $29xx is NORMAL, not a hang.")
+y=note(y,"Reaching $24xx but hanging in $25xx-$27xx = good low RAM, bad WCS staging RAM. That split is the useful one.")
 y=note(y,"Beacon observed: ______________   Boot completes to idle loop? Y / N")
 y-=4
 y=chk(y,"Check 1 — identify the three BIM packages")
@@ -142,6 +150,20 @@ y=tbl(y,["question","finding"],[M,M+230],
   ("Which pins carry the host-side 32-bit path?","")])
 y=note(y,"The host-side counterpart card is missing, so its pinout has to come off this card.")
 y-=3
+y=chk(y,"Check 7c — two predictions this firmware makes that a bus trace can falsify")
+y=para(y,"Both follow from decoding alone and neither has been checked against hardware. They are cheap to test and")
+y=para(y,"each would settle an open question outright.")
+y=para(y,"1. $10AA MUST BE WRITTEN BY SOMETHING OTHER THAN THE CPU. TCBIO1I dispatches on it, but the only code that")
+y=para(y,"   writes that array is the host-command-1 handler, which indexes $10A0 by (channel-1)*2 and validates")
+y=para(y,"   1 <= channel <= $105E. Reaching $10AA needs channel 6; $105E counts nonzero ports among exactly FOUR.")
+y=para(y,"   So the CPU cannot write it. PREDICTION: a bus trace shows a NON-CPU master writing $0010AA. If instead")
+y=para(y,"   nothing ever writes it, the host path is dead code in this ROM revision.")
+y=para(y,"2. A PANEL COMMAND ISSUED FROM A CHANNEL ISR CANNOT COMPLETE. The issuer ends in bra . and is only released")
+y=para(y,"   by the responder on BIM0 ch0, which the firmware programs to LEVEL 6 (CR=$5E), while every channel ISR")
+y=para(y,"   runs at LEVEL 7 (CR=$5F) and never lowers SR. PREDICTION: if the chassis answers $281 via BIM0 ch0, the")
+y=para(y,"   SBC hangs at $F05E86. If the machine instead works, the response arrives by some other path - find it.")
+y=note(y,"Trace result 1: ________________________   Trace result 2: ________________________")
+y-=4
 y=chk(y,"Check 7b — bus mastership")
 y=para(y,"The SBC never asserts a VersaBus transfer request: $1FFF0, the control register half holding Transfer Request and")
 y=para(y,"Block Transfer Request, is written $00 every time. So the CHASSIS masters the bus and DMAs into SBC RAM.")

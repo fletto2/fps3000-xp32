@@ -19,6 +19,36 @@ The prose in `versabus_access_map.md` is current, and
 `selftest_reference.md` is the detailed companion to the worksheet's
 Check 0.
 
+## Worksheet rebuilt again, 2026-07-29 (second pass)
+
+The Check 0 beacon table now carries **measured** data rather than inferred
+labels, and two new rows that did not exist before:
+
+- **sub-test counts per phase**, so a stuck low byte is interpretable — `$0605`
+  means phase 6 died at step 5 of 8
+- the complete phase list: **30 phases, `$01`-`$09`, `$10`-`$1A`, `$20`-`$29`**
+  (BCD numbering with `$1A` the one exception)
+- **`$18`/`$19`/`$1A` identified** as XLTR mode-page, data and status/IRQ
+  register tests — they had no labels at all before
+- **`$20`-`$23` and `$24`-`$27` identified as two passes of the same RAM test**,
+  over `$000400-$01F000` and `$010000-$01F000`. Reaching `$24xx` but hanging in
+  `$25xx-$27xx` means good low RAM and bad WCS staging RAM
+- a warning that **phase `$29` is 99.4% of the run** (32,768 of 32,967 beacon
+  writes) so a beacon parked in `$29xx` is normal, not a hang
+
+**New Check 7c** states the two predictions this session's decoding produced
+that a bus trace can falsify outright:
+
+1. `$10AA` must be written by a non-CPU master — the only code that writes that
+   array indexes `$10A0` by `(channel-1)*2` and validates against `$105E`,
+   which counts nonzero ports among exactly four, so reaching `$10AA` needs
+   channel 6 and is barred.
+2. A panel command issued from a channel ISR cannot complete — the issuer ends
+   in `bra .`, is released only by the BIM0 ch0 responder at **level 6**, and
+   every channel ISR runs at **level 7** without ever lowering SR.
+
+Both are cheap to test and each settles an open question either way.
+
 ## What the rebuilt worksheet adds
 
 - **Check 0, the phase beacon** — read the machine's own self-test
