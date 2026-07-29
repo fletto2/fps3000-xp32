@@ -1564,9 +1564,37 @@ Note the last two: **TCBRDHC shares 192- and 176-byte blocks with the XP
 tasks**, which are the dispatch handlers (`POLL`, `D1_SEND`, `BLK_XFR`,
 `D2_FIN`) that the five copies of the 42-slot table jump into.
 
-**So the unique logic is about 17.8 KB, not 25 KB.** That is the number
-worth carrying: roughly a quarter of what looks like firmware to read is
-the same code seen again.
+### Counting the near-copies too: 38%, and 15.1 KB of unique logic
+
+28.6% counts only **exact** 48-byte repeats. The detector is
+shift-independent — it hashes every window at every position, so XP4I's
+`$18` offset does not hide anything by itself — but a window containing a
+**single** differing byte never matches. Per-channel constants are
+scattered through the task bodies, so most windows in a copied task
+contain one.
+
+Measuring each task against its template directly:
+
+| task vs template | bytes shared | detector caught | uncounted |
+|---|---|---|---|
+| XP2I vs XP1I | 2452 / 2528 | 1686 | **766** |
+| XP3I vs XP2I | 2451 / 2528 | 1686 | **765** |
+| XP4I vs XP3I | 2035 / 2528 | 1186 | **849** |
+
+XP4I's catch rate is lowest (48% against 67%) because it is both shifted
+and the most edited, but all three lose roughly a third of their shared
+content to the exact-match requirement.
+
+| | bytes | share |
+|---|---|---|
+| exact repeats | 7,134 | 28.6% |
+| + near-copies uncounted | 2,380 | |
+| **= replicated** | **9,514** | **38.1%** |
+| **unique logic** | **15,438** | **15.1 KB of 24.4 KB** |
+
+**So nearly two fifths of the application firmware is the same code
+again, and the genuinely distinct logic is about 15 KB.** That is the
+number worth carrying.
 
 Practically, it means a routine found in one task region can be assumed
 present in the other four unless shown otherwise, and that time spent
@@ -1574,9 +1602,9 @@ analysing XP2I, XP3I **or XP4I** is largely wasted — TCBXP1I is the
 template and all three others are near-copies (3%, 3% and 19.5%
 different, each measured at its own stride).
 
-Note this measurement counts **exact** repeats only. TCBXP4I sits `$18`
-off the `$A00` grid, so its near-copies never hash-match and are counted
-as unique. **28.6% is therefore a lower bound on the real replication.**
+Counting near-copies as well as exact repeats raises the figure to
+**38.1%**, leaving **15.1 KB** of genuinely distinct logic — see the
+table above.
 
 ### The panel-command issuer exists seven times, byte for byte
 
