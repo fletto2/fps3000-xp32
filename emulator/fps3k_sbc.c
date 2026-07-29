@@ -104,6 +104,9 @@ static uint8_t bus_read8(uint32_t a) {
     /* Device check FIRST — VMOD_CTRL at $1FFF0 lives inside the RAM
      * range but is a device, so it must intercept before the RAM read. */
     if (versabus_is_device(a)) {
+        if (getenv("FPS3K_PCLOG") && a >= 0xFF0040 && a <= 0xFF00FF)
+            fprintf(stderr, "[PCLOG] rd %06X from PC=%06X\n",
+                    a, m68k_get_reg(NULL, M68K_REG_PPC));
         return versabus_read(a, 1) & 0xFF;
     }
 
@@ -164,6 +167,9 @@ static uint8_t bus_read8(uint32_t a) {
 
 static void bus_write8(uint32_t a, uint8_t v) {
     a &= 0xFFFFFFu;
+    if (getenv("FPS3K_VECWATCH") && a >= 0x128 && a <= 0x12B)
+        fprintf(stderr, "[VECWATCH] write %06X <- %02X from PC=%06X\n",
+                a, v, m68k_get_reg(NULL, M68K_REG_PPC));
 
     /* Device check FIRST — VMOD_CTRL at $1FFF0 lives inside RAM range. */
     if (versabus_is_device(a)) {
@@ -220,6 +226,9 @@ unsigned int m68k_read_memory_8 (unsigned int a) {
     return bus_read8(a);
 }
 unsigned int m68k_read_memory_16(unsigned int a) {
+    if (getenv("FPS3K_PCLOG") && a >= 0xFF0040 && a <= 0xFF00FF)
+        fprintf(stderr, "[PCLOG] rd %06X from PC=%06X\n",
+                a, m68k_get_reg(NULL, M68K_REG_PPC));
     /* AP I/F BERR when XLTR DMA is in progress (chassis owns AP I/F bus).
      * Phase 0x1A00 (F09832) deliberately reads while armed to verify. */
     if (a >= 0xFF0000 && a < 0xFF0100 && versabus_apif_dma_busy()) {

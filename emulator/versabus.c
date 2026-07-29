@@ -10,6 +10,13 @@
 /* From Musashi — assert IRQ level synchronously when chassis fires */
 extern void m68k_set_irq(unsigned int level);
 
+/* XLTR MODE0 fields used by the panel-status handshake (Path B).  The
+ * chassis returns a 5-bit response code in bits 0-4 and raises bit 11
+ * (valid); the SBC's handler acknowledges by setting bit 10. */
+#define MODE0_RESP_VALID  (1u << 11)
+#define MODE0_RESP_ACK    (1u << 10)
+#define MODE0_RESP_MASK   0xFFu   /* bit 7 selects the dispatcher; bits 0-4 are the code */
+
 static FILE *log_fp = NULL;
 static int   verbose = 0;
 static mc6840_t  ptm_dev;
@@ -478,12 +485,27 @@ static int bim_decode(uint32_t addr, int *unit, int *reg) {
     return (*unit < BIM_COUNT);
 }
 
+/* Experiment: FPS3K_HOSTLVL overrides the level the host channel
+ * (BIM2 ch2) requests.  $5F decodes to level 7, but the board's IRQ pin
+ * wiring is unverified (Check 2 in the trace worksheet).  If the real
+ * level is below 6, BIM0 ch0 can preempt the host ISR and F04930 gets to
+ * run, which is what the design appears to need. */
+static int bim_level_of(int unit, int ch) {
+    uint8_t cr = bim[unit].cr[ch];
+    int lvl = BIM_CR_LEVEL(cr);
+    if (unit == BIM_HOST_UNIT && ch == BIM_HOST_CH) {
+        const char *e = getenv("FPS3K_HOSTLVL");
+        if (e && lvl) lvl = (int)strtoul(e, NULL, 0) & 7;
+    }
+    return lvl;
+}
+
 int versabus_bim_assert(int unit, int ch) {
     if (unit < 0 || unit >= BIM_COUNT || ch < 0 || ch >= BIM_CH) return 0;
     bim[unit].req[ch] = 1;
     uint8_t cr = bim[unit].cr[ch];
     if (!BIM_CR_IRE(cr)) return 0;
-    return BIM_CR_LEVEL(cr);          /* 0 = disabled, no IRQ output */
+    return bim_level_of(unit, ch);
 }
 
 void versabus_bim_clear(int unit, int ch) {
@@ -504,7 +526,7 @@ int versabus_bim_pending_level(void) {
             if (!bim[u].req[c]) continue;
             uint8_t cr = bim[u].cr[c];
             if (!BIM_CR_IRE(cr)) continue;
-            int lvl = BIM_CR_LEVEL(cr);
+            int lvl = bim_level_of(u, c);
             if (lvl > best) best = lvl;
         }
     return best;
@@ -526,7 +548,7 @@ int versabus_bim_iack(int level) {
             if (!bim[u].req[c]) continue;
             uint8_t cr = bim[u].cr[c];
             if (!BIM_CR_IRE(cr)) continue;
-            if (BIM_CR_LEVEL(cr) != level) continue;
+            if (bim_level_of(u, c) != level) continue;
             if (log_fp)
                 fprintf(log_fp, "[BIM] IACK L%d -> unit %d ch %d vector $%02X\n",
                         level, u, c, bim[u].vr[c]);
@@ -592,11 +614,20 @@ static void xltr_write(uint32_t addr, uint16_t val) {
              * F05E86.  The chassis answers with a status code and an
              * interrupt, and the handler rewrites the saved PC to step
              * the CPU past the spin.  Arm that response now. */
-            if (val >= 0x258 && val <= 0x2A0) {
+            /* The trigger is the CHANNEL_SELECT write itself with MODE0
+             * bit 10 (response-acknowledge) already clear — that is the
+             * Path-B handshake as documented, and it covers both call
+             * sites.  Gating on a $258-range command code here was wrong:
+             * PanelIOConfigure_25A (F05688) writes an *argument* to
+             * $FF000E, not a command code, so its spin at F056B8 was never
+             * answered and the machine stalled one step further on. */
+            if (log_fp)
+                fprintf(log_fp, "[PANEL] CHANNEL_SELECT <- $%04X, mode0=$%04X, arm=%s\n",
+                        val, xltr.mode0,
+                        (xltr.mode0 & MODE0_RESP_ACK) ? "no (ACK set)" : "yes");
+            if (!(xltr.mode0 & MODE0_RESP_ACK)) {
                 /* FPS3K_RESP overrides the returned status code, so the
-                 * 0..$14 code space can be swept experimentally.  With the
-                 * handshake closed, the firmware itself tells us what each
-                 * code means. */
+                 * 0..$14 code space can be swept experimentally. */
                 const char *e = getenv("FPS3K_RESP");
                 versabus_arm_panel_response(e ? (uint8_t)strtoul(e, NULL, 0) : 0x14, 400);
             }
@@ -979,9 +1010,6 @@ void versabus_write(uint32_t addr, uint32_t val, int size) {
  * codes below $14 mean, and which one belongs to which panel command, is
  * NOT established: this returns a single benign code so the path can be
  * exercised at all. */
-#define MODE0_RESP_VALID  (1u << 11)
-#define MODE0_RESP_ACK    (1u << 10)
-#define MODE0_RESP_MASK   0x1Fu
 
 static int      panel_resp_armed;      /* response scheduled */
 static uint32_t panel_resp_delay;      /* cycles until it lands */
@@ -1010,7 +1038,9 @@ static void panel_resp_tick(uint32_t cycles) {
     xltr.raw[(XLTR_MODE0 - XLTR_BASE) / 2] = xltr.mode0;
     panel_resp_armed = 0;
     int u = 0, c = 0;
-    if (bim_in_service_unit >= 0) { u = bim_in_service_unit; c = bim_in_service_ch; }
+    if (getenv("FPS3K_RESP_INSVC") && bim_in_service_unit >= 0) {
+        u = bim_in_service_unit; c = bim_in_service_ch;
+    }
     int lvl = versabus_bim_assert(u, c);
     if (log_fp)
         fprintf(log_fp, "[PANEL] response code $%02X in MODE0, BIM%d ch%d -> level %d\n",

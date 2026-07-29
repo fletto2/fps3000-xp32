@@ -355,11 +355,13 @@ code the current chassis model never provokes.
 
 ---
 
-## The panel-status handshake, closed
+## The panel-status handshake — fires, but does not complete
 
 The mechanism CLAUDE.md long recorded as "one good IRQ-handler
 implementation away from end-to-end S-record loading" is identified and
-now runs in the emulator.
+the handler now runs in the emulator. It does **not** complete a host
+transfer, and an earlier version of this section claiming otherwise was
+wrong — see "What the response does not do" below.
 
 Sequence, all read off the disassembly:
 
@@ -395,8 +397,76 @@ per-channel channels and level 6 sufficient for the task-context ones.
 Modelling this needed one further fix: the BIM must **release the IRQ
 line during IACK**, as the datasheet's Figure 10 shows. Without that the
 level never drops, no new edge forms, and a later response on the same
-channel is swallowed. With it, the SBC escapes the spin and reads
-`$FF0048` for the first time, consuming a host byte.
+channel is swallowed.
+
+### The response must outrank the waiting handler
+
+The handler at `F04930` runs only when the response arrives at a level
+**above** the IPL mask of the code that is spinning. That is a hard
+68000 rule (a level-*n* request is blocked at mask *n*; only level 7 is
+exempt, and then only on an edge), and it decides the whole mechanism:
+
+| Host-link ISR level | `F04930` executions | Spin iterations | Outcome |
+|---|---|---|---|
+| 7 (as the firmware sets it, `CR=$5F`) | **0** | 76,314 | spins forever |
+| 5 | 1 | 1 | escapes, advances one command |
+| 2 | 1 | 1 | escapes, advances one command |
+
+The firmware writes `CR=$5E` (level 6) to BIM0 ch0 and `CR=$5F`
+(level 7) to the channel BIMs, so on the real board a BIM0 ch0 response
+can *never* preempt a channel ISR. The level-5 row above is an
+experiment (`FPS3K_HOSTLVL`), not hardware truth. Either the per-channel
+spins are answered on their own level-7 channel by a fresh edge, or the
+board's IRQ-pin wiring differs from the CR level — Check 2 in the trace
+worksheet. This is the open question, and it is now a specific one.
+
+### Two dispatchers, selected by bit 7
+
+`F04930` reads `MODE0`, clears bit 11, stores the word to `$E86`, sets
+bit 10 and writes it back. It then does `btst #7, $E87` — **bit 7 of the
+response byte picks which dispatcher runs**:
+
+| Bit 7 | Path | Index | Table |
+|---|---|---|---|
+| 0 | `F04A6E` | `(code & $F) << 2` | 16 entries at **`F05102`** |
+| 1 | `F0495C` | `code & $1F`, range-checked 0..`$14` | the `F05BA4` family |
+
+The `F05102` table is new here and was not in any earlier note. All 16
+slots are `4EFA xxxx` (`jmp d16(pc)`), targets:
+
+| Code | Target | Code | Target | Code | Target | Code | Target |
+|---|---|---|---|---|---|---|---|
+| `$0` | F04A84 | `$4` | F04E3A | `$8` | F04F52 | `$C` | F0502C |
+| `$1` | F04CF2 | `$5` | F04EE4 | `$9` | F04FA0 | `$D` | F05092 |
+| `$2` | F04D20 | `$6` | F04F30 | `$A` | F04FBA | `$E` | F050CA |
+| `$3` | F04D4E | `$7` | F04F3A | `$B` | F05002 | `$F` | F050F8 |
+
+Two entries are confirmed by execution trace, not just by decoding the
+displacement: code `$00` runs `F05102 → F04A84`, code `$0B` runs
+`F0512E → F05002`. Because only the low nibble indexes this table,
+`$04`/`$14` alias and `$00`/`$10` alias — which is exactly the aliasing
+seen in the sweep below, and is the reason that sweep's results split the
+way they do.
+
+### What the response does not do
+
+Sweeping every response value in `$00`-`$14` and `$80`-`$94` (both
+dispatchers, 42 runs) gives two firm negative results:
+
+- **`$FF0048` is never read.** Not once, on any code. The host byte is
+  therefore not consumed through the panel-status path, and whatever
+  frees the host to send its next byte is some other mechanism.
+- **`F0572C` — the `PanelStatusDispatch` site — is never reached.** So
+  the 42-slot `F05BA4` table below, although correctly decoded, is *not*
+  what `F04930` dispatches through. It belongs to a different caller.
+
+An earlier revision of this file stated that the SBC "reads `$FF0048`
+for the first time, consuming a host byte". That was an artefact: the
+apparent read was an **instruction fetch** from `PC=$FF0048`, after a
+re-entrant interrupt storm walked the stack down through the vector
+table and overwrote vector `$128` with `$00FF0000`. Logging the PC of
+each access (`FPS3K_PCLOG`) is what exposed it; register-access logs
+alone cannot distinguish a data read from an opcode fetch.
 
 ## The dispatch table is executable code
 
@@ -420,9 +490,11 @@ path.
 
 ## Measured behaviour per code
 
-With the handshake closed the codes can be driven directly
-(`FPS3K_INJECT=<code>` fires one response on BIM0 ch0). Writes observed
-after injection:
+The codes can be driven directly (`FPS3K_INJECT=<code>` fires one
+response on BIM0 ch0). **Treat the table below as unverified**: it was
+measured before the interrupt-storm bug above was found, so some of its
+writes may be storm artefacts rather than per-code behaviour. It needs
+re-running against the corrected model. Writes observed after injection:
 
 | Code | Predicted | Registers written |
 |---|---|---|
