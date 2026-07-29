@@ -1473,6 +1473,44 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### Chassis memory: the zero-fill is safe too, for the same reason
+
+The SBC-side finding — the firmware never reads a DRAM byte it has not written,
+so the parity strap is not a hazard for it — raises the same question for the
+**MAIN DATA card**. `chassis_mem` is a zero-filled 1 MB array, a real card powers
+up random, and self-test phases `$28`/`$29` walk that window 131,072 times.
+
+`FPS3K_CHASSIS_UNINIT=<file>` now answers it. A full boot reads
+never-written chassis memory **six times**, all at `$400000` (bytes 0 and 1,
+three times over), all from **PC `$F096AC`**:
+
+```
+$F096AC  move.w (a1),d0      <- the probe read
+$F096AE  nop / nop / nop / nop
+$F096B6  rts
+```
+
+That is `ChassisProbe_Read`, and **the value is discarded** — four NOPs then
+`rts`, `d0` never used. The routine tests whether the access *bus errors*, not
+what the data is; the NOP padding exists so the 68000's asynchronous bus error
+lands at a predictable PC. Its write counterpart at `$F096B8` has the same shape.
+
+So the zero-fill is harmless on the chassis side as well, and for a sharper
+reason than on the SBC side. It is not that the firmware always writes before
+reading — here it genuinely reads unwritten memory — but that **the six reads it
+makes are the only ones whose data it does not care about.**
+
+This also confirms a pre-existing annotation by measurement rather than by
+reading: the note calling `$F096AC`/`$F096B8` bus-error probes with deliberate
+NOP padding is right, and the fact that `$400000` is never written before being
+read is independent evidence for it.
+
+The chassis window's **size** happens to be right too: `CHASSIS_MEM_SIZE` is
+1 MB, and the one populated `MAIN DATA` card is 256 Kwords × 32 bits = 1 MB. The
+three unpopulated card slots are not modelled as absent, so a firmware routine
+that sized the whole 4 MB space would find memory the machine does not have —
+but no routine does, since phases `$28`/`$29` walk only `$400000`-`$404000`.
+
 ### The model now defaults to the machine, not to an empty chassis
 
 `FPS3K_CHANNELS` defaulted to **0** — a chassis with no XP cards at all. That is

@@ -280,6 +280,18 @@ else:
                   0xFF0000 <= struct.unpack('>I', d[a2+2:a2+6])[0] <= 0xFF02FF
                   for a2 in range(0, 0xA600, 2)))
 
+    # --- chassis memory: only the BERR probe reads it unwritten ------------
+    with tempfile.TemporaryDirectory() as _td5:
+        subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000'],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       env={**os.environ, 'FPS3K_CHASSIS_UNINIT': _td5+'/c'})
+        _cu = [l.split() for l in open(_td5+'/c') if l.strip()]
+    check('unwritten chassis reads come only from ChassisProbe_Read $F096AC',
+          _cu and all(x[1] == 'F096AC' for x in _cu)
+          and all(x[0].startswith('40000') for x in _cu))
+    check('$F096AC is a probe: read then 4 NOPs then rts, value discarded',
+          d[0x96AC:0x96B8].hex().upper() == '30114E714E714E714E714E75')
+
     # --- the model defaults to the real 2-AC machine ----------------------
     _, rdef = run({}, 400_000_000)
     check('default configuration reports $105E = 2 (AC1+AC2 populated)',

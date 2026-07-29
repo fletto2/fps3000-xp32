@@ -70,6 +70,8 @@ uint8_t *host_sim_get_ram_ptr(void) { return ram; }
 #define CHASSIS_MEM_BASE  0x400000
 #define CHASSIS_MEM_SIZE  (1u << 20)        /* 1 MB */
 static uint8_t  chassis_mem[CHASSIS_MEM_SIZE];
+static uint8_t  chassis_written[CHASSIS_MEM_SIZE];
+static FILE    *chassis_uninit_fp = NULL;
 static uint64_t chassis_mem_reads, chassis_mem_writes, chassis_mem_berrs;
 static uint8_t  rom[ROM_SIZE];
 
@@ -185,6 +187,14 @@ static uint8_t bus_read8(uint32_t a) {
      * BERR is gated by XLTR_DATA_HI bit 5 (see below). */
     if (a >= CHASSIS_MEM_BASE && a < CHASSIS_MEM_BASE + CHASSIS_MEM_SIZE) {
         if (!(versabus_xltr_data_hi() & 0x20)) {
+            /* FPS3K_CHASSIS_UNINIT=<file>: log reads of chassis memory that
+             * has not been written this run.  The same question the SBC-side
+             * FPS3K_UNINIT answers: chassis_mem is a zero-filled array, but a
+             * real MAIN DATA card powers up random, so a diagnostic that reads
+             * before writing could pass here and fail on iron. */
+            if (chassis_uninit_fp && !chassis_written[a - CHASSIS_MEM_BASE])
+                fprintf(chassis_uninit_fp, "%06X %06X\n", a,
+                        m68k_get_reg(NULL, M68K_REG_PPC));
             chassis_mem_reads++;
             /* FPS3K_LOGCHASSIS=1 logs this window.  It is intercepted here,
              * BEFORE versabus_read(), so log_access() never sees it -- which
@@ -309,6 +319,7 @@ static void bus_write8(uint32_t a, uint8_t v) {
     if (a >= CHASSIS_MEM_BASE && a < CHASSIS_MEM_BASE + CHASSIS_MEM_SIZE) {
         if (!(versabus_xltr_data_hi() & 0x20)) {
             chassis_mem_writes++; chassis_mem[a - CHASSIS_MEM_BASE] = v;
+            chassis_written[a - CHASSIS_MEM_BASE] = 1;
             if (getenv("FPS3K_LOGCHASSIS"))
                 fprintf(stderr, "[CHASSIS-MEM ] WR 1-byte %06X = %02X @%06X\n",
                         a, v, m68k_get_reg(NULL, M68K_REG_PPC));
@@ -565,6 +576,8 @@ int main(int argc, char **argv) {
     }
     { const char *u = getenv("FPS3K_UNINIT");
       if (u) uninit_fp = fopen(u, "w"); }
+    { const char *u = getenv("FPS3K_CHASSIS_UNINIT");
+      if (u) chassis_uninit_fp = fopen(u, "w"); }
 
     /* Hook-conflict check.
      *
