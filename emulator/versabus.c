@@ -423,6 +423,14 @@ static void apif_write(uint32_t addr, uint16_t val) {
 /* ============== XLTR handler ============== */
 
 static uint16_t xltr_read(uint32_t addr) {
+    /* FPS3K_CHSEL_RD=<hex> makes CHANNEL_SELECT read back that value
+     * instead of what the SBC last wrote.  F04A84 reads this register
+     * and the bulk-transfer loop at F04AE2 only runs when it reads $28,
+     * so this is how the chassis would signal "bulk transfer pending". */
+    if (addr == XLTR_CHANNEL_SELECT) {
+        const char *e = getenv("FPS3K_CHSEL_RD");
+        if (e) return (uint16_t)strtoul(e, NULL, 16);
+    }
     /* Special-case the registers with side effects */
     if (addr == XLTR_STATUS_IRQ) {
         if (xltr.arm_pending) {

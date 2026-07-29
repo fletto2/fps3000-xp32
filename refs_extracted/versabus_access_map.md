@@ -483,6 +483,45 @@ inference. What is measured is only that the CPU never writes it.
 
 Reproduce with `FPS3K_DMA10AA=2 FPS3K_MBOX=00010000 FPS3K_HOSTLVL=5`.
 
+### The bulk data-in port is `$FF0008`
+
+The mailbox path above is handshake only — it moves no payload. The
+actual host-to-SBC bulk transfer is a polled loop in TCBRDHC at F04AE2,
+and it reads a different port entirely:
+
+```
+F04AD6  lea    $8(a5),a0        ; a5 = $FF0000, so a0 = $FF0008
+F04ADA  movea.l $E58,a1         ; g__srec_addr = destination in SBC RAM
+F04AE2  move.w #$400,$218(a5)   ; arm  XLTR_STATUS_IRQ
+F04AE8  move.w $218(a5),d7      ; poll XLTR_STATUS_IRQ
+F04AEC  btst   #$f,d7           ;   until bit 15
+F04AF0  beq    F04AE8
+F04AF2  move.w #0,$218(a5)      ; clear
+F04AF8  move.w (a0),(a1)+       ; *** read $FF0008 -> RAM, auto-increment
+F04AFC  cmp.l  $E64,d0          ; g__panel_expected = word count
+F04B02  ble    F04AE2
+```
+
+One 16-bit word per arm/poll/clear cycle, no interrupts anywhere. The
+destination `$E58` is the same pointer `SRecordDataHandler` constrains to
+`$10000-$1FFFF`, so this is the microcode staging path.
+
+**The gate is a CHANNEL_SELECT readback of `$28`.** F04A84 reads
+`$FF0204` back and stores it to `$E5C`; F04AC8 compares `$E5C` against
+`$28` and only then enters the loop. The chassis signals "bulk transfer
+pending" by presenting that value — it is not something the SBC wrote.
+
+That is a falsifiable prediction, and it holds. Forcing the readback
+(`FPS3K_CHSEL_RD=28 FPS3K_RESP=0x00`) produces
+`[APIF] RD 2-byte FF0008` — the first read of that port in any run of
+this emulator. The loop then exits after one word because `$E64` is
+still zero, which is the next thing a chassis model has to supply.
+
+Two neighbouring registers in the same window follow the per-channel
+layout: `$FF0004` bit 0 is polled as a ready flag (F04B22, F05A22), and
+`$FF0008` is the data-in port. So `$FF0000-$FF001F` is a channel window
+of the same shape as the four at `$FF0040 + $20*N`.
+
 ### What the response does not do
 
 Sweeping every response value in `$00`-`$14` and `$80`-`$94` (both

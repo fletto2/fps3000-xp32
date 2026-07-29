@@ -121,7 +121,7 @@ static uint8_t bus_read8(uint32_t a) {
     /* Device check FIRST — VMOD_CTRL at $1FFF0 lives inside the RAM
      * range but is a device, so it must intercept before the RAM read. */
     if (versabus_is_device(a)) {
-        if (getenv("FPS3K_PCLOG") && a >= 0xFF0040 && a <= 0xFF00FF)
+        if (getenv("FPS3K_PCLOG") && a >= 0xFF0000 && a <= 0xFF00FF)
             fprintf(stderr, "[PCLOG] rd %06X from PC=%06X\n",
                     a, m68k_get_reg(NULL, M68K_REG_PPC));
         return versabus_read(a, 1) & 0xFF;
