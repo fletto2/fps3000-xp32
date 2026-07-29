@@ -601,10 +601,20 @@ So the complete microcode chain is now exercised in both directions:
 **One limitation, and it is the harness.** Chaining a load and a push in
 a single scripted run does not work: the parameter-loading responses
 interleave with the long S-record parse and land wrong (`$E58` came out
-`$00010001` and `$E64` zero). Each half verifies cleanly on its own. A
-sequencer that waits for the SBC to finish one command before arming the
-next would fix it; the current one re-arms on acknowledgement, which is
-too eager for a command that runs for millions of cycles.
+`$00010001` and `$E64` zero). Each half verifies cleanly on its own.
+
+The obvious fix — re-arm only when TCBRDHC is back at its idle wait,
+rather than on acknowledgement — **was tried and made things worse**, so
+it is recorded here as a dead end rather than a suggestion. Gating on
+`PC == F04736` stopped the inbound path running at all and left `$E58` at
+`$00080010` with a count of `$1C`. `F04736` is reached transiently
+between commands, not only when the task is genuinely idle, so it is not
+the completion signal it looks like. The change was reverted.
+
+A working fix needs a real completion signal. The candidates worth trying
+are the `PCMD_CH1_ACK` (`$25A`) the handler issues at F05224 on a
+successful record, or the panel-command write at `$FF000E`, both of which
+mark the end of a command rather than a moment during one.
 
 ### The record address is an OFFSET — the firmware adds `$10000` itself
 
