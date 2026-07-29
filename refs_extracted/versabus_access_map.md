@@ -1455,6 +1455,50 @@ original was right in substance and my re-verification of it was wrong in
 method. Both were caught by doing the arithmetic or the decode rather than
 trusting a summary.*
 
+### The `$281` deadlock is worse than a hang: it destroys the vector table
+
+`FPS3K_VECWATCH` used to watch four bytes — `$128`-`$12B`, TCBIO1I's vector —
+because that is the one a re-entrant ISR corrupted in the incident that caused
+an earlier retraction. Widened to the whole table, with a `post` mode that
+reports only writes after the RTOS is up, it turns a one-off diagnosis into a
+standing check. Running it over every configuration this session used:
+
+| configuration | post-boot vector writes |
+|---|---|
+| plain boot | 4 |
+| `CHANNELS=2 XPIRQ=1 CHCMD=C801` | 4 |
+| `XPIRQ=5 DMA10AA=2 MBOX=$00010000` | 4 |
+| **`XPIRQ=5,6 DMA10AA=2 MBOX=$20010000`** | **729** |
+
+The four are benign and identical in every case — `$104 ← $00F04930` from
+`PC=$F02278`, the kernel installing RDHC's vector, which simply happens after
+TCBIO1I's in the boot order.
+
+**The 729 are not.** They span `$000104` to `$0003FF` — the entire vector table
+— and come from `PC=$F05DD6` (483), `$F05E86` (146) and `$F05E0C` (96): the
+TCBIO1I ISR entry, the spin, and the call into the issuer. `$F05DD6` is
+`movem.l <regs>,-(a7)`. **The stack has walked down through the vector table.**
+
+The mechanism is a 68000 property this project had not connected to the
+deadlock: **level 7 is non-maskable**. A handler spinning at IPL 7 can still be
+re-entered by a new level-7 edge, and each re-entry pushes a frame. The task
+stack is `$190` — 400 bytes — so it overflows quickly, and the vector table sits
+just below.
+
+**This does not undermine the deadlock finding; it sharpens it.** The load-
+bearing datum was that the rescuer `F04930` executes *zero* times while the
+spin executes 18,135, and stack corruption cannot manufacture a zero. What
+changes is the severity: issuing a panel command from a channel ISR does not
+merely hang the task, it **overruns the stack into the vector table**, which on
+real hardware ends in a double bus fault and a halted CPU rather than a quiet
+spin.
+
+**One caveat, stated plainly.** The re-assertion is driven by this project's
+own hook at a fixed 200,000-cycle interval. Whether a real chassis re-raises
+the channel interrupt while the SBC is spinning is unknown, and if it does not,
+the ISR is entered once and the stack survives. The stack overflow is therefore
+conditional on repeated interrupts; the deadlock itself is not.
+
 ### The firmware never reads untouched DRAM — parity is not a hazard for it
 
 CLAUDE.md's "Known divergences" table warns that real DRAM powers up with

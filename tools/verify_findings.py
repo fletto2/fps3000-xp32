@@ -153,6 +153,18 @@ else:
               0xA240 + 8*i + struct.unpack('>H', d[0xA240+8*i:0xA242+8*i])[0]
               == 0xA57E for i in range(9)))
 
+    # --- vector-table integrity across configurations --------------------
+    def vecwrites(env2):
+        return subprocess.run([EMU, '-rom', ROM, '-cycles', '300000000'],
+                              capture_output=True, text=True,
+                              env={**os.environ, 'FPS3K_VECWATCH': 'post',
+                                   **env2}).stderr.count('VECWATCH')
+    check('a plain boot makes exactly 4 post-boot vector writes (all benign)',
+          vecwrites({}) == 4)
+    check('the $281 deadlock config overruns the stack into the vector table',
+          vecwrites({'FPS3K_XPIRQ': '5,6', 'FPS3K_DMA10AA': '2',
+                     'FPS3K_MBOX': '20010000'}) > 500)
+
     # --- the firmware never reads never-written DRAM ---------------------
     with tempfile.TemporaryDirectory() as _td3:
         subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000'],

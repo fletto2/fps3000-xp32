@@ -254,9 +254,26 @@ static void bus_write8(uint32_t a, uint8_t v) {
      * 253,883 of them in the stack page $1Fxxx alone, and the top offender
      * was a movem.l (a7)+ pop.  The gate is the bug, not the firmware. */
     if (a < RAM_SIZE) ram_written[a] = 1;
-    if (getenv("FPS3K_VECWATCH") && a >= 0x128 && a <= 0x12B)
-        fprintf(stderr, "[VECWATCH] write %06X <- %02X from PC=%06X\n",
-                a, v, m68k_get_reg(NULL, M68K_REG_PPC));
+    /* FPS3K_VECWATCH: report writes to the exception vector table.  It used
+     * to watch only $128-$12B, TCBIO1I's vector, because that is the one a
+     * re-entrant ISR once corrupted -- producing an instruction fetch from
+     * $FF0048 that was misread as a data access and caused a retracted
+     * finding.  Watching the WHOLE table turns that from a one-off diagnosis
+     * into a standing check: any write here after the RTOS is up is
+     * suspicious, and a run that reports none cannot be producing
+     * vector-corruption artifacts.  Set FPS3K_VECWATCH=post to report only
+     * writes after TCBIO1I's vector is installed. */
+    if (a < 0x400) {
+        const char *vw = getenv("FPS3K_VECWATCH");
+        if (vw) {
+            int post = (vw[0] == 'p');
+            uint32_t v128 = ((uint32_t)ram[0x128] << 24) | ((uint32_t)ram[0x129] << 16)
+                          | ((uint32_t)ram[0x12A] << 8)  |  (uint32_t)ram[0x12B];
+            if (!post || v128 == 0xF05DD6)
+                fprintf(stderr, "[VECWATCH] write %06X <- %02X from PC=%06X\n",
+                        a, v, m68k_get_reg(NULL, M68K_REG_PPC));
+        }
+    }
 
     /* FPS3K_RAMWATCH=<hex addr> logs every CPU write to that longword.
      * $10AA is read by TCBIO1I at F05E12 and — per a full-ROM search —

@@ -174,6 +174,10 @@ y=para(y,"2. A PANEL COMMAND ISSUED FROM A CHANNEL ISR CANNOT COMPLETE. The issu
 y=para(y,"   by the responder on BIM0 ch0, which the firmware programs to LEVEL 6 (CR=$5E), while every channel ISR")
 y=para(y,"   runs at LEVEL 7 (CR=$5F) and never lowers SR. PREDICTION: if the chassis answers $281 via BIM0 ch0, the")
 y=para(y,"   SBC hangs at $F05E86. If the machine instead works, the response arrives by some other path - find it.")
+y=para(y,"   SEVERITY: level 7 is NON-MASKABLE on a 68000, so if the channel interrupt re-asserts while the SBC is")
+y=para(y,"   spinning, the ISR re-enters and each entry pushes a frame onto a 400-byte task stack. In emulation that")
+y=para(y,"   overruns the ENTIRE vector table ($104-$3FF, 729 bytes) and would end in a double bus fault + HALT on iron.")
+y=para(y,"   So the symptom to look for is not a quiet hang but FAIL+HALTED - which is what the first burn showed.")
 y=note(y,"Trace result 1: ________________________   Trace result 2: ________________________")
 y-=4
 y=chk(y,"Check 7b — bus mastership")
