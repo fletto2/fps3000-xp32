@@ -493,6 +493,67 @@ is that the value's origin is **unresolved**.
 
 Reproduce with `FPS3K_DMA10AA=2 FPS3K_MBOX=00010000 FPS3K_HOSTLVL=5`.
 
+### `$FF0008` is bidirectional, and response-byte bit 5 picks the direction
+
+The inbound loop at F04AE2 is only half the mechanism. F04C50 is its
+mirror:
+
+```
+F04C50  a0 = $FF0008          ; the same port
+        a1 = $E58             ; the same staging pointer
+F04C62  move.w (a1)+,(a0)     ; RAM -> port  (F04AF8 does port -> RAM)
+        cmp d0, $E64          ; the same count
+        ble F04C62
+```
+
+Same port, same address parameter, same count parameter, opposite
+direction. `$FF0008` is a bidirectional bulk data port.
+
+**The selector is bit 5 of the response byte.** After the opcode latch
+`$E5C` is tested, F04B16 does `btst #5,$E87` and F04B1E branches to the
+outbound loop when it is set:
+
+| `$E5C` | `$E87` bit 5 | Path |
+|---|---|---|
+| `$28` | — | **inbound** bulk, F04AE2: `$FF0008` -> `$10000+` |
+| `$00` | 1 | **outbound** bulk, F04C50: `$10000+` -> `$FF0008` |
+| `$00` | 0 | F04B22, the polled non-bulk path |
+
+This completes the microcode upload route. Host content reaches the
+staging buffer by S-record or by inbound bulk, and leaves for the WCS
+through the **outbound** direction of the same port:
+
+```
+host -> [S-record parser | inbound $FF0008] -> $10000-$1FFFF
+     -> outbound $FF0008 -> XLTR -> UNIV FMT -> XP32 WCS
+```
+
+Note bit 5 is a direction modifier in the code `$3` chassis-memory
+primitive too, but with the **opposite sense** — there bit 5 set selects
+a *read* of chassis memory into `$E70`, here it selects a *write* out of
+SBC RAM. The bit means "direction" in both, but the polarity is
+per-command and should not be generalised.
+
+### Where the WCS bank select must live — still open
+
+The AU store is 4K x 128 bits x **four banks** per AC, and the staging
+buffer holds exactly one bank. Neither transfer loop touches a bank
+register: both use only `$E58` (address) and `$E64` (count), and the
+destination within the chassis is not expressed in either.
+
+So the bank must be carried by the surrounding command state. The
+candidates, in order:
+
+1. **`$E68`/`$E6A`**, the third 32-bit parameter, loaded by response code
+   `$9` and passed to `PanelSendAndWait` as `d3`. It is the only
+   parameter in the whole command set with no established purpose.
+2. **`$E60`**, the channel number — but that selects which AC, and the
+   four ACs each have four banks, so it cannot also select the bank.
+3. A field in the opcode itself, in the bits above the low nibble.
+
+`$E68` is the natural fit by elimination. Confirming it needs a chassis
+that reports where data landed, which the emulator cannot currently do.
+
 ### The bulk data-in port is `$FF0008`
 
 The mailbox path above is handshake only — it moves no payload. The
