@@ -1455,6 +1455,36 @@ original was right in substance and my re-verification of it was wrong in
 method. Both were caught by doing the arithmetic or the decode rather than
 trusting a summary.*
 
+### Audit of the pre-existing annotations — result
+
+The `fps3k.asm` note table carried **64 annotations** written before this
+session. Auditing the checkable ones against decode and measurement:
+
+| claim | verdict |
+|---|---|
+| 16 self-test phase labels (`$0200`-`$1700` at named entry points) | **all correct** |
+| `$26E`-`$271` are per-STEP, not per-channel | **correct** — and predates this session's rediscovery |
+| the vector fill skips `$230` alone | **correct** |
+| BIM programming: 6 CRs cleared, 10 VRs loaded `$41`-`$4A` | **correct** |
+| `$4245` = `"BE"` bus-error marker, five app sites | **correct** |
+| host command dispatch: `andi #7` / `subq #1` / 4-entry table | **correct** |
+| cmd 1 builds the ASQ name from `"HXP0"` + channel | **correct** |
+| `$0F` = 15 = `TERM`, terminate task | **WRONG** — retracted |
+| vector 140 "is meant to be **serviced**" | **WRONG** — it is made non-fatal |
+| (CLAUDE.md) `$10A0` index 6 lands on `$10AA` | **WRONG** — index 6 is `$10A6` |
+
+The phase labels verify by a direct measure: for each of the sixteen, the PC
+that writes that phase's sub-step 0 falls **after** the claimed entry point, at
+offsets `$06` to `$4A` with a median of `$1E` — exactly the spread expected for
+a routine that does some setup before announcing itself.
+
+**Three wrong out of the checkable set, and the three share a shape**: each was
+a plausible identification that nobody had put a number to. `TERM EQU 15`
+matched `$0F` numerically; "index 6" was close enough to `$10AA` to pass a
+glance; "serviced" is what one assumes when a vector is deliberately preserved.
+None survived arithmetic or a decode. The rest of the table held up, which is
+the more important half of the result.
+
 ### Two corrections found while propagating notes into `fps3k.asm`
 
 **A silent data-loss bug in the note table.** `NOTES` in
