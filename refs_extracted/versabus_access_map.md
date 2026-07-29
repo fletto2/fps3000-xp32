@@ -1473,6 +1473,47 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### Complete RMS68K marker census: 12 tags, 7 undocumented
+
+CLAUDE.md lists five structure markers. Scanning both ROM and post-boot RAM for
+`!` followed by three capitals finds **twelve**, and identifies every remaining
+unlabelled block in the RAM map:
+
+| tag | ROM | RAM | address | reading |
+|---|---:|---:|---|---|
+| `!TCB` | 13 | **6** | `$1E900 + $200*n` | task control block |
+| `!TST` | 1 | **6** | `$1EA60 + $200*n` | per-task, TCB+`$160` |
+| `!UDR` | 1 | **1** | `$1F600` | — |
+| `!PAT` | 1 | **1** | `$1F700` | 30-byte linked entries, a pool or free list |
+| `!IDV` | 1 | **1** | `$1F800` | — |
+| `!IOV` | 1 | **1** | `$1F900` | I/O vector — CLAUDE.md's memory map already names "IOVs" |
+| `!UST` | 1 | **1** | `$1FB00` | User Segment Table — the (task, queue) directory |
+| `!GST` | 1 | **1** | `$1FD00` | Global Segment Table |
+| `!ASQ` | 2 | 0 | — | code exists, no tagged instance |
+| `!CCB` | 1 | 0 | — | " |
+| `!DLY` | 1 | 0 | — | " |
+| `!VCT` | 2 | 0 | — | " |
+
+**Seven were undocumented**: `!GST`, `!IDV`, `!IOV`, `!PAT`, `!UDR`, `!UST`,
+`!VCT`. Two of them — `!GST` and `!UST` — were named in the asm annotations but
+never made it into the marker list.
+
+`!PAT` at `$1F700` is the most structured of the new ones: a linked list with
+entries at `$1F714`, `$1F732`, `$1F750`, `$1F76E`, `$1F78C`, `$1F7AA` —
+**stride `$1E`, thirty bytes** — each holding `$FFFFFFFF` and otherwise empty,
+which reads as an unallocated pool. Six entries, matching the six tasks.
+
+The expansions above are **inference from the tag letters and the contents**,
+except `!IOV` (CLAUDE.md's memory map already lists IOVs) and `!GST`/`!UST`
+(named in the asm annotations). `!PAT` and `!UDR` are not expanded here because
+nothing establishes what they stand for.
+
+**With this the RTOS working set is fully mapped.** Every one of the runs in the
+post-boot occupancy table above now has an identity: six TCBs, six `!TST`
+blocks, five untagged ASQ blocks, and one each of `!UDR`, `!PAT`, `!IDV`,
+`!IOV`, `!UST`, `!GST` — plus the vector table, the stack, and two small global
+areas.
+
 ### Which RTOS structures actually get created
 
 Searching post-boot RAM for the five RMS68K markers:

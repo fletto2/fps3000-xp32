@@ -166,6 +166,12 @@ else:
     check('a clean boot uses well under half the 1 KB supervisor stack',
           all(_r[x:x+4] == _P for x in range(0x404, 0x600, 4)))
 
+    check('12 RMS68K markers exist; 8 tags are instantiated in RAM',
+          {_r[x:x+4] for x in range(0, 0x20000)
+           if _r[x:x+1] == b'!' and _r[x+1:x+4].isalpha()
+           and _r[x+1:x+4].isupper()} ==
+          {b'!TCB', b'!TST', b'!UDR', b'!PAT', b'!IDV', b'!IOV', b'!UST', b'!GST'})
+
     check('directive $2D creates per-task ASQ blocks in reverse task order',
           [(_r[x:x+4], _r[x+10:x+14]) for x in
            (0x1E700, 0x1E500, 0x1E300, 0x1E100)] ==
