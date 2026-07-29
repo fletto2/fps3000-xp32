@@ -1389,6 +1389,47 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The XP task prologue, decoded
+
+Each XP task makes five `trap #1` calls and then blocks. Reading their
+parameter blocks gives the whole startup sequence:
+
+| # | directive | parameter block | function |
+|---|---|---|---|
+| 1 | `$01` | `$F07D14`: `"XP1I"` +0, `$20000000` +8, `"STCK"` +$C, `$190` +$14 | task / stack setup, 400-byte stack |
+| 2 | `$2D` | stack copy of `"AXP1"`, `$0002` | attach ASQ — AC-side queue |
+| 3 | `$2D` | stack copy of `"HXP1"`, `$0002` | attach ASQ — host-side queue |
+| 4 | `$4C` | the descriptor block at `$F07D00` | **connect interrupt vector** |
+| 5 | `$13` | — | **block / wait** |
+
+`"AXP1"` and `"HXP1"` are exactly the ASQ names CLAUDE.md documents for this
+task, which is independent confirmation that the two directive-`$2D` calls
+are ASQ attaches. The names are assembled by a backwards copy loop
+(`$F07D76`-`$F07D80`) from tables at `$F07D2C`/`$F07D36` onto the stack.
+
+**Directive `$4C` is verified, not inferred.** A watchpoint on vector `$114`
+(= `$45`×4, XP1I's) shows the final write of `$00F07EE6` coming from kernel
+PC `$F02278`, and `$F07DDE` — the `trap #1` carrying `$4C` — is the nearest
+preceding XP1I instruction, 141 instructions earlier. So `$4C` takes a
+descriptor block and installs the vector it names.
+
+That closes a gap left open above. The descriptor block's fields were
+documented as a declaration; they are in fact **the parameter block for
+directive `$4C`**, which is why vector number and handler address sit at
+fixed offsets in it.
+
+The remaining directives are inferred from their parameter blocks rather
+than traced: `$01` carries a task name, a `"STCK"` tag and a size, and `$2D`
+carries an ASQ name. `$13` carries nothing and is where every XP task stops.
+
+#### What this means for the model
+
+The blocking point is now fully characterised: each XP task completes setup,
+registers its ISR, and waits on directive `$13` for an interrupt its BIM
+channel will never raise in the emulator. Supplying that interrupt — not the
+presence gate, not the panel handshake — is what would advance the four
+channel tasks.
+
 ### The `$26E-$271` panel codes are not per-channel
 
 CLAUDE.md labels `0x26E-0x271` as `PCMD_CH{1..4}_TCB_FAIL` and flags the

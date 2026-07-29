@@ -126,6 +126,12 @@ else:
            zip('1234', (0x4E,0x6E,0x8E,0xAE))] == [2,2,2,1] and
           [xp[n].count(bytes.fromhex('30BC8000')) for n in '1234'] == [1,1,1,0])
 
+    check('XP1I directive $01 parameter block: name, STCK tag, $190 stack',
+          d[0x7D14:0x7D18] == b'XP1I' and d[0x7D20:0x7D24] == b'STCK' and
+          struct.unpack('>I', d[0x7D28:0x7D2C])[0] == 0x190)
+    check('XP1I ASQ name tables hold AXP1 and HXP1',
+          d[0x7D2C:0x7D30] == b'AXP1' and d[0x7D36:0x7D3A] == b'HXP1')
+
     # --- panel failure codes are directive-indexed, not per-channel -------
     def codes(lo, hi):
         c = []
