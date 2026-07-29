@@ -635,6 +635,59 @@ The BIM row reproduces the F046E0 table exactly, and the data-port rows
 reproduce the `$20` channel stride. This is a sixth independent
 confirmation of the mapping.
 
+## The channel `+$08`/`+$0A` pair is one 32-bit register
+
+This document and CLAUDE.md both label the per-channel window as
+"Read A `+$08`" and "Status `+$0A`". `BLK_XFR` (F05B0E) says otherwise:
+
+```
+a5 = $FF0008
+if a2 == a5:  poll $FF0004 bit 0        ; destination is the bulk port
+loop:
+   d6 = (a1)        ; channel +$08
+   (a2) = d6
+   if (swapped) d0 == 0:
+        d6 = $2(a1) ; channel +$0A
+        (a2) = d6           ;  -> same address: packed into a FIFO port
+   else:
+        d6 = $2(a1)
+        $2(a2) = d6         ;  -> next word: strided into memory
+```
+
+It reads **both** words every iteration and deposits them either at one
+address or at consecutive addresses. That is what moving a 32-bit value
+looks like: `+$08` is the high half, `+$0A` the low half. `+$0A` is not a
+status register.
+
+TCBXP1I corroborates it from the write side. F07EC6 writes `(a1) <- 0`
+then `$2(a1) <- $1B`, which is the 32-bit constant `$0000001B` written
+high-half-then-low-half — the same convention `BLK_XFR` reads back.
+
+A 32-bit channel register also fits the hardware: the AP I/F carries
+eight **Am29705** 16-word x 4-bit dual-port SRAMs, which is 32 bits wide.
+
+The high word of the opcode selects the destination style — packed for a
+port, strided for memory — which is the only use found for the upper half
+of the opcode word.
+
+## `$4F` has no connection to `$FF004A`
+
+CLAUDE.md's host-protocol section states that the host "presents status
+`0x4F` at `$FF004A`", and adds that the meaning of `$4F` beyond "byte
+ready" is unknown but that it "is what makes the ROM proceed".
+
+**Neither part survives checking.** `$4F` occurs in the ROM exactly five
+times, always as `move.w #$4f,(a3)` where `a3` is a **BIM control
+register** — the IRE-cleared form of `$5F`, written by `PanelSendAndWait`
+and its four task copies to suppress a channel's interrupt during a
+transfer. It never appears as a `$FF004A` value, and `$FF004A` is neither
+read nor written anywhere in a full boot.
+
+The `0x4F` in the documentation traces back to `host_sim.c:132` and
+`versabus.c:311`, which are our own emulator's invention. The doc then
+cited the emulator as though it were evidence. It is circular, and the
+value has no established meaning on that port.
+
 ## The complete chassis-to-SBC command protocol
 
 Everything above assembles into one mechanism. `$FF0204` (CHANNEL_SELECT)
