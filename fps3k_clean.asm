@@ -7172,7 +7172,7 @@ loc_F08728:                            ; in MainInit (0xF08728)
   f08776:  06 46 01 00             addi.w     #$100, d6
   f0877a:  61 00 05 e2             bsr.w      RAMAddressingTest
   f0877e:  06 46 01 00             addi.w     #$100, d6
-  f08782:  61 00 06 74             bsr.w      ROMChecksumTest
+  f08782:  61 00 06 74             bsr.w      BoardStatusPoll_3F11
   f08786:  61 00 09 ee             bsr.w      PTMInit
   f0878a:  06 46 01 00             addi.w     #$100, d6
   f0878e:  61 00 06 9e             bsr.w      loc_F08E2E
@@ -7850,9 +7850,9 @@ loc_F08DE8:                            ; in RAMAddressingTest (0xF08DE8)
   f08df6:  4e 75                   rts       
 
 ; ============================================================
-; ROMChecksumTest
+; BoardStatusPoll_3F11
 ; ============================================================
-ROMChecksumTest:
+BoardStatusPoll_3F11:
   f08df8:  48 e7 e0 08             movem.l    d0-d2/a4, -(a7)
   f08dfc:  42 06                   clr.b      d6
   f08dfe:  3d 46 02 04             move.w     d6, $204(a6) ; → XLTR_CHANNEL_SELECT
@@ -7872,7 +7872,7 @@ loc_F08E20:                            ; in BoardStatusPoll_3F11 (0xF08E20)
   f08e20:  61 00 fa fa             bsr.w      PollBoardStatus
   f08e24:  4a 87                   tst.l      d7
   f08e26:  66 ea                   bne.b      loc_F08E12
-;>>>> [R7/BOTH] In ROMChecksumTest, this restores registers from the stack before function exit.
+;>>>> [R7/BOTH] In BoardStatusPoll_3F11, this restores registers from the stack before function exit.
   f08e28:  4c df 10 07             movem.l    (a7)+, d0-d2/a4
   f08e2c:  4e 75                   rts       
 
@@ -9117,7 +9117,7 @@ loc_F09986:                            ; in ROMChecksum_etc (0xF09986)
   f0998e:  20 3c 00 ff 00 ff       move.l     #$ff00ff, d0
   f09994:  61 22                   bsr.b      loc_F099B8
   f09996:  46 80                   not.l      d0
-;>>>> [R2/BOTH] Tests memory pattern 0x55aa55aa/0xaa55aa55 verification with bit inversion (ROMChecksumTest)
+;>>>> [R2/BOTH] Tests memory pattern 0x55aa55aa/0xaa55aa55 verification with bit inversion (BoardStatusPoll_3F11)
   f09998:  61 1e                   bsr.b      loc_F099B8
   f0999a:  20 3c 55 aa 55 aa       move.l     #$55aa55aa, d0
 ;>>>> [R14/BOTH] The instruction at `f099a0` (`bsr.b loc_F099B8`) calls the subroutine at `loc_F099B8`, which writes the channel number in `d6` to the XLTR Channel Select register (offset 0x204) and then performs a memory pattern test with the value 0x55AA55AA (loaded at `f0999a`), part of the `ROMChecksum_etc` routine’s RAM pattern verification sequence that tests various patterns (0xFF00FF, 0x55AA55AA, 0x33CC33CC) and their inversions.

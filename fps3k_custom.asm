@@ -6562,7 +6562,7 @@ F08772  61 00 05 a6             bsr.w    loc_F08D1A
 F08776  06 46 01 00             addi.w   #$100, d6
 F0877A  61 00 05 e2             bsr.w    RAMAddressingTest
 F0877E  06 46 01 00             addi.w   #$100, d6
-F08782  61 00 06 74             bsr.w    ROMChecksumTest
+F08782  61 00 06 74             bsr.w    BoardStatusPoll_3F11
 F08786  61 00 09 ee             bsr.w    PTMInit
 F0878A  06 46 01 00             addi.w   #$100, d6
 F0878E  61 00 06 9e             bsr.w    loc_F08E2E
@@ -7204,9 +7204,9 @@ F08DF2  4c df 03 02             movem.l  (a7)+, d1/a0-a1
 F08DF6  4e 75                   rts      
 
 ; ============================================================
-; ROMChecksumTest
+; BoardStatusPoll_3F11
 ; ============================================================
-ROMChecksumTest:
+BoardStatusPoll_3F11:
 F08DF8  48 e7 e0 08             movem.l  d0-d2/a4, -(a7)
 F08DFC  42 06                   clr.b    d6
 F08DFE  3d 46 02 04             move.w   d6, $204(a6)
