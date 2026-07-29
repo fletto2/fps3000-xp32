@@ -779,7 +779,27 @@ static void xltr_write(uint32_t addr, uint16_t val) {
 
 /* ============== mailbox handler ============== */
 
+/* Same boot-complete gate the $10AA injection uses: vector $128 holding
+ * F05DD6 means TCBIO1I has started.  Injecting from reset breaks the
+ * power-on diagnostics, which walk this RAM and read these registers. */
+extern uint8_t *versabus_ram_ptr(void);
+static int versabus_boot_complete(void) {
+    const uint8_t *r = versabus_ram_ptr();
+    if (!r) return 0;
+    uint32_t v = ((uint32_t)r[0x128] << 24) | ((uint32_t)r[0x129] << 16)
+               | ((uint32_t)r[0x12A] << 8)  |  (uint32_t)r[0x12B];
+    return v == 0xF05DD6;
+}
+
 static uint32_t mailbox_read(uint32_t addr, int size) {
+    /* FPS3K_MBOX also applies here, so the host status word can be driven
+     * without going through host_sim's byte-queue path.  Raising TCBIO1I's
+     * BIM directly (FPS3K_XPIRQ=5) bypasses that path entirely, and the
+     * word still has to carry bit 29 plus the class field in bits 16-17. */
+    if (addr == MAILBOX_HOST_STATUS && versabus_boot_complete()) {
+        const char *e = getenv("FPS3K_MBOX");
+        if (e) return (uint32_t)strtoul(e, NULL, 16);
+    }
     if (addr == MAILBOX_HOST_STATUS) return mailbox.host_status;
     if (addr == MAILBOX_SBC_REPLY)   return mailbox.sbc_reply;
     return 0;
@@ -1301,8 +1321,12 @@ void versabus_tick(uint32_t cycles) {
         static uint64_t clk;
         clk += cycles;
         if (xpch < 0) { const char *e = getenv("FPS3K_XPIRQ"); xpch = e ? atoi(e) : 0; }
-        if (xpch >= 1 && xpch <= 4) {
-            static const int U[4] = {1,1,2,2}, C[4] = {2,3,0,1};
+        /* 5 = TCBIO1I's host link, BIM2 ch2 ($FF0254, vector $4A).  Driving
+         * it here raises the interrupt at the firmware's own level 7, which
+         * is what the board does; earlier work had to force level 5 with
+         * FPS3K_HOSTLVL because nothing raised the BIM. */
+        if (xpch >= 1 && xpch <= 5) {
+            static const int U[5] = {1,1,2,2,2}, C[5] = {2,3,0,1,2};
             int u = U[xpch-1], c = C[xpch-1];
             if (versabus_bim_enabled(u, c) && clk - last > 200000) {
                 last = clk;

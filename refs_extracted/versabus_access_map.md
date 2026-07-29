@@ -1389,6 +1389,61 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### TCBIO1I runs at the firmware's own interrupt level
+
+Every previous result on the host-link path carried this caveat: *"they were
+produced with the host ISR forced to level 5 (`FPS3K_HOSTLVL`), since at the
+firmware's own level 7 the panel handshake never escapes its spin."* The
+reason was that nothing in the model ever raised TCBIO1I's BIM channel —
+BIM2 ch2 at `$FF0254`, control value `$5F` — so the only way in was a forged
+level-5 autovector.
+
+`FPS3K_XPIRQ=5` now raises that channel directly. **The ISR at `$F05DD6`
+executes at level 7, off the real BIM, with no level override**, and TCBIO1I
+reaches 57 distinct PCs including the `$10AA` read at `$F05E12`.
+
+TCBIO1I is also unusually simple by the measures used on the XP tasks: **no
+`btst` sites at all**, and exactly two RAM globals referenced by absolute
+address — `$E6E` and `$10AA`.
+
+#### A tooling defect: `FPS3K_DMA10AA` was hanging the self-test
+
+Setting `FPS3K_DMA10AA=2` produced **zero** TCBIO1I instructions, and the
+cause is not in the firmware. `$10AA` lies in the RAM the power-on
+diagnostics walk, and a location that reads back a constant regardless of
+what was written fails a pattern test — with the injection live from reset the
+machine hangs in the diagnostics at `F09904` and never reaches the scheduler
+at all.
+
+The hook now gates on boot completion (vector `$128` holding `F05DD6`, the
+same gate `host_sim` uses). **Any earlier `$10AA` result should be re-checked
+against this**: if it was obtained with the injection active from reset, the
+machine was not in the state the result assumed.
+
+#### With that fixed, `$10AA = 2` reaches the reply branch at level 7
+
+| configuration | `$F05E2C` | ISRExit `$F05E4C` |
+|---|---|---|
+| `XPIRQ=5` alone | no | no |
+| `XPIRQ=5`, `DMA10AA=2` | **yes** | **yes** |
+| `XPIRQ=5`, `DMA10AA=2`, `MBOX=$20010000` | no | no |
+
+The reply branch is reached with `$10AA = 2` and **the mailbox left alone**.
+
+That is worth flagging against the documented account, which has the reply
+path requiring "mailbox bits 16-17 = 1". At level 7 the branch is taken
+without touching the mailbox, and forcing the mailbox word *prevents* it,
+diverting the ISR to `$F05DFA` — the `PCMD_HOST_REQUEST` (`$281`) site — and
+the `$F05E56` path instead.
+
+**Do not read that as refuting the mailbox class field.** `FPS3K_MBOX` returns
+a **constant**, which no real mailbox does: the host word would change as the
+handshake progressed. A constant that never clears is exactly the kind of
+model artefact that produces a different branch for uninteresting reasons. The
+honest statement is that the level-7 route reaches the reply branch on `$10AA`
+alone, and that the mailbox class field could not be exercised at level 7 with
+the crude constant-injection hook available.
+
 ### The XP tasks' RAM map
 
 Classifying every absolute reference to `$1050`-`$1090` by which tasks make it

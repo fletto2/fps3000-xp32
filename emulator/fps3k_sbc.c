@@ -49,6 +49,9 @@ static void on_apif_consumed(void *ctx) { host_sim_byte_consumed((host_sim_t *)c
 #define ROM_BASE  0xF00000
 
 static uint8_t  ram[RAM_SIZE];
+
+/* Exposed so versabus.c can apply its boot-complete gate (vector $128). */
+uint8_t *versabus_ram_ptr(void) { return ram; }
 /* Written-ness tracking.  FPS3K_UNINIT logs every read of a RAM byte the
  * CPU has never written -- the complete set of values this firmware
  * consumes but does not produce, which is exactly what a chassis model
@@ -109,9 +112,18 @@ static int poke_lookup(uint32_t a, uint8_t *out) {
     return 0;
 }
 
+/* Only inject once the RTOS is up.  $10AA lies in the RAM the power-on
+ * diagnostics walk, so a location that reads back a constant regardless of
+ * what was written fails a pattern test -- with the injection active from
+ * reset the machine hangs in the diagnostics at F09904 and never reaches
+ * the scheduler.  The boot-complete gate is the same one host_sim uses:
+ * vector $128 holding F05DD6 means TCBIO1I has started. */
 static int dma10aa_active(uint32_t *out) {
     const char *e = getenv("FPS3K_DMA10AA");
     if (!e) return 0;
+    uint32_t v128 = ((uint32_t)ram[0x128] << 24) | ((uint32_t)ram[0x129] << 16)
+                  | ((uint32_t)ram[0x12A] << 8)  |  (uint32_t)ram[0x12B];
+    if (v128 != 0xF05DD6) return 0;
     *out = (uint32_t)strtoul(e, NULL, 16);
     return 1;
 }
