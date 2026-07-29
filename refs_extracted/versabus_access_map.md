@@ -1389,6 +1389,47 @@ distinct PCs executed**, and six tests now run that never ran before:
 The next wall is inside F08E2E. Hook: `FPS3K_BSTAT19_B5` forces the bit
 either way for experiments.
 
+### The largest XP-only routine is a channel scan
+
+The 408-byte block replicated across the four XP tasks and absent from RDHC
+runs to the end of each task region, and its most substantial routine is at
+`$F08616` in XP1I's copy — the target of the `jsr $F08616` in the task body at
+`$F07E42`. It is a loop over the channel windows:
+
+```
+$F08668  movea.l #$FF0000,a2
+$F08676  move.w  $4E(a2,d4.l),d2    ; this channel's command register
+$F0867A  btst    #15,d2
+$F08680  btst    #14,d2
+$F08686  st      d5                 ; both set -> flag
+$F08688  addi.l  #$20,d4            ; next channel window
+$F0868E  addq.w  #1,d3
+$F08690  cmp.w   $105E,d3           ; bounded by the channel-present count
+$F08696  ble     -> $F08676
+```
+
+Three things this confirms from running code rather than from static reading:
+
+1. **`$105E` is the channel count** — a third independent confirmation, after
+   the probe at `$F0A224` that writes it and the per-task presence gate that
+   reads it. Here it bounds a loop.
+2. **`$20` is the channel-window stride**, which until now was inferred from
+   the four windows' base addresses.
+3. **Bits 15 and 14 are the dispatch field.** They were found gating the
+   `$8000` path in the task body; the scan tests the same two bits across
+   every channel.
+
+The routine also touches the shared globals identified earlier — it reads and
+increments `$107E` and accumulates into `$1064` — which is what those two are
+for: scan state shared across the four tasks, as opposed to the per-channel
+array at `$1066-$107D`.
+
+Earlier in the same block, `$F0857E` pushes a longword `0`, the ASCII
+`"USER"`, and `moveq #$43,d0` before a `trap #1` — a directive-`$43` call
+naming the same owner string that RDHC's task descriptor carries at `+$14`.
+That is the sixth distinct RTOS directive this ROM is now known to use
+(`$01`, `$13`, `$2D`, `$43`, `$4C`, plus the `$0F` in the channel ISR).
+
 ### A third of the application code is byte-identical replication
 
 Sweeping the FPS application region `$F04488-$F0A5FF` for duplicated blocks

@@ -96,6 +96,16 @@ else:
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
               [(0x104,0xF04930),(0x114,0xF07EE6),(0x118,0xF074E6),
                (0x11C,0xF06AE6),(0x120,0xF060CE),(0x128,0xF05DD6)]))
+    # --- the XP channel-scan loop ----------------------------------------
+    check('channel scan at $F08616: $20 stride, bounded by $105E',
+          d[0x8668:0x866C].hex().upper() == '247C00FF' and
+          d[0x8676:0x867A].hex().upper() == '3432484E' and
+          d[0x8688:0x868E].hex().upper() == '068400000020' and
+          d[0x8690:0x8696].hex().upper() == 'B679' + '0000105E')
+    check('the scan tests the same command bits 15 and 14 as the task body',
+          d[0x867A:0x867E].hex().upper() == '0802000F' and
+          d[0x8680:0x8684].hex().upper() == '0802000E')
+
     # --- large replicated blocks: RDHC + one per XP task -----------------
     for ln, addrs in [(408, [0xF06750, 0xF07168, 0xF07B68, 0xF08568]),
                       (192, [0xF05B92, 0xF065D2, 0xF06FEA, 0xF079EA, 0xF083EA]),
