@@ -635,6 +635,88 @@ The BIM row reproduces the F046E0 table exactly, and the data-port rows
 reproduce the `$20` channel stride. This is a sixth independent
 confirmation of the mapping.
 
+## The complete chassis-to-SBC command protocol
+
+Everything above assembles into one mechanism. `$FF0204` (CHANNEL_SELECT)
+is **bidirectional**: the chassis presents arguments there for the SBC to
+read, and the SBC returns results by writing to it. `$E74` is the
+SBC-side result register.
+
+### The cycle
+
+```
+chassis raises BIM0 ch0, opcode in MODE0 bits 0-7, argument in CHANNEL_SELECT
+  F04930   latch MODE0 -> $E86, set ACK bit 10, dispatch on bit 7 + low nibble
+  handler  consume the argument, compute a result into $E74
+  F04910   clear ACK bit 10 in MODE0
+  F0491E   BIM0 CR0 <- $5E   (re-enable IRE, level 6)
+  F04924   $E74 -> CHANNEL_SELECT   (return the result)
+  F0492C   back to the wait loop
+```
+
+### Registers the protocol maintains
+
+| Global | Role | Loaded by |
+|---|---|---|
+| `$E58`/`$E5A` | 32-bit address | code `$1` / `$41` |
+| `$E5C`/`$E5E` | latched opcode | code `$0` |
+| `$E60`/`$E62` | channel number | code `$5` |
+| `$E64`/`$E66` | 32-bit word count | code `$2` / `$42` |
+| `$E68`/`$E6A` | 32-bit data parameter | code `$9` |
+| `$E70`/`$E72` | 32-bit chassis-memory data | code `$3` family |
+| `$E74` | **result returned to the chassis** | every handler |
+| `$E7A` | control-block slot index | codes `$A` / `$C` |
+
+### The command set
+
+| Code | Operation | Argument | Result | Evidence |
+|---|---|---|---|---|
+| `$0` | latch opcode and execute | opcode 0..`$10`, or `$28` = bulk transfer | — | **executed** |
+| `$1`/`$41` | set address low / high | address half | — | **executed** |
+| `$2`/`$42` | set count low / high | count half | — | **executed** |
+| `$3`/`$43`/`$63` | chassis memory write / load-high / read | data half | `$E70` | **executed** (round trip) |
+| `$5` | argument 0: report AC count; argument N: select channel N | 0 or channel | `$105E` or — | inferred |
+| `$7` | disable BIM0 ch0 interrupt | — | — | **executed** (CR `$5E`->`$4E`) |
+| `$9` | set data parameter | data half | — | inferred |
+| `$A` | read control-block word | index in `$E7A` | `$E74` | inferred |
+| `$B` | report `$10010` | — | `$E74` | **executed** |
+| `$C` | read/write register-file half | index in `$E7A` | `$E74` | inferred |
+| `$F` | return from interrupt | — | — | **executed** |
+
+Code `$5` doing double duty is the notable one: with argument 0 it is a
+**query** — the SBC answers with `$105E`, the AC count — and with a
+nonzero argument it selects a channel. That is the only command in the
+set that reports a configuration value back, and it means the chassis can
+ask the SBC what it believes the machine's population to be.
+
+### Execution: `PanelSendAndWait`
+
+Opcode `$28` runs the polled bulk loop from `$FF0008`. Any other opcode
+0..`$10` reaches `PanelSendAndWait` with the accumulated parameters:
+
+| Register | Contents |
+|---|---|
+| `d0` | opcode from `$E5C` — indexes the 42-slot table |
+| `d1` | address from `$E58` |
+| `d2` | word count from `$E64` |
+| `d3` | data parameter from `$E68` |
+| `d4` | channel number from `$E60` |
+| `a0` | `$FF0000`, the AP I/F command port |
+| `a1` | channel data port A, `$FF0000 + $20*(ch+1) - 6` |
+| `a2` | `$FF0008`, the bulk data port |
+| `a3` | that channel's BIM control register, via the F046E0 table |
+
+The `a1` formula reproduces the documented channel windows exactly:
+channel 1 gives `$FF0048`, channel 4 gives `$FF00A8`.
+
+**This refines an earlier statement in this document.** The 42-slot table
+was described as indexed by "the command code passed in, not a status
+code returned by the chassis". `d0` comes from `$E5C`, which is the
+latched **CHANNEL_SELECT readback** — so it is chassis-supplied after
+all. The accurate statement is that it is a chassis-supplied *opcode*,
+latched by an earlier command, rather than a status code produced by the
+transfer that `PanelSendAndWait` is about to perform.
+
 ### Measured bit usage on the mode registers
 
 Scanning every read-modify-write sequence on the XLTR registers gives
