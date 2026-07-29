@@ -260,10 +260,33 @@ static void  (*apif_consumed_cb)(void *ctx) = NULL;
 static void   *apif_consumed_ctx = NULL;
 static uint8_t apif_inj_status = 0;
 
+/* CORRECTED 2026-07-29.  This used to write the host byte into channel 1's
+ * data ports ($FF0048 / $FF004E) and present $4F at $FF004A.  All three are
+ * wrong and the emulator was encoding a protocol this project has since
+ * disproven:
+ *
+ *   - $FF0048/$FF004A/$FF004E are TCBXP1I's registers, not the host link's.
+ *     The only absolute reference to $FF0048 in the ROM is a WRITE, in XP1I,
+ *     and the reads come from XP1I's own ISR as $48(a5).
+ *   - $4F never appears at $FF004A in the firmware.  It occurs five times, all
+ *     as move.w #$4f,(a3) where a3 is a BIM control register -- the IRE-cleared
+ *     form of $5F.  The value entered our docs from host_sim.c and the docs then
+ *     cited the emulator as evidence.
+ *   - the host payload rides in the MAILBOX pair: $70001C inbound, $700020 out.
+ *
+ * ds2/ADVERSARIAL_REVIEW.md D.3 flags the same conflict from the docs side
+ * ("$FF004A: status word vs data LOW").  This is the code-side resolution.
+ *
+ * FPS3K_APIF_LEGACY=1 restores the old behaviour for comparison against
+ * measurements taken before this fix. */
 void versabus_inject_apif_byte(uint8_t a, uint8_t b, uint8_t status) {
-    apif.ch_data[0][0] = a;        /* surfaces at $FF0048 (CH1 data A) */
-    apif.ch_data[0][1] = b;        /* surfaces at $FF004E (CH1 data B) */
-    apif_inj_status    = status;   /* surfaces at $FF004A read */
+    if (getenv("FPS3K_APIF_LEGACY")) {
+        apif.ch_data[0][0] = a;
+        apif.ch_data[0][1] = b;
+        apif_inj_status    = status;
+    } else {
+        (void)a; (void)b; (void)status;   /* payload goes via the mailbox */
+    }
     /* Indicate "host has data" via cmd_status bit 14 (ready flag) */
     apif.cmd_status   |= (1u << 14);
     /* TCBIO1I ISR (F05DD6) reads $70001C and tests bit 29 ("host
@@ -326,16 +349,15 @@ static void chassis_process_panel_cmd(uint16_t cmd) {
     case 0x281:
         /* SBC asking for next host byte.  If we have one queued from
          * host_sim, deliver it via channel-1 data ports. */
-        if (panel_byte_queued) {
-            apif.ch_data[0][0] = panel_byte_value;        /* $FF0048 */
-            apif.ch_data[0][1] = panel_byte_value;        /* $FF004E */
-            apif_inj_status    = 0x4F;                    /* $FF004A */
-            /* Advance the host-side queue — apif_notify_consumed
-             * is called from the channel-data read paths. */
-        } else {
-            apif.ch_data[0][0] = 0;
-            apif.ch_data[0][1] = 0;
-            apif_inj_status    = 0;
+        /* Do NOT deliver via channel 1's data ports: those belong to
+         * TCBXP1I.  The $281 arm is also known to deadlock -- it spins at
+         * $F05E86 and only the level-6 responder can release it, which
+         * cannot preempt this level-7 ISR.  So there is nothing correct to
+         * do here yet; the honest model is to ack and record the request. */
+        if (getenv("FPS3K_APIF_LEGACY") && panel_byte_queued) {
+            apif.ch_data[0][0] = panel_byte_value;
+            apif.ch_data[0][1] = panel_byte_value;
+            apif_inj_status    = 0x4F;
         }
         break;
 
@@ -343,7 +365,7 @@ static void chassis_process_panel_cmd(uint16_t cmd) {
         /* "Re-sync" / "give me byte again" — same as 0x281 but
          * doesn't advance the host's stream pointer.  We deliver
          * the same byte without consuming. */
-        if (panel_byte_queued) {
+        if (getenv("FPS3K_APIF_LEGACY") && panel_byte_queued) {
             apif.ch_data[0][0] = panel_byte_value;
             apif.ch_data[0][1] = panel_byte_value;
             apif_inj_status    = 0x4F;

@@ -1473,6 +1473,41 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The emulator's host-byte model was wrong *and inert* — now corrected
+
+Working toward whole-machine emulation, the AP I/F host-byte path turned out to
+still implement the protocol this project disproved. `versabus_inject_apif_byte`
+wrote the host byte into **channel 1's data ports** (`$FF0048`, `$FF004E`) and
+presented **`$4F`** at `$FF004A`, and `chassis_process_panel_cmd`'s `$281`/`$282`
+arms did the same. All three are wrong:
+
+- `$FF0048`/`$FF004A`/`$FF004E` are **TCBXP1I's** registers. The only absolute
+  reference to `$FF0048` in the ROM is a *write*, in XP1I, and the reads come
+  from XP1I's own ISR as `$48(a5)`.
+- **`$4F` never appears at `$FF004A`.** It occurs five times, all as
+  `move.w #$4f,(a3)` with `a3` a BIM control register — the IRE-cleared form of
+  `$5F`. It entered the docs from `host_sim.c`, and the docs then cited the
+  emulator as evidence.
+- the host payload rides in the **mailbox pair**, `$70001C` in and `$700020` out.
+
+This is the code-side resolution of `ds2/ADVERSARIAL_REVIEW.md` D.3, which flags
+the same conflict from the docs side (`$FF004A`: "status word" vs "data LOW").
+
+**Two measurements make the correction safe, and both are worth recording.**
+
+The regression harness passes **130/130 unchanged** after the removal, so no
+verified finding depended on the invented model.
+
+And running the same host transfer both ways — `FPS3K_APIF_LEGACY=1` versus
+corrected — gives **identical execution**: 54 distinct TCBIO1I PCs, `$F05DFA`
+once, `$FF0048` never read, in both. The channel-port writes and the `$4F`
+status **had no effect on anything**. The firmware never read them.
+
+That explains how the error survived so long. An invented protocol that
+*changes behaviour* gets caught by the first contradicting measurement; one that
+is inert looks like it is working and nothing ever disagrees with it. The tell
+was not a failed test — it was noticing the value's provenance.
+
 ### Byte accesses to the VersaBUS window never happen
 
 `ds2/ADVERSARIAL_REVIEW.md` F.4 flags that the emulator does not model what a
