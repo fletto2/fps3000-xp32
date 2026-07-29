@@ -148,6 +148,16 @@ else:
           d[0xA14A:0xA158].hex().upper() == '207C00000124B1FC000002306706'
           and vec(0x8C) == 0xF00896)
 
+    # --- the exception-code table at $F0A23A -----------------------------
+    check('9-entry exception table at $F0A23A: codes $29E-$2A6, 8 bytes apart',
+          [struct.unpack('>H', d[0xA23A+8*i+2:0xA23C+8*i+2])[0] for i in range(9)]
+          == list(range(0x29E, 0x2A7)) and
+          all(struct.unpack('>H', d[0xA23A+8*i:0xA23C+8*i])[0] == 0x303C
+              for i in range(9)))
+    check('an FPS stub sits inside the kernel region at $F001A0 (code $2B2)',
+          d[0x1A0:0x1AC].hex().upper() == '303C02B24EB900F0450060FE' and
+          d.count(b'\x30\x3c\x02\xb2') == 1)
+
     # --- $10AA is out of reach of the only code that writes that array ---
     check('cmd-1 writes $10A0[(ch-1)*2] and is bounded by $105E',
           d[0x53CC:0x53D2].hex().upper() == '20045380E588' and

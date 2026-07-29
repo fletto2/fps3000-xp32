@@ -150,6 +150,18 @@ y=tbl(y,["question","finding"],[M,M+230],
   ("Which pins carry the host-side 32-bit path?","")])
 y=note(y,"The host-side counterpart card is missing, so its pinout has to come off this card.")
 y-=3
+y=chk(y,"Check 0b - if the board dies, the panel port names the exception")
+y=para(y,"The last word written to $FF000E before a hang is a CPU exception code. Nine of them, from a table at $F0A23A.")
+y=para(y,"This costs nothing to watch and immediately separates a bus fault from a stray interrupt.")
+y=tbl(y,["code","exception","code","exception"],[M,M+40,M+180,M+220],
+ [("$29E","bus error (2)","$2A3","TRAPV (7)"),
+  ("$29F","address error (3)","$2A4","privilege violation (8)"),
+  ("$2A0","illegal instruction (4)","$2A5","uninitialised interrupt (15)"),
+  ("$2A1","divide by zero (5)","$2A6","CATCH-ALL - stray IRQ on any unused vector"),
+  ("$2A2","CHK (6)","$2B2","kernel-region fatal stub at $F001A0")],rowh=9.2)
+y=note(y,"$2A6 is the one to expect from a wiring fault: it is installed on 182 unused user vectors.")
+y=note(y,"Last $FF000E value observed: ______________")
+y-=4
 y=chk(y,"Check 7c — two predictions this firmware makes that a bus trace can falsify")
 y=para(y,"Both follow from decoding alone and neither has been checked against hardware. They are cheap to test and")
 y=para(y,"each would settle an open question outright.")

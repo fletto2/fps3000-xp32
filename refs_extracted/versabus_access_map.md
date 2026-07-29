@@ -1455,6 +1455,66 @@ original was right in substance and my re-verification of it was wrong in
 method. Both were caught by doing the arithmetic or the decode rather than
 trusting a summary.*
 
+### The panel port reports which CPU exception killed the board
+
+Nine panel codes were undocumented. They form one table at `$F0A23A`, eight
+bytes per entry, and each entry is `move.w #<code>,d0` followed by a branch to
+the common panic path:
+
+| handler | code | vector | exception |
+|---|---|---|---|
+| `$F0A23A` | `$29E` | 2 | **bus error** |
+| `$F0A242` | `$29F` | 3 | **address error** |
+| `$F0A24A` | `$2A0` | 4 | illegal instruction |
+| `$F0A252` | `$2A1` | 5 | divide by zero |
+| `$F0A25A` | `$2A2` | 6 | CHK |
+| `$F0A262` | `$2A3` | 7 | TRAPV |
+| `$F0A26A` | `$2A4` | 8 | privilege violation |
+| `$F0A272` | `$2A5` | 15 | uninitialised interrupt |
+| `$F0A27A` | `$2A6` | — | **the catch-all on 182 unused user vectors** |
+
+**This is a hardware-visible diagnostic.** If the board dies, the last value
+written to the panel command port at `$FF000E` names the exception class. A
+bus error reports `$29E`; a stray interrupt on any unwired vector reports
+`$2A6`. Nothing in this project's bring-up material mentioned it, and it costs
+nothing to watch for.
+
+CLAUDE.md listed only `$29E` and `$29F`, as "`PCMD_RTOS_29E/29F` — RTOS-side
+operations". That is vague and slightly wrong: they are the bus-error and
+address-error reporters, and they are the first two entries of a nine-entry
+table.
+
+### There is FPS code inside the RMS68K kernel region
+
+The kernel is described as generic Motorola code ending at `$F04487`, and it
+very nearly is. Testing both directions:
+
+- **kernel → FPS: exactly one reference.** `$F001A4` is `jsr $F04500` — a call
+  into the panel-command issuer, copy 1.
+- **FPS → kernel: two references**, both `$F00000` from `$F08D24`/`$F08D36`,
+  which are the ROM readback walk of phase `$0300` reading the ROM base as
+  *data*. No FPS code ever calls a kernel routine directly.
+- **FPS-specific constants inside the kernel: none.** `$FF0000`, `$F70018`,
+  `$F70011`, `$1FFF0`, `$105E`, `$10AA` — zero real occurrences; the two
+  apparent hits straddle instruction boundaries.
+
+So the boundary is clean in every respect **except one FPS-authored stub**:
+
+```
+$F001A0  move.w #$02B2,d0
+$F001A4  jsr    $F04500      ; the panel-command issuer
+$F001AA  bra .               ; unreachable - the issuer never returns
+```
+
+It sits immediately before the TRAP #0 vector target at `$F001AC`, issues a
+**tenth otherwise-unused panel code `$2B2`**, and hangs. `$2B2` occurs exactly
+once in the whole image. This also accounts for the ninth `bra .` — the one the
+issuer census attributed to "the kernel".
+
+The architecture is therefore stricter than the address split suggests: the
+application talks to the kernel **only through TRAP #0 and TRAP #1**, and the
+kernel talks to the application through exactly one hand-placed stub.
+
 ### Sweeping the response codes does not unlock RDHC
 
 The coverage measurement below names the bottleneck as "a chassis model that
