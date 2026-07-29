@@ -551,7 +551,39 @@ word count, and the chassis programs both by pushing (code, argument)
 pairs. That makes the whole thing a small command language, not a status
 report.
 
-### `$105E` is a chassis-supplied channel count
+### `$105E` is the installed-AC count, and it gates the dormant channels
+
+CLAUDE.md has long recorded that this chassis runs a 2-AC configuration
+and that "AC3 and AC4 task slots are dormant". `$105E` is the mechanism.
+
+Each XP task compares it against **its own channel number** and skips its
+channel initialisation if the count is lower:
+
+| Site | Compare | Task |
+|---|---|---|
+| F07DF6 | `cmpi.w #$1,$105E` | TCBXP1I |
+| F073F6 | `cmpi.w #$2,$105E` | TCBXP2I |
+| F069F6 | `cmpi.w #$3,$105E` | TCBXP3I |
+| F05FF6 | `cmpi.w #$4,$105E` | TCBXP4I |
+
+A fifth independent confirmation of the task-to-channel mapping, and this
+one is decisive about what the value means. Driving it confirms the
+behaviour end to end — counting writes to each channel's write port:
+
+| `$105E` | ch1 `$FF0044` | ch2 `$FF0064` | ch3 `$FF0084` | ch4 `$FF00A4` |
+|---|---|---|---|---|
+| `0` | 0 | 0 | 0 | 0 |
+| `2` | 1 | 1 | 0 | 0 |
+| `4` | 1 | 1 | 1 | 1 |
+
+`$105E = 2` is exactly this machine's population. So the firmware is not
+hard-wired for a 2-AC chassis: it is generic over 1-4 ACs and the chassis
+tells it how many are present. That is why the ROM exposes four channels
+while only two do anything here.
+
+### `$105E` is supplied from outside the ROM
+
+
 
 `$105E` is compared in six places (F04838, F04C94, F04E46, F04EEE,
 F04F0A, F0538A) and **written nowhere**. It reads `$0000` after boot, and

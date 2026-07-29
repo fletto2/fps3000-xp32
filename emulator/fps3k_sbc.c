@@ -49,6 +49,13 @@ static void on_apif_consumed(void *ctx) { host_sim_byte_consumed((host_sim_t *)c
 #define ROM_BASE  0xF00000
 
 static uint8_t  ram[RAM_SIZE];
+/* Written-ness tracking.  FPS3K_UNINIT logs every read of a RAM byte the
+ * CPU has never written -- the complete set of values this firmware
+ * consumes but does not produce, which is exactly what a chassis model
+ * owes it.  $105E, $10AA and the CHANNEL_SELECT $28 readback were each
+ * found by hand; this finds the rest. */
+static uint8_t  ram_written[RAM_SIZE];
+static FILE    *uninit_fp = NULL;
 uint8_t *host_sim_get_ram_ptr(void) { return ram; }
 
 /* Chassis-side memory backing for $400000-$4FFFFF (1 MB).  When
@@ -152,7 +159,11 @@ static uint8_t bus_read8(uint32_t a) {
         return versabus_read(a, 1) & 0xFF;
     }
 
-    if (a < RAM_SIZE) return ram[a];
+    if (a < RAM_SIZE) {
+        if (uninit_fp && !ram_written[a])
+            fprintf(uninit_fp, "%05X %06X\n", a, m68k_get_reg(NULL, M68K_REG_PPC));
+        return ram[a];
+    }
     if (a >= ROM_BASE && a < ROM_BASE + ROM_SIZE) return rom[a - ROM_BASE];
 
     /* Chassis-routed memory: backed by chassis_mem when not BERR'd.
@@ -209,6 +220,7 @@ static uint8_t bus_read8(uint32_t a) {
 
 static void bus_write8(uint32_t a, uint8_t v) {
     a &= 0xFFFFFFu;
+    if (a < RAM_SIZE && v) ram_written[a] = 1;   /* nonzero writes only */
     if (getenv("FPS3K_VECWATCH") && a >= 0x128 && a <= 0x12B)
         fprintf(stderr, "[VECWATCH] write %06X <- %02X from PC=%06X\n",
                 a, v, m68k_get_reg(NULL, M68K_REG_PPC));
@@ -493,6 +505,8 @@ int main(int argc, char **argv) {
     if (n != ROM_SIZE) {
         fprintf(stderr, "WARN: ROM image is %zu bytes, expected %d\n", n, ROM_SIZE);
     }
+    { const char *u = getenv("FPS3K_UNINIT");
+      if (u) uninit_fp = fopen(u, "w"); }
     fprintf(stderr, "[init] ROM loaded: %zu bytes from %s\n", n, rom_path);
 
     /* Open trace files */
