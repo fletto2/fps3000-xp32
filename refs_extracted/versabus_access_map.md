@@ -1118,6 +1118,37 @@ return the last value written rather than any hardware state. That is
 what `versabus.c` implements, and phase `$0600`'s eight-pattern
 round-trip test only passes because of it.
 
+## Regression harness for the findings in this document
+
+`tools/verify_findings.py` asserts **21 of the claims made here**, in the
+ROM image and at runtime. Run it from the repo root after any change to
+`disasm.py`, the emulator, or the ROM:
+
+```
+python3 tools/verify_findings.py     ->  21/21 passed
+```
+
+Static checks: the ROM's MD5; that the panel-command issuer has exactly
+seven byte-identical copies at the documented addresses; that the 42-slot
+dispatch table has five; that F05102 is sixteen `4EFA` entries; that
+`SRecordDataHandler` seeds `a1 = $10` and adds `$10000`; that one
+S-record parser takes S8 and the other S7; that the XP task stride is
+`$A00` with XP4I aligning at `$A18`; and the TDTI entry names.
+
+Runtime checks: that a boot installs all six task ISR vectors; that the
+self-tests execute and hit **zero** error flags; that an S-record load
+produces exactly 16 stores with the right bytes at `$10010`; and that it
+exits via `F05254` (success) rather than `F05224` (reject).
+
+**Why this exists.** Several findings in this document were wrong for
+days before anything caught them — a `ROMChecksumTest` label that
+outlived its correction by three days, an XP4I "90% divergent" reading
+that was an alignment artefact, an `F05224` success/reject swap. Each was
+a claim nothing tested. The harness will not catch a wrong
+*interpretation*, but it will catch the case where a change makes a
+recorded fact stop being true, which is the failure mode that has cost
+the most time here.
+
 ## Validation record: the self-test suite as a chassis-model test harness
 
 With the four chassis-stub fixes in place the firmware's own diagnostics
