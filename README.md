@@ -46,7 +46,7 @@ Motorola **M68KVM02-3** VERSAmodule monoboard (MC68000 @ 8 MHz).
   fig 2 + APSIM64 appendix A) + Curington 1986. The bit-level FPS-
   164 layout is now pinned; XP-32 is a structured widening of it.
 - **`notes/xp32_microcode_format_inferred.md`** — older companion analysis
-  focused on the AMD Am29116 sequencer side. Some claims here predate
+  focused on the AMD Am29116 EU-controller side. Some claims here predate
   the Hockney fig 2.53 confirmation that the EU has a fixed PROM
   (not SRAM); the EU portion is pinned mask-PROM, the AU is the
   writable target.

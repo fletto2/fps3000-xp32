@@ -24,7 +24,7 @@ floating-point processors for minicomputers. The lineage:
 1981  FPS-164          64-bit, designed 1979 with Schottky-TTL MSI
                        (~2000 chips, 7 boards, 760W per Charlesworth 1986)
 1983  XP-32 (FPS-5000) IEEE 754 32-bit, single-board AC, 6 MHz
-                       Am29116 EU sequencer + Weitek FP chips + Am2168 SRAMs
+                       2x Am29116 EU controller + Weitek FP chips + Am2168 SRAMs
 1985  FPS-164/MAX      matrix accelerator boards: Weitek WTL 1264/1265
                        + ADI ADSP-3210/3220, ADSP-1401 program sequencer
 1986  FPS-264          ECL FPS-164, 38 Mflop/s
@@ -58,7 +58,7 @@ engineering P/N, where read):
 | Slot | Card | P/N | Note |
 |---:|---|---|---|
 | 11 | AP I/F | `612-4448-401-F` | host-bus variant unidentified |
-| 10/8 | XP-32 EXEC | `612-4805-002` | Am29116 + EU PROM |
+| 10/8 | XP-32 EXEC | `612-4805-002` | **2x** Am29116 EU controller + EU PROM |
 | 9/7 | XP-32 ARITH | `612-4806-002` | FP pipes |
 | 4 | MEMORY | `612-4456-461` | per cardcage-photo label |
 | 5 | MEMORY | `612-4498-401-A` | per index-plate |
@@ -128,7 +128,7 @@ on separate VersaBUS cards that talk over the chassis backplane.
                                               │
   ┌────────────┐  ┌────────────┐  ┌─────────────────────────────────┐
   │    TCM     │  │    LMD     │  │  Executive Unit (EU) — EXEC card│
-  │ 4K × 32    │  │ 16K × 32   │  │   AMD Am29116DCB sequencer      │
+  │ 4K × 32    │  │ 16K × 32   │  │   2x AMD Am29116DCB (EU ctrl)   │
   │ RAM        │  │ RAM        │  │   (16-bit bipolar µP)           │
   │ 2 banks    │  │ 2 banks    │  │   + Am2168 SRAM array (program) │
   │ (table     │  │ (local main│  │   + PALs (decode logic)         │

@@ -23,9 +23,17 @@ Confirmed by tracing every store to the `0xFF0000+` range:
 | `0xFF0218` | **Status / IRQ register** | bit 15 = ready/done; arm by writing `0x400` | (per ROM init) |
 | `0xFF021A` | **IRQ Mask register** | written `0xFFF` at init; bits cleared on per-error path via lookup table at `F05C4C` | `F0570E`, `F05722` |
 
-Per-channel data registers (4 channels = TCBXP1I..TCBXP4I) are at
-`0xFF0048/4E`, `0xFF0068/6E`, `0xFF0088/8E`, `0xFF00A8/AE`, with
-config at `0xFF0244/46/50/52`.
+Per-channel registers (4 channels = TCBXP1I..TCBXP4I) sit on a `$20`
+stride at `0xFF0040 + $20*N`: write port `+$04`, read A `+$08` (this
+read consumes a host byte), status `+$0A`, read B `+$0E`.
+
+**Correction (2026-07-29):** `0xFF0244/46/50/52` are not channel config.
+They are **BIM interrupt control registers** in the block at
+`0xFF0230-0xFF025F`, which holds three MC68153-style Bus Interface
+Modules. A fifth, `0xFF0254`, belongs to TCBIO1I. The `$5F` written to
+them encodes IRQ level 7 with the enable bit set, and each has a vector
+register eight bytes above it supplying the interrupt vector during
+IACK. See `../refs_extracted/versabus_access_map.md`.
 
 ## Bus-side command opcodes
 

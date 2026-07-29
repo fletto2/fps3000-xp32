@@ -37,7 +37,10 @@ high-confidence hypothesis pending bench probe — not yet verified.
 |---|---|---|
 | `0x00` | command/status | 16-bit; opcodes `0x8004` (REQUEST-XFER), `0x8005` (CONTINUE) |
 | `0x0E` | per-channel cmd-arg | echo of `d0` |
-| `0x48`/`4E`, `68`/`6E`, `88`/`8E`, `A8`/`AE` | per-channel data ports A/B (XP1..XP4) | |
+| `0x44`, `64`, `84`, `A4` | per-channel **write** port (XP1..XP4) | |
+| `0x48`, `68`, `88`, `A8` | per-channel **read A**; this read consumes a host byte | |
+| `0x4A`, `6A`, `8A`, `AA` | per-channel **status**; host presents `$4F` | |
+| `0x4E`, `6E`, `8E`, `AE` | per-channel **read B** | |
 
 ### XLTR register block at `0xFF02xx` (SBC-private)
 
@@ -52,7 +55,9 @@ high-confidence hypothesis pending bench probe — not yet verified.
 | `0x216` | Data Hi / Cmd | single-bit cmds `0x10`/`0x20`/`0x40`/`0x80` |
 | `0x218` | Status / IRQ | bit 15 = ready/done; arm by writing `0x400` |
 | `0x21A` | IRQ Mask | written `0xFFF` |
-| `0x244`, `0x246`, `0x250`, `0x252` | per-channel config (CH1..CH4) | |
+| `0x230`-`0x25F` | **three MC68153-style BIMs**, 4 channels each: CR0-3 at +$0/+2/+4/+6, VR0-3 at +$8/+A/+C/+E | |
+| `0x244`, `0x246`, `0x250`, `0x252`, **`0x254`** | BIM *control* registers, one per task (XP1-4 and TCBIO1I). `$5F` = IRQ level 7 + enable | |
+| `0x24C`, `0x24E`, `0x258`, `0x25A`, `0x25C` | matching BIM *vector* registers, 8 bytes above each control register | |
 
 ## Layer 3 — XLTR ↔ XP-32 EU (panel commands)
 

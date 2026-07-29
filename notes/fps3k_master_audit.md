@@ -588,6 +588,7 @@ The GLM audit is **insufficiently rigorous**. It accepts claims at face value wi
 **Evidence**:
 - `cliffsnotes/03-firmware.md` lists `F046E0` as `ChannelConfigOffsetTable` with "4 longwords (XLTR config offsets)"
 - `xltr_protocol.md` lists per-channel config registers at `0xFF0244`, `0xFF0246`, `0xFF0250`, `0xFF0252`
+  **[superseded 2026-07-29: these are BIM interrupt control registers, and there is a fifth at `0xFF0254`. See `../refs_extracted/versabus_access_map.md`.]**
 - The mapping 4 channels → 4 config registers is architecturally plausible
 
 **Counter-evidence**:

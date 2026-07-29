@@ -114,7 +114,9 @@ Specifically:
    8 transfers, not 1).
 4. Once all banks needed by the user microcode are loaded, the host
    issues XPRUN, which sets the Am29116's PC to a configured entry
-   point (probably stored in one of the per-channel config registers
+   point (previously guessed to be one of the "per-channel config
+   registers"; those are now identified as BIM interrupt control
+   registers, so this hypothesis needs a new home
    `FF0244/46/50/52`) and clears the busy flag, letting the EU + AU
    run.
 

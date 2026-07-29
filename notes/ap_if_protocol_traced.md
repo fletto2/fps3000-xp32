@@ -229,14 +229,26 @@ HardwareInit + boot:
 | 0xFF0250 | CH3 | 0x5F |
 | 0xFF0252 | CH4 | 0x5F |
 
-The constant `0x5F` (= `01011111`) is written to each channel's
-CONFIG register during init. Bits 0-4 set, bit 6 set. Probably
-configures the channel's mode (e.g., enable + interrupt + bus-arbitration
-preset).
+**Correction (2026-07-29): these are not channel config registers.**
+`0xFF0230-0xFF025F` holds three MC68153-style Bus Interface Modules, four
+interrupt channels each, with CR0-3 at +$0/+2/+4/+6 and VR0-3 at
++$8/+A/+C/+E. `0x244`, `0x246`, `0x250` and `0x252` are BIM *control*
+registers, and there is a fifth at `0x254` owned by TCBIO1I.
 
-ChannelConfigOffsetTable at F046E0 stores these offsets:
-`0x244, 0x246, 0x250, 0x252`. Note the gap between `0x246` and `0x250`
-(8 bytes skipped) — possibly reserved for two more channels.
+`0x5F` (`01011111`) decodes against the MC68153 datasheet as bits 0-2 =
+IRQ request level **7**, bit 4 = IRE (interrupt enable). Bit 5 is IRAC
+(auto-clear), clear here, so a channel stays armed after acknowledgement.
+Bit 7 is the Flag, also clear.
+
+The guess above was close on shape and wrong on function: it is an
+enable-plus-interrupt setting, but it programs an interrupt controller
+rather than a channel mode.
+
+ChannelConfigOffsetTable at F046E0 stores `0x244, 0x246, 0x250, 0x252`.
+**The 8-byte gap between `0x246` and `0x250` is now explained**: it holds
+BIM1's four vector registers (`0x248`, `0x24A`, `0x24C`, `0x24E`), not
+reserved space for two more channels. `0x24C` and `0x24E` are in active
+use, carrying vectors `$45` and `$46` for TCBXP1I and TCBXP2I.
 
 ## IRQ mask register (`0xFF021A`)
 

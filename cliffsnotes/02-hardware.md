@@ -38,7 +38,9 @@ Per Nakazoto's photo (`refs/FPS-3000/cards/05_XP32_EXEC.JPG`), board
 
 - **AMD Am29116DCB** — 16-bit bipolar microprocessor (the EU
   instruction processor; not a microprogram sequencer in the bit-slice
-  sense)
+  sense). **There are TWO on the one card** (owner, 2026-07-29). How the
+  pair split the 80-bit microword is open, and it decides whether an EU
+  PROM dump holds one instruction stream or two
 - **Am2168-45PCB / CY7C168 SRAMs** in an array — likely the AU writable
   control store (4K × 128-bit, host-uploaded)
 - **Bipolar PROMs** — these are the **EU PROM** per Hockney's
