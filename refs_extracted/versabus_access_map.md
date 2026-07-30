@@ -13140,3 +13140,52 @@ setting it derails the boot. The model therefore defaults to **two** BIMs — th
 that demonstrably boots — with `FPS3K_BIMS=3` retained for whoever investigates the storm.
 
 This is an **open modelling defect**, not a settled question: the real card carries three.
+
+## The $F70030 routine, decoded (2026-07-30)
+
+The kernel's single absolute device access sits in a handler at **`$F00A1C`**, which the 80.3%
+kernel listing still leaves undecoded — nothing reaches it statically, so it has to be decoded
+by hand:
+
+```
+F00A1C  tst.l    $c78.w           ; re-entrancy guard / saved-SP slot
+F00A20  bne.b    $f00a32          ; already nested -> skip the context save
+F00A22  ori.w    #$7000,sr        ; mask to level 7
+F00A26  movem.l  d0-d7/a0-a6,-(a7)
+F00A2A  move.l   a7,$c78.w        ; stash SP
+F00A2E  move.w   $3c(a7),sr
+F00A32  movea.l  $c78.w,a7
+F00A36  ori.w    #$700,sr
+F00A3A  move.b   $f70030.l,d0
+F00A40  ori.b    #$20,d0          ; set bit 5
+F00A44  move.b   d0,$f70030.l
+F00A4E  movem.l  (a7)+,d0-d7/a0-a7 ; restores a7 too -- full context
+F00A52  clr.l    $c78.w
+F00A56  rte
+```
+
+It is an exception handler with a nesting guard, full register save/restore including `a7`,
+and interrupts masked around the register touch. **No branch, call or pointer anywhere in the
+64 KB reaches it**, so it is installed at runtime through the vector table or not at all.
+
+**Dormancy confirmed by measurement, not inference:** after a full boot `$C78` reads `$00000000`.
+That slot is written on entry and cleared on exit, so a zero means the handler never ran —
+independent of the PC-trace argument used before.
+
+### A false-negative that did not materialise
+
+A scan of the decoded kernel for memory operands outside ROM and SBC RAM returns **zero**
+device addresses. That is exactly the shape of result this project has learned to distrust,
+because the firmware addresses devices through base registers and an absolute scan cannot see
+that form. Two nearby sites do access through pointers — `movea.l $c3a.w,a1` then writes to
+`$4(a1)`, and `movea.l $e48.w,a0` then `andi.w #$ffdf,(a0)`.
+
+Checked rather than assumed: after a boot, **`$C3A` = `$00000800` and `$E48` = `$00000000`**.
+`$800` is the register-save area the kernel itself writes with `movem.l d0-d7/a0-a7,$808.w`, so
+these are RAM accesses, not disguised device I/O. The "kernel touches exactly one device
+address" claim survives the stronger test.
+
+One loose end: writing `$15`, `$35`, `$2E`, `$3E` in succession to the *same* address
+(`$F009FC`-`$F00A0E`) is command-register behaviour, not RAM behaviour — four writes to RAM
+would leave only the last. It is unreachable in every configuration run so far (`$C5C` never
+reaches its `$64` threshold), so nothing is measurable here yet.
