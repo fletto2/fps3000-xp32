@@ -157,6 +157,20 @@ static uint64_t total_instr  = 0;
 static int poke_lookup(uint32_t a, uint8_t *out) {
     const char *e = getenv("FPS3K_POKE");
     if (!e) return 0;
+    /* Gate on boot completion, for exactly the reason FPS3K_DMA10AA is gated:
+     * the power-on diagnostics walk all of RAM writing a pattern and reading it
+     * back, so ANY location forced to read a constant fails a pattern test and
+     * the machine hangs in the diagnostics.  Measured: FPS3K_POKE=10A0=0002
+     * ended the boot at F098FC (the address-uniqueness test) instead of F00FCC
+     * (the RTOS idle loop), and every downstream measurement read as "the hook
+     * had no effect" when in fact the machine never booted.  This defect was
+     * fixed once for DMA10AA and left in place here.
+     * FPS3K_POKE_FROM_RESET=1 restores the old behaviour for comparison. */
+    if (!getenv("FPS3K_POKE_FROM_RESET")) {
+        uint32_t v128 = ((uint32_t)ram[0x128] << 24) | ((uint32_t)ram[0x129] << 16)
+                      | ((uint32_t)ram[0x12A] << 8)  |  (uint32_t)ram[0x12B];
+        if (v128 != 0xF05DD6) return 0;
+    }
     char buf[512];
     snprintf(buf, sizeof buf, "%s", e);
     for (char *t = strtok(buf, ","); t; t = strtok(NULL, ",")) {
@@ -865,7 +879,7 @@ int main(int argc, char **argv) {
             "FPS3K_RAMWATCH","FPS3K_VECWATCH","FPS3K_UNINIT",
             "FPS3K_CHASSIS_UNINIT","FPS3K_LOGCHASSIS","FPS3K_BUSPC",
             "FPS3K_BSTAT19_B5","FPS3K_PCLOG","FPS3K_REGLOG","FPS3K_APIF_LEGACY",
-            "FPS3K_RTOSDUMP","FPS3K_CHASSIS_CMD",
+            "FPS3K_RTOSDUMP","FPS3K_CHASSIS_CMD","FPS3K_POKE_FROM_RESET",
         };
         int any = 0;
         fprintf(stderr, "[done] hooks active:");

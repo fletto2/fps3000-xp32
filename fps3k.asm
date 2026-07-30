@@ -1886,6 +1886,12 @@ loc_F053A2:
 ;###     builds the ASQ name from $48585030 = "HXP0" + channel
   f053b6: 22 3c 48 58 50 30       move.l   #$48585030, d1
   f053bc: d2 04                   add.b    d4, d1
+;### RDHC's ASQ POST EXECUTES, but it is NOT what wakes the XP task.  The
+;###   gate above (btst #1 of $10A1+(ch-1)*2) is set only by operation $14, so
+;###   the post needs a second pass; forcing the flag makes $F05652 run.  But
+;###   measured, XP1I reaches 34.4% from ITS OWN CHANNEL INTERRUPT ALONE and the
+;###   ASQ post adds nothing.  The hand-off exists and runs; the release is the
+;###   channel BIM interrupt, as before.
   f053be: 4e b9 00 f0 56 52       jsr      loc_F05652.l
 
 loc_F053C4:
@@ -6571,6 +6577,17 @@ loc_F07E86:
   f07eb0: 4e b9 00 f0 86 c0       jsr      loc_F086C0.l
 
 loc_F07EB6:
+;### FPS3K_CHCMD=C801 SUPPRESSES COVERAGE, and it was in the config this project
+;###   recorded as the XP-driven best case (the source of "XP tasks 18-20%
+;###   each").  Measured, own IRQ alone vs + CHCMD=C801:
+;###     XP1I 34.4% -> 16.7%    XP3I 12.1% -> 12.1%
+;###     XP2I 31.4% -> 13.7%    XP4I 12.6% -> 12.6%
+;###   $C801 sets bits 15, 14 AND 11.  XP1I/2/3 test bit 11 and take the short
+;###   $8000/$1B branch when it is set; XP4I never tests it, so is unaffected --
+;###   exactly the asymmetry measured.  The bit added to unblock the channel
+;###   transaction also SHORT-CIRCUITS the code it was meant to expose.
+;###   Driving all four channels at once is worse still (7-12% each): the tasks
+;###   contend, so a config meant to exercise all of them exercises each less.
 ;###   bit 11, the last gate.
   f07eb6: 08 39 00 0b 00 00 10 66  btst.b   #$b, $1066.l  [g_ch_block]
   f07ebe: 67 14                   beq.b    loc_F07ED4

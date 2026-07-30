@@ -80,6 +80,24 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- driving the XP tasks: CHCMD suppresses coverage ----
+ (0xF053BE,'RDHC\'s ASQ POST EXECUTES, but it is NOT what wakes the XP task.  The'),
+ (0xF053BE,'  gate above (btst #1 of $10A1+(ch-1)*2) is set only by operation $14, so'),
+ (0xF053BE,'  the post needs a second pass; forcing the flag makes $F05652 run.  But'),
+ (0xF053BE,'  measured, XP1I reaches 34.4% from ITS OWN CHANNEL INTERRUPT ALONE and the'),
+ (0xF053BE,'  ASQ post adds nothing.  The hand-off exists and runs; the release is the'),
+ (0xF053BE,'  channel BIM interrupt, as before.'),
+ (0xF07EB6,'FPS3K_CHCMD=C801 SUPPRESSES COVERAGE, and it was in the config this project'),
+ (0xF07EB6,'  recorded as the XP-driven best case (the source of "XP tasks 18-20%'),
+ (0xF07EB6,'  each").  Measured, own IRQ alone vs + CHCMD=C801:'),
+ (0xF07EB6,'    XP1I 34.4% -> 16.7%    XP3I 12.1% -> 12.1%'),
+ (0xF07EB6,'    XP2I 31.4% -> 13.7%    XP4I 12.6% -> 12.6%'),
+ (0xF07EB6,'  $C801 sets bits 15, 14 AND 11.  XP1I/2/3 test bit 11 and take the short'),
+ (0xF07EB6,'  $8000/$1B branch when it is set; XP4I never tests it, so is unaffected --'),
+ (0xF07EB6,'  exactly the asymmetry measured.  The bit added to unblock the channel'),
+ (0xF07EB6,'  transaction also SHORT-CIRCUITS the code it was meant to expose.'),
+ (0xF07EB6,'  Driving all four channels at once is worse still (7-12% each): the tasks'),
+ (0xF07EB6,'  contend, so a config meant to exercise all of them exercises each less.'),
  # ---- executing all 42 operation codes ----
  (0xF05BA8,'THE STATIC CENSUS IS CONFIRMED BY EXECUTION, 13 FOR 13.  Sweeping cmd 1\'s'),
  (0xF05BA8,'  operation code over $00-$29, one emulator run each: every one of the 13'),

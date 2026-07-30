@@ -1473,6 +1473,92 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### `FPS3K_CHCMD=C801` was *suppressing* XP coverage, and `FPS3K_POKE` never booted
+
+Two hook defects found while trying to drive the XP tasks, both of the shape this
+document keeps cataloguing.
+
+#### `FPS3K_POKE` had the ungated-injection bug that `FPS3K_DMA10AA` was fixed for
+
+`FPS3K_POKE=10A0=0002` ended the boot at **`F098FC`** — the address-uniqueness RAM
+test — instead of `F00FCC`, the RTOS idle loop. The power-on diagnostics walk all of
+RAM writing a pattern and reading it back, so **any** location forced to read a
+constant fails a pattern test. Every downstream measurement read as "the hook had no
+effect" when the machine had never booted.
+
+This is precisely the defect fixed for `FPS3K_DMA10AA` and left in place for
+`FPS3K_POKE`. It is now gated on the same boot-complete signal (vector `$128` =
+`F05DD6`), with `FPS3K_POKE_FROM_RESET=1` to reproduce the old behaviour. *A fix
+applied to one injection hook should have been applied to every one of them; there
+was no reason `$10AA` would be special.*
+
+With the gate, `final PC=F00FCC` and **`$F05652` executes — RDHC's ASQ post to
+`HXP1` runs for the first time.**
+
+#### But the ASQ post does not wake the XP task; the channel interrupt does
+
+| configuration | XP1I | RDHC |
+|---|---|---|
+| `XPIRQ=1` alone | **34.4%** | 0.9% |
+| `XPIRQ=1` + `CHCMD=C801` | 16.7% | 3.3% |
+| `XPIRQ=6,1` alone | 10.3% | 3.3% |
+| `XPIRQ=6,1` + `RESP=$94` | 34.4% | 4.9% |
+| + command 1 operation `$14` | 34.4% | 19.8% |
+| + the ASQ post | 34.4% | 18.5% |
+
+XP1I reaches 34.4% from **its own channel interrupt alone**. Adding RDHC's ASQ post
+changes nothing. So the hand-off exists in the firmware and now executes, but it is
+not what releases the XP task — that is the channel BIM interrupt, as before.
+
+Note also that `XPIRQ=6,1` *without* a valid response code gives only 10.3%: raising
+BIM0 ch0 with no code deadlocks the responder and starves the XP task. The level-6
+deadlock does not just block RDHC, it steals time from everything.
+
+#### `FPS3K_CHCMD=C801` halves XP1I and XP2I, and it is in the documented config
+
+| task | own IRQ alone | + `CHCMD=C801` | all four IRQs | all four + `CHCMD` |
+|---|---|---|---|---|
+| XP1I | **34.4%** | 16.7% | 10.3% | 10.3% |
+| XP2I | **31.4%** | 13.7% | 7.3% | 7.3% |
+| XP3I | 12.1% | 12.1% | 7.0% | 7.0% |
+| XP4I | 12.6% | 12.6% | 12.6% | 12.6% |
+
+**`FPS3K_CHCMD=C801` cuts XP1I and XP2I coverage roughly in half**, and it is part of
+the configuration this project recorded as the XP-driven best case — the one that
+produced the "XP tasks 18-20% each" figure. Driving one channel with no `CHCMD` at
+all is strictly better for every task.
+
+The mechanism is a fact already in this document: `$C801` sets bits 15, 14 **and
+11**, and *"XP1I/2/3 test command bits 15, 14, 11; XP4I only 15, 14."* With bit 11
+set, XP1I and XP2I take the short `$8000`/`$1B` branch and finish; with it clear they
+run the longer path. XP4I never tests bit 11, so it is unaffected — exactly the
+asymmetry measured. *The bit that was added to unblock the channel transaction also
+short-circuits the code it was meant to expose.*
+
+**Driving all four channels together is worse than driving one**, dropping every task
+to 7-12%. The four tasks contend, and a configuration meant to exercise all of them
+exercises each less.
+
+XP3I is the outlier: 12.1% regardless of `CHCMD`, despite testing bit 11 like its
+siblings. Unexplained.
+
+#### Coverage now
+
+| region | bytes | earlier | now |
+|---|---|---|---|
+| RDHC | 5888 | 1% | **34%** |
+| IO1I | 586 | 16% | 33% |
+| XP1I | 2564 | 9% | **38%** |
+| XP2I | 2560 | 6% | **31%** |
+| XP3I | 2560 | 5% | 12% |
+| XP4I | 2560 | 6% | 13% |
+| self-test | 5298 | 85% | 85% |
+| RTOS init | 2560 | 70% | 70% |
+| pre-task | 376 | 0% | **0%** |
+| **executable total** | **24952** | 25% | **44%** |
+
+**44% of executable code**, union over 16 configurations.
+
 ### Coverage after the RDHC work: 38% of executable code
 
 Union over 11 configurations (default, scripted operations, XP-driven, IO1I-driven,

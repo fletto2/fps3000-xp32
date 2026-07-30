@@ -92,23 +92,39 @@ if not os.path.exists(EMU):
 else:
     print('\nemulator runtime')
     tmp = tempfile.mkdtemp()
+    # Memoised: the suite reached 61 emulator invocations at ~10-15 s each and
+    # blew past its 10-minute budget, while many configurations (notably the
+    # bare default) are launched by a dozen different checks.  Keying on the
+    # env delta plus cycle count is safe because the emulator is deterministic
+    # -- three golden-master digests in this file assert exactly that.
+    _run_cache = {}
+
     def run(env, cycles, extra=None):
+        key = (tuple(sorted(env.items())), cycles, tuple(extra or ()))
+        if key in _run_cache:
+            return _run_cache[key]
         e = dict(os.environ); e.update(env)
         cmd = [EMU, '-rom', ROM, '-cycles', str(cycles),
                '-trace', f'{tmp}/t', '-dump-ram', f'{tmp}/r']
         if extra: cmd += extra
         subprocess.run(cmd, env=e, capture_output=True, timeout=400)
-        return open(f'{tmp}/t').read(), open(f'{tmp}/r', 'rb').read()
+        out = (open(f'{tmp}/t').read(), open(f'{tmp}/r', 'rb').read())
+        _run_cache[key] = out
+        return out
 
     def run_err(env, cycles):
         """Same, but returns the emulator's STDERR -- where the diagnostic
         channels (RTOSDUMP, RAMWATCH, the exit summary) all write.  run()
         returns the PC trace, and using it for a stderr assertion makes the
         check vacuous, which is how the first RTOSDUMP checks failed."""
+        key = ('err', tuple(sorted(env.items())), cycles)
+        if key in _run_cache:
+            return _run_cache[key]
         e = dict(os.environ); e.update(env)
         r = subprocess.run([EMU, '-rom', ROM, '-cycles', str(cycles)],
                            env=e, capture_output=True, timeout=400)
-        return r.stderr.decode('utf-8', 'replace')
+        _run_cache[key] = r.stderr.decode('utf-8', 'replace')
+        return _run_cache[key]
     tr, ram = run({}, 400_000_000)
     check('boot: all 6 task ISR vectors installed',
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
@@ -450,6 +466,56 @@ else:
     check('the acknowledge roughly doubles XP1I coverage (116 -> 240)',
           len({l for l in trk.split() if 'F07D00' <= l <= 'F086FF'}) > 200 and
           len({l for l in trn2.split() if 'F07D00' <= l <= 'F086FF'}) < 130)
+
+    # Decoded-instruction starts and lengths, parsed once from the asm, so a
+    # coverage assertion measures executed DECODED BYTES rather than raw PCs.
+    import re as _re
+    ASM_STARTS = {}
+    for _l in open('fps3k.asm'):
+        _m = _re.match(r'^  ([0-9a-f]{6}): ((?:[0-9a-f]{2} )+)', _l)
+        if _m:
+            ASM_STARTS[int(_m.group(1), 16)] = len(_m.group(2).split())
+
+    # --- hook defects: POKE ungated, CHCMD suppressing coverage -------------
+    check('FPS3K_POKE is gated on boot completion (the DMA10AA defect, repeated)',
+          'FPS3K_POKE_FROM_RESET' in open('emulator/fps3k_sbc.c').read())
+    ep = run_err({'FPS3K_POKE': '10A0=0002', 'FPS3K_POKE_FROM_RESET': '1'},
+                 400_000_000)
+    check('...ungated it ends the boot in the RAM test, not the RTOS idle loop',
+          'final PC=F098FC' in ep)
+    # Assert the SEMANTIC property, not a literal final PC: the exact idle
+    # address varies with the rest of the configuration (F00FCC with the RDHC
+    # hooks, F00510 with the poke alone), and pinning one of them made this
+    # check fail for a reason unrelated to what it is testing.
+    _, rg = run({'FPS3K_POKE': '10A0=0002'}, 400_000_000)
+    check('...gated it completes boot: all six task ISR vectors installed',
+          all(struct.unpack('>I', rg[v:v+4])[0] == hh for v, hh in
+              [(0x104, 0xF04930), (0x114, 0xF07EE6), (0x118, 0xF074E6),
+               (0x11C, 0xF06AE6), (0x120, 0xF060CE), (0x128, 0xF05DD6)]))
+    tpost = run({'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6',
+                 'FPS3K_POKE': '10A0=0002',
+                 'FPS3K_CHASSIS_CMD': '1,14,1'}, 400_000_000)[0].split('\n')
+    check("RDHC's ASQ post to HXP1 ($F05652) executes once the gate is fixed",
+          tpost.count('F05652') >= 1 and tpost.count('F053BE') >= 1)
+
+    def region_pct(env, lo, hi):
+        ex = set()
+        for ln in run(env, 400_000_000)[0].split('\n'):
+            try:
+                ex.add(int(ln, 16))
+            except ValueError:
+                pass
+        dd = {a2: n for a2, n in ASM_STARTS.items() if lo <= a2 < hi}
+        return 100.0 * sum(dd[a2] for a2 in dd if a2 in ex) / max(1, sum(dd.values()))
+    xp1 = (0xF07D4A, 0xF0874A)
+    bare = region_pct({'FPS3K_XPIRQ': '1'}, *xp1)
+    with_c = region_pct({'FPS3K_XPIRQ': '1', 'FPS3K_CHCMD': 'C801'}, *xp1)
+    check('FPS3K_CHCMD=C801 SUPPRESSES XP1I coverage (bit 11 short-circuits it)',
+          bare > 30 and with_c < bare * 0.65)
+    xp4 = (0xF05F4A, 0xF0694A)
+    check('...but not XP4I, which never tests bit 11',
+          abs(region_pct({'FPS3K_XPIRQ': '4'}, *xp4)
+              - region_pct({'FPS3K_XPIRQ': '4', 'FPS3K_CHCMD': 'C801'}, *xp4)) < 1.0)
 
     # --- executing all 42 operation codes confirms the census ---------------
     # Every slot the jump table decodes as a bare rts must fire NO primitive and
