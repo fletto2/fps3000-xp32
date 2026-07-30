@@ -13249,3 +13249,38 @@ behind" reading, which is where this started, is also withdrawn.
 `105.4%` anomaly dissolves. What remains genuinely unknown is how much of the ~24 KB classified
 as data is truly data — and no artifact in this lineage can answer that, because they all
 inherit the same decisions.
+
+## Whole-ROM accounting: 88.4% of the content is decoded, not 54% (2026-07-30)
+
+Every coverage figure this project has quoted divides by a denominator that is **46.9% blank
+ROM**. Verified directly from the image, not from any disassembly artifact:
+`$F0A825`-`$F0FFFD` is **22,489 bytes with not one nonzero byte** — the free space the monitor
+is patched into.
+
+| range | bytes | decoded | |
+|---|---:|---:|---|
+| RMS68K kernel `$F00000`-`$F04487` | 17,544 | 14,084 | **80.3%** |
+| application `$F04488`-`$F0A824` | 25,501 | 23,962 | **94.0%** |
+| blank tail `$F0A825`-`$F0FFFD` | 22,489 | — | all zero |
+| ROM checksum word `$F0FFFE` | 2 | — | |
+
+**ROM content = 43,047 bytes, of which 38,046 are decoded = 88.4%.**
+
+Against the full 65,536 the same work reads as 58.1%, and that is the number this project has
+been quoting — most visibly "54% of INSTRUCTION bytes" and "the application region is 49.6%
+decoded". Those figures are arithmetically correct and substantively misleading: they count
+22 KB of deliberately empty ROM as un-understood firmware.
+
+Two consequences worth stating plainly:
+
+- **The application region is ~94% decoded, not ~50%.** Its remaining data is 690 bytes of
+  ASCII and 637 bytes of other non-zero content — roughly 1.3 KB, not 24 KB. The "half the
+  application is unknown" framing was an artifact of the denominator throughout.
+- **The kernel is now the least-covered region**, at 80.3%, having been at 0% this morning.
+  That inverts the standing assumption that the kernel was the well-understood stock part and
+  the FPS application was the frontier.
+
+Independent classification of the bytes `fps3k.asm` renders as `DC.W`, done without the
+disassembler: **94.7% zero, 2.8% printable ASCII, 2.5% other**. So the "data" in this image is
+overwhelmingly emptiness, and the genuinely unexplained non-code content across the whole
+application region is on the order of one kilobyte.
