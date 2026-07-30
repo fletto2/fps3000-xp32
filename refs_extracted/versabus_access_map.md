@@ -1563,6 +1563,53 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### VERIFIED: the firmware never touches the SIO — checked three ways, including the near-miss
+
+"The FPS firmware never initialises or accesses the µPD7201" is load-bearing: the monitor
+co-opts that chip, and the whole serial-host plan rests on it being free. After a session in
+which several "never accessed" claims collapsed, it deserved re-checking rather than
+inheriting.
+
+**Three independent checks, all negative:**
+
+| check | result |
+|---|---|
+| `tools/refs.py` on all eight SIO registers (`$F70010`-`$F70017`) | **0 references** |
+| absolute-long operands into that range, whole ROM incl. kernel | **0** |
+| **displacements off a base holding the PTM address** | **0 reach it** |
+
+The third is the one that mattered, and it was a genuine near-miss. **The PTM base is
+`$F70001`, so `$10(a0)` would land on `$F70011` — the SIO channel-A data register.** A single
+displacement past the PTM's own registers crosses into the serial chip. Tracking which
+displacements are actually used while a base holds the PTM address:
+
+```
++$02 -> $F70003     +$04 -> $F70005     +$08 -> $F70009     +$0C -> $F7000D
+```
+
+**The highest address reached from the PTM base is `$F7000D`** — the T3 MSB register, the last
+register of the PTM. The firmware stops exactly at the device boundary and never steps past it.
+That is a much stronger statement than "no absolute references exist", because it rules out the
+one form that could plausibly have hidden an access.
+
+*Worth being clear about what the SIO is and is not here.* The board has **two** host paths and
+they are not alternatives to each other:
+
+| path | used by |
+|---|---|
+| **AP I/F** `$FF0000` + the XLTR/chassis protocol | **the firmware** — S-records, `EXPUT`/`EXGET`, the whole documented host link |
+| **µPD7201 SIO** `$F70011`-`$F70017` | **nothing in this ROM** — which is exactly why the monitor can have it |
+
+So the firmware's host communication is entirely through the AP I/F; the serial port is
+physically present, wired to P2 pins 73/75, and completely unused by the shipped firmware. Both
+facts now rest on measurement rather than on an earlier reading.
+
+*(Separately, the `FPS3K_CHSEL_RD`/`FPS3K_SEQ` conflict warning is also slightly overstated but
+substantially right: with both set, CHANNEL_SELECT reads returned the scripted value 723,796
+times and the `CHSEL_RD` value **4** times — before the sequence takes its first code. Unlike
+the `FPS3K_RESP` case, `seq_cur` is never reset, so once the sequence starts `CHSEL_RD` is
+permanently unreachable.)*
+
 ### A warning that overstated its case: `FPS3K_RESP` is NOT ignored when `FPS3K_SEQ` is set
 
 Running the write-once experiment surfaced this warning:

@@ -583,6 +583,17 @@ else:
     check('...and inside the $200 allocation stride, so they are FPS extension',
           all(0xFC <= o < 0x200 for o in (0x100, 0x102, 0x138, 0x160)))
 
+    # --- the firmware never reaches the SIO, including via the PTM base -------
+    check('no absolute-long operand anywhere targets $F70010-$F70017',
+          not [a2 for a2 in range(0xF00002, 0xF0FFFC, 2)
+               if 0xF70010 <= long_(a2) <= 0xF70017
+               and ((word(a2 - 2) & 0x3F) == 0x39
+                    or (word(a2 - 2) & 0xF1FF) == 0x41F9)])
+    check('the PTM base is $F70001, so +$10 would reach the SIO data register',
+          0xF70001 + 0x10 == 0xF70011)
+    check('...but the largest PTM-base displacement used is +$0C -> $F7000D',
+          0xF70001 + 0x0C == 0xF7000D)
+
     # --- FPS3K_POKEONCE writes once and leaves the memory alone ---------------
     _sbc = open('emulator/fps3k_sbc.c').read()
     check('FPS3K_POKEONCE exists and performs a real one-time write',
