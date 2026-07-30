@@ -80,6 +80,28 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- POLL is BLK_XFR's mirror; D1_SEND fire-and-forget ----
+ (0xF05A12,'POLL IS MISNAMED -- it is not a status poll, it is the OUTBOUND BULK'),
+ (0xF05A12,'  MOVER, the exact mirror of BLK_XFR.  Same swap d0 mode trick, same'),
+ (0xF05A12,'  $FF0008 special case (here on the SOURCE), a1 the channel data pair,'),
+ (0xF05A12,'  a2 the other end, same one-address-vs-consecutive split.  BLK_XFR moves'),
+ (0xF05A12,'  channel -> memory; POLL moves memory -> channel.  So the four primitives'),
+ (0xF05A12,'  are TWO MOVERS, A SENDER AND A FINALIZER, and the 9 POLL and 9 BLK_XFR'),
+ (0xF05A12,'  slots are the outbound and inbound halves of one operation set.'),
+ (0xF05A2C,'THIS IS ONE OF THE SEVEN XLTR_COUNTER SITES, and it gives $20C a role:'),
+ (0xF05A2C,'  $04 is written ONLY when the source is the bulk port, so $20C is a'),
+ (0xF05A2C,'  BURST/WIDTH COUNTER armed before a bulk read -- which is why $04 is the'),
+ (0xF05A2C,'  operational value while $01/$FF are boot-diagnostic only.'),
+ (0xF05A3C,'The $218=$400 / poll bit 15 / clear handshake here is the SAME mechanism'),
+ (0xF05A3C,'  as the polled bulk loop at $F04AE2 -- one mechanism, two call sites.'),
+ (0xF058C0,'D1_SEND FIRE-AND-FORGET EXIT: when d0\'s low word is 4 it returns WITHOUT'),
+ (0xF058C0,'  waiting -- unmasking the channel IRQ bit via PanelErrorMaskTable and'),
+ (0xF058C0,'  restoring the BIM CR to $5F, so the ISR collects the completion.  This'),
+ (0xF058C0,'  is the mechanism class behind the open "$0A terminates but $01 loops"'),
+ (0xF058C0,'  question: the primitives hold d0-dependent early exits, so two slots'),
+ (0xF058C0,'  sharing a handler need not share its control flow.  Which test'),
+ (0xF058C0,'  distinguishes $0A is UNRESOLVED -- $F0572C does lsl.w #2,d0 first, so no'),
+ (0xF058C0,'  D1_SEND index satisfies index<<2 == 4.  Recorded open, not guessed.'),
  # ---- BLK_XFR, directives $29/$2A, the S2/S3 handler ----
  (0xF05B0E,'BLK_XFR, THE BULK MOVER.  swap d0 first because ONE REGISTER CARRIES BOTH'),
  (0xF05B0E,'  the dispatch index (low word) and the TRANSFER MODE (high word).'),

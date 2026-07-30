@@ -2575,6 +2575,14 @@ loc_F0588A:
   f058b6: 48 41                   swap     d1
   f058b8: 33 41 00 02             move.w   d1, $2(a1)
   f058bc: 30 bc 80 04             move.w   #$8004, (a0)
+;### D1_SEND FIRE-AND-FORGET EXIT: when d0's low word is 4 it returns WITHOUT
+;###   waiting -- unmasking the channel IRQ bit via PanelErrorMaskTable and
+;###   restoring the BIM CR to $5F, so the ISR collects the completion.  This
+;###   is the mechanism class behind the open "$0A terminates but $01 loops"
+;###   question: the primitives hold d0-dependent early exits, so two slots
+;###   sharing a handler need not share its control flow.  Which test
+;###   distinguishes $0A is UNRESOLVED -- $F0572C does lsl.w #2,d0 first, so no
+;###   D1_SEND index satisfies index<<2 == 4.  Recorded open, not guessed.
   f058c0: 0c 40 00 04             cmpi.w   #$4, d0
   f058c4: 66 1e                   bne.b    loc_F058E4
   f058c6: 30 2c 02 1a             move.w   $21a(a4)  [XLTR_IRQ_MASK], d0
@@ -2703,6 +2711,13 @@ loc_F059F0:
 loc_F05A08:
   f05a08: 49 f9 00 f0 5b f8       lea.l    loc_F05BF8.l, a4
   f05a0e: 4e f4 00 00             jmp      (a4, d0.w)
+;### POLL IS MISNAMED -- it is not a status poll, it is the OUTBOUND BULK
+;###   MOVER, the exact mirror of BLK_XFR.  Same swap d0 mode trick, same
+;###   $FF0008 special case (here on the SOURCE), a1 the channel data pair,
+;###   a2 the other end, same one-address-vs-consecutive split.  BLK_XFR moves
+;###   channel -> memory; POLL moves memory -> channel.  So the four primitives
+;###   are TWO MOVERS, A SENDER AND A FINALIZER, and the 9 POLL and 9 BLK_XFR
+;###   slots are the outbound and inbound halves of one operation set.
 ;### OPEN QUESTION THE SWEEP EXPOSES: $0A and $14 TERMINATE, the other 27 live
 ;###   codes do not.  $0A and $14 fire their primitives ONCE; every other live
 ;###   code fires 1468 times, once per re-raised interrupt, never completing.
@@ -2720,6 +2735,10 @@ loc_F05A22:
   f05a22: 38 2c 00 04             move.w   $4(a4), d4
   f05a26: 08 04 00 00             btst.b   #$0, d4
   f05a2a: 67 f6                   beq.b    loc_F05A22
+;### THIS IS ONE OF THE SEVEN XLTR_COUNTER SITES, and it gives $20C a role:
+;###   $04 is written ONLY when the source is the bulk port, so $20C is a
+;###   BURST/WIDTH COUNTER armed before a bulk read -- which is why $04 is the
+;###   operational value while $01/$FF are boot-diagnostic only.
   f05a2c: 39 7c 00 04 02 0c       move.w   #$4, $20c(a4)  [XLTR_COUNTER]
 
 loc_F05A32:
@@ -2729,6 +2748,8 @@ loc_F05A32:
 loc_F05A38:
   f05a38: bb ca                   cmpa.l   a2, a5
   f05a3a: 66 16                   bne.b    loc_F05A52
+;### The $218=$400 / poll bit 15 / clear handshake here is the SAME mechanism
+;###   as the polled bulk loop at $F04AE2 -- one mechanism, two call sites.
   f05a3c: 39 7c 04 00 02 18       move.w   #$400, $218(a4)  [XLTR_STATUS_IRQ]
 
 loc_F05A42:

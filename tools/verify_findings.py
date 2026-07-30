@@ -541,6 +541,28 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- POLL is BLK_XFR's mirror; D1_SEND has a fire-and-forget exit --------
+    check('POLL opens with the same swap d0 mode trick as BLK_XFR',
+          d[0xF05A12-0xF00000:0xF05A14-0xF00000] == b'\x48\x40')
+    check('...and the same $FF0008 special case, here on the SOURCE',
+          d[0xF05A1A-0xF00000:0xF05A20-0xF00000] == b'\x4b\xec\x00\x08\xbb\xca')
+    check('...it sets XLTR_COUNTER = $04 only for a bulk-port source',
+          d[0xF05A2C-0xF00000:0xF05A32-0xF00000] == b'\x39\x7c\x00\x04\x02\x0c')
+    check('...its inner loop arms $218 = $400 and polls bit 15',
+          d[0xF05A3C-0xF00000:0xF05A48-0xF00000]
+          == b'\x39\x7c\x04\x00\x02\x18\x38\x2c\x02\x18\x08\x04')
+    check('...and it moves SOURCE -> channel pair, the reverse of BLK_XFR',
+          d[0xF05A52-0xF00000:0xF05A5C-0xF00000]
+          == b'\x3c\x12\x32\x86\x0c\x40\x00\x00\x66\x22')
+    check('D1_SEND splits d1 into two halves across the channel data pair',
+          d[0xF058B2-0xF00000:0xF058BC-0xF00000]
+          == b'\x48\x41\x32\x81\x48\x41\x33\x41\x00\x02')
+    check('...then $8004, and takes a fire-and-forget exit when d0 low word == 4',
+          d[0xF058BC-0xF00000:0xF058C4-0xF00000]
+          == b'\x30\xbc\x80\x04\x0c\x40\x00\x04')
+    check('...that exit restores the BIM CR to $5F (re-enabling the interrupt)',
+          d[0xF058DE-0xF00000:0xF058E2-0xF00000] == b'\x36\xbc\x00\x5f')
+
     # --- directives $29/$2A are ASQ name-lookup and post --------------------
     check('$F05652 builds a 10-byte {name, longword, word} block on the stack',
           d[0xF05654-0xF00000:0xF05660-0xF00000]

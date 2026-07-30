@@ -1528,6 +1528,80 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### `POLL` is `BLK_XFR`'s mirror, and it explains the `XLTR_COUNTER = $04`
+
+With `BLK_XFR` and `D2_FIN` already decoded, the remaining two primitives complete
+the set — and `POLL` is misnamed. It is not a status poll; it is the **outbound**
+bulk mover.
+
+```
+$F05A12  swap    d0                 ; same mode-in-the-high-word trick as BLK_XFR
+$F05A14  a4 = $FF0000
+$F05A1A  lea     $8(a4),a5          ; the bulk port
+$F05A1E  cmpa.l  a2,a5              ; is the SOURCE the bulk port?
+$F05A22  poll    $FF0004 bit 0      ;   then wait for ready
+$F05A2C  move.w  #$4,$20C(a4)       ;   and set XLTR_COUNTER = $04
+$F05A32  d1 = 1
+loop:
+$F05A3C  move.w  #$400,$218(a4)     ; arm STATUS_IRQ
+$F05A42  poll bit 15, then clear $218
+$F05A52  move.w  (a2),d6            ; read from the SOURCE
+$F05A54  move.w  d6,(a1)            ; write to the CHANNEL DATA PAIR
+$F05A56  cmpi.w  #$0,d0             ; mode, exactly as in BLK_XFR
+```
+
+**`BLK_XFR` moves channel → memory; `POLL` moves memory → channel.** Identical
+shape: `swap d0` for the mode, the `a5 == $FF0008` special case (here on the
+*source*), `a1` the channel data pair, `a2` the other end, and the same
+one-address-versus-consecutive mode split. So the four primitives are really
+**two movers, one sender and one finalizer**, not four unrelated handlers — and the
+9 `POLL` slots and 9 `BLK_XFR` slots are the outbound and inbound halves of the
+same operation set.
+
+*The name in this document has been `POLL` since the dispatch table was first
+decoded, taken from the `$218` handshake it does. That handshake is real, but it is
+the transfer handshake, not the point of the routine.*
+
+**It also identifies one of the seven `XLTR_COUNTER` sites.** `$F05A2C` writes the
+operational value `$04` to `$FF020C` **only when the source is the bulk port** — so
+`$20C` is a **burst/width counter armed before a bulk read**, and the reason `$04`
+is "operational" while `$01`/`$FF` are boot-diagnostic is that 4 is the real burst
+size. That is a concrete role for a register this document has only been able to
+describe by its observed values.
+
+And the `$218 = $400` / poll bit 15 / clear sequence in the inner loop is the same
+handshake as the polled bulk loop at `$F04AE2`, so those are one mechanism used from
+two places.
+
+### `D1_SEND` has a fire-and-forget exit
+
+```
+$F058B2  swap    d1
+$F058B4  move.w  d1,(a1)            ; d1 HIGH half -> channel data high
+$F058B6  swap    d1
+$F058B8  move.w  d1,$2(a1)          ; d1 LOW half  -> channel data low
+$F058BC  move.w  #$8004,(a0)        ; REQUEST-TRANSFER
+$F058C0  cmpi.w  #$4,d0             ; low word of d0 == 4 ?
+$F058C6    read $21A, pop d4, index PanelErrorMaskTable, bclr that bit,
+$F058DA    write $21A back, restore the BIM CR to $5F, rts   <-- NO WAIT
+$F058E4  else 1000-poll timeout on bit 14, as usual
+```
+
+So `D1_SEND` pushes a 32-bit value across as two halves, and **when `d0`'s low word
+is `4` it returns without waiting** — unmasking the channel's interrupt bit through
+`PanelErrorMaskTable` and restoring the BIM control register to `$5F` on the way
+out. That is the *asynchronous* variant: fire the transfer, re-enable the interrupt,
+let the ISR collect the completion.
+
+This is the mechanism class behind the open `$0A`-terminates-but-`$01`-loops
+question from the operation sweep: **the primitives contain `d0`-dependent early
+exits**, so two slots sharing a handler need not share its control flow. Which
+exact test distinguishes `$0A` is still unresolved — `$F0572C` does `lsl.w #2,d0`
+before dispatching, so the value the handler compares is `index << 2`, and no
+`D1_SEND` index satisfies `index << 2 == 4`. Either another caller enters
+`D1_SEND` directly with `d0 = 4`, or `POLL` has its own exit further in. *Recorded
+as open rather than guessed.*
+
 ### `BLK_XFR` decoded: the bulk mover, and its mode is the swapped high word of `d0`
 
 `$F05B0E` is the block-transfer primitive — 9 of the 42 operation slots reach it —
