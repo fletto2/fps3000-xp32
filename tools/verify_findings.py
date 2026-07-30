@@ -3311,5 +3311,30 @@ with tempfile.TemporaryDirectory() as _tdt:
     check('setting $0C34 bit 15 makes the trace-ring writer run',
           _tt.count('F01688\n') > 0)
 
+# --- the XP service path, traced end to end 2026-07-30 --------------------
+check('XP1I signals only when channel status bit 14 is set',
+      insn(0xF07E86) == 'btst.b #$e, $1066.l')
+check('...and bit 11 is clear',
+      insn(0xF07E90) == 'btst.b #$b, $1066.l')
+check('the signal is directive $2B SGSEM',
+      insn(0xF07EA4) == 'moveq #$2b, d0')
+check('...with the TCB itself as the parameter block',
+      insn(0xF07EA6) == 'lea.l (a6), a0')
+check('the inner channel validator bounds against $105E',
+      insn(0xF08556) == 'cmp.w $105e.l, d0')
+check('...and rejects via panel command $264',
+      insn(0xF0855E) == 'move.w #$264, d0')
+check('the USER handoff is gated on $10AE',
+      insn(0xF08572) == 'tst.l $10ae(a2)')
+check('...and looks the task up by the literal USER',
+      insn(0xF08586) == "move.l #$55534552, -(a7)")
+check('...via directive $43 RSTATE',
+      insn(0xF0858C) == 'moveq #$43, d0')
+# The absence that matters: no status test between the trap and the store.
+check('the RSTATE result is filed with no status check',
+      insn(0xF0859A) == 'move.l d0, $10be(a2)'
+      and 'cmpi' not in (insn(0xF08596) or '')
+      and 'tst' not in (insn(0xF08596) or ''))
+
 print(f'\n{checks - len(fails)}/{checks} passed')
 sys.exit(1 if fails else 0)
