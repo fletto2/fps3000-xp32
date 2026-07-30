@@ -13996,3 +13996,38 @@ This is the SBC-side half of the panel protocol enumerated in full: 19 codes RDH
 What remains unknown about that protocol is not its vocabulary but its *grammar* — which
 sequences the chassis actually drives, which needs hardware or a conversation longer than seven
 exchanges.
+
+## The SBC-side grammar is recoverable by inference after all
+
+Last section concluded that what remained was "not vocabulary but grammar — which needs hardware
+or a longer conversation". That was half right, and the half that was wrong is recoverable
+statically.
+
+Because `$F05688` never returns, the ISR must supply a PC. What each of the 39 resolved call
+sites does *next* is therefore the continuation the firmware expects, and it is readable:
+
+| continuation | sites | meaning |
+|---|---:|---|
+| inline | **18** | the command is a step; execution carries straight on |
+| `bra $F050F8` | 8 | `ChannelConfigDispatch` — **end the ISR turn** |
+| `rts` | 4 | the issue was a subroutine's last act |
+| `jmp $F05678` | 3 | shared tail |
+| `bra $F047E6` | 3 | shared init continuation |
+| `bra $F05684` | 2 | `moveq #$f,d0 / trap #1` = directive **`$0F` TERM** — the task kills itself |
+| `bra $F0481C` | 1 | |
+
+Three things follow, none of which needed hardware:
+
+- **The rescue returns to the instruction after the `jsr`.** Eighteen sites continue inline with
+  code that plainly expects to run, so `$F04930`'s PC rewrite must effect the return that
+  `$F05688` itself never performs — it pops the caller's address rather than resuming the spin.
+- **Eight commands are terminal ISR actions.** "Issue this and end the turn" is the single most
+  common *structured* continuation, which is what a response-driven state machine looks like from
+  the SBC side.
+- **Two commands are followed by task suicide.** Init steps `$276`/`$277` fall through to TERM,
+  so a failure at the first two init steps ends RDHC rather than retrying.
+
+**What genuinely still needs hardware** is narrower than stated before: not the SBC's grammar,
+which is above, but the *chassis's* — which command sequences the chassis actually drives, and in
+what order. The SBC's half of the conversation is now fully enumerated: 19 codes out, 16
+operations in, 42 issue points, and the continuation after every one of them.
