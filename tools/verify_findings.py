@@ -570,6 +570,20 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the $25D-$260 block: rejects and drain-completions --------------------
+    check('$25F/$260 drain loops poll $FF0000 and discard from (a0)',
+          d[0xF04C28-0xF00000:0xF04C34-0xF00000]
+          == b'\x0c\x69\x00\x00\x00\x00\x6f\x04\x30\x10\x60\xf4'
+          and d[0xF05280-0xF00000:0xF0528C-0xF00000]
+          == b'\x0c\x69\x00\x00\x00\x00\x6f\x04\x30\x10\x60\xf4')
+    check('...with a1 = $FF0000 established just before',
+          d[0xF04C22-0xF00000:0xF04C28-0xF00000] == b'\x22\x7c\x00\xff\x00\x00')
+    check('$25F also guards the S-record type against $5339 = "S9"',
+          d[0xF05560-0xF00000:0xF05566-0xF00000] == b'\x0c\x41\x53\x39\x6e\x08'
+          and bytes([0x53, 0x39]) == b'S9')
+    check('$25E has NO real site: its apparent one is inside the $F05102 jmp table',
+          0xF05102 <= 0xF05142 <= 0xF05102 + 16 * 4)
+
     # --- chassis ops $C and $D; $25D is a reject ------------------------------
     check('op $C writes CHANNEL_SELECT into $101E/$1020, half by half',
           d[0xF05068-0xF00000:0xF05076-0xF00000]

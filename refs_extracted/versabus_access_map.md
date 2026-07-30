@@ -1563,6 +1563,49 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The `$25D`-`$260` block settled: rejects and drain-completions, and `$FF0000` is a count
+
+Following through on the previous entry rather than leaving the block half-corrected, every
+site decodes:
+
+| code | real sites | what each one is |
+|---|---|---|
+| `$25D` | 2 | **range rejects** — `CHANNEL_SELECT` outside `0..$F` |
+| **`$25E`** | **0** | *my earlier count of 1 was a false positive* — the bytes sit inside the 16-entry `jmp` table at `$F05102`-`$F05142`, which is **data** |
+| `$25F` | 2 | one **drain-completion**, one **S-record type reject** (`$5339` = `'S9'`) |
+| `$260` | 2 | one **drain-completion**, one reject arm |
+| `$261` | 0 | unused |
+
+**So the block is a reject/completion family, and the "per-channel config" label is wrong for
+all four codes** — not just `$25D`. Two of the four codes are never emitted at all, which no
+per-channel scheme would produce.
+
+*The `$25E` miscount is worth owning:* I scanned for `303C xxxx` byte pairs and reported one
+site without checking whether the address was code. It is the fourth time this session a
+detector was run over data as if it were instructions. The jump table is 16 entries of
+`4EFA dddd` and my pattern matched its displacement bytes.
+
+**`$FF0000` is polled as a signed remaining-count.** Both drain-completion sites share a shape:
+
+```
+.loop:  cmpi.w #$0,$0(a1)      ; a1 = $FF0000
+        ble    .exit            ; leave when it goes <= 0
+        move.w (a0),d0          ; read the port and DISCARD
+        bra    .loop
+.exit:  move.w #$25f,d0         ; (or $260)
+```
+
+The loop consumes from `(a0)` **while `$FF0000` stays positive**, discarding every word, and
+emits a completion code when it reaches zero or goes negative. That gives `$FF0000` — which
+the device map records only as "read, 3-4 sites" — a concrete role: **a count the chassis
+presents, decrementing as words are taken**, with its sign as the exhausted flag.
+
+It also makes this the *second* discard-drain in the firmware, alongside `$F0517E` found
+earlier. Both read a port and never store the value; the difference is where the terminating
+count lives — `d4` in `$F0517E`, the chassis-side `$FF0000` here. **The machine has two
+draining mechanisms, one SBC-counted and one chassis-counted**, which is a distinction worth
+having when modelling a transfer that must be abandoned.
+
 ### Chassis ops `$C` and `$D` decoded — and `$25D` is a reject, not a per-channel config
 
 RDHC's second-largest gap, `$F05066-$F050D6`, is the tail of chassis op `$C` and the whole of
