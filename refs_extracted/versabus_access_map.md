@@ -15948,3 +15948,37 @@ residual.
 
 The `!VCT` base is confirmed: slot `$0C66` reads `$0001FA00` at runtime, so the indexing above is
 sound.
+
+### What `!VCT` actually encodes
+
+Measured across all 246 vectors above 9:
+
+| tag | meaning | count |
+|---|---|---:|
+| `$00` | the vector is on a **default** handler — either `$F00896` (log-and-return) or `$F0A27A` (panic catch-all) | 216 |
+| `$FF` | the vector has a **distinct** handler of its own | 23 |
+| `1`-`6` | **owned** by that task, written later by directive `$4C` | 6 |
+| `$BF` | vector `$2D` (TRAP #13) only | 1 |
+
+The fill loop at `$F09F1C` writes `$FF` where a vector differs from the value in `a4` and leaves
+`$00` where it matches:
+
+```
+F09F1C  lea.l  $28.w,a2        ; from vector 10
+F09F22  cmpa.l (a2)+,a4
+F09F24  beq.b  skip            ; matches -> leave $00
+F09F26  move.b d2,(a0)         ; differs -> $FF
+F09F2C  cmpa.l #$400,a2        ; to vector 255
+```
+
+**I guessed `a4` twice and was wrong twice** — first the catch-all, then the log-and-return stub.
+The data shows vectors on *either* default handler carry `$00`, so a single comparison against one
+address cannot produce the observed table. Either the loop runs more than once, or `a4` is
+reloaded; I decoded one pass and should not have inferred the whole mechanism from it.
+
+What the **table** encodes is nevertheless settled by the data itself, independent of how it is
+built: **default handler → `$00`, own handler → `$FF`, owned by a task → 1-6.**
+
+That leaves `$BF` at vector `$2D` as the single exception in 246 entries — TRAP #13, handler
+`$F00A8E`, a rung of the `bsr` fan-in ladder. Precisely isolated, still unexplained, and now known
+not to come from a `bclr` (none targets this table) nor from the one fill pass decoded here.
