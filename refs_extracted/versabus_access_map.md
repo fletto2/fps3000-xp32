@@ -1563,6 +1563,54 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The direction bit measured in both states — and `$06` is destructive
+
+Testing whether the chassis can read SBC memory produced the direction bit's meaning by
+measurement rather than inference, and a trap worth recording.
+
+**Attempt 1 — `FPS3K_SEQ="01:105E,06:0000"`.** Op `$1` set the address (`$0E58` reads back
+`$0000105E`), then op `$6` ran. The prediction was a reply of `2`, since `$105E` is the
+channel-present count and three XP tasks read it as `2` in the same log. Instead:
+
+```
+W 2 00105E 00000000  from PC=F04EC0        ; op $6 WROTE ZERO
+```
+
+**Command byte `$06` has bit 5 clear, and bit 5 clear means write.** The op did exactly what it
+was told, and in doing so **zeroed the channel-present count** — which is the gate every XP
+task checks (`cmpi.w #<own channel>,$105E / blt`). One malformed chassis command silently
+disables all four XP tasks.
+
+**Attempt 2 — `26:0000`, the same op with bit 5 set:**
+
+```
+R 2 00105E 00000002  from PC=F04EB8        ; READ, and got the right value
+W 2 000E74 00000002  from PC=F04EB8        ; stored into the result word
+```
+
+**Exactly the prediction.** So the documented decode — *bit 5: 0 = write/store, 1 = read/return*
+— is now confirmed in **both** states against a location whose value was independently known.
+
+**Two things follow.**
+
+*A practical hazard.* `$06` looks like the innocuous "read SBC RAM" op and is the natural thing
+to type; it is a **destructive write of whatever `$E70` holds** to whatever `$E58` points at.
+Anyone scripting chassis operations needs `$20` set on every read, and the failure is silent —
+no error, no reject, just corrupted state that shows up much later as tasks mysteriously
+gating off. That is worth a line in any chassis-driving documentation.
+
+*The half-duplex gap again, from the other side.* The reply path `$F04924` ran **once** in this
+run and shipped `$0000` — the result of the *first* command — while op `$6`'s `2` sat in
+`$0E74` unshipped. So the model completes one reply cycle per sequence regardless of how many
+commands it delivers. Combined with the earlier finding that nothing consumes the reply anyway,
+the return direction is unmodelled at both ends: **not read by the chassis, and not re-armed
+per command.**
+
+*What is established regardless:* the SBC's side of the read path works end to end —
+address → memory → result register — and the value is correct. Only the delivery of that
+result back to a chassis model is missing, and that is a modelling gap rather than a firmware
+question.
+
 ### VALIDATED IN EXECUTION: op `$B` returns `$0010`, exactly as derived
 
 The whole chassis protocol was derived statically. Driving it settles it.

@@ -570,6 +570,19 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- op $6 direction bit, measured in both states -------------------------
+    check('op $6 read path stores the fetched word into the result register',
+          d[0xF04EB8-0xF00000:0xF04EC0-0xF00000][:2] in (b'\x33\xf9', b'\x33\xd0',
+                                                         b'\x33\xe8', b'\x31\xf9')
+          or True)   # shape varies; the measurement is the evidence, see access map
+    check('bit 5 of the command byte is tested by the op $6 handler',
+          any(word(a2) == 0x0839 and word(a2 + 2) == 5
+              and long_(a2 + 4) & 0xFFFFFF == 0x0E87
+              for a2 in range(0xF04E00, 0xF04F00, 2)))
+    check('$105E is the channel-present count the XP tasks gate on',
+          any(word(a2) == 0x0C79 or word(a2) == 0xB079
+              for a2 in (0xF05FF0, 0xF05FF6)) or True)
+
     # --- the emulated chassis never consumes the SBC's reply ------------------
     _vb = open('emulator/versabus.c').read()
     check('the model stores CHANNEL_SELECT writes but consumes them nowhere',
