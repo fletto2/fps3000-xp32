@@ -441,6 +441,33 @@ else:
           len({l for l in trk.split() if 'F07D00' <= l <= 'F086FF'}) > 200 and
           len({l for l in trn2.split() if 'F07D00' <= l <= 'F086FF'}) < 130)
 
+    # --- the downward page heap ------------------------------------------
+    _, rh = run({}, 400_000_000)
+    g32 = lambda x: struct.unpack('>I', rh[x:x+4])[0]
+    HEAP = [(0x1FD00, 1), (0x1FB00, 2), (0x1FA00, 1), (0x1F900, 1), (0x1F800, 1),
+            (0x1F700, 1), (0x1F600, 1), (0x1F500, 1)] + \
+           [(0x1F300 - 0x200 * i, 2) for i in range(6)] + \
+           [(0x1E700 - 0x200 * i, 2) for i in range(6)]
+    top = 0x1FE00
+    contig = True
+    for b, pg in HEAP:
+        if b + pg * 256 != top:
+            contig = False
+        top = b
+    check('heap: 20 allocations tile $1DD00-$1FDFF contiguously, downward', contig)
+    check('heap bottom is $1DD00 (not $1DF00 -- RDHC block is allocated, all-zero)',
+          top == 0x1DD00 and not any(rh[0x1DD00:0x1DF00]))
+    check('every task TCB+$138 points at its own $x00-aligned ASQ/stack block',
+          [g32(0x1E900 + 0x200 * i + 0x138) for i in range(6)] ==
+          [0x1E700, 0x1E500, 0x1E300, 0x1E100, 0x1DF00, 0x1DD00])
+    check('ASQ block nonzero count recovers the declared ASQ count (2,2,2,2,1,0)',
+          [sum(1 for x in rh[b:b + 0x200] if x) for b in
+           (0x1E700, 0x1E500, 0x1E300, 0x1E100, 0x1DF00, 0x1DD00)] ==
+          [12, 12, 12, 12, 6, 0])
+    check("first ASQ descriptor is 'AXP1' + longword + word at the block base",
+          rh[0x1E700:0x1E70A] == b'AXP1\x00\x00\x00\x14\x00\x02' and
+          rh[0x1E70A:0x1E714] == b'HXP1\x00\x00\x00\x2a\x00\x02')
+
     # --- directive $04 is the page allocator ------------------------------
     ALLOC = [(0xF09E78, 0x0C20), (0xF09EBE, 0x0C24), (0xF09EFE, 0x0C66),
              (0xF09F42, 0x0C6A), (0xF09F70, 0x0C6E), (0xF09FA2, 0x0C2C),

@@ -1473,6 +1473,84 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The whole RAM heap, and a 512-byte correction to the staging buffer
+
+Following the allocator down gives the complete picture. **The heap starts at
+`$1FE00` — immediately below the supervisor stack region — and grows downward in
+256-byte pages.** Twenty allocations happen during boot, contiguous, no gaps:
+
+| # | what | extent | pages |
+|---|---|---|---|
+| 1 | `!GST` | `$1FD00-$1FDFF` | 1 |
+| 2 | `!UST` | `$1FB00-$1FCFF` | 2 |
+| 3 | untagged | `$1FA00-$1FAFF` | 1 |
+| 4 | `!IOV` | `$1F900-$1F9FF` | 1 |
+| 5 | `!IDV` | `$1F800-$1F8FF` | 1 |
+| 6 | `!PAT` | `$1F700-$1F7FF` | 1 |
+| 7 | `!UDR` | `$1F600-$1F6FF` | 1 |
+| 8 | untagged | `$1F500-$1F5FF` | 1 |
+| 9-14 | TCBs, `RDHC` `IO1I` `XP4I` `XP3I` `XP2I` `XP1I` | `$1E900-$1F4FF` | 2 each |
+| 15-20 | ASQ/stack blocks, `XP1I` `XP2I` `XP3I` `XP4I` `IO1I` `RDHC` | `$1DD00-$1E8FF` | 2 each |
+
+**Heap bottom after a clean boot: `$1DD00`.**
+
+**The staging-buffer bound was 512 bytes too generous.** This document has
+recorded the usable microcode-staging region as `$10000-$1DEFF`, derived from a
+nonzero-byte scan. RDHC's ASQ/stack block at `$1DD00-$1DEFF` contains **zero
+nonzero bytes** — RDHC declares no ASQ and never pushed deep enough to write it —
+so a nonzero scan cannot see it, even though the allocator has handed it out and
+RDHC will write it the moment it does any real work. The correct bound is
+**`$10000-$1DCFF`, 56.25 KB**.
+
+*This is the same instrument defect as the others in this document, in its purest
+form yet: an allocated-but-untouched buffer is indistinguishable from free memory
+to any scan that looks at contents instead of at the allocator.* The fix is not a
+better scan, it is reading `TCB+$138` — which is where the answer was all along.
+
+**Three independent confirmations of the page unit.** The end-address arithmetic
+(`base + (size<<8) - 1`); the `$x00` alignment of all twenty blocks; and the
+rounding — every task descriptor requests `$190` (400 bytes) of stack and every
+block is `$200`, i.e. `ceil(400/256) = 2` pages.
+
+#### The block at `TCB+$138` is the ASQ block, and its size proves the ASQ count
+
+`TCB+$138` points at the block; `TCB+$13C` is the task's saved stack pointer
+inside it. At the block's base sits an array of **10-byte ASQ descriptors** —
+4-byte name, longword, word:
+
+```
+$1E700  41 58 50 31  00 00 00 14  00 02      'AXP1'
+$1E70A  48 58 50 31  00 00 00 2A  00 02      'HXP1'
+```
+
+Count the nonzero bytes per block and you recover the ASQ declarations exactly:
+
+| task | nonzero | ASQs | declared in its descriptor |
+|---|---|---|---|
+| XP1I…XP4I | 12 | 2 | `AXPn` + `HXPn` ✓ |
+| IO1I | 6 | 1 | `HIO1` ✓ |
+| RDHC | 0 | 0 | none ✓ |
+
+So `!ASQ` — one of the four markers with kernel code but no tagged instance —
+**does have live instances; they are here, untagged.** That closes the loop on the
+earlier finding that directive `$2D` creates the queues without stamping `!ASQ`:
+this is where it puts them.
+
+#### The allocation order is an observable of the startup sequence
+
+The TCBs come out in TDTI table order — `RDHC` highest, `XP1I` lowest. The
+ASQ/stack blocks come out in the **reverse** order — `XP1I` highest, `RDHC`
+lowest. They cannot both be one loop. The reading that fits: TDTI creates all six
+TCBs in table order, and then each task allocates its *own* block when it runs its
+directive `$01`, in scheduling order. **The addresses therefore record which task
+the scheduler ran first**, and they say XP1I — consistent with RDHC issuing its
+directive `$12` five times as `XP4I..XP1I` then `USER`, i.e. RDHC starting the
+others before settling into its own body.
+
+*For emulation this matters more than it looks: a chassis model that changes how
+many tasks start, or in what order, moves the heap bottom and shifts every one of
+these addresses. They are not constants to hard-code.*
+
 ### Directive `$04` is the page allocator, and it explains every `$x00` address
 
 Working the backlog from the top, the largest genuinely distinct span —
