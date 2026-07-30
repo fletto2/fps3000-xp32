@@ -348,6 +348,13 @@ else:
     check('$F096AC is a probe: read then 4 NOPs then rts, value discarded',
           d[0x96AC:0x96B8].hex().upper() == '30114E714E714E714E714E75')
 
+    check('the transfer primitive is replicated 15 times for each command',
+          d.count(d[0x56C8:0x56C8+52]) == 15 and d.count(d[0x5742:0x5742+50]) == 15)
+    check('$F056C8 issues $8004 and $F05742 issues $8005, both polling bit 14',
+          d[0x56CA:0x56CE].hex().upper() == '30BC8004' and
+          d[0x5742:0x5746].hex().upper() == '30BC8005' and
+          d[0x56D8:0x56DC] == d[0x5750:0x5754])
+
     check('both remaining 5-copy groups open with the same $5F re-enable epilogue',
           d[0x57FA:0x580C] == d[0x599C:0x59AE] and
           d[0x5806:0x580A].hex().upper() == '36BC005F')

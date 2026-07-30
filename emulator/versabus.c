@@ -658,7 +658,13 @@ static void apif_write(uint32_t addr, uint16_t val) {
                                 apif.ch_lo[c] = val; return; }   /* +$0A */
         if (addr == base + 6) {                                   /* +$0E */
             apif.ch_data[c][1] = val;
-            if (val == 0x8004) ch_request_transfer(c);   /* REQUEST-TRANSFER */
+            /* BOTH transfer commands poll bit 14 with the same 1000-iteration
+             * budget.  Decoding the two 15-copy replicated groups showed the
+             * primitive is issue-then-poll and exists three times per task for
+             * each command: $F056C8 (+52) is $8004 + poll and $F05742 (+50) is
+             * $8005 + poll, 15 copies each across the five tasks.  Acknowledging
+             * only $8004 left all fifteen $8005 sites timing out. */
+            if (val == 0x8004 || val == 0x8005) ch_request_transfer(c);
             return;
         }
     }

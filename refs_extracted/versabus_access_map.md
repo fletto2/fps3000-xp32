@@ -1473,6 +1473,33 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The transfer primitive, replicated 15 times — and a matching gap in the model
+
+The original sweep also reported two **15-copy** groups, the highest replication
+count in the ROM, and neither had been decoded. Both are the same primitive:
+
+| group | first instructions | copies |
+|---|---|---|
+| `$F056C8` +52 | `move.w #$8004,(a0)` then poll bit 14, `d5 = $3E8` | **15** — 3 per task × 5 |
+| `$F05742` +50 | `move.w #$8005,(a0)` then **the same poll** | **15** — 3 per task × 5 |
+
+So the chassis transfer primitive is **issue-then-poll**, it exists three times per
+task for each of the two commands, and — the useful part — **both commands poll
+bit 14 with the same budget.**
+
+The model acknowledged only `$8004`. All fifteen `$8005` sites were still running
+their full 1000-iteration timeout. Fixed: `ch_request_transfer` now fires for both.
+
+**It changes nothing measurable, and that is worth stating.** No new PCs, no digest
+movement, 160/160 unchanged — because the `$8005` sites are not reached in any
+configuration currently available. The fix is correct on the firmware's own terms
+(the two commands share a poll, so they must share an acknowledge) and its value is
+that it will not need finding again when a configuration does reach them.
+
+It also explains why the `$8004` acknowledge produced such a large jump. It was
+never one site: the primitive is replicated 15 times, and the ISR's poll is one
+instance of an idiom used throughout.
+
 ### The last two replicated groups: a shared epilogue, and `$8005`
 
 Decoding the two remaining 5-copy groups completes the set. Both **begin with the
