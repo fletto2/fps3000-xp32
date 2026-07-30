@@ -3400,5 +3400,31 @@ with tempfile.TemporaryDirectory() as _tds:
     check('!CCB and !DLY have no RAM instance at all',
           _rs.count(b'!CCB') == 0 and _rs.count(b'!DLY') == 0)
 
+# --- every hook must still let the machine boot ---------------------------
+# FPS3K_CHSEL_RD forces CHANNEL_SELECT to read a constant FROM RESET, and the
+# self-test's register walks fail against a constant-reading register, so the
+# boot hangs in the diagnostics at $F08920 instead of reaching the RTOS rest
+# state.  That is the defect already fixed for FPS3K_POKE and FPS3K_DMA10AA by
+# gating them on boot completion; CHSEL_RD never received the gate.
+#
+# The failure is invisible without this check: the run completes, prints
+# plausible counts, and reports a final PC that only looks wrong if you know
+# what a healthy one is.  This project has one documented result -- the first
+# $FF0008 read -- that was taken with this hook and does not reproduce.
+def _boots(env2):
+    out = subprocess.run([EMU, '-rom', ROM, '-cycles', '150000000'],
+                         capture_output=True, text=True, timeout=400,
+                         env={**os.environ, **env2}).stderr
+    m = re.search(r'final PC=([0-9A-F]+)', out)
+    return bool(m) and 0xF00F00 <= int(m.group(1), 16) <= 0xF01000
+
+check('a clean boot reaches the RTOS rest state', _boots({}))
+for _hk, _hv in (('FPS3K_DATAIN', '1'), ('FPS3K_RESP', '0x94'),
+                 ('FPS3K_DMA10AA', '2'), ('FPS3K_POKE', '10AA=0002'),
+                 ('FPS3K_MBOX', '00010000')):
+    check(f'{_hk} still lets the machine boot', _boots({_hk: _hv}))
+check('FPS3K_CHSEL_RD does NOT -- ungated, hangs in the self-test (known)',
+      not _boots({'FPS3K_CHSEL_RD': '28'}))
+
 print(f'\n{checks - len(fails)}/{checks} passed')
 sys.exit(1 if fails else 0)
