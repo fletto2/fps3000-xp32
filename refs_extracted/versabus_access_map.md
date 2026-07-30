@@ -13456,3 +13456,38 @@ references and six times the decoder was too narrow". It then carried a seventh 
 same class of error in its own regex. Fixed to capture the full hex run and skip anything
 introduced by `#`; re-validated against the known positive `$FF0048` at `$F07EF6`, which still
 resolves through its `$48(a5)` base form.
+
+## Closing the $FF0004 gap, and what it exposes about the ready flag
+
+The static∪runtime comparison left exactly one static-only address: `$FF0004`, the polled ready
+flag at `$F04B22`. It is now reached — the runtime map simply lacked the configuration:
+
+```
+FPS3K_XPIRQ=6 FPS3K_RESP=0x00 FPS3K_SEQ="01:0000,41:0001,02:0008,42:0000,00:0028"
+```
+
+**`$F04B22` executes 1,365,711 times** in that run. So the union map is 68 addresses with no
+static-only residue: every device address in the disassembly is now also reachable at runtime.
+
+### The ready flag is gated on a hook, not on chassis state
+
+Those 1.37 M iterations are a **spin**. `$FF0004` bit 0 is asserted only when `FPS3K_SREC` is
+set (`versabus.c:560`), so with no S-record source configured the flag never goes ready and the
+firmware polls forever — final PC `$F04B26`.
+
+| config | `$F04B22` | `$FF0008` reads | final PC |
+|---|---:|---:|---|
+| SEQ + XPIRQ, no `SREC` | 1,365,711 | 0 | `$F04B26` (spinning) |
+| SEQ + XPIRQ + `SREC` | 2 | 37 | `$F056B8` |
+
+With a source configured the poll completes in **two** iterations and 37 words are read from the
+bulk port. **That is a modelling weakness rather than a bug**: a real chassis asserts ready from
+its own buffer state, not from whether the operator configured a file. Any experiment sensitive
+to *when* ready rises is measuring the hook, not the hardware.
+
+The 37 reads go through the **S-record front end** (`$F04B8A` compares against `$5330` = `"S0"`),
+not the raw block-transfer loop — `$F04AF8` executes zero times. Nothing reaches the staging
+buffer (`$10010` stays zero; the only nonzero bytes above `$10000` are the six at `$1DF00`, which
+are RTOS data), and the run ends at `$F056B8` — the already-documented `PanelSendAndWait` spin.
+So this configuration advances past the ready gate and then meets a blocker that is already
+understood, rather than revealing a new one.
