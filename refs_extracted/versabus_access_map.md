@@ -13533,3 +13533,38 @@ self-test at `$F096AC`/`$F09798`/`$F09AF6`. That is consistent with the already-
 limitation that a sequence hands over only a handful of codes and stops; it is a gap in the
 driving hook, not evidence against the decode. The read side of the *same handler* is confirmed,
 and the two paths differ only in the direction of one `move.l`.
+
+## Why FPS3K_SEQ "silently drops its tail": delivery is acknowledgement-driven
+
+This file records that a sequence delivers only ~4-6 codes, that pacing is not the cause (gaps
+from 20 M down to 200 K cycles and a 3× longer run give identical results), and that the
+workaround is one operation per run, unioned. The mechanism is now measured.
+
+`panel_resp_tick` advances the script **only when the SBC acknowledges the previous response**
+by setting `MODE0_RESP_ACK` (bit 10). So the delivery rate is not a clock — it is a handshake,
+and **it stops dead whenever the SBC enters a spin**.
+
+Measured with `FPS3K_XPIRQ=6 FPS3K_RESP=0x00` and the five-code staging sequence:
+
+| | ISR `$F04930` fires | ops dispatched |
+|---|---:|---|
+| ready flag never asserts | **2** | `$1`, `$0` |
+| ready flag asserts (`FPS3K_SREC` set) | **3** | `$1`, `$0` ×2 |
+
+In the first case op `$0` arms the transfer and the SBC spins 1,365,711 times on `$FF0004`,
+never acknowledging again, so codes 3-5 are never handed over. In the second the poll clears and
+one more exchange happens before the run blocks at `$F056B8`, the `PanelSendAndWait` spin.
+
+**This firmware is full of such blockers** — the ready poll, `PanelSendAndWait`, and the eight
+panel-command issuers that end in `bra .`. Each one halts sequence delivery where it stands.
+
+Two consequences:
+
+- **No amount of pacing will deliver a longer script**, which is exactly what the earlier gap
+  sweep found without being able to explain it. The observation and the mechanism now agree.
+- The way to drive a deeper sequence is to **clear the blocker the SBC is sitting in**, not to
+  lengthen the script or space it differently. Asserting the ready flag bought exactly one more
+  exchange, which is the smallest possible confirmation of that principle.
+
+This is also why op `$3`'s write path could not be reached: every arrangement tried put a
+blocker between the start of the run and the code that would have dispatched it.
