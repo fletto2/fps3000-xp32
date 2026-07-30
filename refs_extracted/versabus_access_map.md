@@ -16014,3 +16014,27 @@ reaches different objects depending on a register loaded elsewhere.
 
 What clearing bit 6 of TRAP #13's `!VCT` byte *means* is still open. But it is now a question about
 one identified instruction in one identified routine, rather than about an anomalous byte.
+
+### The `+$2C` identification verified by watchpoint
+
+Having found that the `$xx(a6)` field map counts are an upper bound, the fields it *names* deserve
+a direct test. Watching RDHC's state word at `$1F32C` over a full boot gives its complete write
+history, and every non-diagnostic writer is a routine already identified here:
+
+| PC | value | what |
+|---|---|---|
+| `$F098FC`, `$F09944`, `$F099BC`, `$F09A6E`, `$F09A92`, `$F08A50` | patterns | self-test RAM walks |
+| `$F0A3A8` | `00` | bulk clear |
+| `$F02966` | `80` | the `move.b #$80,$2c(a5)` from the four-writes census |
+| `$F0A0B2` | `00` | task creation — `move.w d2,$2c(a5)` after `T0CRTCB` |
+| **`$F02C3E`** | **`40`** | **directive `$13` WAIT — `bset #$e`** |
+
+The final write is `$40` in the high byte, i.e. `$4000` in the word — bit 14, WAITING — from the
+routine identified as `WAIT` by the directive table. **Measured, not inferred**, and it closes the
+loop on three separate claims at once: that `$F02C3E` is `WAIT`, that bit 14 is the waiting flag,
+and that `+$2C` is the state word.
+
+So the field map's *identifications* survive the base-register caveat even though its *counts* do
+not. That distinction is worth preserving: a displacement census tells you which offsets are
+touched and roughly how, and a watchpoint tells you by what and to what effect. The first is cheap
+and approximate, the second exact and narrow, and today the second corrected the first twice.
