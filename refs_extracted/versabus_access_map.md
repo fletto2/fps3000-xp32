@@ -1563,6 +1563,54 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The panel-command issuer is ONE-WAY: it never returns, on any path
+
+`$F05688` is 48 bytes and **completely linear — no branches, no conditions:**
+
+```
+$F05688:  move.w d0,$e6e.l       ; stash the code at the shared global
+$F0568E:  movea.l #$ff0000,a0
+$F05694:  move.w d0,$e(a0)       ; write the code to $FF000E
+$F05698:  move.w $202(a0),d1     ; MODE1
+$F0569C:  bclr.b #$e,d1          ; clear bit 14
+$F056A0:  bset.b #$c,d1          ; set bit 12
+$F056A4:  move.w d1,$202(a0)
+$F056A8:  move.w $200(a0),d1     ; MODE0
+$F056AC:  bclr.b #$a,d1          ; clear bit 10
+$F056B0:  move.w d1,$200(a0)
+$F056B4:  move.w d0,$204(a0)     ; issue on CHANNEL_SELECT
+$F056B8:  bra.b  $F056B8         ; SPIN -- unreachable to exit
+```
+
+**Every call to this routine halts the calling task.** There is no return, no conditional
+skip, and the eight copies are byte-identical over exactly these 48 bytes. It is called with
+ordinary completion codes as well as error codes — `$26C` RELEASE on a normal finish, `$25D`
+on a range reject, `$26A` on a timeout — so this is not an error-only path.
+
+**Two of this project's readings need adjusting.**
+
+The routine is named `PanelSendAndWait` and described as issuing a command and waiting for a
+response. **The code contains no wait** — a `bra .` is not a poll, has no exit condition, and
+tests nothing. "Send and halt" is what it does.
+
+And the escape is documented as *"the panel-status responder `$F04930` rewriting the saved
+PC"*. **No code in RDHC writes to a stacked return address.** Every `a7`-relative access in the
+region is a register save/restore (`$F04930`, `$F050F8`), a MODE2 push/pop (`$F04D4E`/`$F04E22`,
+`$F05312`), or an on-stack parameter block (`$F05652`-`$F05674`). The ISR exits via `trap #1`
+with directive `$0C` in the CCR, so any resumption decision belongs to the RTOS — and
+empirically the responder runs **966 times during the spin without releasing it**.
+
+**What this does not settle** is how the machine is supposed to work on real hardware. A task
+that halts on every panel command cannot be the normal path, so either the RTOS's directive-`$0C`
+handling resumes the task elsewhere (plausible, and it is kernel code outside `fps3k.asm`), or
+the spin is genuinely terminal and the eight copies mark unrecoverable states. *I can rule out
+the documented explanation without being able to supply the correct one*, and saying so is more
+useful than replacing one unsupported mechanism with another.
+
+The practical consequence for the emulator is unchanged and now better founded: **RDHC halts on
+its first panel command**, and nothing in the firmware will release it. Whatever releases it must
+come from outside the ROM — the RTOS kernel or the hardware — and that is where to look next.
+
 ### The dynamic profile of the whole machine: one live spin, four idle tasks
 
 Applying the profiling lesson to every task at once gives the machine's actual behaviour in a

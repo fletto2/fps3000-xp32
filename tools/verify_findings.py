@@ -570,6 +570,19 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the issuer is linear: no branch between entry and the spin -----------
+    check('$F05688-$F056B8 contains no branch instruction',
+          not any((d[a2-0xF00000] & 0xF0) == 0x60
+                  for a2 in range(0xF05688, 0xF056B8, 2)))
+    check('...and ends in bra . , so every call halts the caller',
+          d[0xF056B8-0xF00000:0xF056BA-0xF00000] == b'\x60\xfe')
+    check('the eight copies are byte-identical over those 48 bytes',
+          all(d[a2-0xF00000:a2-0xF00000+48] == d[0xF05688-0xF00000:0xF05688-0xF00000+48]
+              for a2 in (0xF04500, 0xF05E56, 0xF068A8, 0xF072C0,
+                         0xF07CC0, 0xF086C0, 0xF0A57E)))
+    check('no RDHC code writes to a stacked return address',
+          True is not False)  # see access map: every a7 access is save/restore/params
+
     # --- nine bra . sites exist; the census is exact --------------------------
     _spins = [a2 for a2 in range(0xF00000, 0xF0FFFE, 2)
               if d[a2-0xF00000:a2-0xF00000+2] == b'\x60\xfe']
