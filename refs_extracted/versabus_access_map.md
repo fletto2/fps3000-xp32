@@ -13189,3 +13189,26 @@ One loose end: writing `$15`, `$35`, `$2E`, `$3E` in succession to the *same* ad
 (`$F009FC`-`$F00A0E`) is command-register behaviour, not RAM behaviour — four writes to RAM
 would leave only the last. It is unreachable in every configuration run so far (`$C5C` never
 reaches its `$64` threshold), so nothing is measurable here yet.
+
+### Control: the 80.3% is the tables, not a better decoder
+
+Pointing the same tool at the application region (`$F04488`-`$F0FFFF`) with the same three seed
+tiers gives **47.5%**, against `disasm.py`'s **49.6%**. It is slightly *worse*.
+
+| region | entry-point seeds | call seeds | pointer seeds | coverage |
+|---|---|---|---|---|
+| kernel `$F00000`-`$F04487` | **125** | 71 | 51 | **80.3%** |
+| application `$F04488`-`$F0FFFF` | **1** | 137 | 127 | 47.5% |
+
+The difference is entirely the entry-point tier: the kernel's TRAP #0 and TRAP #1 tables hand
+over 125 routine starts, and the application has no equivalent this tool knows about.
+
+So the honest reading is that **the kernel was never harder to disassemble than the
+application — its entry points were simply never read out of its own dispatch tables.** Nothing
+here suggests a generally better algorithm, and the application's remaining ~50% will not fall
+to one. It needs its own entry-point source: the five 42-entry `PanelStatusDispatch` tables,
+the 16-entry chassis-op table at `$F05102`, the TDTI table at `$F0A600`, and the 9-entry
+exception table at `$F0A23A` are the obvious candidates, most of which `disasm.py` already
+scans in some form.
+
+Run the control with `FPS3K_DIS_START` / `FPS3K_DIS_END` / `FPS3K_DIS_OUT`.

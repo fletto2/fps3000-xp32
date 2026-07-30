@@ -18,8 +18,14 @@ import struct
 from capstone import Cs, CS_ARCH_M68K, CS_MODE_M68K_000
 
 ROM_PATH = "FPS3K_U11_U12_JOIN.bin"
-OUT_PATH = "fps3k_kernel.asm"
-BASE, START, END = 0xF00000, 0xF00000, 0xF04488
+import os
+BASE = 0xF00000
+# Region is overridable so the same seeding strategy can be pointed at the
+# application region as a control -- if it beats disasm.py's 49.6% there, the
+# gain is the strategy and not something peculiar to the kernel.
+START = int(os.environ.get("FPS3K_DIS_START", "0xF00000"), 16)
+END = int(os.environ.get("FPS3K_DIS_END", "0xF04488"), 16)
+OUT_PATH = os.environ.get("FPS3K_DIS_OUT", "fps3k_kernel.asm")
 
 # The TRAP #0 directive jump table.  35 longword slots; slot 0 and slot $20
 # both hold the error return, so there are 34 distinct entry points.
