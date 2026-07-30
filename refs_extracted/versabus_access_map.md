@@ -14492,3 +14492,37 @@ Three independent confirmations fall out of one table:
 
 Practically: `TCB+$0FC` plus `TCB+$2C` answers "where is every task and why is it stopped" from a
 single dump, with no trace required.
+
+## The wake mechanism verified in machine state: RDHC's WAITING bit clears
+
+Comparing task snapshots between a default boot and the level-7 driven configuration:
+
+| task | default | driven |
+|---|---|---|
+| XP1I-XP4I, IO1I | `$4000` / unchanged | `$4000` / unchanged |
+| **RDHC** | `$4000` (WAITING) | **`$0018`** — bit 14 **cleared** |
+
+**Bit 14 is the WAITING bit**, derived this morning from `WAIT` setting it and `WAKEUP` clearing
+it. Seeing it go from set to clear in a driven run is the first evidence *in machine state* —
+rather than in PC counts — that the entire chain works end to end:
+
+```
+BIM0 ch0 raised → $F04930 → dispatch → $F050F8 exit stub → move #$0C,ccr → trap #1
+   → $F00262 sentinel test → $F00280 → !IDV lookup on the -6'd PC → T0WAKEUP → bclr #$e,$2c
+```
+
+Every link in that chain was established separately today; this is the whole of it observed
+working at once, on the one task whose vector (`$41`) is being driven. The other five are
+untouched, exactly as they should be — nothing is raising their BIM channels.
+
+Two honest limits on the claim:
+
+- **RDHC is woken, not advanced.** Its saved PC stays `$F04740`, and its coverage stays at 3%.
+  Waking a task and running it to completion are different things: it wakes, fails to sustain
+  the chassis conversation past seven exchanges, and re-parks.
+- **This is the level-7 probe**, which contradicts the `$5E` the firmware writes. At the
+  firmware's own level 6 the state word does not change. So what is demonstrated is that the
+  *mechanism* is correctly understood and correctly modelled — not that a real board delivers at
+  level 7.
+
+`$0018` (bits 3 and 4) is the state RDHC lands in; those bits are not yet identified.
