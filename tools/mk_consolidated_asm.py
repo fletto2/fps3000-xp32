@@ -80,6 +80,27 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- seven undocumented panel codes; RDHC's copy is short ----
+ (0xF084AA,'EXTRA ROUTINE PRESENT IN ALL FOUR XP COPIES AND ABSENT FROM RDHC\'s.'),
+ (0xF084AA,'  Diffing the five dispatch-subsystem copies over $5C8 bytes: RDHC differs'),
+ (0xF084AA,'  from every XP copy by 197 bytes while the XP copies differ from each'),
+ (0xF084AA,'  other by only 25-49 -- and most of RDHC\'s difference is that it ENDS'),
+ (0xF084AA,'  EARLIER: from $F05C52 to the end RDHC is ALL ZEROS where the XP copies'),
+ (0xF084AA,'  carry ~180 bytes of code.  So the subsystem is four copies of a longer'),
+ (0xF084AA,'  version plus one shortened variant, not five copies of one thing.'),
+ (0xF084AA,'  This routine validates 1 <= channel <= $105E, rejects with panel $263,'),
+ (0xF084AA,'  takes the TOP BYTE of d1 (lsr.l #$18) and if nonzero issues DIRECTIVE'),
+ (0xF084AA,'  $10 with the task\'s own region base as the parameter block, then writes'),
+ (0xF084AA,'  panel code $264 + CHANNEL to the command port.'),
+ (0xF084DA,'SEVEN UNDOCUMENTED PANEL CODES, $262-$268, all XP-task-only:'),
+ (0xF084DA,'    $262  4 sites, one per task, in the ISR prologue'),
+ (0xF084DA,'    $263  4 sites, one per task -- the channel-number reject'),
+ (0xF084DA,'    $264  8 sites, two per task, one being THIS addi.w #$264,d1 with'),
+ (0xF084DA,'          d1 = the channel, so the family is $265-$268 for channels 1-4'),
+ (0xF084DA,'  They fill exactly the gap between the documented $260 and $269, and'),
+ (0xF084DA,'  $261 is used NOWHERE -- consistent, since $25D-$260 are the four'),
+ (0xF084DA,'  per-channel config codes and a fifth would have no channel.  The panel'),
+ (0xF084DA,'  code space is denser than recorded and organised in runs of four.'),
  # ---- the complete XP-task template parameterization ----
  (0xF07E3C,'THE PER-CHANNEL SCAN MASK IS ONE NIBBLE PER CHANNEL.  Guarded on MODE1'),
  (0xF07E3C,'  bit 7 (busy), each XP task loads a mask and calls ITS OWN copy of the'),

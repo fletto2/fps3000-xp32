@@ -7447,6 +7447,17 @@ loc_F084A4:
   f084a8: 02 00                   DC.W     0x0200
 
 loc_F084AA:
+;### EXTRA ROUTINE PRESENT IN ALL FOUR XP COPIES AND ABSENT FROM RDHC's.
+;###   Diffing the five dispatch-subsystem copies over $5C8 bytes: RDHC differs
+;###   from every XP copy by 197 bytes while the XP copies differ from each
+;###   other by only 25-49 -- and most of RDHC's difference is that it ENDS
+;###   EARLIER: from $F05C52 to the end RDHC is ALL ZEROS where the XP copies
+;###   carry ~180 bytes of code.  So the subsystem is four copies of a longer
+;###   version plus one shortened variant, not five copies of one thing.
+;###   This routine validates 1 <= channel <= $105E, rejects with panel $263,
+;###   takes the TOP BYTE of d1 (lsr.l #$18) and if nonzero issues DIRECTIVE
+;###   $10 with the task's own region base as the parameter block, then writes
+;###   panel code $264 + CHANNEL to the command port.
   f084aa: 0c 40 00 01             cmpi.w   #$1, d0
 ;>>>> [R11/DS] This instruction performs a signed comparison (`blt.b`) to check if `d0` is less than 1, validating a block size parameter against the minimum allowed value (1) in the TCBXP1I task, branching to an error handler at `loc_F084B8` if the value is invalid before comparing against the maximum block size at `$105e.l  [g_ac_count]`.
   f084ae: 6d 08                   blt.b    loc_F084B8
@@ -7468,6 +7479,15 @@ loc_F084C2:
   f084d0: 41 f9 00 f0 7d 40       lea.l    loc_F07D40.l, a0
   f084d6: 4e 41                   trap     #$1
   f084d8: 30 01                   move.w   d1, d0
+;### SEVEN UNDOCUMENTED PANEL CODES, $262-$268, all XP-task-only:
+;###     $262  4 sites, one per task, in the ISR prologue
+;###     $263  4 sites, one per task -- the channel-number reject
+;###     $264  8 sites, two per task, one being THIS addi.w #$264,d1 with
+;###           d1 = the channel, so the family is $265-$268 for channels 1-4
+;###   They fill exactly the gap between the documented $260 and $269, and
+;###   $261 is used NOWHERE -- consistent, since $25D-$260 are the four
+;###   per-channel config codes and a fifth would have no channel.  The panel
+;###   code space is denser than recorded and organised in runs of four.
   f084da: 06 41 02 64             addi.w   #$264, d1
   f084de: 3b 41 00 0e             move.w   d1, $e(a5)
   f084e2: 32 2d 02 02             move.w   $202(a5)  [XLTR_MODE1], d1

@@ -550,6 +550,30 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- seven undocumented panel codes $262-$268 ---------------------------
+    def _code_sites(v):
+        return [a2 for a2 in range(0xF04400, 0xF0A800, 2)
+                if struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0]
+                   in (0x303C, 0x323C, 0x0641)
+                and struct.unpack('>H', d[a2-0xF00000+2:a2-0xF00000+4])[0] == v]
+    check('$262 has one site per XP task, in the ISR prologue',
+          _code_sites(0x262) == [0xF060C0, 0xF06AD8, 0xF074D8, 0xF07ED8])
+    check('$263 has one site per XP task (the channel reject)',
+          _code_sites(0x263) == [0xF066A0, 0xF070B8, 0xF07AB8, 0xF084B8])
+    check('$264 has two sites per XP task, one of them addi.w #$264,d1',
+          len(_code_sites(0x264)) == 8
+          and d[0xF084DA-0xF00000:0xF084DE-0xF00000] == b'\x06\x41\x02\x64')
+    check('$261 is used nowhere (the per-channel runs are four wide)',
+          _code_sites(0x261) == [])
+    check("RDHC's dispatch copy is ~180 bytes shorter: all zeros from $F05C52",
+          not any(d[0xF05C52-0xF00000:0xF05D00-0xF00000])
+          and any(d[0xF084AA-0xF00000:0xF08558-0xF00000]))
+    check('the extra XP routine validates the channel then issues directive $10',
+          d[0xF084AA-0xF00000:0xF084B8-0xF00000]
+              == b'\x0c\x40\x00\x01\x6d\x08\xb0\x79\x00\x00\x10\x5e\x6f\x0a'
+          and d[0xF084CE-0xF00000:0xF084D8-0xF00000]
+              == b'\x70\x10\x41\xf9\x00\xf0\x7d\x40\x4e\x41')
+
     # --- the XP-task template: alignment and the per-channel scan mask -------
     BODY = {1: 0xF07E12, 2: 0xF07412, 3: 0xF06A12, 4: 0xF06018}
     _ref = d[BODY[1]-0xF00000:BODY[1]-0xF00000+0x900]

@@ -1528,6 +1528,67 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Seven undocumented panel codes, and RDHC's dispatch copy is 180 bytes short
+
+Diffing the five copies of the dispatch subsystem over `$5C8` bytes:
+
+| pair | differing bytes |
+|---|---|
+| RDHC vs any XP | **197** |
+| XP4I vs XP3I/XP2I/XP1I | 49 |
+| XP3I vs XP2I vs XP1I | 25 |
+
+**RDHC's copy is the outlier, and most of the difference is that it ends earlier.**
+From offset `+$51A` (`$F05C52`) to the end, RDHC is **all zeros** while the four XP
+copies carry ~180 bytes of code RDHC does not have. So the subsystem is not five
+copies of one thing — it is four copies of a longer version plus one shortened
+variant.
+
+The extra routine (XP1I's at `$F084AA`) is a channel-validating notifier:
+
+```
+$F084AA  cmpi.w  #$1,d0
+$F084B0  cmp.w   $105E,d0          ; validate 1 <= channel <= channel count
+$F084B8  move.w  #$263,d0          ; reject
+$F084BC  jsr     $F086C0           ;   via the task's own issuer
+$F084C2  moveq   #$18,d2
+$F084C4  lsr.l   d2,d1             ; take the TOP BYTE of d1
+$F084CA  beq     -> skip
+$F084CE  moveq   #$10,d0
+$F084D0  lea     $F07D40,a0        ; the task's own region base
+$F084D6  trap    #1                ; directive $10
+$F084DA  addi.w  #$264,d1          ; panel code $264 + CHANNEL
+$F084DE  move.w  d1,$e(a5)         ;   -> the command port
+```
+
+#### The panel-code table is missing seven codes
+
+Sweeping every `move.w #$2xx,d0` and `addi.w #$2xx,d1` against the documented table
+turns up three constants that are not in it, all of them XP-task-only:
+
+| code | sites | what |
+|---|---|---|
+| `$262` | 4 — one per XP task, in the ISR prologue (`$F07ED8` etc.) | issued immediately before `jsr <own issuer>` |
+| `$263` | 4 — one per XP task | **channel-number reject** in the routine above |
+| `$264` | 8 — two per XP task | once loaded plainly, once as **`addi.w #$264,d1`** with `d1` = the channel |
+
+Because `$264` is *added* to a channel number, the family is **`$264`-`$268`** — a
+per-channel code, `$265`-`$268` for channels 1-4. Together with `$262` and `$263`
+that is **seven previously unrecorded codes, `$262`-`$268`**, filling exactly the gap
+between the documented `$260` and `$269`.
+
+**`$261` is used nowhere**, which is consistent: `$25D`-`$260` are the four
+per-channel config codes, so a fifth at `$261` would have no channel to belong to.
+The panel-code space is denser than recorded and organised in per-channel runs of
+four.
+
+Also worth noting: **directive `$10`** — one of the three "XP-side" directives — is
+issued here with the task's **own region base** as its parameter block and a channel
+number in `d1`, and only when the top byte of `d1` is nonzero. Alongside `$43`
+(task-lookup-by-name) and `$29`/`$2A` (queue lookup and post), that makes four of the
+fourteen directives with concrete call sites, though `$10`'s semantics are still
+unnamed.
+
 ### The complete XP-task template parameterization, by diffing the four copies
 
 Using the template-diff lever the authorship finding suggests. First the alignment,
