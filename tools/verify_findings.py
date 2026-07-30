@@ -570,6 +570,17 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the six ISR-exit stubs pass their directive in the CCR ---------------
+    _isr = (0xF05100, 0xF05E50, 0xF060F4, 0xF06B0C, 0xF0750C, 0xF07F0C)
+    check('six TRAP #1 sites are preceded by move.w #$c,ccr, one per task',
+          all(d[a2-4-0xF00000:a2-0xF00000] == b'\x44\xfc\x00\x0c'
+              and word(a2) == 0x4E41 for a2 in _isr))
+    check('RDHC\'s stub restores ALL registers first, so d0 cannot carry it',
+          d[0xF050F8-0xF00000:0xF050FC-0xF00000] == b'\x4c\xdf\xff\xff')
+    check('65 d0-passed + 6 ccr-passed = the 71 TRAP #1 sites, none unaccounted',
+          65 + len(_isr) == len([a2 for a2 in range(0xF04488, 0xF10000, 2)
+                                 if word(a2) == 0x4E41]))
+
     # --- the DRAM pattern test is a rotate-by-3 generator ---------------------
     check('the seed pair $FF000102/$01796AF3 is planted below the tested region',
           d[0xF089B6-0xF00000:0xF089C2-0xF00000]

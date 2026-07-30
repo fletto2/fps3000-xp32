@@ -1528,6 +1528,60 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The six unresolvable TRAP #1 sites are the ISR exits — and they pass the directive in the CCR
+
+Resolving TRAP #1 directives by scanning backwards for a `d0` load reaches 65 of 71 sites.
+The six it cannot reach are not a limitation of the scan window — **they do not load `d0` at
+all**, and they are the most structurally important trap sites in the firmware:
+
+| site | task |
+|---|---|
+| `$F05100` | RDHC |
+| `$F05E50` | IO1I |
+| `$F060F4` | XP4I |
+| `$F06B0C` | XP3I |
+| `$F0750C` | XP2I |
+| `$F07F0C` | XP1I |
+
+**Exactly one per task**, matching the six `{vector, TCB, ISR entry, ISR exit}` records in
+`!IDV` at `$1F800`. All six carry a byte-identical prefix:
+
+```
+move.w #$c,ccr
+trap   #$1
+```
+
+**`d0` cannot carry the directive here.** RDHC's stub is the clearest case: the instruction
+immediately before is `movem.l (a7)+,d0-d7/a0-a7`, restoring the *interrupted task's* entire
+register set. After that nothing in the register file belongs to the ISR — using `d0` would
+corrupt the task being resumed. The `move.w #$c,ccr` is the only state the stub sets, and it
+is the last thing before the trap.
+
+**The mechanism is the stacked SR.** `trap #1` pushes SR — condition codes included — onto
+the supervisor stack before entering the handler. So the kernel reads the directive out of
+the stacked SR's low byte rather than a register. That is a genuinely elegant solution to
+"pass an argument when every register must already hold the caller's value", and it is
+invisible to any analysis that assumes the documented "directive in `d0`" convention holds
+universally.
+
+So the ROM uses **two** TRAP #1 calling conventions:
+
+| convention | sites | used by |
+|---|---|---|
+| directive in `d0` | 65 | ordinary task-level calls |
+| directive in `CCR` | 6 | **ISR exit, one per task** |
+
+This also closes out the last gap in the directive inventory: 65 + 6 = 71, with nothing
+unaccounted. The `$0C` value is the ISR-exit selector, and it is not a member of the 14
+`d0`-passed directives — it lives in a separate space, which is consistent with it being
+read from a different place.
+
+*Method note:* this is the sixth false negative this session from a detector narrower than
+its target, and the only one where the narrowness pointed at something real. The six sites
+resisted resolution because they genuinely are different, not because the regex was wrong —
+**worth distinguishing from the other five, where the code was ordinary and the tool was
+not.**
+
 ### The DRAM test is a rotate-by-3 pattern generator — and the constants are its seed
 
 The two magic longwords planted before `$F099F4` (`$FF000102` and `$01796AF3`) are not
