@@ -1563,6 +1563,46 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### Zero padding in the instruction count, and what the largest run proves
+
+Looking for the biggest undocumented stretches of code, the top hit was 214 bytes in RDHC at
+`$F05C5C` — which turned out to be **zero fill**, decoded by the disassembler as
+`ori.b #$0,d0` (opcode `0000 0000`). The measure was ranking disassembler artifacts.
+
+Quantified across `fps3k.asm`:
+
+| | bytes |
+|---|---|
+| lines counted as instructions | 22,980 |
+| all-zero `ori.b #$0,d0` | **392 (1.7%)** |
+| genuine instruction bytes | **22,588** |
+
+So the coverage denominator this project quotes is slightly generous: **54% of instruction
+bytes executed becomes 55%** against the corrected figure. A small correction, and worth
+recording as small — I expected it to be larger and checked rather than assumed, which is
+the only reason the number is trustworthy either way.
+
+**22 zero-padding runs exist, and the largest is structurally informative.**
+`$F05C54-$F05CFF` is 172 bytes of zero fill, and the next decoded instruction is at
+**`$F05D00`** — exactly the TDTI table's declared start for TCBIO1I. RDHC's real code ends
+at `$F05C54`; everything after it is fill to the task boundary.
+
+*That confirms the TDTI region boundaries are genuine allocation boundaries rather than
+labels this project imposed.* The task extents come from the ROM's own `!TCB` table at
+`$F0A600`, and here the code layout independently agrees with them: the assembler padded
+RDHC out to the boundary the table declares. Region bounds elsewhere in this project are
+approximate (they misattributed the `$2D` sites by `$92` bytes), so having one confirmed
+exactly is worth knowing.
+
+The second-largest run, `$F09BC6-$F09BFA` (56 bytes), is the unused tail of the SCM pattern
+table at `$F09BB6` — consistent with that table holding two complementary longword pairs and
+then nothing, which is how it was read when decoding `$F09B20`.
+
+*Method note:* this is the third measurement this session distorted by treating decoded
+output as ground truth — after the `$400000-$7FFFFF` opcode flood and the `[SYMBOL]`
+annotation breaking direction detection. **A disassembler emits a decode for every byte;
+whether those bytes are instructions is a separate question it cannot answer.**
+
 ### Task-region tally: 42 call targets, and the last nine resolve into four routines
 
 Applying the self-test's inventory method to the six task regions gives 42 distinct call

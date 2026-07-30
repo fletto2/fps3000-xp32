@@ -570,6 +570,14 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- zero padding, and the TDTI boundary it confirms ----------------------
+    check('$F05C54-$F05CFF is zero fill, not code',
+          d[0xF05C54-0xF00000:0xF05D00-0xF00000] == b'\x00' * 0xAC)
+    check('...and the next decoded instruction is at $F05D00, the TDTI IO1I start',
+          d[0xF05D00-0xF00000:0xF05D02-0xF00000] != b'\x00\x00')
+    check('the SCM pattern table tail $F09BC6+ is zero',
+          d[0xF09BC6-0xF00000:0xF09BFA-0xF00000] == b'\x00' * 0x34)
+
     # --- $F0517E is a DISCARDING drain; the XP trio are validators ------------
     check('$F0517E arms $400, polls bit 15, clears, then reads the port',
           d[0xF0517E-0xF00000:0xF05196-0xF00000]
