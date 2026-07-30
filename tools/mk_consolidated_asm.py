@@ -80,6 +80,24 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- $14 means two different things ----
+ (0xF04976,'*** $14 HAS TWO DIFFERENT MEANINGS, AND THIS IS WHY ONLY ONE RDHC COMMAND'),
+ (0xF04976,'  EXECUTES PER BOOT. ***  To RDHC\'s main loop at $F048D8, $E86 & $1F == $14'),
+ (0xF04976,'  means "a command record is waiting".  To THIS dispatcher it means'),
+ (0xF04976,'  "acknowledge and return": beq straight to $F050F8, the ISR exit stub'),
+ (0xF04976,'  (movem / move #$C,ccr / trap #1), waking nobody.'),
+ (0xF04976,'  And the ISR runs FIRST, so every $14 after the first is absorbed here.'),
+ (0xF04976,'  RDHC saw the first only because it was already past its $13 wait at that'),
+ (0xF04976,'  moment: measured, $F0473C and $F04740 each execute ONCE however many $14s'),
+ (0xF04976,'  arrive, while $F0495C runs 467 times.  The last RDHC instruction in a full'),
+ (0xF04976,'  trace is $F05100 -- the trap #1 of that exit stub.'),
+ (0xF04976,'  CONSEQUENCE FOR A HOST DRIVER, and it is a firmware property not a'),
+ (0xF04976,'  modelling gap: a stream of commands CANNOT be issued as a stream of $14s.'),
+ (0xF04976,'  Each command needs RDHC re-woken by something that is NOT $14, and only'),
+ (0xF04976,'  then does a $14 reach the command arm.  The correct sequence alternates:'),
+ (0xF04976,'  wake, $14, wake, $14...  Falsifiable on hardware -- a bus trace of a'),
+ (0xF04976,'  working machine issuing several commands should show a non-$14 code'),
+ (0xF04976,'  between each pair of $14s.'),
  # ---- phases $15xx and $23xx complete the specification set ----
  (0xF094FA,'PHASE $15xx IS A CHANNEL_SELECT READ-BACK TEST, and the BEACON IS THE'),
  (0xF094FA,'  TEST: write d6 (0..5), read $204 back, require a match.  So the six'),

@@ -1528,6 +1528,47 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Why only one RDHC command executes per boot: `$14` means two different things
+
+With the descriptor layout known, a fully-populated command record was worth trying:
+`{1, operation, channel, count, payload, param, buffer…}` at `$400000`. It gains
+**nothing** — 19% of RDHC either way, identical to the minimal `1,14,1` probe, because
+operation `$14` takes its buffer from a fixed ROM address (`$F0549E`) rather than the
+inline one, and `$F0544A` computes the inline pointer regardless.
+
+The real ceiling is that **RDHC wakes exactly once**: `$F0473C` (the `$13` wait) and
+`$F04740` (the instruction after it) each execute once, whatever the descriptor. Tracing
+where RDHC goes afterwards finds the reason, and it is four instructions in the ISR:
+
+```
+$F04976  cmpi.w  #$14,d0
+$F0497A  beq.w   ChannelConfigDispatch      ; = $F050F8, the ISR EXIT STUB
+```
+
+**So `$14` has two different meanings depending on who reads it.** To RDHC's main loop
+at `$F048D8`, `$E86 & $1F == $14` means *"a command record is waiting"*. To the ISR's
+bit-7 dispatcher at `$F04976`, `d0 == $14` means *"acknowledge and return"* — straight
+to `$F050F8`, `movem` / `move #$C,ccr` / `trap #1`, waking nobody.
+
+And the ISR runs first. So the second and every subsequent `$14` notification is
+absorbed by `$F0497A` and returns from interrupt; RDHC only ever saw the first one
+because it was already past its wait at that moment. The last RDHC instruction in a
+full trace is `$F05100` — the `trap #1` of that exit stub — reached via `$F04930` →
+`$F0495C` → `$F04976` → `$F0497A`.
+
+*This is a firmware property, not a modelling gap, and it changes what a host driver
+has to do.* A stream of commands cannot be issued as a stream of `$14`s. Each command
+needs RDHC re-woken by something that is **not** `$14` — the wake path is the `$13`
+wait — and only then does a `$14` reach the command arm. The correct host sequence is
+therefore alternating: *wake, `$14`, wake, `$14`…*, and the single-code
+`FPS3K_RESP` hook cannot express it because it presents one constant value forever.
+
+That is the concrete next step for driving RDHC past 47%: a response *sequence* that
+alternates a waking code with `$14`, delivered through the BIM path rather than the
+scripted-panel path. It is also a falsifiable prediction about the real machine — a bus
+trace of a working FPS-3000 issuing several commands should show a non-`$14` code
+between each pair of `$14`s.
+
 ### Two more phase specifications, and the set is now read end to end
 
 **`$15xx` is a CHANNEL_SELECT read-back test.** Six phases, one PC, and the beacon

@@ -550,6 +550,21 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- $14 means "command waiting" to RDHC but "just return" to the ISR ----
+    check('$F04976 tests d0 == $14 and branches straight to the ISR exit stub',
+          d[0xF04976-0xF00000:0xF0497E-0xF00000]
+          == b'\x0c\x40\x00\x14\x67\x00\x07\x7c')
+    check('...whose target is $F050F8, the movem/ccr/trap exit',
+          0xF0497A + 2 + struct.unpack('>H', d[0xF0497C-0xF00000:0xF0497E-0xF00000])[0]
+          == 0xF050F8)
+    t14b = pcs({'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6',
+                'FPS3K_CHASSIS_CMD': '1,14,1'}, CYC)
+    check('RDHC therefore wakes exactly ONCE however many $14s arrive',
+          t14b.count('F0473C') == 1 and t14b.count('F04740') == 1
+          and t14b.count('F0495C') > 300)
+    check('...and a fully-populated descriptor gains nothing over the probe',
+          t14b.count('F05370') == 1)
+
     # --- phases $15xx and $23xx ----------------------------------------------
     check('$15xx writes CHANNEL_SELECT 0..5 and reads each back',
           d[0xF094F2-0xF00000:0xF094F8-0xF00000] == b'\x0c\x06\x00\x05\x6e\x1e'

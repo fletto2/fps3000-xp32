@@ -761,6 +761,23 @@ loc_F04930:
 ;>>>> [R1/BOTH] This `cmpi.w #$14, d0` checks if the XP-32 channel configuration mode (masked to 5 bits in `$e86.l`) equals 0x14, branching to a mode-specific handler.
   f0496e: 0c 40 00 14             cmpi.w   #$14, d0
   f04972: 6e 00 07 ce             bgt.w    loc_F05142
+;### *** $14 HAS TWO DIFFERENT MEANINGS, AND THIS IS WHY ONLY ONE RDHC COMMAND
+;###   EXECUTES PER BOOT. ***  To RDHC's main loop at $F048D8, $E86 & $1F == $14
+;###   means "a command record is waiting".  To THIS dispatcher it means
+;###   "acknowledge and return": beq straight to $F050F8, the ISR exit stub
+;###   (movem / move #$C,ccr / trap #1), waking nobody.
+;###   And the ISR runs FIRST, so every $14 after the first is absorbed here.
+;###   RDHC saw the first only because it was already past its $13 wait at that
+;###   moment: measured, $F0473C and $F04740 each execute ONCE however many $14s
+;###   arrive, while $F0495C runs 467 times.  The last RDHC instruction in a full
+;###   trace is $F05100 -- the trap #1 of that exit stub.
+;###   CONSEQUENCE FOR A HOST DRIVER, and it is a firmware property not a
+;###   modelling gap: a stream of commands CANNOT be issued as a stream of $14s.
+;###   Each command needs RDHC re-woken by something that is NOT $14, and only
+;###   then does a $14 reach the command arm.  The correct sequence alternates:
+;###   wake, $14, wake, $14...  Falsifiable on hardware -- a bus trace of a
+;###   working machine issuing several commands should show a non-$14 code
+;###   between each pair of $14s.
   f04976: 0c 40 00 14             cmpi.w   #$14, d0
   f0497a: 67 00 07 7c             beq.w    ChannelConfigDispatch
   f0497e: 08 39 00 06 00 00 0e 87  btst.b   #$6, $e87.l
