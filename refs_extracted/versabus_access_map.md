@@ -13568,3 +13568,29 @@ Two consequences:
 
 This is also why op `$3`'s write path could not be reached: every arrangement tried put a
 blocker between the start of the run and the code that would have dispatched it.
+
+### Fix: the ready flag now tracks whether the chassis has data, not which hook is set
+
+`$FF0004` bit 0 tested `getenv("FPS3K_SREC")` only. Two consequences, both now removed:
+
+- **`FPS3K_DATAIN` could never drive the polled path.** It is the *other* bulk source — the
+  incrementing pattern at `$FF0008` — and with the ready flag ignoring it the port stayed
+  permanently not-ready. The documented `FPS3K_DATAIN` result must therefore have come through a
+  path that does not poll `$FF0004`.
+- **With no source configured the firmware span forever**, and that spin throttled
+  `FPS3K_SEQ` delivery, because the script only advances on acknowledgement.
+
+Now: `DATAIN` → ready; `SREC` → ready until exhausted; neither → not ready, which is what a
+chassis with an empty buffer would say.
+
+Measured, `FPS3K_XPIRQ=6 FPS3K_RESP=0x00 FPS3K_DATAIN=1` plus the staging sequence:
+
+| | before | after |
+|---|---:|---:|
+| `$F04B22` iterations | 1,365,711 | **1** |
+| final PC | `$F04B26` (spinning) | `$F04C32` |
+
+The spin is gone. `$F04AF8` still does not run and the staging buffer stays empty: with an
+incrementing pattern the S-record front end at `$F04B8A` is comparing against `$5330` = `"S0"`
+and correctly rejecting what it is given. That is the firmware behaving properly, not a
+remaining defect — feeding `DATAIN` to an S-record parser was never going to parse.

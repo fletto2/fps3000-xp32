@@ -554,11 +554,30 @@ static uint16_t apif_read(uint32_t addr) {
      * ASCII characters per 16-bit word, which is how the firmware's
      * S-record front end at F04B22 reads it (F04B8A compares against
      * $5330 = "S0"). */
-    /* $FF0004 bit 0 is the port-ready flag the firmware polls at F04B22
-     * and F05A22 before every transfer.  With an S-record source
-     * configured, data is always available. */
-    if (addr == 0xFF0004 && getenv("FPS3K_SREC"))
-        return srec_exhausted ? 0x0000 : 0x0001;   /* bit 0 = data available */
+    /* $FF0004 bit 0 is the port-ready flag the firmware polls at F04B22 and
+     * F05A22 before every transfer.  It means "the chassis has a word to
+     * hand over", so it must track whether a SOURCE EXISTS -- not which
+     * environment variable happens to be set.
+     *
+     * It used to test FPS3K_SREC only, which had two consequences:
+     *   - FPS3K_DATAIN, the other bulk source, left the port permanently
+     *     not-ready, so the incrementing pattern could never drive the
+     *     polled path at all.
+     *   - With no source configured the firmware polls forever: measured
+     *     1,365,711 iterations of $F04B22, final PC $F04B26.  That spin also
+     *     stalls FPS3K_SEQ delivery, because the script only advances when
+     *     the SBC acknowledges -- so one missing flag throttled the whole
+     *     scripted-chassis mechanism.
+     *
+     * A real chassis asserts this from its own buffer state.  Modelling it
+     * as "a source is configured and not exhausted" is still a model, but it
+     * is one about the chassis rather than about our command line. */
+    if (addr == 0xFF0004) {
+        if (getenv("FPS3K_DATAIN")) return 0x0001;   /* endless pattern */
+        if (getenv("FPS3K_SREC"))
+            return srec_exhausted ? 0x0000 : 0x0001;
+        return 0x0000;                               /* nothing to give */
+    }
 
     /* END OF STREAM.  SRecordDataHandler's reject/drain loop at F05218
      * reads $FF0000 and exits when it is <= 0 as a signed word, so the
