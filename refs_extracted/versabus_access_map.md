@@ -16504,3 +16504,27 @@ or literal instructions whose RAM reads have side effects — which remains open
 The review's own caveats are worth keeping visible: its EU-PROM plan carries 3 SERIOUS issues and
 its AU-microcode plan 1 FATAL (a circular NOP/byte-map dependency) by its own adversarial pass.
 Those are the honest limits of both inference routes, self-identified.
+
+### Pre-integration check for the `ds/` library
+
+Noted for when these components are folded into the emulator:
+
+| | |
+|---|---|
+| builds | clean at `-O2 -Wall`, 136 assertions, 0 failures |
+| exports | 67 functions, all chip-name-prefixed (`am29116_`, `am2910_`, `am29705_`, …) |
+| emulator symbols | 2,758 |
+| **collisions** | **none** |
+| artifact | `ds/libamd_devices.a`, linkable directly |
+
+The namespace is clean, so linking is not a blocker. The integration points its own notes propose
+— `am29705` cascade replacing the `apif` struct, `am29116_panel_command()` replacing the panel-code
+dispatch, `am2910_tick()` driving PROM addresses — are behavioural substitutions rather than
+mechanical ones, and each would change what the model does, so each wants its own before/after
+measurement against the three golden machine-state digests.
+
+Method note on this check: my first attempt compared `ds/` against `emulator/*.o` and reported
+"no collisions" from an **empty** emulator symbol set, because that build compiles all sources in
+one invocation and produces no object files. Comparing against the linked binary gives 2,758
+symbols and the same answer for a real reason. A clean result from an empty set is the same defect
+as a zero counter on a crashed machine, and it is the fourth instance this session.
