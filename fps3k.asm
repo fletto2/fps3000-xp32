@@ -2655,6 +2655,13 @@ loc_F059F0:
 loc_F05A08:
   f05a08: 49 f9 00 f0 5b f8       lea.l    loc_F05BF8.l, a4
   f05a0e: 4e f4 00 00             jmp      (a4, d0.w)
+;### OPEN QUESTION THE SWEEP EXPOSES: $0A and $14 TERMINATE, the other 27 live
+;###   codes do not.  $0A and $14 fire their primitives ONCE; every other live
+;###   code fires 1468 times, once per re-raised interrupt, never completing.
+;###   $14 is the documented finalize code, but $0A is an ORDINARY POLL slot --
+;###   nothing in the static table distinguishes it from $01/$16/$17/$19/$1B/
+;###   $1F/$22/$24, which share this handler and loop forever.  Whatever ends
+;###   the sequence is inside POLL's own logic.  Invisible to static reading.
   f05a12: 48 40                   swap     d0
   f05a14: 28 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a4
   f05a1a: 4b ec 00 08             lea.l    $8(a4), a5
@@ -2851,6 +2858,13 @@ PanelStatusDispatch:
 ;### 42-slot dispatch table. FIVE identical copies exist, one per task region;
   f05ba4: 4e 75                   rts      
   f05ba6: 4e 71                   DC.W     0x4e71  ; 'Nq'
+;### THE STATIC CENSUS IS CONFIRMED BY EXECUTION, 13 FOR 13.  Sweeping cmd 1's
+;###   operation code over $00-$29, one emulator run each: every one of the 13
+;###   slots this table decodes as a bare rts fires NO primitive and gives
+;###   byte-identical coverage (488 of 5888 RDHC bytes).  The OLD census would
+;###   have predicted 8 of those 13 to do something.  Live slots each fire
+;###   exactly the primitive assigned: $01->POLL, $08->BLK_XFR, $14->D2_FIN.
+;###   Union over all 42 codes: 1326/5888 = 23% of RDHC, from 1% at baseline.
   f05ba8: 4e fa                   DC.W     0x4efa
   f05baa: fe 68                   DC.W     0xfe68
   f05bac: 4e fa                   DC.W     0x4efa

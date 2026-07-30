@@ -451,6 +451,38 @@ else:
           len({l for l in trk.split() if 'F07D00' <= l <= 'F086FF'}) > 200 and
           len({l for l in trn2.split() if 'F07D00' <= l <= 'F086FF'}) < 130)
 
+    # --- executing all 42 operation codes confirms the census ---------------
+    # Every slot the jump table decodes as a bare rts must fire NO primitive and
+    # give byte-identical coverage; the old census would have predicted 8 of
+    # these 13 to do something.
+    # SAMPLED, not exhaustive: the full 13 cost ~13 emulator runs and pushed the
+    # suite past 10 minutes.  All 13 were verified once by hand (see the access
+    # map, "Executing all 42 operation codes"); these 4 are the regression guard.
+    RTS_OPS = (0x00, 0x13, 0x21, 0x29)
+    prims = ('F05738', 'F058B2', 'F05A12', 'F05B0E')
+    quiet = []
+    for op in RTS_OPS:
+        tro = run({'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6',
+                   'FPS3K_CHASSIS_CMD': f'1,{op:X},1'}, 400_000_000)[0].split('\n')
+        quiet.append(all(tro.count(pp) == 0 for pp in prims))
+    check('sampled rts slots $00/$13/$21/$29 fire NO primitive (4 of 13 checked)',
+          all(quiet))
+    # ... and a live slot from each handler does fire its own
+    live = {0x01: 'F05A12', 0x08: 'F05B0E', 0x14: 'F05738'}
+    fired = []
+    for op, pp in live.items():
+        trl = run({'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6',
+                   'FPS3K_CHASSIS_CMD': f'1,{op:X},1'}, 400_000_000)[0].split('\n')
+        fired.append(trl.count(pp) >= 1)
+    check('...while live slots $01/$08/$14 fire POLL/BLK_XFR/D2_FIN respectively',
+          all(fired))
+    tr0a = run({'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6',
+                'FPS3K_CHASSIS_CMD': '1,A,1'}, 400_000_000)[0].split('\n')
+    tr01 = run({'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6',
+                'FPS3K_CHASSIS_CMD': '1,1,1'}, 400_000_000)[0].split('\n')
+    check('op $0A terminates (POLL once) while op $01 loops, though both are POLL',
+          tr0a.count('F05A12') == 1 and tr01.count('F05A12') > 1000)
+
     # --- RDHC's 42-slot table executes; corrected census --------------------
     def slot(i):
         a2 = 0xF05BA4 + 4 * i - 0xF00000

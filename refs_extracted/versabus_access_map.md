@@ -1473,6 +1473,44 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### Executing all 42 operation codes confirms the static census 13 for 13
+
+Sweeping command 1's operation code over `$00`-`$29`, one run each, counting which
+primitive fires and how much of RDHC executes:
+
+| operation codes | primitives fired | RDHC bytes |
+|---|---|---|
+| `$00 $0B $0C $11 $12 $13 $15 $20 $21 $26 $27 $28 $29` | **none** | 488 (8%) — identical for all 13 |
+| `$01 $16 $17 $19 $1B $1F $22 $24` | `POLL` ×1468 | 642 (11%) |
+| `$08 $09 $18 $1A $1C $1D $1E $23 $25` | `BLK_XFR` ×1468 | 622 (11%) |
+| `$02 $04 $06 $0D $0F` | `POLL` + `D1_SEND` | 788-832 (13-14%) |
+| `$03 $05 $07 $0E $10` | `BLK_XFR` + `D1_SEND` | 768 (13%) |
+| `$0A` | `POLL` ×**1** | 540 (9%) |
+| `$14` | `D2_FIN` + `POLL` + `D1_SEND`, ×**1** each | **1070 (18%)** |
+
+**Every one of the 13 codes predicted to be a bare `rts` fires no primitive and
+produces byte-identical coverage.** That is the static decode of the jump table
+confirmed by execution, 13 for 13, and it is the kind of check the table's
+handler-count corrections needed — the old census would have predicted 8 of these
+to do something.
+
+The live slots each fire exactly the primitive the table assigns them. Several fire
+*two*, because `$F05468`'s caller walks successive descriptors at `$14(a6)` stride,
+so a `D1_SEND` slot is reached as part of a sequence that also polls or block-moves.
+
+**Two operations terminate; the other 27 do not.** `$0A` and `$14` fire their
+primitives **once**, while every other live code fires **1468 times** — once per
+re-raised interrupt, never completing. `$14` is the documented finalize code, and
+this makes `$0A` the *other* terminating operation, which nothing in the static
+table distinguishes: index `$0A` is an ordinary `POLL` slot. Whatever ends the
+sequence is inside `POLL`'s own logic and is reached for `$0A` but not for `$01`,
+`$16`, `$17`, `$19`, `$1B`, `$1F`, `$22` or `$24`, which share the same handler.
+*That is a real open question the sweep exposes, and it is invisible to static
+reading.*
+
+**Union over all 42 operation codes: 1326 / 5888 bytes = 23% of RDHC**, from 1% at
+baseline.
+
 ### RDHC's 42-slot table executes, and 13 of its slots are `rts`
 
 Command 1's parameter block is `{command, operation, channel}`:

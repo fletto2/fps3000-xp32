@@ -80,6 +80,21 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- executing all 42 operation codes ----
+ (0xF05BA8,'THE STATIC CENSUS IS CONFIRMED BY EXECUTION, 13 FOR 13.  Sweeping cmd 1\'s'),
+ (0xF05BA8,'  operation code over $00-$29, one emulator run each: every one of the 13'),
+ (0xF05BA8,'  slots this table decodes as a bare rts fires NO primitive and gives'),
+ (0xF05BA8,'  byte-identical coverage (488 of 5888 RDHC bytes).  The OLD census would'),
+ (0xF05BA8,'  have predicted 8 of those 13 to do something.  Live slots each fire'),
+ (0xF05BA8,'  exactly the primitive assigned: $01->POLL, $08->BLK_XFR, $14->D2_FIN.'),
+ (0xF05BA8,'  Union over all 42 codes: 1326/5888 = 23% of RDHC, from 1% at baseline.'),
+ (0xF05A12,'OPEN QUESTION THE SWEEP EXPOSES: $0A and $14 TERMINATE, the other 27 live'),
+ (0xF05A12,'  codes do not.  $0A and $14 fire their primitives ONCE; every other live'),
+ (0xF05A12,'  code fires 1468 times, once per re-raised interrupt, never completing.'),
+ (0xF05A12,'  $14 is the documented finalize code, but $0A is an ORDINARY POLL slot --'),
+ (0xF05A12,'  nothing in the static table distinguishes it from $01/$16/$17/$19/$1B/'),
+ (0xF05A12,'  $1F/$22/$24, which share this handler and loop forever.  Whatever ends'),
+ (0xF05A12,'  the sequence is inside POLL\'s own logic.  Invisible to static reading.'),
  # ---- RDHC's 42-slot table executes; corrected census ----
  (0xF053C4,'CMD 1 PARAMETER BLOCK is {command, operation, channel}: +$00 command'),
  (0xF053C4,'  number, +$04 the OPERATION CODE tested here, +$08 the channel (read at'),
