@@ -16668,3 +16668,40 @@ number is the last thing successfully broadcast, and the failure is at or after 
 This also explains why `$F0891C` is where the `FPS3K_CHSEL_RD` hang was observed. That hook breaks
 the `CHANNEL_SELECT` read-back test, so the machine reaches a checkpoint with the failure flag set
 and stops there — in the handshake, one step past the test that actually failed.
+
+## `$F0891C` decoded: the checkpoint is where the FAIL lamp is lit
+
+The routine every phase passes through is fourteen instructions and **contains no loop** — it
+tests, acts, and returns:
+
+```
+F0891C  movem.l a1-a2,-(a7)
+F08920  lea.l   $f70018.l,a2     ; board status
+F08926  btst.b  #$4,$1(a2)       ; bit 4
+F0892C  beq.b   $f08936
+F0892E  btst.b  #$5,$1(a2)       ; bit 5 -- both set -> $F088F4
+F08934  bne.b   $f0894e
+F08936  tst.l   d7               ; the failure flag
+F08938  beq.b   $f08952          ; clean -> return
+F0893A  lea.l   $1fff0.l,a1      ; the VERSAmodule control register
+F08940  bclr.b  #$6,$1(a1)       ; CLEAR VMOD BIT 6
+F08946  move.w  #$1000,$202(a6)  ; MODE1 <- $1000
+F08952  movem.l (a7)+,a1-a2
+F08956  rts
+```
+
+**`$1FFF1` bit 6 is where the FAIL lamp lives**, per this project's note on the VERSAmodule control
+register. So the complete hardware failure-indication chain is:
+
+> any phase sets `d7 = $F0F0F0F0` → the next checkpoint tests `d7` → **clears VMOD bit 6** and
+> writes MODE1 `$1000` → the FAIL lamp lights on the physical board.
+
+That is the whole externally visible failure path, and it explains why the lamp is the *only*
+signal a board with no serial output gives: `d7` is internal, the phase number needs a bus probe,
+and this bit is the one thing a human can see.
+
+**Two corrections to my own readings.** The routine does not spin — so "final PC `$F08920`" means
+the machine was *inside* this call at that instant, driven by a retry loop elsewhere, not stuck in
+a wait here. And the earlier description of `$F0891C` as polling board status "waiting" for a
+handshake is wrong: it *samples* bits 4 and 5 once and branches, with the abort path at `$F088F4`
+reached only when **both** are set.
