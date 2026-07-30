@@ -13890,3 +13890,36 @@ So the operations must be driven as *(code, argument)* pairs with their paramete
 first — which is exactly what `FPS3K_SEQ`'s `code:chsel` form provides, and why the two hooks
 exist separately. The practical driving recipe remains `FPS3K_SEQ` for parameterised sequences,
 with `FPS3K_RESPSEQ` reserved for codes that need no setup.
+
+## CORRECTION: the self-test installs THREE bus-error handlers, for different phases
+
+Earlier today this file recorded that the static vector installs "explain a phase already
+documented here: `$600` can only survive provoking a BERR because `$F08706`/`$F0870E` install a
+handler on vectors 2 and 3 first." **The attribution was wrong.** Measured over a default boot
+and two driven configurations:
+
+| handler | installed at | vector | executions |
+|---|---|---|---:|
+| `$F08902` | `$F08706`, `$F0870E` | 2 and 3 | **0** |
+| `$F08F06` | phase `$600`'s own setup | 2 | **2** |
+| `$F098E0` | `$F0960A`, `$F096CC`, `$F0983A` | 2 | **3** |
+| `$F088FA` | `$F087B4`, `$F0883C`, `$F088D6` | 85 (`$154`) | **0** |
+
+All five install sites execute exactly once, so the installs are real. But `$F08902` **never
+fires**, so it cannot be what carries phase `$600` through its fault.
+
+**Phase `$600` uses its own handler**, `$F08F06` — the one the harness already describes as
+"counts faults with a skip-zero guard, and does NOT adjust PC". Measured: the sweep at `$F08F36`
+runs once, `$F08F06` fires **twice**, and the exit test at `$F08F4C` runs once. The bus-timeout
+watchdog test does provoke its BERR, and it services it itself.
+
+So the self-test installs **three different bus-error handlers across its run**, each belonging
+to the phase that needs it, and hands vector 2 between them. `$F08902` and the vector-85 handler
+are guards for faults a healthy machine never takes — which is why a green boot leaves them at
+zero.
+
+**Method note.** The harness's `$600` checks are *static byte assertions*: they verify the
+decoded logic (`tst.l d1 / bne` after the sweep) and prove nothing about runtime. Reading
+"`$600` EXITS on a fault ... PASS" as evidence that a fault occurred is exactly the mistake
+that produced the wrong attribution. The runtime evidence had to be measured separately, and it
+happens to agree.
