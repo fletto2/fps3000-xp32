@@ -15464,3 +15464,33 @@ arithmetic.
 So XP4I differs from its siblings in **five** measured ways: four inconsistent address offsets and
 one genuine behavioural omission. The offsets say it was hand-patched; the missing bit-11 tests say
 the patching was not merely mechanical.
+
+### The three shared globals identified
+
+| address | uses per task | what |
+|---|---|---|
+| `$1062` | 1 — `move.w #$1,$1062` | a flag each task raises; written here, read elsewhere |
+| **`$1064`** | 2 — `and.w d2` then `or.w d4` | **the four-nibble per-channel status word** |
+| `$107E` | 3 — read, `addq.b #$1`, `clr.b` | a shared byte counter |
+
+`$1064`'s indexing settles it:
+
+```
+F0864A  move.w d0,d3      ; channel number
+F0864C  subq.w #$1,d3     ; ch-1
+F0864E  lsl.w  #$2,d3     ; x4 -> a NIBBLE index
+F08650  lsl.w  d3,d4      ; shift this channel's value into its nibble
+F08652  and.w  d2,$1064   ; clear the nibble  (d2 = $FFF0 / $FF0F / $F0FF / $0FFF)
+F08658  or.w   d4,$1064   ; set the new value
+```
+
+**A 16-bit word of four 4-bit fields, one per channel**, updated by a clear-then-set
+read-modify-write at `(ch-1)*4`. That confirms the documented scan mask — this project derived
+the `$FFF0`/`$FF0F`/`$F0FF`/`$0FFF` constants from the template byte-diff, and here is the
+arithmetic that consumes them, with the shift width `lsl.w #$2` proving the 4-bit field size
+rather than assuming it.
+
+So the per-channel data area is now fully accounted for: **four shared globals** (`$105E` the AC
+count, `$1062` a per-task flag, `$1064` the nibble status word, `$107E` a byte counter) and
+**three private words per task** on a 6-byte stride. Every `$10xx` reference in all four XP task
+regions falls into one of those seven slots.
