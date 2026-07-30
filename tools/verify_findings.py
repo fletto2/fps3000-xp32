@@ -570,6 +570,17 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- two distinct acknowledges on MODE0 bit 10 ----------------------------
+    check('the ISR SETS bit 10 on every command, before dispatching',
+          d[0xF04942-0xF00000:0xF04950-0xF00000]
+          == b'\x33\xc0\x00\x00\x0e\x86\x08\xc0\x00\x0a'
+             b'\x31\x40\x02\x00')
+    check('RDHC CLEARS bit 10 and ships the result -- the other acknowledge',
+          d[0xF048CE-0xF00000:0xF048D6-0xF00000]
+          == b'\x08\x81\x00\x0a\x3b\x41\x02\x00')
+    check('...so one bset and one bclr on the same bit, 400 bytes apart',
+          0xF04948 - 0xF048CE == 0x7A)
+
     # --- SEQ codes DO carry bit 7; delivery is the obstacle -------------------
     _vb = open('emulator/versabus.c').read()
     check('MODE0_RESP_MASK is $FF, so a sequence code keeps bit 7',

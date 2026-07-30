@@ -1563,6 +1563,51 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### There are TWO acknowledges, and the reply is gated by RDHC's wake rate
+
+The failed push experiment said the obstacle was in the arm/acknowledge state machine. It is,
+and the reason is that **"acknowledge" names two different things** which I had been treating as
+one.
+
+The panel-status ISR at `$F04930` acknowledges **every** command, immediately, before it
+dispatches anything:
+
+```
+$F0493A:  move.w $200(a0),d0        ; read MODE0
+$F0493E:  bclr.b #$b,d0             ; clear bit 11
+$F04942:  move.w d0,$e86.l          ; LATCH the command
+$F04948:  bset.b #$a,d0             ; SET bit 10 -- ACKNOWLEDGE
+$F0494C:  move.w d0,$200(a0)        ; write it back
+$F04950:  btst.b #$7,$e87.l         ; then dispatch on bit 7
+```
+
+That is the bit-10 set the model waits on to release the next scripted code — and it fires on
+**every** command (1,464 times in these runs), which is why delivery works and why pacing never
+mattered.
+
+RDHC's `$F048C8` is a **second, different** acknowledge: it *clears* bit 10 and ships `$0E74`.
+It is reached only when RDHC wakes from its directive-`$13` wait **and** finds bit 7 set.
+
+| | site | when | effect |
+|---|---|---|---|
+| **ISR acknowledge** | `$F04948` | every command | sets bit 10; releases the next code |
+| **RDHC acknowledge+reply** | `$F048C8` | RDHC wakes *and* bit 7 set | clears bit 10; ships the result |
+
+**So the reply rate is gated by RDHC's wake rate, not by delivery at all.** RDHC woke twice in
+the two-op run and only one wake carried bit 7 — hence one reply. Pushing codes faster could
+never help, exactly as measured, because the codes were never the constraint.
+
+*This is where three rounds of reasoning about delivery timing should have started.* The
+distinction was visible in the disassembly the whole time — one site does `bset #$a`, the other
+`bclr #$a`, four hundred bytes apart — and I read both as "the acknowledge" because they touch
+the same bit. **Two operations on one bit are not the same operation**, and the direction was
+the tell.
+
+What remains genuinely open is narrower than before: **what wakes RDHC, and how often it can be
+made to.** Its waker is its own ISR exit stub `$F050FC` via RTOS directive `$13`, which this
+file already documents. That is a tractable question and a different one from anything I have
+been asking.
+
 ### Push delivery implemented, tested, and REVERTED — the specification was incomplete
 
 Having derived a specification for push-based delivery from the code, I implemented it:
