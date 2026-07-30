@@ -550,6 +550,27 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- $1200: bit 5 self-clears; phases inherit VMOD state ------------------
+    check('$1200 asserts board-status bit 1 follows $1FFF1 bit 5, set and clear',
+          d[0xF0926E-0xF00000:0xF0927C-0xF00000]
+          == b'\x08\xed\x00\x05\x00\x01\x08\x2c\x00\x01\x00\x01\x66\x06'
+          and d[0xF09290-0xF00000:0xF0929E-0xF00000]
+          == b'\x08\xad\x00\x05\x00\x01\x08\x2c\x00\x01\x00\x01\x67\x06')
+    check('$1200 clears ONLY bit 7 on entry, inheriting bit 4 from $1100',
+          d[0xF09240-0xF00000:0xF09246-0xF00000]
+          == b'\x08\xad\x00\x07\x00\x01')
+    check('...and $1100 ends with a bset, so bit 4 arrives at $1200 SET',
+          d[0xF091BE-0xF00000:0xF091C0-0xF00000] == b'\x61\x06'   # bsr F091C6
+          and d[0xF091C6-0xF00000:0xF091CA-0xF00000] == b'\x01\xed\x00\x01')
+    check('$1200 polls $1FFF1 bit 5 for SELF-CLEARING, bounded to 16 tries',
+          d[0xF092C2-0xF00000:0xF092D0-0xF00000]
+          == b'\x30\x3c\x00\x0f\x08\x2d\x00\x05\x00\x01\x57\xc8\xff\xf8')
+    check('$1200 runs with interrupts enabled at IPL 2 (SR <- $2200)',
+          d[0xF09246-0xF00000:0xF0924A-0xF00000] == b'\x46\xfc\x22\x00')
+    check('the emulator models VMOD_CTRL as plain RAM -- no auto-clear anywhere',
+          not any('0x1FFF1' in open(f).read()
+                  for f in ('emulator/versabus.c', 'emulator/fps3k_sbc.c')))
+
     # --- $1100 writable-bit test; PTM walking ones over movep -----------------
     check('$1100 loads d0=4 as the bit index and clears $1FFF1 bit 7 first',
           d[0xF0919C-0xF00000:0xF091A6-0xF00000]

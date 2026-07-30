@@ -1528,6 +1528,62 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Phase `$1200`: bit 5 is a self-clearing request, and the phases are STATEFUL
+
+`$F09236` is the busiest of the local-board stages and it yields three things.
+
+**1. `$F70019` bit 1 follows `$1FFF1` bit 5 directly.** A hard set/clear assertion pair:
+
+```
+bset #5,$1(a5)  ;  btst #1,$1(a4)  ;  bne ok      ; board-status bit 1 must be SET
+bclr #5,$1(a5)  ;  btst #1,$1(a4)  ;  beq ok      ; ...and CLEAR
+```
+
+**2. The phases share state, and this one depends on what `$1100` left behind.** The
+documented equation is `bit 1 of $F70019 = NOT(bit 4 of $1FFF1) OR (bit 5 AND NOT bit 0 of
+$1FFF0)`. On entry `$F09240` clears only bit **7**; bit 4 is left as `$1100` ended it — and
+`$1100` runs set → clear → **set**, so **bit 4 arrives here SET**. That makes `NOT(bit 4)`
+zero and reduces the equation to `bit1 = bit5 AND NOT bit0`, which is exactly the assertion
+above. *The test is only correct because of the preceding phase's final write.* An emulator
+that reset VMOD_CTRL between phases — a reasonable-looking tidiness — would break `$1200`
+while leaving `$1100` passing.
+
+**3. `$1FFF1` bit 5 is polled for self-clearing.** After setting bit 7 and bit 5 together:
+
+```
+bset #5,$1(a5)
+move.w #$f,d0
+loop:  btst #5,$1(a5)     ; poll THE BIT IT JUST SET
+       dbeq d0,loop       ; until it reads CLEAR, 16 tries
+```
+
+The firmware waits for hardware to clear a bit it wrote. **Bit 5 is therefore a
+request/strobe, not a latch** — which distinguishes it sharply from bit 4, whose
+flip-flop behaviour `$1100` verifies explicitly. Two bits of the same register with
+different natures, each tested in the way appropriate to it.
+
+*Stated with the hedge it deserves:* the `dbeq` is a **bounded** wait and the pass/fail
+assertion that follows is on `$F70019` bit 1, not on bit 5. So a machine where bit 5 never
+clears times out and still passes. The polling is strong evidence of intent — nothing polls
+a bit it expects to stay put — but it is not proof, and the ROM offers no way to close that
+gap.
+
+Then the whole sequence repeats with `$1FFF0` bit 0 **set** (`$F092F8`), isolating the
+`NOT bit 0` term of the equation. So `$1200` covers both terms across both settings.
+
+**Emulator status.** `$1FFF0`/`$1FFF1` appear nowhere in the emulator's C — VMOD_CTRL is
+plain RAM inside the 128 KB array, so writes stick and nothing ever self-clears. `$1100`'s
+flip-flop test passes trivially and correctly. `$1200`'s bit-5 wait always exhausts all
+sixteen iterations, and the stage passes only because the separately-modelled board-status
+equation carries it. **The handshake is vestigial in emulation** — harmless today, but it
+means the model reproduces the *result* of this stage without reproducing its *mechanism*,
+and anything later that depends on bit 5 actually clearing would fail without warning.
+
+Also worth noting: `$F09246` sets `SR <- $2200`, dropping the interrupt mask to level 2 and
+installing `$F09330` as a handler. `$1200` is the first stage to run with interrupts
+enabled — it is an interrupt-driven test, not a polling one, and the `dbeq` loops are its
+timeouts.
+
 ### Phase `$1100` is a writable-bit test; the PTM test is 16-bit walking ones over `movep`
 
 Two more sequence-B stages decode cleanly, and both put hard constraints on the models.
