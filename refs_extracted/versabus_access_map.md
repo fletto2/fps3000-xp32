@@ -1598,6 +1598,44 @@ The pattern across all of this is the session's recurring one, one level up: **t
 itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
 here changed what is known about the machine; it changed how much a passing suite is worth.
 
+### The vector-table overrun was a TWO-BIM artefact — correcting the count removed it
+
+Verifying the three-BIM change turned up a behavioural difference worth more than the change
+itself. The harness carries a check that the `$281` deadlock configuration "overruns the stack
+into the vector table". Measured both ways, post-boot vector writes over 300 M cycles:
+
+| BIM count | post-boot vector writes |
+|---|---|
+| **2** (the old default) | **730** — the overrun |
+| **3** (the card's actual complement) | **1** |
+
+**The interrupt storm was caused by our own misconfiguration.** Telling a three-BIM card that it
+has two produces a re-entrant interrupt condition that walks the stack through the exception
+vector table; modelling the hardware correctly removes it entirely.
+
+*That matters beyond tidiness, because this project already has a retracted finding whose root
+cause was that storm.* The record reads:
+
+> *A **retracted** earlier claim: that the handshake was "closed" and `$FF0048` read. That
+> reading came from an interrupt-storm artefact — a re-entrant ISR walked the stack through the
+> vector table, overwrote vector `$128` with `$00FF0000`, and the resulting instruction fetch
+> from `$FF0048` was misread as a data access.*
+
+So a wrong conclusion was drawn from a storm, the storm was correctly identified as an artefact,
+and the artefact has now been traced to its cause: **the emulator was modelling two BIMs where
+three are fitted.** The retraction was right; what it could not say was *why* the machine was
+behaving pathologically.
+
+**The check is now split into both halves** — the storm under `FPS3K_BIMS=2`, and its absence
+under the correct default — so the phenomenon stays documented while the default asserts the
+healthy behaviour. Keeping only the second would lose a real finding about what a wrong BIM
+count does.
+
+*A general point this makes concrete:* a modelling error does not always show up as a wrong
+value. Here it showed up as **an entire pathological behaviour** that looked like a property of
+the firmware, was investigated as one, and produced a published claim that had to be withdrawn.
+**Misconfiguration is a source of phantom findings, not merely of missing ones.**
+
 ### THE MONITOR WORKED ON REAL HARDWARE (2026-07-30)
 
 The owner reports the monitor running on the machine. That closes the project's principal open

@@ -338,9 +338,18 @@ else:
                                    **env2}).stderr.count('[VECWATCH]')
     check('a plain boot makes exactly 4 post-boot vector writes (all benign)',
           vecwrites({}) == 4)
-    check('the $281 deadlock config overruns the stack into the vector table',
-          vecwrites({'FPS3K_XPIRQ': '5,6', 'FPS3K_DMA10AA': '2',
-                     'FPS3K_MBOX': '20010000'}) > 500)
+    # THE OVERRUN WAS A TWO-BIM ARTEFACT.  Modelling the three MC68153s the card
+    # actually carries removes it entirely: measured 730 post-boot vector writes
+    # with FPS3K_BIMS=2 and ONE with the correct three.  So the interrupt storm
+    # this check documents was caused by our own misconfiguration, not by the
+    # $281 path.  Assert both halves -- the storm under the old config, and its
+    # absence under the correct one.
+    _cfg281 = {'FPS3K_XPIRQ': '5,6', 'FPS3K_DMA10AA': '2',
+               'FPS3K_MBOX': '20010000'}
+    check('with TWO BIMs the $281 config overruns the stack into the vectors',
+          vecwrites({**_cfg281, 'FPS3K_BIMS': '2'}) > 500)
+    check('...and with the correct THREE BIMs the overrun does not occur',
+          vecwrites(_cfg281) < 10)
 
     # --- the firmware never reads never-written DRAM ---------------------
     with tempfile.TemporaryDirectory() as _td3:
