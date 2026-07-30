@@ -3114,6 +3114,28 @@ _rom = open(ROM, 'rb').read()
 _B = 0xF00000
 
 
+def insn(addr):
+    """The disassembler's own rendering of the instruction at `addr`.
+
+    Hand-encoding 68000 machine code for byte-comparison checks produced FOUR
+    wrong encodings in one session -- a subq count, an adda register field, an
+    lsr count, and an absolute-short addressing mode -- each of which failed as
+    a check while the underlying finding was correct.  Reading disassembly is
+    reliable; writing machine code from memory is not.  Assert against the
+    decoder instead, so a check can only fail when the ROM differs.
+    """
+    try:
+        from capstone import Cs, CS_ARCH_M68K, CS_MODE_M68K_000
+    except ImportError:
+        return None
+    md = Cs(CS_ARCH_M68K, CS_MODE_M68K_000)
+    try:
+        i = next(md.disasm(_rom[addr - _B:addr - _B + 10], addr, count=1))
+    except StopIteration:
+        return None
+    return f"{i.mnemonic} {i.op_str}".strip()
+
+
 def _w(a):
     return struct.unpack('>H', _rom[a - _B:a - _B + 2])[0]
 
@@ -3200,7 +3222,7 @@ check('TRAP #1 entry tests a CCR sentinel, not just supervisor mode',
       == b'\x3f\x17\x02\x2f\x00\x0c\x00\x01\x02\x17\x00\x7f'
          b'\x67\x08\x0c\x2f\x00\x0c\x00\x01\x67\x08')
 check('the ISR-exit path adjusts the stacked PC by -6 at $F00282',
-      _rom[0xF00280 - _B:0xF00284 - _B] == b'\x58\x8f\x5d\x97')
+      insn(0xF00282) == 'subq.l #$6, (a7)')
 check('...and reads it back at $3c(a7), past the 60 bytes of saved registers',
       _rom[0xF00284 - _B:0xF00288 - _B] == b'\x48\xe7\xff\xfe'
       and _rom[0xF00296 - _B:0xF0029A - _B] == b'\x28\x6f\x00\x3c')
@@ -3249,17 +3271,17 @@ check('$0C34 is read by eight btst sites, one per bit of its high byte',
            if _rom[a - _B:a - _B + 2] == b'\x08\x38'          # btst #imm,abs.W
            and struct.unpack('>H', _rom[a - _B + 4:a - _B + 6])[0] == 0x0C34}) == 8)
 check('directive $02 uses TAS.B -- the 68000 atomic read-modify-write',
-      _rom[0xF0078E - _B:0xF00790 - _B] == b'\x4a\xd0')
+      insn(0xF0078E) == 'tas.b (a0)')
 check('...guarded by a level-7 mask',
-      _rom[0xF0078A - _B:0xF0078E - _B] == b'\x00\x7c\x07\x00')
+      insn(0xF0078A) == 'ori.w #$700, sr')
 check('directive $03 orders the ready queue on the byte at TCB+$26',
-      _rom[0xF007D6 - _B:0xF007DA - _B] == b'\x10\x28\x00\x26')
+      insn(0xF007D6) == 'move.b $26(a0), d0')
 check('...and guards against double insertion with bset #4 on TCB+$2D',
       _rom[0xF007C2 - _B:0xF007C8 - _B] == b'\x08\xe8\x00\x04\x00\x2d')
 check('directive $08 converts an address to 256-byte pages with lsr.l #$8',
-      _rom[0xF0176C - _B:0xF0176E - _B] == b'\xe0\x8e')
+      insn(0xF0176C) == 'lsr.l #$8, d6')
 check('the trace ring writer advances by the $1A record stride',
-      _rom[0xF016A2 - _B:0xF016A6 - _B] == b'\x49\xed\x00\x1a')
+      insn(0xF016A2) == 'lea.l $1a(a5), a4')
 check('the ring geometry closes: $1F500 + 8 + 9*$1A == $1F5F2',
       0x1F500 + 8 + 9 * 0x1A == 0x1F5F2)
 
