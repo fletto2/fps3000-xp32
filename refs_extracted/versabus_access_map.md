@@ -14941,3 +14941,36 @@ would show up as new directive types.**
 That makes the syscall trace a sharper progress metric than PC coverage for this question: any
 future chassis model that genuinely drives RDHC should produce `$12` RESUME and semaphore
 directives in this ring, and their absence is a cleaner failure signal than a coverage percentage.
+
+## The 37-vector handler is a "log and return" stub — and it never fires
+
+`$F00896`, the target of **37 exception vectors** (more than any handler except the 182-vector
+panic catch-all), is five instructions:
+
+```
+F00896  btst.b  #$e,$c34.w    ; trace enabled?
+F0089C  beq.b   $f008a4       ; no -> just return
+F0089E  bsr.w   $f01688       ; yes -> log an entry
+F008A2  dc.w    $EE14         ; this trace point's identifier
+F008A4  rte
+```
+
+So **37 exception vectors silently swallow their exceptions** unless kernel tracing is switched on.
+Anything landing there is invisible in a stock build — no lamp, no log, no state change.
+
+**Trace-point identifiers are a convention**: `$F002E8` carries `$FF15`, `$F008A2` carries
+`$EE14`. The writer fetches the word after the `bsr` via `$14(a7)`, so each site tags its records
+distinctly and a populated ring can be read back to source.
+
+### Zero executions is evidence about the emulator, not just the firmware
+
+With `$0C34 = $C000` (bits 14 and 15) the stub executes **0 times** across a full boot. Nothing
+reaches any of those 37 vectors.
+
+That is worth stating positively: a model that generated **spurious exceptions** — a real hazard
+given how much of this emulator is inferred bit-mapping — would deposit them here, and they would
+now be visible. Zero is positive evidence that the model is not manufacturing phantom exceptions,
+which no coverage or PC measurement could establish.
+
+**`FPS3K_POKE="0C34=C000"` plus a count of `$F00896` is therefore a spurious-exception detector**,
+using the firmware's own instrumentation. It costs one run and needs nothing added to the model.
