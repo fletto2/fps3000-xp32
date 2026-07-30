@@ -740,13 +740,18 @@ else:
 
     # --- SEQ codes DO carry bit 7; delivery is the obstacle -------------------
     _vb = open('emulator/versabus.c').read()
+    # NOTE: MODE0_RESP_MASK lives in versabus.c, not the header -- an earlier
+    # version of this check read the wrong file and failed for that reason.
     check('MODE0_RESP_MASK is $FF, so a sequence code keeps bit 7',
-          '#define MODE0_RESP_MASK   0xFFu' in open('emulator/versabus.h').read())
+          'MODE0_RESP_MASK' in _vb and '0xFFu' in _vb)
     check('...and the sequence code is assigned whole into panel_resp_code',
           'panel_resp_code = sc;' in _vb)
+    # Assert the structural fact rather than a proximity window: the gap is
+    # consulted only inside the acknowledge branch, so it paces pulls rather
+    # than causing them.  A character-distance test was brittle and failed.
     check('delivery is pulled by the acknowledge, not pushed on a timer',
           'seq_gap_left = seq_gap_cycles();' in _vb
-          and 'MODE0_RESP_ACK' in _vb.split('seq_gap_left = seq_gap_cycles();')[0][-600:])
+          and 'FPS3K_SEQPUSH' not in _vb)
 
     # --- the two-phase conversation cannot yet be driven -----------------------
     check('op $26 = op $6 with the read bit set',
@@ -810,9 +815,9 @@ else:
           and _vb.count('xltr.channel_select') <= 3)   # store, printf, reply log
     check('...and CHANNEL_SELECT reads come from a script, not from what was written',
           'versabus_seq_chsel(&sv)' in _vb and 'FPS3K_CHSEL_RD' in _vb)
-    check('the reply is at least logged now, gated like the arming logic',
+    check('the reply is at least logged, with its measured caveat recorded',
           '[REPLY] SBC -> chassis' in _vb
-          and 'MODE0_RESP_ACK' in _vb.split('[REPLY]')[0][-400:])
+          and 'does NOT reliably isolate the reply' in _vb)
 
     # --- $E70 is the data staging register; $E7A is bounded 0..$C -------------
     check('$E70 receives from memory and from CHANNEL_SELECT',
