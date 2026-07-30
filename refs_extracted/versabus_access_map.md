@@ -1563,6 +1563,41 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### Auditing the harness: a stale check that outlived the defect it described
+
+Fixing three brittle checks prompted an audit of the rest, and it found a worse one.
+
+**A check asserting a defect that had been fixed.** `check('the emulator does NOT model
+dual-8-bit, so its tick is 27% slow', ...)` was still present and still **passing**, hours
+after the dual-8-bit fix. It passed because its condition — that `counter[t] = p->latch[t]`
+appears in `mc6840.c` — remains true: the fix kept the 16-bit reload as the *else* branch.
+**The condition held while the name had become false.**
+
+That is the second time this session a check outlived its claim; the first asserted the
+retracted `$0E74` mailbox reading and likewise passed. Both are more dangerous than a failing
+check, because a green suite reads as confirmation of every name in it.
+
+**The audit also classified the 20 source-string assertions**, which fall into two kinds that a
+reader cannot distinguish from a failure message:
+
+| kind | examples | what a failure means |
+|---|---|---|
+| **code structure** | `#define APIF_END 0xFF0100`, `((addr - 0xFF0040) >> 5) + 1`, `panel_resp_code = sc;` | the model changed; a documented claim may no longer hold |
+| **comment presence** | `"does NOT reliably isolate the reply"`, `"Gate on boot completion"` | a recorded **caveat was deleted** — worth knowing, not a regression |
+
+Both are legitimate; conflating them is not. The harness now says so in a header note, so a
+future failure is read correctly rather than investigated as a machine change.
+
+**And the removed kind.** Three checks asserted that two strings appeared within *N characters*
+of each other in a source file. Those tested the file's formatting: any comment inserted between
+them — and this session added many — breaks them without anything about the emulator changing.
+*A proxy that correlates with the property you want is fine until you edit the thing the proxy
+measures.*
+
+The pattern across all of this is the session's recurring one, one level up: **the harness is
+itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
+here changed what is known about the machine; it changed how much a passing suite is worth.
+
 ### VERIFIED: the firmware never touches the SIO — checked three ways, including the near-miss
 
 "The FPS firmware never initialises or accesses the µPD7201" is load-bearing: the monitor

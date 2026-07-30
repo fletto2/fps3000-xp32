@@ -1443,9 +1443,31 @@ else:
     check('...giving (39+1)*(199+1) = 8000 E cycles = exactly 10 ms at 800 kHz',
           (0x27 + 1) * (0xC7 + 1) == 8000
           and abs(8000 / (8_000_000 / 10) - 0.010) < 1e-9)
-    check('the emulator does NOT model dual-8-bit, so its tick is 27% slow',
-          'counter[t] = p->latch[t]' in open('emulator/mc6840.c').read()
-          and '0x04' not in open('emulator/mc6840.c').read().split('mc6840_tick')[1])
+    # STALE UNTIL 2026-07-30: this asserted "the emulator does NOT model
+    # dual-8-bit, so its tick is 27% slow" -- a defect fixed earlier the same
+    # day.  It kept passing because the 16-bit reload survives as the else
+    # branch, so the check's CONDITION held while its NAME had become false.
+    # Second instance this session of a check outliving its claim (the first
+    # asserted the retracted $0E74 mailbox reading).  Assert the fix instead.
+    _mc = open('emulator/mc6840.c').read()
+    check('the emulator DOES model dual-8-bit mode now',
+          '(msb + 1) * (lsb + 1)' in _mc and 'p->cr[t] & 0x04' in _mc)
+    check('...with the 16-bit reload kept as the else branch',
+          'counter[t] = p->latch[t]' in _mc)
+
+    # ---------------------------------------------------------------------
+    # NOTE on checks that search emulator SOURCE text.  Two kinds appear below
+    # and a failure means different things:
+    #   (a) CODE STRUCTURE -- device bounds, decode expressions, symbol names.
+    #       A failure means the model changed and a documented claim may no
+    #       longer hold.
+    #   (b) COMMENT PRESENCE -- e.g. "does NOT reliably isolate the reply",
+    #       "Gate on boot completion".  These guard DOCUMENTATION, not
+    #       behaviour: a failure means a recorded caveat was deleted, which is
+    #       worth knowing but is not a regression in the machine.
+    # Checks that asserted two strings were within N characters of each other
+    # were removed -- those tested the file's formatting, nothing more.
+    # ---------------------------------------------------------------------
 
     # --- the AP I/F is 8 windows of $20; only five are populated --------------
     check('the channel port formula is (ch+1)<<5 + $FF000E, so ch1 is window 2',
