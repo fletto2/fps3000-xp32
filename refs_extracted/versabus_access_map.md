@@ -1563,6 +1563,50 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### CONFIRMED IN THE KERNEL: the TRAP #1 handler tests for the Z|N sentinel
+
+The sentinel reading was inferred from `$0C` being an arithmetically impossible flag pair. The
+kernel's own TRAP #1 handler confirms it outright.
+
+Vector 33 (`$84`) reads `$F00262` in post-boot RAM, and that handler opens:
+
+```
+$F00262:  3F17            move.w  (a7),-(a7)        ; duplicate the stacked SR
+$F00264:  022F 000C 0001  andi.b  #$0C,$1(a7)       ; MASK the CCR with $0C
+$F0026A:  0217 007F       andi.b  #$7F,(a7)
+$F0026E:  6708            beq     $F00278           ; -> normal directive path
+$F00270:  0C2F 000C 0001  cmpi.b  #$0C,$1(a7)       ; COMPARE against $0C
+$F00276:  6708            beq     $F00280           ; -> the sentinel path
+$F00278:  548F            addq.l  #2,a7             ; normal
+$F00280:  588F            addq.l  #4,a7             ; sentinel
+```
+
+**The kernel masks the stacked CCR with `$0C` and tests for `$0C` — that is, it tests that
+both Z and N are set**, and branches to a different path when they are. The impossible flag
+pair is not merely a plausible marker; it is the exact thing the handler looks for, and the two
+arms discard different amounts of stack (`addq #2` versus `addq #4`), so they expect different
+frame shapes.
+
+That closes the question completely:
+
+| | |
+|---|---|
+| **normal TRAP #1** | directive in `d0`, CCR arbitrary → `$F00278` |
+| **ISR exit** | CCR = Z\|N, `d0` belongs to the interrupted task → `$F00280` |
+
+*The prediction and its confirmation came from different places*, which is what makes it worth
+recording. The reasoning was: `d0` is unavailable at an ISR exit, so the CCR must carry the
+signal; `$0C` sets Z and N together; no arithmetic produces that; therefore it is a deliberate
+marker rather than a value. The confirmation is six instructions of kernel code — in the region
+this project excludes from `fps3k.asm` as "stock Motorola" — doing precisely that test.
+
+**And it vindicates looking in the kernel at all.** The previous entry ended with "whatever
+releases it comes from outside the ROM — the RTOS kernel or the hardware — and that is where to
+look next". The kernel was the right half of that disjunction, and the 27% of the image this
+project treats as generic turned out to contain the answer. *Stock code is still this machine's
+code*, and the boundary drawn around it is a convenience, not a statement about where findings
+live.
+
 ### The ISR-exit CCR value is a SENTINEL, not a directive number
 
 I wrote earlier that the six ISR exit stubs "pass the directive in the CCR". Two checks say

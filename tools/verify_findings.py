@@ -570,6 +570,17 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the kernel TRAP #1 handler tests for the sentinel --------------------
+    check('the TRAP #1 handler duplicates the stacked SR and masks it with $0C',
+          d[0xF00262-0xF00000:0xF0026A-0xF00000]
+          == b'\x3f\x17\x02\x2f\x00\x0c\x00\x01')
+    check('...then compares the masked CCR against $0C -- the Z|N sentinel',
+          d[0xF00270-0xF00000:0xF00278-0xF00000]
+          == b'\x0c\x2f\x00\x0c\x00\x01\x67\x08')
+    check('...and the two arms discard different frame sizes',
+          d[0xF00278-0xF00000:0xF0027A-0xF00000] == b'\x54\x8f'
+          and d[0xF00280-0xF00000:0xF00282-0xF00000] == b'\x58\x8f')
+
     # --- the ISR-exit CCR value is an impossible flag pair --------------------
     check('the ISR exits with move.w #$000C,CCR (opcode 44FC)',
           d[0xF050FC-0xF00000:0xF05102-0xF00000] == b'\x44\xfc\x00\x0c\x4e\x41')
