@@ -1563,6 +1563,55 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The ISR exit is a RESCHEDULING POINT — the full kernel path decoded
+
+Following the sentinel branch to its end gives the complete ISR-exit mechanism:
+
+```
+$F002AA:  bne     $F002C2           ; no match -> error
+$F002AC:  movea.l -$c(a5),a6        ; matched: a6 = the record's TCB pointer
+$F002B0:  lea     (a6),a0
+$F002B2:  bsr     $F02C6C           ; hand the TCB to the scheduler
+$F002B6:  movem.l (a7)+,d0-d7/a0-a6
+$F002BA:  lea     $4(a7),a7
+$F002BE:  rte                       ; return to whatever was selected
+$F002C2:  bsr     $F00186           ; no match -> error path
+```
+
+**Both `!IDV` offsets land exactly on the documented fields**, which is a strong independent
+check on the record layout since `a5` has already been advanced `$E` past the match:
+
+| code | resolves to | field |
+|---|---|---|
+| `cmpa.l $a(a5),a4` | `+$A` (pre-advance) | **ISR exit** — what the lookup matches |
+| `movea.l -$c(a5),a6` | `a5-$E+$2` = `+$2` | **TCB** — what the lookup yields |
+
+So the sequence is: match the exiting ISR by its exit address, take that record's **TCB**, and
+pass it to `$F02C6C` before returning via `rte`.
+
+**That makes the ISR exit a rescheduling point.** The `rte` cannot simply resume the ISR — the
+PC was rewound six bytes to the `move.w #$c,ccr`, so resuming it would re-issue the same trap
+forever. It only makes sense if `$F02C6C` **switches the stacked context to another task**,
+which is what a scheduler called with a TCB does. The rewind then serves a second purpose: if
+this ISR is ever resumed later, it re-issues its exit rather than falling through into whatever
+follows.
+
+That completes a central RTOS mechanism which this project had only named:
+
+| step | |
+|---|---|
+| 1 | ISR finishes with `move.w #$c,ccr` / `trap #1` |
+| 2 | kernel detects the **Z\|N sentinel** and rewinds the PC by 6 |
+| 3 | walks **`!IDV`** (stride 14) matching the exit address at `+$A` |
+| 4 | takes that record's **TCB** at `+$2` |
+| 5 | calls **`$F02C6C`** with it — the scheduler |
+| 6 | `rte` into the selected task |
+
+**And it confirms why RDHC cannot escape its spin.** Step 6 returns to whatever the scheduler
+selects; if that is RDHC, RDHC resumes at `$F056B8` and spins again. Nothing in this path
+inspects or alters a *spinning* task's PC — the only PC arithmetic is the fixed −6 applied to
+the ISR's own return address. The escape, if there is one, is not in the ISR-exit path either.
+
 ### The sentinel path walks `!IDV` with a 14-byte stride — and rewinds the PC by 6
 
 Following the sentinel branch decodes cleanly and confirms `!IDV`'s record layout from the

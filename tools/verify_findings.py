@@ -570,6 +570,19 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the ISR exit hands a TCB to the scheduler and RTEs -------------------
+    check('a match takes the record TCB at -$C(a5) and calls $F02C6C',
+          d[0xF002AC-0xF00000:0xF002B6-0xF00000]
+          == b'\x2c\x6d\xff\xf4\x41\xd6\x61\x00\x29\xb8')
+    check('...then restores, trims the frame and RTEs',
+          d[0xF002B6-0xF00000:0xF002C0-0xF00000]
+          == b'\x4c\xdf\x7f\xff\x4f\xef\x00\x04\x4e\x73')
+    check('the two !IDV offsets resolve to the exit and TCB fields',
+          0x0A == 10 and (0x0E - 0x0C) == 2)
+    check('no match branches to the error path at $F00186',
+          d[0xF002C2-0xF00000:0xF002C6-0xF00000] == b'\x61\x00\xfe\xc2'
+          and 0xF002C6 - 0x13E == 0xF00188)
+
     # --- the sentinel path walks !IDV with a 14-byte stride -------------------
     check('the sentinel path rewinds the return PC by 6 -- ccr(4) + trap(2)',
           d[0xF00280-0xF00000:0xF00284-0xF00000] == b'\x58\x8f\x5d\x97')
