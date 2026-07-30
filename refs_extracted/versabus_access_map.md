@@ -14252,3 +14252,41 @@ This makes the mechanism emulator-relevant in a concrete way: a model that lets 
 `rte` instead of routing it through `trap #1` with `CCR = $0C` will never wake the task, and the
 failure will look like "the interrupt fired but nothing happened" — which is exactly the symptom
 this project chased for several sessions under the heading of the `bra .` deadlock.
+
+## CORRECTION: TRAP #2-#15 vectors are populated, not free
+
+This project records that the firmware "uses only TRAP #0 and TRAP #1 — a sweep of every
+`TRAP #n` finds **zero** uses of #2-#15, so those fourteen vectors are free". The sweep is right;
+the conclusion drawn from it is not.
+
+Dumping the **runtime** vector table (built in RAM at boot, so invisible to any ROM scan) shows
+those fourteen vectors pointing at fourteen consecutive addresses on a **2-byte stride**:
+
+```
+F00A78  61 1c   bsr.b $f00a96     <- TRAP #2
+F00A7A  61 1a   bsr.b $f00a96     <- TRAP #3
+  …                                  …
+F00A92  61 02   bsr.b $f00a96     <- TRAP #15
+F00A94  4e 71   nop
+F00A96          move.w $4(a7),-(a7)   ; the shared handler
+F00A9A          andi.b #$7f,(a7)      ; the same supervisor/user split
+```
+
+A **`bsr` fan-in ladder**: fourteen two-byte branches to one handler. Each `bsr` stacks its own
+return address, so the handler can tell which trap fired from where it was called — the same
+"identify the caller by where it came from" idiom the kernel uses for `!IDV`, and a second
+instance of that pattern.
+
+So the vectors are **live kernel handlers**, not empty slots. What the sweep established is
+narrower: *this firmware never issues* TRAP #2-#15, which is a different statement from *nothing
+is installed there*.
+
+**Consequence for the monitor.** Installing a `TRAP #14` breakpoint handler overwrites a
+populated kernel vector rather than filling an empty one. In practice that is still safe — the
+firmware issues no TRAP #14, so the kernel handler at `$F00A90` is never reached — but the
+existing note ("those fourteen vectors are free ... confirmed conflict-free by measurement")
+describes the right conclusion for the wrong reason, and a reader planning to use another trap
+number should know they are all occupied.
+
+Also visible in the same dump: **`$F0A27A` serves 182 vectors** (the panic catch-all, matching
+the documented count) and **`$F00896` serves 37**.
