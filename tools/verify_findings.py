@@ -3464,5 +3464,42 @@ check('d7 carries one failure marker, $F0F0F0F0, at every site',
            for a in range(0xF08700, 0xF09C00, 2)
            if _rom[a - _B:a - _B + 2] == b'\x2e\x3c'}) == 1)
 
+# --- the scheduler control block at $0C08, mapped 2026-07-30 --------------
+with tempfile.TemporaryDirectory() as _tdq:
+    subprocess.run([EMU, '-rom', ROM, '-cycles', '150000000',
+                    '-dump-ram', f'{_tdq}/r'], capture_output=True, timeout=400)
+    _rq = open(f'{_tdq}/r', 'rb').read()
+
+    def _lw(a):
+        return struct.unpack('>I', _rq[a:a + 4])[0] & 0xFFFFFF
+
+    def _tcbname(a):
+        return _rq[a + 0x10:a + 0x14].decode('latin1') if 0x1E000 <= a < 0x20000 else None
+
+    check('$0C0C is the current-task pointer and holds RDHC at rest',
+          _tcbname(_lw(0x0C0C)) == 'RDHC')
+    check('$0C10 heads the all-tasks list, starting at XP1I',
+          _tcbname(_lw(0x0C10)) == 'XP1I')
+    check('$0C14 is the ready-queue head and is EMPTY at rest',
+          _lw(0x0C14) == 0)
+    # The chain is built by six LIFO pushes, so it runs in reverse TDTI order.
+    _chain, _a = [], _lw(0x0C10)
+    while 0x1E000 <= _a < 0x20000 and len(_chain) < 10:
+        _chain.append(_tcbname(_a))
+        _a = _lw(_a + 0x0C)
+    check('the all-tasks chain is six nodes in reverse TDTI creation order',
+          _chain == ['XP1I', 'XP2I', 'XP3I', 'XP4I', 'IO1I', 'RDHC'])
+    check('...and terminates at zero', _a == 0)
+    # An empty ready queue and six blocked tasks are the same fact twice.
+    check('every task is WAITING, which is why the ready queue is empty',
+          all(struct.unpack('>H', _rq[b + 0x2C:b + 0x2E])[0] == 0x4000
+              for b in (0x1E900, 0x1EB00, 0x1ED00, 0x1EF00, 0x1F100, 0x1F300)))
+
+# The enqueue/dequeue pair on TCB+$2D bit 4.
+check('the ready-queue insert guards with bset #$4,$2d(a0)',
+      insn(0xF007C2) == 'bset.b #$4, $2d(a0)')
+check('...and the dequeue clears it with bclr #$4,$2d(a6)',
+      insn(0xF0053C) == 'bclr.b #$4, $2d(a6)')
+
 print(f'\n{checks - len(fails)}/{checks} passed')
 sys.exit(1 if fails else 0)
