@@ -1563,6 +1563,47 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### `$0E74` is the chassis-op RETURN VALUE, and CHANNEL_SELECT is the reply register
+
+The read-out site the validated enumerator surfaced — `$F04924 [R] move.w $e74.l,$204(a5)` —
+turns out to be the last step of the chassis reply sequence, and it completes the
+request/response protocol:
+
+```
+$F04910:  move.w $e86.l,d1           ; the LATCHED command word
+$F04916:  bclr.b #$a,d1              ; clear bit 10 -- acknowledge it
+$F0491A:  move.w d1,$200(a5)         ; write it back to XLTR_MODE0
+$F0491E:  move.w #$5e,$230(a5)       ; re-arm BIM0 ch0 (level 6, IRE set)
+$F04924:  move.w $e74.l,$204(a5)     ; SEND THE RESULT to CHANNEL_SELECT
+$F0492C:  bra    loc_F04736          ; back to RDHC's wait
+```
+
+So the full conversation is:
+
+| direction | carrier |
+|---|---|
+| **chassis → SBC** | command byte in the **low byte of `XLTR_MODE0`**, latched at `$E86`/`$E87`, delivered by a **BIM0 ch0 interrupt** (vector `$41`, handler `$F04930`) |
+| **SBC → chassis** | result word in **`$0E74`**, written to **`CHANNEL_SELECT`**; the command is acknowledged by clearing **MODE0 bit 10** |
+
+**That is what `$0E74` is**: the op handlers clear it on entry (the 22 immediate zero-writes),
+store their answer into it (the 11 register-sourced writes, including `move usp,a1 / swap /
+move.w d1,$0E74` returning the user stack pointer's high half), and this site ships it back.
+The `cmpi.w #$25A,$0E74` in RDHC's main loop is the firmware inspecting a *result* before
+replying — exactly as the retraction guessed, now with the outbound site to support it.
+
+**It also explains `CHANNEL_SELECT`'s double life.** `$FF0204` is the most-written register on
+the board and this project has recorded two unrelated uses: the self-test's **phase beacon**
+(`d6` with its low byte cleared) and the service path's **channel selection**. It is neither,
+exactly — it is the SBC's general **outbound word to the chassis**, carrying whatever the SBC
+currently has to say: a phase number during power-on, an operation result in service. The
+~33k writes against 7 reads follow directly from that being the machine's only reply channel.
+
+*And the retraction paid for itself.* Withdrawing the mailbox claim forced building a tool
+that could enumerate references correctly, and the first thing that tool found was the read
+that identifies `$0E74` properly. **The wrong answer was reached by a broken method that
+happened to look thorough; the right one came from fixing the method rather than re-examining
+the conclusion.**
+
 ### `tools/refs.py`: stop hand-decoding opcodes — and it settles `$10AA` vs `$0E74`
 
 Six times this session I hand-decoded 68000 opcodes to enumerate references, and six times the

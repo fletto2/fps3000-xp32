@@ -570,6 +570,19 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the chassis reply sequence -------------------------------------------
+    check('the reply path acknowledges by clearing MODE0 bit 10',
+          d[0xF04910-0xF00000:0xF0491E-0xF00000]
+          == b'\x32\x39\x00\x00\x0e\x86\x08\x81\x00\x0a'
+             b'\x3b\x41\x02\x00')
+    check('...re-arms BIM0 ch0 with $5E (level 6, IRE set)',
+          d[0xF0491E-0xF00000:0xF04924-0xF00000] == b'\x3b\x7c\x00\x5e\x02\x30')
+    check('...then ships $0E74 out to CHANNEL_SELECT as the result',
+          d[0xF04924-0xF00000:0xF0492C-0xF00000]
+          == b'\x3b\x79\x00\x00\x0e\x74\x02\x04')
+    check('...and returns to RDHC\'s wait',
+          d[0xF0492C-0xF00000:0xF04930-0xF00000] == b'\x60\x00\xfe\x08')
+
     # --- tools/refs.py exists and is validated against its controls -----------
     check('tools/refs.py parses disassembler output rather than raw opcodes',
           'fps3k.asm' in open('tools/refs.py').read()
