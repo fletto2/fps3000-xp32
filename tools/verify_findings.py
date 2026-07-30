@@ -570,20 +570,19 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
-    # --- $0E74 is chassis-written: the ROM only ever clears it ----------------
-    check('RDHC tests $0E74 against panel code $25A',
+    # --- $0E74: the chassis-mailbox claim is RETRACTED ------------------------
+    # An earlier version asserted "every write to $0E74 is zero", counting only
+    # immediate-source stores.  There are 11 register-sourced writes, plainly
+    # nonzero.  Assert the refutation so the false claim cannot return.
+    check('$0E74 IS written from registers -- not a chassis-only mailbox',
+          d[0xF04A0E-0xF00000:0xF04A1A-0xF00000]
+          == b'\x4e\x69\x22\x09\x48\x41\x33\xc1\x00\x00\x0e\x74')
+    check('...and copied from $0E70, another firmware global',
+          d[0xF04DA6-0xF00000:0xF04DB0-0xF00000]
+          == b'\x33\xf9\x00\x00\x0e\x70\x00\x00\x0e\x74')
+    check('RDHC does compare $0E74 against $25A (the observation was sound)',
           d[0xF0475E-0xF00000:0xF04766-0xF00000]
           == b'\x0c\x79\x02\x5a\x00\x00\x0e\x74')
-    check('every write to $0E74 is zero -- 22 sites, none otherwise',
-          len([a2 for a2 in range(0xF04488, 0xF0FFF0, 2)
-               if word(a2) == 0x33FC and long_(a2 + 4) & 0xFFFFFF == 0x0E74
-               and word(a2 + 2) == 0]) == 22
-          and not [a2 for a2 in range(0xF04488, 0xF0FFF0, 2)
-                   if word(a2) == 0x33FC and long_(a2 + 4) & 0xFFFFFF == 0x0E74
-                   and word(a2 + 2) != 0])
-    check('...and there are no absolute-SHORT references to it either',
-          not [a2 for a2 in range(0xF04488, 0xF0FFF0, 2)
-               if (word(a2) & 0x3F) == 0x38 and word(a2 + 2) == 0x0E74])
 
     # --- three emission forms, and $264 uses two of them ----------------------
     check('$264 is emitted by addi.w #imm,d1 as well as move.w #imm,d0',

@@ -1563,47 +1563,52 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
-### `$0E74` is a second chassis-written mailbox — the firmware only ever clears it
+### RETRACTED: `$0E74` is NOT a chassis mailbox — it is an op RESULT word
 
-Chasing the one *comparison* against a panel code turns up a communication path.
+*The entry that stood here claimed `$0E74` was written only from off-board, on the `$10AA`
+pattern. It is wrong and is withdrawn in full.*
 
-`$F0475E` in RDHC does `cmpi.w #$25A,$0E74` — the firmware testing a **stored** panel code
-rather than emitting one. `$25A` is `PCMD_CH1_ACK`. Enumerating every reference to `$0E74` at
-a code address:
+The claim rested on enumerating writes and finding 22, all zero. That enumeration only
+counted **immediate-source** stores (`move.w #imm,abs`). `$0E74` also has **11
+register-sourced writes**, which are plainly nonzero:
 
-| form | sites | value |
-|---|---|---|
-| `move.w #$0000,$0E74` | **22** | always zero |
-| `cmpi.w #$0000,$0E74` | 4 | |
-| `cmpi.w #$25A,$0E74` | 1 | |
-| absolute-**short** forms | **0** | (checked separately — `$0E74` is short-reachable) |
+```
+$F04A0E:  move   usp,a1
+          move.l a1,d1
+          swap   d1
+$F04A14:  move.w d1,$e74.l          ; the HIGH HALF OF THE USER STACK POINTER
+$F04DA6:  move.w $e70.l,$e74.l      ; copied from another global
+```
 
-**Nothing in the ROM ever writes a nonzero value to `$0E74`.** Twenty-two writes, all zero,
-and the only nonzero value it is ever compared against is `$25A`. So a nonzero `$0E74` must
-arrive from **off-board**.
+So the firmware writes `$0E74` with register values and with other globals' contents. It is
+not chassis-written, and the `$10AA` analogy does not hold.
 
-**That is exactly the `$10AA` pattern, and `$10AA` was solved.** This file records the same
-shape for it — *"a write watchpoint catches exactly 8 writes to `$10AA-$10AD`, all zeros... a
-nonzero `$10AA` must come from off-board"* — and the resolution was that **chassis op `$6`
-makes the SBC's own CPU store it**: the chassis sets an address with op `$1` and issues op
-`$6`, and no bus mastering is involved. `$0E74` is almost certainly written the same way.
+**What it actually looks like:** a **result word for the chassis-op handlers.** The handlers
+clear it on entry (that is what the 22 immediate zero-writes are — one per op path) and store
+an answer into it before returning; `move usp,a1 / swap / move.w d1,$0E74` is a handler
+returning the user stack pointer's high half to whatever asked. The `cmpi.w #$25A,$0E74` at
+`$F0475E` is then RDHC testing a *result*, not a posted code. That reading is consistent with
+every site but I am not asserting it with the confidence of the retracted claim.
 
-That makes this a **second instance of the same mechanism**, which is worth more than the
-first: op `$6` was demonstrated once against a single target, and a second global with an
-identical write profile is what one would expect if it is the general chassis→SBC store path
-rather than a one-off.
+**How the error happened, precisely.** In the same entry I wrote *"the check was necessary,
+not decorative"* about having tested absolute-**short** addressing. That check was real — but
+absolute-short is a different **addressing mode for the same instruction**, whereas the writes
+I missed use a different **source operand**. Having checked one axis thoroughly, I treated the
+enumeration as complete. **Coverage along one dimension reads as coverage, and is not.**
 
-**So `$0E74` is a chassis-posted panel code**: the chassis writes it, RDHC's main loop tests
-it for `$25A` (channel-1 acknowledge), and the twenty-two clearing writes are the SBC
-consuming it — one per handler that can service a posted code. The clears cluster exactly
-where you would expect: `$F04998`-`$F04AB4` in the panel-response paths, and `$F04D14`-`$F050EC`
-across the chassis-op handlers, including the op `$C` and op `$D` sites decoded above.
+*This is the sixth instance of the pattern this session and by far the most damaging*, because
+unlike the earlier ones it produced a confident, structured, committed finding with an
+attractive story — a second instance of a known mechanism — rather than an obviously-empty
+result. **A false negative that confirms an existing hypothesis is much harder to notice than
+one that contradicts it**, and that is the real lesson here: I stopped checking when the answer
+started agreeing with something I already believed.
 
-*Method note:* `$0E74` sits in the low 32K and is therefore reachable by absolute-**short**
-addressing, which the `.l`-form scan would have missed entirely. I checked before concluding,
-and there are none — but the check was necessary, not decorative. Had they existed, "the
-firmware never writes a nonzero value" would have been another false negative of exactly the
-kind this session keeps producing.
+The detector that produced it has the same flaw and its other output is unreliable for the
+same reason: it flagged `$0E58`, `$0E5C` and `$0E7A` alongside `$0E74`, and did **not** flag
+`$10AA`, the one global known to fit the pattern — because `$10AA`'s zero-writes come from a
+bulk-clear loop rather than immediate stores. A detector that misses its own control and
+flags four cases, one of which is demonstrably wrong, has established nothing. **No mailbox
+sweep is claimed.**
 
 ### A definitive panel-code census: 41 codes, 154 sites, 50 unused
 
