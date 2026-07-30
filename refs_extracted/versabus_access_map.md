@@ -1563,6 +1563,71 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### Chassis ops `$C` and `$D` decoded — and `$25D` is a reject, not a per-channel config
+
+RDHC's second-largest gap, `$F05066-$F050D6`, is the tail of chassis op `$C` and the whole of
+op `$D`.
+
+**Op `$C` writes a 32-bit parameter into the array at `$101E`, half at a time**, and it
+implements the command-byte bits literally:
+
+```
+bne    .low
+move.w $204(a0),$1020(a1)      ; CHANNEL_SELECT -> low half
+bra    .done
+.low:
+move.w $204(a0),$101e(a1)      ; CHANNEL_SELECT -> high half
+.done:
+move.w #$0,$e74
+btst.b #$4,$e87                ; the AUTO-INCREMENT bit of the command byte
+beq    .no_inc
+addq.l #$1,$e7a                ; bump the array index
+```
+
+That is the documented command-byte decode executing: **bit 4 = auto-increment `$E7A`**, bit 6
+selecting which half of the longword receives `CHANNEL_SELECT`. The array at `$1020` was
+recorded as a *read* path; it is written here too.
+
+**Op `$D` validates `CHANNEL_SELECT` in `0..$F`**, and on success resets the index and latches
+the value:
+
+```
+cmpi.w #$0,$204(a0)  ;  blt  .reject
+cmpi.w #$f,$204(a0)  ;  ble  .ok
+.reject:  move.w #$25d,d0  ;  jsr PanelIOConfigure_25A
+.ok:      clr.w   $e7a           ; reset the array index
+          move.w  $204(a0),$e7c  ; latch the validated selector
+          move.w  #$0,$e74
+```
+
+`$E7C` is a global this project has not recorded before: **the validated chassis selector**.
+
+**Correction: `$25D` is a range-reject code.** The panel-code table lists `$25D`-`$260` as
+`PCMD_CH{1..4}_CONFIG`, "per-channel config", reasoning that *"`$261` is used nowhere,
+consistent with `$25D`-`$260` being the four per-channel config codes."* The call sites do not
+support it:
+
+| code | sites | context |
+|---|---|---|
+| **`$25D`** | **2** | **both immediately after a `ble.b` — the out-of-range arm** |
+| `$25E` | 1 | |
+| `$25F` | 2 | both after `bra.b` |
+| `$260` | 2 | both after `bra.b` |
+| `$261` | **0** | (the absence the inference rested on) |
+
+A per-channel scheme would give one site per code. `$25D` has two, both on validation-failure
+arms of range checks (`$F04FD2` and `$F050A2`), which is a **reject** and not a configuration.
+The `$261` absence is real but supports nothing on its own — an unused code is equally
+consistent with a reject family that happens to have four members.
+
+**This is the second per-channel grouping in that table to fail.** The `$26D`-`$271` block was
+already retracted — *"`$26E` is not a channel code at all; all four XP tasks emit the identical
+multiset, so none of them can identify a channel; they index the RTOS directive that failed."*
+Same shape here: codes that look channel-indexed turn out to index a **failure reason**. The
+table's per-channel readings should be treated as unverified wherever they were inferred from
+code adjacency rather than from a call site. I have decoded only `$25D`'s sites; `$25E`-`$260`
+remain open, and I am not extending the correction to them without doing the same work.
+
 ### `PanelErrorMaskTable` decodes `XLTR_IRQ_MASK`: channel 1-4 are bits 5,4,3,2
 
 RDHC's largest undocumented run, `$F05900-$F0597A`, is the **transfer teardown path**, and

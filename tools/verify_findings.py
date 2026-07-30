@@ -570,6 +570,27 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- chassis ops $C and $D; $25D is a reject ------------------------------
+    check('op $C writes CHANNEL_SELECT into $101E/$1020, half by half',
+          d[0xF05068-0xF00000:0xF05076-0xF00000]
+          == b'\x33\x68\x02\x04\x10\x20\x60\x06'
+             b'\x33\x68\x02\x04\x10\x1e')
+    check('...and honours command-byte bit 4 by incrementing $E7A',
+          d[0xF0507E-0xF00000:0xF0508E-0xF00000]
+          == b'\x08\x39\x00\x04\x00\x00\x0e\x87\x67\x06'
+             b'\x52\xb9\x00\x00\x0e\x7a')
+    check('op $D range-checks CHANNEL_SELECT 0..$F',
+          d[0xF05092-0xF00000:0xF050A2-0xF00000]
+          == b'\x0c\x68\x00\x00\x02\x04\x6d\x08'
+             b'\x0c\x68\x00\x0f\x02\x04\x6f\x0e')
+    check('...emits $25D on the REJECT arm, at both of its two sites',
+          d[0xF050A2-0xF00000:0xF050A6-0xF00000] == b'\x30\x3c\x02\x5d'
+          and d[0xF04FD2-0xF00000:0xF04FD6-0xF00000] == b'\x30\x3c\x02\x5d')
+    check('...and on success resets $E7A and latches the selector in $E7C',
+          d[0xF050B0-0xF00000:0xF050BE-0xF00000]
+          == b'\x42\x79\x00\x00\x0e\x7a'
+             b'\x33\xe8\x02\x04\x00\x00\x0e\x7c')
+
     # --- PanelErrorMaskTable decodes XLTR_IRQ_MASK ----------------------------
     check('PanelErrorMaskTable sits right after the 42-entry dispatch table',
           0xF05BA4 + 42 * 4 == 0xF05C4C)
