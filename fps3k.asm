@@ -2377,6 +2377,28 @@ PanelIOConfigure_25A:
 ;### panel-command issuer, copy 2 of 8 (the "PanelIOCommand processor").
 ;### PanelIOConfigure copy 2/7 - TCBRDHC. ...one per task region plus this pre-task one.
   f05688: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
+;### THE PANEL-CODE SPACE IS PARTITIONED BY OWNING TASK, NOT BY CHANNEL.
+;###   Classifying every code by which task regions issue it:
+;###     $258-$260  RDHC ONLY
+;###     $262-$264  XP TASKS ONLY (1-2 sites per task)
+;###     $269-$26C  SHARED -- RDHC and all four XP tasks (the abort/release
+;###                family every task needs)
+;###     $26D-$271  XP TASKS ONLY
+;###     $276-$27B  RDHC ONLY        $27D  RDHC + IO1I
+;###     $27E-$280  IO1I ONLY        $29E-$2A6  RTOS INIT ONLY
+;###   This WITHDRAWS the "per-channel runs of four" idea floated one round
+;###   earlier: each task owns a private block plus one shared group.
+;###   TWO LABEL CORRECTIONS FOLLOW.  $25D-$260, recorded as
+;###   PCMD_CH{1..4}_CONFIG, are RDHC-ONLY with irregular site counts
+;###   (2/1/2/2); a genuinely per-channel code appears once or twice PER XP
+;###   TASK, as $262/$263/$264 do.  The CH1-CH4 labelling is unsupported.
+;###   And $25B (PCMD_CH1_FLUSH) is NEVER ISSUED -- zero sites -- so a named
+;###   code describes something the firmware never does.  $261, $26F and $27C
+;###   are likewise absent, $27C confirming the noted INIT_STEP7 gap.
+;###   CAUTION: a raw byte-pair search is NOT a valid absence test here -- it
+;###   gives 71 hits for $260 and 15 for $258, nearly all incidental matches
+;###   inside displacements and data.  Only the instruction-level sweep
+;###   distinguishes a code being ISSUED from its bytes merely occurring.
   f0568e: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
   f05694: 31 40 00 0e             move.w   d0, $e(a0)
   f05698: 32 28 02 02             move.w   $202(a0)  [XLTR_MODE1], d1
@@ -7988,6 +8010,19 @@ loc_F08974:
 
 loc_F08992:
   f08992: 61 00 0f 58             bsr.w    loc_F098EC
+;### THE PHASE NUMBER IS A RUNNING COUNTER IN d6, NOT A TEST IDENTIFIER.
+;###   addi.w #$100,d6 bumps the base between sub-tests, and $F098F0 does
+;###   clr.b d6 -- clearing only the LOW byte -- before writing d6 to
+;###   CHANNEL_SELECT.  So the high byte is a running base and the low byte
+;###   counts steps within a test.
+;###   $F098EC is called from EXACTLY ONE site (here) yet produces both $20xx
+;###   AND $24xx phases: the outer loop runs a four-sub-test block twice,
+;###   advancing the base $400 per iteration.  Confirmed independently by the
+;###   beacon PCs being identical between the two groups, and $F099B8 being
+;###   called from SIX sites -- exactly why $21xx and $25xx have six phases.
+;###   CONSEQUENCE: phase inventories that count distinct beacon values
+;###   OVERCOUNT distinct tests.  "30 phases" and "13 confirmed" are counter
+;###   values; several groups are re-runs of one block with a different base.
   f08996: 06 46 01 00             addi.w   #$100, d6
 ;>>>> [R7/BOTH] This is a subroutine call to loc_F09986, which is part of the memory bus probe or board status polling sequence during MainInit, incrementing d6 by 0x100 as a progress indicator.
   f0899a: 61 00 0f ea             bsr.w    loc_F09986
@@ -8073,6 +8108,12 @@ HardwareInit:
   f08a6c: 42 86                   clr.l    d6
 
 loc_F08A6E:
+;### PHASES $0100-$0168 ARE THE 68000 CPU REGISTER SELF-TEST -- 105 counter
+;###   values for ONE test, not 105 tests.  First it checks that moveq #$FF
+;###   sign-extends to $FFFFFFFF (error marker $F0F0F0F0 and spin if not), then
+;###   walks a value and its complement through EVERY register including the
+;###   USER STACK POINTER via the privileged move a5,usp / move usp,a3 forms.
+;###   Nothing chassis-side is involved.
   f08a6e: 7e ff                   moveq    #$ff, d7
   f08a70: 0c 87 ff ff ff ff       cmpi.l   #$ffffffff, d7
   f08a76: 67 06                   beq.b    loc_F08A7E
@@ -8119,6 +8160,8 @@ loc_F08AC8:
 ;>>>> [R4/BOTH] Setting up user data segment registers (D1-D3/A0-A1) for task context initialization.
   f08ace: 2a 41                   movea.l  d1, a5
   f08ad0: 28 4e                   movea.l  a6, a4
+;### The USP hop -- reachable only through the privileged move usp forms, so an
+;###   emulator that stubs USP will fail this phase.
   f08ad2: 4e 65                   move     a5, usp
 ;>>>> [R7/BOTH] In `HardwareInit`, this instruction copies the address in `a4` (user stack pointer setup) to `a2`, part of a sequence that duplicates and exchanges register values to initialize task context data segments for the RMS68K kernel.
   f08ad4: 24 4c                   movea.l  a4, a2

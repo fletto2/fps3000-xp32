@@ -1528,6 +1528,122 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The self-test "phase" is a running counter in `d6`, not a test identifier
+
+The phase beacon is `move.w d6,$204(a6)` and the value is maintained by hand:
+
+```
+$F08992  bsr.w   $F098EC        ; address-uniqueness RAM test   -> phases $20xx
+$F08996  addi.w  #$100,d6       ; BUMP THE PHASE BASE
+$F0899A  bsr.w   $F09986        ; pattern test                  -> phases $21xx
+$F0899E  move.l  a5,-(a7)
+$F089A0  addi.w  #$100,d6       ; bump again
+$F089A4  cmpa.l  #$1fff0,a1     ; ... inside an OUTER LOOP
+$F089AC  lea     -$20(a1),a1
+```
+
+`$F098F0` does `clr.b d6` — clearing only the **low** byte — then writes `d6` to
+CHANNEL_SELECT, so the high byte is the caller's running base and the low byte counts
+sub-steps within a test. **`$F098EC` is called from exactly one site**, `$F08992`, yet
+produces both `$20xx` and `$24xx` phases: the outer loop runs a four-sub-test block
+twice, and each iteration advances the base by `$400`.
+
+**So `$20xx`-`$23xx` and `$24xx`-`$27xx` are the same code, run twice** — confirmed
+independently by the beacon PCs, which are identical between the two groups
+(`$F098F2`, `$F099B8`, `$F099FA`, `$F09A84`). And `$F099B8` is called from **six**
+sites, which is exactly why `$21xx` and `$25xx` each have six phases.
+
+*This changes how the phase space should be read.* This document and `CLAUDE.md` list
+phase inventories — "phases `$0100`-`$1A00`, `$2000`", "13 confirmed", "30 phases" —
+as though each value named a distinct test. They are **counter values**. Several
+groups are re-runs of one block with a different base, so a count of distinct beacon
+values overcounts distinct tests. The 105 values `$0100`-`$0168` are one test
+incrementing per register, not 105 tests.
+
+#### Phases `$0100`-`$0168` are the 68000 CPU register self-test
+
+```
+$F08A6E  moveq   #$ff,d7
+$F08A70  cmpi.l  #$ffffffff,d7      ; does moveq sign-extend?
+$F08A78  move.l  #$f0f0f0f0,d6      ;   no -> error marker, and spin
+...
+$F08AC8  move.l  d0,d1 / not.l d1
+$F08ACC  movea.l d0,a6 / movea.l d1,a5 / movea.l a6,a4
+$F08AD2  move    a5,usp             ; through the USER STACK POINTER
+$F08AD6  move    usp,a3
+$F08AD8  movea.l a2,a0 / movea.l a3,a1 / move.l a0,d4 / move.l a1,d5
+```
+
+A value and its complement are walked through **every register including the USP** —
+reachable only via the privileged `move usp` forms — with the phase counter
+incremented per step. Nothing chassis-side is involved.
+
+#### What each phase group actually touches
+
+Classifying every group by the devices its code accesses, **with the beacon write
+itself excluded** (including it makes every group trivially "touch the XLTR", which is
+how the first version of this classification came out useless):
+
+| group | phases | touches | needs a chassis model? |
+|---|---|---|---|
+| `$01xx` | 105 | VMOD | no — CPU registers |
+| `$02xx` `$05xx` `$08xx` `$09xx` `$11xx` `$12xx` `$14xx` | 4-6 each | BOARD/PTM, VMOD | **board-status handshake only** |
+| `$03xx` `$04xx` `$07xx` `$10xx` `$20xx` `$21xx` `$22xx` | 1-6 each | **nothing** | no — pure RAM/CPU |
+| `$06xx` `$13xx` | 8, 7 | VMOD | no |
+| `$15xx` `$16xx` `$23xx` | 1-6 | XLTR | yes |
+| `$17xx` `$18xx` `$19xx` `$28xx` `$29xx` | 1-5 | chassis memory + XLTR | yes |
+| `$1Axx` | 3 | **AP I/F** + XLTR | yes |
+
+**The bit-mapping rules this project derived "from phases `$0800`/`$1100`/`$1200`/
+`$1400`" come from the board-status group** — `$F70019` and `$1FFF0/1` only, no XLTR or
+AP I/F. That is consistent with those rules all being equations relating `$F70019` bits
+to `$1FFF1` bits, and it means they were derived from the right phases; but it also
+means **only ten of the thirty groups touch the XLTR, AP I/F or chassis memory at
+all**. A chassis model has far less to answer for than the phase count suggests.
+
+### The panel-code space is partitioned by owning task, not by channel
+
+*This withdraws my own hypothesis from the section below.* Having found `$262`-`$268`
+organised per channel, I suggested the code space runs in "per-channel runs of four".
+Classifying **every** code by which task regions issue it shows the real structure,
+and it is by **owning task**:
+
+| range | issued by | evidence |
+|---|---|---|
+| `$258`-`$260` | **RDHC only** | 1-5 sites each, all in `$F04600-$F05CFF` |
+| `$262`-`$264` | **XP tasks only** | 4, 4 and 8 sites — one or two per task |
+| `$269`-`$26C` | **shared** — RDHC *and* all four XP tasks | 5, 20, 10, 45 sites |
+| `$26D`-`$271` | **XP tasks only** | 4, 8, 4, 8 sites |
+| `$276`-`$27B` | **RDHC only** | one site each |
+| `$27D` | RDHC + IO1I | |
+| `$27E`-`$280` | **IO1I only** | one site each |
+| `$29E`-`$2A6` | **RTOS init only** | the nine exception reporters |
+
+So each task owns a private block and there is one **shared group at `$269`-`$26C`** —
+which is exactly the abort/timeout/release family every task needs. That is a stronger
+and simpler rule than per-channel runs, and it predicts where an unassigned code
+belongs.
+
+#### Two label corrections it forces
+
+**`$25D`-`$260` are not per-channel config.** They are recorded as
+`PCMD_CH{1..4}_CONFIG`, but all four are **RDHC-only** with irregular site counts
+(2, 1, 2, 2). A genuinely per-channel code appears once or twice *per XP task*, as
+`$262`/`$263`/`$264` do. The `CH1`-`CH4` labelling on this block is unsupported.
+
+**`$25B` (`PCMD_CH1_FLUSH`) is never issued.** The instruction sweep finds **zero**
+sites. Likewise `$261`, `$26F` and `$27C` have no sites — and `$27C` is precisely the
+"gap where `INIT_STEP7` would sit" this document already noted, now confirmed as a
+real absence rather than a naming oversight. So of the codes named in the table, one
+(`$25B`) names something the firmware never does.
+
+*Methodological note, the fifth of its kind this session: a raw byte-pair search is
+**not** a valid absence test here. Searching the ROM for the two bytes of each code
+gives 71 hits for `$260` and 15 for `$258` — nearly all incidental matches inside
+displacements and data. Only the instruction-level sweep (`move.w #imm,d0`,
+`addi.w #imm,d1`) distinguishes a code being *issued* from its bytes merely occurring.
+`$26F` is the one case where both agree at zero.*
+
 ### Seven undocumented panel codes, and RDHC's dispatch copy is 180 bytes short
 
 Diffing the five copies of the dispatch subsystem over `$5C8` bytes:

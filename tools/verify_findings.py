@@ -550,6 +550,57 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- the phase beacon is a running counter in d6 -------------------------
+    check('the phase beacon writes d6, and clr.b d6 preserves the high byte',
+          d[0xF098F0-0xF00000:0xF098F6-0xF00000] == b'\x42\x06\x3d\x46\x02\x04')
+    check('the base is bumped by $100 between sub-tests',
+          d[0xF08996-0xF00000:0xF0899A-0xF00000] == b'\x06\x46\x01\x00'
+          and d[0xF089A0-0xF00000:0xF089A4-0xF00000] == b'\x06\x46\x01\x00')
+    check('$F098EC (the RAM test) is called from exactly ONE site, $F08992',
+          [a2 for a2 in range(0xF08700, 0xF0A000, 2)
+           if struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0] == 0x6100
+           and a2 + 2 + struct.unpack('>h', d[a2-0xF00000+2:a2-0xF00000+4])[0]
+               == 0xF098EC] == [0xF08992])
+    check('...so $20xx and $24xx are the same code twice, not distinct tests',
+          d[0xF098EC-0xF00000:0xF098F0-0xF00000] == b'\x48\xe7\x80\xe0')
+    check('phase $01xx is the CPU register test: moveq #$FF then a $FFFFFFFF compare',
+          d[0xF08A6E-0xF00000:0xF08A78-0xF00000]
+          == b'\x7e\xff\x0c\x87\xff\xff\xff\xff\x67\x06')
+    check('...and it walks the value through the USER STACK POINTER',
+          d[0xF08AD2-0xF00000:0xF08AD8-0xF00000] == b'\x4e\x65\x24\x4c\x4e\x6b')
+
+    # --- the panel-code space is partitioned by owning task -----------------
+    def _regions_of(v):
+        RG = [(0xF04600, 0xF05D00, 'RDHC'), (0xF05D00, 0xF05F4A, 'IO1I'),
+              (0xF05F4A, 0xF0694A, 'XP4'), (0xF0694A, 0xF0734A, 'XP3'),
+              (0xF0734A, 0xF07D4A, 'XP2'), (0xF07D4A, 0xF0874A, 'XP1'),
+              (0xF09C00, 0xF0A600, 'init')]
+        out = set()
+        for a2 in range(0xF04400, 0xF0A800, 2):
+            if struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0] \
+                    not in (0x303C, 0x323C, 0x203C, 0x223C, 0x0641, 0x0640):
+                continue
+            if struct.unpack('>H', d[a2-0xF00000+2:a2-0xF00000+4])[0] != v:
+                continue
+            for lo, hi, n in RG:
+                if lo <= a2 < hi:
+                    out.add(n)
+        return out
+    check('$258-$260 are RDHC-only (so the CH1..CH4 labels are unsupported)',
+          all(_regions_of(v) == {'RDHC'} for v in (0x258, 0x259, 0x25A, 0x25C,
+                                                   0x25D, 0x25E, 0x25F, 0x260)))
+    check('$262/$263/$264 are XP-task-only',
+          all(_regions_of(v) == {'XP1', 'XP2', 'XP3', 'XP4'}
+              for v in (0x262, 0x263, 0x264)))
+    check('$269-$26C are the shared group: RDHC AND all four XP tasks',
+          all(_regions_of(v) == {'RDHC', 'XP1', 'XP2', 'XP3', 'XP4'}
+              for v in (0x269, 0x26A, 0x26B, 0x26C)))
+    check('$27E-$280 are IO1I-only and $29E-$2A6 are RTOS-init-only',
+          all(_regions_of(v) == {'IO1I'} for v in (0x27E, 0x27F, 0x280))
+          and all(_regions_of(v) == {'init'} for v in range(0x29E, 0x2A7)))
+    check('$25B (named PCMD_CH1_FLUSH), $261, $26F and $27C are never issued',
+          all(_regions_of(v) == set() for v in (0x25B, 0x261, 0x26F, 0x27C)))
+
     # --- seven undocumented panel codes $262-$268 ---------------------------
     def _code_sites(v):
         return [a2 for a2 in range(0xF04400, 0xF0A800, 2)
