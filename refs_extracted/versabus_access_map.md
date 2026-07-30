@@ -13963,3 +13963,36 @@ anything about its code.** Measured, delivery reaches 7 operations before stalli
 So "RDHC is 3% covered" and "RDHC is poorly understood" are different claims, and only the first
 is true. The region decodes cleanly, its call graph is fully mapped, and the single reason it
 does not execute is a chassis conversation we cannot yet sustain past seven exchanges.
+
+## RDHC's complete outbound command vocabulary, recovered statically
+
+Since RDHC's execution is bounded by a chassis conversation we cannot sustain, its command set
+was never observable at runtime. It is recoverable anyway: each of the 42 `jsr $F05688` sites is
+preceded by the command in `d0`. Resolving 41 of 42 by look-back gives **19 distinct codes**:
+
+| code | sites | name |
+|---|---:|---|
+| `$258` / `$259` / `$25A` | 1 / 2 / 3 | CH1 reset / init / acknowledge |
+| `$25C` | 5 | reset status |
+| `$25D` `$25E` `$25F` `$260` | 2 / **1** / 2 / 2 | the four per-channel config codes |
+| `$269` `$26A` `$26B` | 1 / 4 / 2 | error abort / timeout abort / channel abort |
+| **`$26C`** | **9** | release — the `D2_FIN` finalize code, the most-issued of all |
+| `$276`-`$27B`, `$27D` | 1 each | init steps 1-6 and 8 |
+
+Three things this settles or corroborates:
+
+- **`$25E` has exactly one site**, independently confirming the correction already recorded when
+  the code/data map contradicted an earlier "zero sites" claim. Two different methods, same
+  answer.
+- **`$262`-`$268` do not appear**, consistent with those being the XP-task-only codes; nor do
+  `$281`/`$282`, which belong to TCBIO1I's host link. The three tasks' vocabularies are disjoint
+  where this file said they were.
+- **`$26C` release is issued nine times** — more than any other code, and more than twice the
+  next. RDHC finalises far more often than it initialises, which fits a dispatcher that services
+  many short transactions rather than one long one.
+
+This is the SBC-side half of the panel protocol enumerated in full: 19 codes RDHC can send, the
+16 chassis operations it can receive (`$F05102`), and the 42-slot status table it dispatches on.
+What remains unknown about that protocol is not its vocabulary but its *grammar* — which
+sequences the chassis actually drives, which needs hardware or a conversation longer than seven
+exchanges.
