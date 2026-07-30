@@ -1528,6 +1528,48 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The firmware addresses devices ONLY through base registers — which explains everything
+
+Applying the validated operand test (an absolute-long is preceded by an opcode that takes
+one) across the whole 64 KB gives a small, sharp result. **Seven distinct device addresses
+are referenced absolutely in the entire ROM**, and every sampled one is a `lea`:
+
+| address | sites | preceded by |
+|---|---|---|
+| `$1FFF0` | 13 | `lea …,a5` / `lea …,a1` |
+| `$F70018` | 9 | `lea …,a4` / `lea …,a2` |
+| `$FF0000` | 4 | `lea …,a6` |
+| `$F70001` | 2 | `lea …,a0` |
+| `$400000`, `$403FFC`, `$404000` | 1 each | the SCM tests |
+| `$F70030` | 1 | `move.b abs,d0` — the kernel's lone access |
+
+**11 of 11 sampled absolute device references are `lea base,An`.** The firmware establishes
+base registers and performs *all* actual device I/O through displacement addressing:
+
+```
+a6 = $FF0000    ->  $202(a6), $204(a6), $216(a6), $4E(a6) …   AP I/F + XLTR
+a5 = $1FFF0     ->  (a5), $1(a5), -$e(a5) …                    VMOD_CTRL block
+a4 = $F70018    ->  $1(a4) …                                   board status
+a0 = $F70001    ->  $2(a0), $4(a0), $8(a0), $c(a0) …           MC6840 PTM
+```
+
+*This is the single most important structural fact for anyone analysing this ROM*, and it is
+the root cause of six false negatives this session. Absolute-address scanning does not merely
+miss *some* accesses here — it misses **essentially all of them**, because absolute forms
+exist only to load the bases. `$FF0204` is the extreme case: the hottest register on the
+board at ~33k writes, and it appears in **zero** absolute-long references. Any tool that
+scans for `$FF0204` will report it unused.
+
+So the addressing model is a two-level one and analysis has to match it: find the `lea` that
+establishes a base, then attribute every `dN(An)` in scope to that base — with the caveats
+already learned, that `lea` itself accesses nothing and that a base must not be carried
+across unrelated routines.
+
+*Two kernel hits discarded:* `$4A237C` and `$4A297C` pass the operand test (both preceded by
+`$4EB9` = `jsr abs.l`) but the targets lie in unpopulated space where no code can exist, so
+the `$4EB9` is data misread as an opcode. **The operand test raises confidence; it does not
+replace a sanity check on the resulting address.**
+
 ### `$F70030` — one device register in the whole RMS68K kernel, and it is off our map
 
 The kernel region `$F00000-$F04488` (17,544 bytes, 26% of the ROM) is excluded from

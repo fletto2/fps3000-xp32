@@ -570,6 +570,24 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- devices are reached through base registers, not absolute addresses ---
+    _LEA = {0x41F9: 'a0', 0x43F9: 'a1', 0x45F9: 'a2', 0x47F9: 'a3',
+            0x49F9: 'a4', 0x4BF9: 'a5', 0x4DF9: 'a6', 0x4FF9: 'a7'}
+    check('every sampled absolute device reference is a lea that loads a base',
+          all(word(a2 - 2) in _LEA for a2 in
+              (0xF0875A, 0xF0893C, 0xF089F4,      # $1FFF0
+               0xF08760, 0xF08922, 0xF089FA,      # $F70018
+               0xF08754, 0xF08A62, 0xF08AB0,      # $FF0000
+               0xF09060, 0xF0917A)))              # $F70001
+    check('the bases are a6=$FF0000, a5=$1FFF0, a4=$F70018, a0=$F70001',
+          word(0xF08754 - 2) == 0x4DF9 and long_(0xF08754) == 0xFF0000
+          and word(0xF0875A - 2) == 0x4BF9 and long_(0xF0875A) == 0x1FFF0
+          and word(0xF08760 - 2) == 0x49F9 and long_(0xF08760) == 0xF70018
+          and word(0xF09060 - 2) == 0x41F9 and long_(0xF09060) == 0xF70001)
+    check('$FF0204 -- the hottest register -- has ZERO absolute-long references',
+          not [a2 for a2 in range(0xF00002, 0xF0FFFC, 2)
+               if long_(a2) == 0xFF0204 and (word(a2 - 2) & 0x3F) == 0x39])
+
     # --- $F70030: the kernel's only device access -----------------------------
     check('the kernel read-modify-writes $F70030, setting bit 5',
           d[0xF00A3A-0xF00000:0xF00A4A-0xF00000]
