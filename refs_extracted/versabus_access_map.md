@@ -1528,6 +1528,49 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The DRAM test is a rotate-by-3 pattern generator — and the constants are its seed
+
+The two magic longwords planted before `$F099F4` (`$FF000102` and `$01796AF3`) are not
+sentinels, as I guessed when first noting them. They are the **seed pair** for a pseudo-random
+pattern generator, left in RAM immediately below the region under test and pointed at by
+`a5` — which `$F099F4` deliberately does **not** save, so it survives as an implicit
+argument.
+
+Four routines make up the test:
+
+| routine | role |
+|---|---|
+| `$F099F4` | walks the range in **`$20` = 32-byte blocks** |
+| `$F09A4C` | **generator** — `rol.l #3,d0`, then chains `d1..d5` each a further `rol.l #3` |
+| `$F09A24` | **verifier** — feeds `d2,d3,d4,d5` to the comparator |
+| `$F09A3A` | **comparator** — `rol.l #3,d0` to advance the expected value, `cmp.l d1,d0`, else `$F0F0F0F0` |
+
+The arithmetic closes exactly: `$F09A24` is called **twice** per block and compares **four**
+longwords each time — 8 longwords = **32 bytes**, precisely the `$20` stride `$F099F4`
+advances by. Nothing is left over.
+
+**Why rotate by three.** `gcd(3, 32) = 1`, so the 32 successive rotations of a longword are
+all distinct — every longword in a block gets a different value, and adjacent longwords
+differ across the whole width rather than in a few bits. That is a real pattern-sensitivity
+test: it catches coupling faults between neighbouring cells that a uniform `$55555555` fill
+cannot, because with a checkerboard every location holds the *same* value and a
+cell-to-cell short is invisible. From the seed `$01796AF3` the block takes
+`$0BCB5798, $5E5ABCC0, $F2D5E602, $96AF3017, …` — no structure an address decoder could
+accidentally reproduce.
+
+So the SBC's memory testing is layered, and each layer catches what the others cannot:
+
+| layer | stage | catches |
+|---|---|---|
+| address lines | `$F09AD6` (SCM), `RAMAddressingTest` | shorted/open address lines, aliasing |
+| uniform patterns | `$F09B20` — `$0/$FFFFFFFF`, `$55…/$AA…` | stuck bits, data-line shorts |
+| **rotating pseudo-random** | `$F099F4` + friends | **pattern sensitivity, cell coupling** |
+
+*Correcting my own note from the previous entry:* I described these constants as "boundary
+sentinels, most likely" and flagged that I had not decoded `$F099F4`. They are seeds, and the
+placement just below the tested region is simply a convenient scratch location for the
+generator's starting state — not a guard against overrun.
+
 ### The last two stages test System Common Memory — and that closes the board map
 
 `$F09AD6` and `$F09B20`, the final stages before the third `$D0` checkpoint, both operate on

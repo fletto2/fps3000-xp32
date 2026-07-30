@@ -570,6 +570,26 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the DRAM pattern test is a rotate-by-3 generator ---------------------
+    check('the seed pair $FF000102/$01796AF3 is planted below the tested region',
+          d[0xF089B6-0xF00000:0xF089C2-0xF00000]
+          == b'\x2b\x3c\xff\x00\x01\x02\x2b\x3c\x01\x79\x6a\xf3')
+    check('$F09A3A advances the expected value by rol.l #3 and compares',
+          d[0xF09A3A-0xF00000:0xF09A40-0xF00000] == b'\xe7\x98\xb0\x81\x67\x06')
+    check('$F09A4C chains rol.l #3 across d0..d3',
+          d[0xF09A50-0xF00000:0xF09A5E-0xF00000]
+          == b'\xe7\x98\x22\x00\xe7\x99\x24\x01\xe7\x9a\x26\x02\xe7\x9b')
+    check('$F09A24 verifies four longwords, and is called twice per block',
+          d[0xF09A28-0xF00000:0xF09A38-0xF00000]
+          == b'\x22\x02\x61\x0e\x22\x03\x61\x0a'
+             b'\x22\x04\x61\x06\x22\x05\x61\x02'
+          and d[0xF09A1E-0xF00000:0xF09A22-0xF00000] == b'\x61\x04\x61\x02')
+    check('...so 2 x 4 longwords = 32 bytes = the $20 stride $F099F4 advances',
+          2 * 4 * 4 == 0x20
+          and d[0xF09A0E-0xF00000:0xF09A12-0xF00000] == b'\x45\xe8\x00\x20')
+    check('rol #3 is coprime with 32, so all rotations are distinct',
+          __import__('math').gcd(3, 32) == 1)
+
     # --- the DRAM test carves out $1FFE0-$1FFFF -------------------------------
     check('the memory-test helper backs the range end off by $20 below $1FFF0',
           d[0xF089A4-0xF00000:0xF089B0-0xF00000]
