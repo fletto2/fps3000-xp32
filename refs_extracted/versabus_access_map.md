@@ -14652,3 +14652,43 @@ pursued further.
 The finder itself is the reusable part: routine boundaries from terminator scan-back are correct
 where handler-table attribution is not, and the difference matters for any field or flag whose
 sites lie outside the directive handlers.
+
+## The directives ARE the kernel's subroutine library
+
+A routine inventory of the kernel — boundaries taken from terminator scan-back — finds **432
+routine starts**, of which **58 have `bsr`/`jsr` callers** and 374 are fall-through continuations.
+
+The call distribution is the finding:
+
+| | |
+|---|---:|
+| total kernel call sites | 291 |
+| sites landing on a **directive handler's `bsr` entry** (`handler − 2`) | **134** |
+| **fraction** | **46%** |
+| distinct such routines | 28 |
+
+The ten most-called routines in the kernel are **all TRAP #0 handlers entered two bytes early**:
+
+| routine | callers | is |
+|---|---:|---|
+| `$F0175C` | **31** | `$F0175E` = TRAP #0 directive `$08` |
+| `$F00788` | 16 | `$F0078A` = directive `$02` |
+| `$F007C0` | 7 | `$F007C2` = directive `$03` |
+| `$F006E8` | 7 | `$F006EA` = directive `$01` |
+| `$F017C4` | 7 | `$F017C6` = directive `$07` |
+| `$F01494` | 7 | `$F01496` = directive `$05` |
+| `$F0170E` | 6 | `$F01710` = **T0GETTCB** |
+
+**So the dual-entry convention is load-bearing, not decorative.** Nearly half of everything the
+kernel calls internally is a *directive*, reached through the `bsr` entry that pushes SR while
+the TRAP path enters past it. The system-call interface and the internal subroutine library are
+**the same code**, and the two-byte prologue is what lets one body serve both without a wrapper
+per directive.
+
+That reframes the 29-of-33 census from a curiosity into the kernel's basic organising principle,
+and it explains the four exceptions: `$F01108` and `T0CRTCB` are preceded by `rte`, i.e. they are
+the directives with **no internal callers**, so they never needed a `bsr` entry.
+
+Incidentally the kernel's busiest subroutine is **directive `$08`** at `$F0175E`, with 31 internal
+call sites — unnamed in `TR1.EQ`'s list and never issued by the FPS application, yet the single
+most-used routine in the RMS68K kernel.
