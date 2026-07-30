@@ -1528,6 +1528,53 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The self-test decomposes the board-status equations TERM BY TERM — and that yields a complete VMOD_CTRL bit map
+
+Phase `$200` (`$F08C4A`) is the very first test the machine runs, and it is the simplest
+possible probe:
+
+```
+moveq #$6,d0  ;  moveq #$3,d1
+bclr d0,$1(a5)  ;  btst d0,$1(a5)  ;  beq ok    ; $1FFF1 bit 6 must clear and hold
+bclr d0,$1(a5)  ;  btst d1,$1(a4)  ;  bne ok    ; then $F70019 bit 3 must be SET
+```
+
+Against the documented `bit 3 of $F70019 = NOT(bit 6 OR (bit 7 AND bit 1))`, `$200` drives
+bit 6 low and requires bit 3 high — **it tests the bit-6 term alone**. `MemBusProbe` at
+phase `$1000` then clears bit 6 and walks `(bit 7, bit 1)` as a 2x2 — **the AND term
+alone**. One boolean expression, split across two *sequences*, each phase isolating one
+term with the others held at their identity value.
+
+That is the organising principle of the whole suite, and it makes the remaining stages
+readable: **each stage is a term or a bit of the SBC↔chassis handshake specification**, not
+an arbitrary numbered test. Collecting every stage decoded so far gives a complete bit-level
+map of the VERSAmodule control register:
+
+| register | bit | established by | role |
+|---|---|---|---|
+| `$1FFF1` | **0-2** | `$1300` | **interrupt-request level field** (walked 1..7, delivery mandatory) |
+| `$1FFF1` | **3** | `$1400` | drives `$F70019` bit 2 via `(bit 3 AND bit 0)` |
+| `$1FFF1` | **4** | `$1100` | **verified read/write flip-flop**; the `NOT(bit 4)` term of `$F70019` bit 1 |
+| `$1FFF1` | **5** | `$1200` | `$F70019` bit 1 follows it directly; **self-clearing request** |
+| `$1FFF1` | **6** | `$200` | the `NOT(bit 6)` term of `$F70019` bit 3 |
+| `$1FFF1` | **7** | `$1000` | one input of the `(bit 7 AND bit 1)` term |
+| `$1FFF0` | **0** | `$1200` | the `NOT(bit 0)` term of `$F70019` bit 1 |
+| `$1FFF0` | **1** | `$1000` | the other input of `(bit 7 AND bit 1)` |
+
+**Every bit of `$1FFF1` is accounted for**, and two of `$1FFF0`. That is a firmware-derived
+specification of the register, obtained without any Motorola documentation — and where it
+does overlap Motorola's wording it agrees, since the manual's description of VMOD writes
+driving "chassis-mediated VERSAbus interrupter logic" is precisely the bits 0-2 field.
+
+Two observations this map makes visible that no single stage did. **The bits have different
+electrical natures and the firmware knows it**: bit 4 is probed as a flip-flop (write, read
+back, both ways), bit 5 as a strobe (write, then poll for it to clear itself), bits 0-2 as a
+value field (walked exhaustively). A test suite that treated them uniformly would be
+testing the wrong things. And **the sequence-A/sequence-B split is not local-vs-remote as
+the outward-walk reading suggested** — `$200` and `$1000` test the same equation from
+opposite ends. The split is *before and after* `XLTR_MODE1 <- $2000`, so what changes is
+whether the XLTR is enabled, not which board is under test.
+
 ### Phase `$1300`: `$1FFF1` bits 0-2 are an interrupt-request LEVEL field
 
 `$F09338` is the self-test's interrupt-delivery stage, and it is the strongest hardware

@@ -550,6 +550,19 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- $200 tests the bit-6 term; $1000 tests the AND term -----------------
+    check('$200 loads d0=6 (VMOD bit) and d1=3 (board-status bit)',
+          d[0xF08C5A-0xF00000:0xF08C5E-0xF00000] == b'\x70\x06\x72\x03')
+    check('$200 clears $1FFF1 bit 6 and requires it to read back CLEAR',
+          d[0xF08C66-0xF00000:0xF08C70-0xF00000]
+          == b'\x01\xad\x00\x01\x01\x2d\x00\x01\x67\x06')
+    check('$200 then requires $F70019 bit 3 SET with bit 6 clear',
+          d[0xF08C84-0xF00000:0xF08C8E-0xF00000]
+          == b'\x01\xad\x00\x01\x03\x2c\x00\x01\x66\x06')
+    check('every bit of $1FFF1 is attributed to a self-test stage',
+          sorted({0:'$1300',1:'$1300',2:'$1300',3:'$1400',4:'$1100',
+                  5:'$1200',6:'$200',7:'$1000'}) == list(range(8)))
+
     # --- $1300: $1FFF1 bits 0-2 are an interrupt-request level field ----------
     check('$1300 installs handlers at vectors $140 and $148 (numbers 80 and 82)',
           d[0xF0935E-0xF00000:0xF0936A-0xF00000]
