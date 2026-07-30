@@ -593,6 +593,7 @@ else:
           all(0xFC <= o < 0x200 for o in (0x100, 0x102, 0x138, 0x160)))
 
     # --- the model presents three BIMs; bit 4 is a one-shot -------------------
+    _vb = open('emulator/versabus.c').read()
     check('bit 4 of STATUS_IRQ is modelled as a one-shot presence flag',
           'bim3_present' in _vb and 'xltr.bim3_present = 0;' in _vb)
     check('...cleared by the $400 arm write, as phase $1600 requires',
