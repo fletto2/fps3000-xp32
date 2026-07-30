@@ -16377,3 +16377,27 @@ Practical rule for driving this model: **leave `FPS3K_RESP` unset when using `FP
 it to a real op code converts the post-script filler into a repeated live operation, and the damage
 that causes is silent — the run completes, produces plausible counts, and ends somewhere it should
 not.
+
+### The model already warned about this, and I had redirected the warning away
+
+Auditing the harness for the `FPS3K_RESP` + `FPS3K_SEQ` combination found exactly one use — and it
+is a check that *deliberately* pairs them to verify the emulator **warns**:
+
+```
+[WARN] FPS3K_RESP and FPS3K_SEQ both set (shared state: the MODE0 response code):
+       the scripted codes are delivered FIRST, then FPS3K_RESP once the sequence
+       is exhausted -- not ignored
+```
+
+That is the interaction I spent this section discovering empirically. **The tool announces it, the
+harness tests that the announcement fires, and I ran the combination twice with `2>/dev/null`.**
+
+What the measurement did add, beyond the warning: the *consequence*. The warning says the codes
+are delivered in sequence, not that a real operation code repeated ~200 times after exhaustion
+walks the machine to address `$000000`. That damage, and the fact that the absorbed `$14` default
+is what prevents it, are new.
+
+But the practical rule was already in the model, and the reason I did not have it is that I
+discarded the channel the model uses to say so. Every emulator run in this session that redirected
+stderr to `/dev/null` was throwing away exactly this class of information — and the harness spends
+a check confirming these warnings work.
