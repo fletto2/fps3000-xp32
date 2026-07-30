@@ -1473,6 +1473,114 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### RDHC's host interface is four commands, and command 4 is CPLOAD
+
+`$F05320` is RDHC's command dispatcher, and it is tiny:
+
+```
+$F05322  move.l  (a0)+,d1        ; command number = FIRST LONGWORD of the block
+$F05324  cmpi.l  #$0,d1
+$F0532A  ble     -> reject
+$F0532C  cmpi.l  #$4,d1
+$F05332  ble     -> ok
+$F05334  move.w  #$259,d0        ; out of range -> panel $259
+$F05338  jsr     PanelIOConfigure
+$F0533E  jmp     $F05678
+$F05344  andi.w  #$7,d1
+$F05348  subq.w  #1,d1
+$F0534A  mulu    #$6,d1
+$F0534E  lea     $F05358,a1
+$F05354  jmp     (a1,d1.w)       ; 4-entry table of jmp abs.l
+```
+
+**Four commands, numbered 1-4.** The command number is not passed in a register by
+the caller — it is the **first longword of the parameter block** in `a0`, fetched
+with `move.l (a0)+,d1`, so each command's own arguments follow it in the same
+block. That makes a command a self-contained record, which is what a host would
+write into shared memory.
+
+| cmd | entry | what it is |
+|---|---|---|
+| 1 | `$F05370` | **attach/configure a channel** — channel from `$4(a0)`, defaulting to `$E62`, validated `1 <= ch <= $105E` |
+| 2 | `$F054A2` | **read or write the 16-longword parameter area at `$101E`** |
+| 3 | `$F054E8` | **load `d2` longwords from the block into `$E8A`** onward |
+| 4 | `$F05502` | **CPLOAD — the S-record loader** |
+
+Command 2 is a bidirectional block move: `d1` is a direction flag, then an offset
+and a length, `a1 = $101E + offset*4`, bounds-checked `offset + len <= $10` with
+panel `$25B` on overflow, and `exg.l a1,a0` when `d1` is nonzero — so *one* command
+both reads and writes the channel parameter area, direction chosen by the caller.
+
+Command 4 sets the count at `$E64`, sets bit 4 of `$FF0216`, and then dispatches on
+a 16-bit literal:
+
+```
+$F05522  cmpi.w  #$5330,d1   ; 'S0' -> jsr $F05594
+$F05530  cmpi.w  #$5331,d1   ; 'S1' -> jsr $F055A2
+$F05542  cmpi.w  #$5332,d1   ; 'S2'
+$F05548  cmpi.w  #$5333,d1   ; 'S3'
+```
+
+**That is the S-record type dispatch, and it makes command 4 the `CPLOAD`
+primitive** — the top-level entry point of the whole microcode-upload path this
+ROM exists to implement. The path can now be named end to end: host issues RDHC
+**command 4** with a count and S-record text → `$F05502` dispatches by record type
+→ `SRecordDataHandler` at `$F051A2` applies the `$10 + addr + $10000` offset →
+staging buffer → chassis command **op `$0`** arms the transfer.
+
+#### Correction: `PanelStatusDispatch` is indexed by an operation selector, not a chassis response
+
+This document has described the 42-slot table's index as "a 6-bit **response code**
+supplied by the IRQ handler that completes a panel-command `bra .` spin-wait", and
+read the subsystem as "a streaming-DMA state machine: chassis feeds SBC a stream of
+`d0` codes". **That is wrong, and it is why sweeping 42 response values never
+reached `$F0572C`.**
+
+`$F0572C` is the *tail of `PanelSendAndWait`* (`$F056BA`). The routine mutes its
+BIM with `$4F`, writes `$8004` REQUEST-TRANSFER, polls for done with a 1000-tick
+countdown, and if the error bit is clear falls into `lsl.w #2,d0 / jmp (a4,d0.w)`
+with **`d0` unchanged from entry**. So the index is the caller's argument. And the
+callers take it from a command descriptor:
+
+```
+$F05468  jsr     PanelSendAndWait
+$F0546E  move.l  (a6),d0          ; operation code from the descriptor
+$F05470  cmpi.w  #$14,d0          ; ... compared against D2_FIN
+```
+
+with `a6 = a0` on entry at `$F05370` — an RTOS-style parameter block, fields at
+`+$00` (operation), `+$04`, `+$08`, `+$10`, and the next descriptor at `+$14`.
+
+So the subsystem is the **SBC's own operation dispatcher**: 42 operations, each
+implemented by one of the four transfer primitives (`POLL`, `D1_SEND`, `BLK_XFR`,
+`D2_FIN`), selected by an operation code the *caller* supplies. The earlier
+"resolved — the different caller is the XP channel ISR" was structurally right
+(`$F07F84` is the same tail in the XP copy, at offset `$2858`) but the semantics
+stayed wrong: nothing about the index comes from the chassis.
+
+*This retires the "streaming-DMA state machine, chassis feeds codes" reading. The
+42 slots are an internal operation table, and the 42-value response sweep that
+"failed to reach" the site was testing the wrong input.*
+
+#### Driving the command language lifts RDHC from 1% to 8%
+
+Measured against the decoded instructions in RDHC's TDTI region `$F04600-$F05CFF`:
+
+| configuration | instructions | decoded bytes |
+|---|---|---|
+| baseline, no hooks | 16 / 1653 (1%) | 52 / 5888 (1%) |
+| all 16 chassis operations | **139 / 1653 (8%)** | **618 / 5888 (10%)** |
+
+An 8.7× increase from issuing the operations rather than guessing response codes.
+Bit-7 codes (`$80`-`$94`, the `$F0495C` dispatcher) add nothing on top — consistent
+with the correction above, since that dispatcher is not the route to the 42-slot
+table either.
+
+What is still missing is the *caller* of `$F05320`: RDHC's four commands need a
+command number in `d1` and a parameter block in `a0`, and nothing in the emulator
+supplies either. That, not a response code, is the conversation RDHC is waiting
+for.
+
 ### RESOLVED: the chassis command language is 16 operations, and it can write SBC RAM
 
 The `F04930` responder indexes `(code & $F) << 2` into a 16-entry jump table at

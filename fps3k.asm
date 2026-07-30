@@ -1771,6 +1771,16 @@ loc_F052F8:
   f05312: 3f 2d 02 10             move.w   $210(a5)  [XLTR_MODE2_PAGE], -(a7)
   f05316: 3b 7c 00 00 02 10       move.w   #$0, $210(a5)  [XLTR_MODE2_PAGE]
   f0531c: 20 7c 00 40 00 00       movea.l  #$400000, a0
+;### RDHC HOST COMMAND DISPATCHER.  The command number is the FIRST LONGWORD
+;###   of the parameter block in a0 -- move.l (a0)+,d1 -- so each command is a
+;###   self-contained record with its arguments following, which is what a host
+;###   would write into shared memory.  Validated 1..4, andi #$7, subq #1,
+;###   mulu #$6, indexed into the 4-entry jmp-abs.l table at $F05358:
+;###     cmd 1 $F05370  attach/configure a channel
+;###     cmd 2 $F054A2  read OR write the 16-longword param area at $101E
+;###     cmd 3 $F054E8  load d2 longwords from the block into $E8A
+;###     cmd 4 $F05502  CPLOAD -- the S-record loader
+;###   Out of range -> panel $259 then jmp $F05678.
   f05322: 22 18                   move.l   (a0)+, d1
 ;>>>> [R2/BOTH] This instruction compares the longword loaded from address 0x400000 (the start of the XP-32 microcode staging buffer) against zero, as part of the validation check in the S-record data handler — it verifies that the first word of the uploaded microcode is non-zero before proceeding with the upload.
   f05324: 0c 81 00 00 00 00       cmpi.l   #$0, d1
@@ -1936,6 +1946,10 @@ loc_F0549E:
   f0549e: 00 00 00 00             ori.b    #$0, d0
 ;>>>> [R1/BOTH] This instruction loads a 32-bit value from memory pointed to by a0 into d1, then increments a0, as part of a loop that processes a data structure (likely a TCB or configuration table) containing pairs of addresses and sizes, used in the XP-32 microcode upload or DMA setup routine.
 ;>>>> [R1/BOTH] This instruction loads a 32-bit microcode data word from source buffer (a0 post-incremented) into d1 during S-Record parsing for storage in the XP-32 microcode staging buffer (0x10000-0x1FFFF).
+;### CMD 2 is BIDIRECTIONAL: d1 is a direction flag, then offset and length;
+;###   a1 = $101E + offset*4, bounds-checked offset+len <= $10 with panel $25B
+;###   on overflow, and exg.l a1,a0 when d1 is nonzero -- so one command both
+;###   reads and writes the channel parameter area, direction chosen by caller.
 ;###   cmd 2: register-file copy to/from $101E. Descriptor = direction, index,
   f054a2: 22 18                   move.l   (a0)+, d1
 ;>>>> [R1/DS] This `move.l (a0)+, d2` at `f054a4` loads a 32-bit value from the data pointed to by a0 into d2, part of a loop that processes configuration data for XP-32 panel commands, likely extracting address or length fields for a subsequent `PanelIOConfigure_25A` call.
@@ -2004,6 +2018,13 @@ loc_F05518:
   f0551c: 34 18                   move.w   (a0)+, d2
   f0551e: 52 80                   addq.l   #$1, d0
   f05520: 18 02                   move.b   d2, d4
+;### CMD 4 IS CPLOAD.  This dispatches on a 16-bit literal: $5330 $5331 $5332
+;###   $5333 = the ASCII pairs S0 S1 S2 S3.  So command 4 is the top-level entry
+;###   point of the microcode-upload path this ROM exists to implement, and the
+;###   path can be named end to end: host issues RDHC cmd 4 with a count and
+;###   S-record text -> $F05502 dispatches by record type -> SRecordDataHandler
+;###   at $F051A2 applies the $10 + addr + $10000 offset -> staging buffer ->
+;###   chassis op $0 arms the transfer.
   f05522: 0c 41 53 30             cmpi.w   #$5330, d1
 ;>>>> [R9/BOTH] This conditional branch (bne) checks if the S-record type identifier in d1 is not "S0" (0x5330), part of the S-record parsing state machine validating XP-32 microcode staging buffer uploads to 0x10000-0x1FFFF.
   f05526: 66 08                   bne.b    loc_F05530
@@ -2261,6 +2282,15 @@ loc_F056FE:
   f0572a: 4e 75                   rts      
 
 loc_F0572C:
+;### CORRECTION: this index is NOT a chassis response code.  $F0572C is the TAIL
+;###   of PanelSendAndWait ($F056BA), reached when the error bit is clear, with
+;###   d0 UNCHANGED FROM ENTRY -- so the index is the CALLER's argument, taken
+;###   from a command descriptor: $F0546E does move.l (a6),d0 then cmpi.w #$14
+;###   (D2_FIN), with a6 = a0 on entry at $F05370.  The 42 slots are the SBC's
+;###   OWN operation table, each operation implemented by one of the four
+;###   primitives.  This is why sweeping 42 response values never reached here:
+;###   response codes were never the input.  Retires the "streaming-DMA state
+;###   machine, chassis feeds d0 codes" reading.
 ;###   dispatch on d0 = the latched opcode, into the 42-slot table below
   f0572c: e5 48                   lsl.w    #$2, d0
   f0572e: 49 f9 00 f0 5b a4       lea.l    PanelStatusDispatch.l, a4

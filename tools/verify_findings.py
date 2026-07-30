@@ -451,6 +451,38 @@ else:
           len({l for l in trk.split() if 'F07D00' <= l <= 'F086FF'}) > 200 and
           len({l for l in trn2.split() if 'F07D00' <= l <= 'F086FF'}) < 130)
 
+    # --- RDHC's four-command host interface ---------------------------------
+    check('RDHC dispatcher: cmd number is the FIRST LONGWORD of the block, 1..4',
+          d[0xF05322-0xF00000:0xF05324-0xF00000] == b'\x22\x18'   # move.l (a0)+,d1
+          and d[0xF0532C-0xF00000:0xF05334-0xF00000]
+              == b'\x0c\x81\x00\x00\x00\x04\x6f\x10')
+    check('...then andi.w #$7 / subq #1 / mulu #$6 into the table at $F05358',
+          d[0xF05344-0xF00000:0xF0534E-0xF00000]
+              == b'\x02\x41\x00\x07\x53\x41\xc2\xfc\x00\x06'
+          and d[0xF05354-0xF00000:0xF05358-0xF00000] == b'\x4e\xf1\x10\x00')
+    check('...the table at $F05358 is 4 x jmp abs.l to $F05370/$F054A2/$F054E8/$F05502',
+          [struct.unpack('>I', d[0xF05358-0xF00000+6*i+2:0xF05358-0xF00000+6*i+6])[0]
+           for i in range(4)] == [0xF05370, 0xF054A2, 0xF054E8, 0xF05502]
+          and all(d[0xF05358-0xF00000+6*i:0xF05358-0xF00000+6*i+2] == b'\x4e\xf9'
+                  for i in range(4)))
+    check('cmd 4 is CPLOAD: it dispatches on $5330/$5331/$5332/$5333 = S0/S1/S2/S3',
+          all(struct.unpack('>H', d[a2-0xF00000+2:a2-0xF00000+4])[0] == v
+              for a2, v in ((0xF05522, 0x5330), (0xF05530, 0x5331),
+                            (0xF05542, 0x5332), (0xF05548, 0x5333))))
+    check('cmd 2 bounds-checks offset+len <= $10 and rejects with panel $25B',
+          d[0xF054B4-0xF00000:0xF054BA-0xF00000]
+              == b'\x0c\x83\x00\x00\x00\x10'
+          and struct.unpack('>I', d[0xF054BC-0xF00000+2:0xF054BC-0xF00000+6])[0] == 0x25B)
+    check('cmd 2 is bidirectional: exg.l a1,a0 when the direction flag is nonzero',
+          d[0xF054D4-0xF00000:0xF054D6-0xF00000] == b'\xc3\x48')
+    check('PanelStatusDispatch index is the CALLER d0: $F0572C is PanelSendAndWait tail',
+          d[0xF0572C-0xF00000:0xF05734-0xF00000][:2] == b'\xe5\x48'
+          and d[0xF056FE-0xF00000:0xF05704-0xF00000]
+              == b'\x08\x04\x00\x0d\x67\x28')
+    check('...and the caller takes that d0 from a descriptor at (a6)',
+          d[0xF0546E-0xF00000:0xF05474-0xF00000]
+          == b'\x20\x16\x0c\x40\x00\x14')   # move.l (a6),d0 / cmpi.w #$14,d0
+
     # --- the 16-operation chassis command language --------------------------
     TBL = [0xF04A84, 0xF04CF2, 0xF04D20, 0xF04D4E, 0xF04E3A, 0xF04EE4,
            0xF04F30, 0xF04F3A, 0xF04F52, 0xF04FA0, 0xF04FBA, 0xF05002,
