@@ -1528,6 +1528,67 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### `$1FFE2` is a vector-number register, and the VMOD interrupter owns vectors 80-82
+
+Phase `$700` (`$F08F70`) shows how the board's own interrupter is programmed:
+
+```
+move.w #$144,d0
+lsr.w  #$2,d0            ; $144 / 4 = $51 = 81  -- the VECTOR NUMBER
+move.w d0,-$e(a5)        ; $1FFE2 <- $51
+move.l a3,$144.l         ; vector $144 = handler $F09052
+andi.w #$f8ff,sr         ; unmask interrupts
+```
+
+Deriving a vector *number* from a vector *address* by `lsr #2` and writing it to a fixed
+location, then installing the handler at the matching address, is the signature of a
+**vector register**. So `$1FFE2` is where the VERSAmodule's interrupter is told which vector
+to supply during IACK — a register two words below `VMOD_CTRL` and not previously in any
+map.
+
+Collecting the vectors the self-test programs:
+
+| address | vector | stage |
+|---|---|---|
+| `$140` | **80** (`$50`) | `$1300` handler B — fires all 7 times |
+| `$144` | **81** (`$51`) | `$700` handler `$F09052` |
+| `$148` | **82** (`$52`) | `$1300` handler A — installed, never fires |
+
+**A contiguous group 80-82**, entirely distinct from the BIM vectors `$41`/`$45`-`$4A` that
+carry chassis interrupts. Two independent interrupt paths reach this CPU: the MC68153 BIMs
+on the XLTR for chassis events, and the VERSAmodule's own interrupter for board-local ones.
+The handler `$F09052` is a single `bset.b #$6,$1(a5)` then `rte` — it sets VMOD bit 6, the
+same bit `$200` tests and `$F0903C` clears, so the interrupt path and the board-status
+equation are wired to the same flag.
+
+*Disassembly note:* `$F08F70` renders as `DC.W 0x48e7` followed by a bogus `or.b (a4)+,d0`.
+That is a decode artifact — `48E7 801C` is `movem.l d0/a3-a5,-(a7)`, the standard prologue.
+The stage entry is mis-disassembled, which is worth knowing before trusting the first two
+lines of any routine in this file.
+
+### On reading device datasheets to identify what a stage is testing
+
+A suggestion worth recording, because it has already produced two of this session's
+strongest results and is the right default:
+
+- **MC6840 CR bit 2** = dual 8-bit mode is what turned T3's `$27C7` latch into a
+  `(39+1)x(199+1) = 8000` cycle period and gave the exact **10 ms system tick** — and
+  exposed that the emulator's 16-bit reload runs 27% slow.
+- **MC68153 register layout** (4 control + 4 vector registers per BIM) is what made the
+  `$C0`-to-`$D0`/`$D8` walk in `$1600` legible as **16 or 24 registers = 2 or 3 BIMs**,
+  which in turn explained the long-standing "`$FF025E` is never touched" anomaly.
+
+For the **Am29116** specifically, the constraint is structural rather than a lack of
+willingness: that chip sits on the XP-32 **EXEC** card, and this ROM never addresses it.
+Everything the SBC sends toward it goes as opaque codes through `$FF000E` and the XLTR
+window. The existing decode of panel codes `$258`-`$27D` as Am29116 `SUBRC` instructions
+came from exactly this method and remains the one place the chip's ISA touches this
+firmware — and it is still ambiguous between "real instructions" and "dispatch indices that
+happen to decode", which no amount of further datasheet reading can settle without an EU
+PROM dump or a bus trace. **The self-test stages decoded so far are all SBC-side**, where
+the relevant parts are the 68000, MC6840, MC68153 and the custom XLTR, so those are the
+datasheets that have been carrying the work.
+
 ### Phase `$600` is the BUS-ERROR WATCHDOG test — and `$F80000` is not a device
 
 `$F08F1C` walks `$F82001` down to `$F80001` in steps of 2, reading a byte at each with a

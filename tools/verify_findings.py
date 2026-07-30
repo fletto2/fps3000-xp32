@@ -550,6 +550,22 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- $1FFE2 is a vector-number register; vectors 80-82 -------------------
+    check('$700 derives a vector number by lsr #2 and writes it to $1FFE2',
+          d[0xF08F86-0xF00000:0xF08F96-0xF00000]
+          == b'\x30\x3c\x01\x44\xe4\x48\x3b\x40\xff\xf2'
+             b'\x23\xcb\x00\x00\x01\x44'
+          and 0x144 // 4 == 0x51)
+    check('the three self-test vectors are the contiguous group 80/81/82',
+          [a // 4 for a in (0x140, 0x144, 0x148)] == [80, 81, 82])
+    check('$700 unmasks interrupts after installing the vector',
+          d[0xF08F96-0xF00000:0xF08F9A-0xF00000] == b'\x02\x7c\xf8\xff')
+    check('handler $F09052 sets VMOD bit 6 -- the bit $200 tests -- and rte',
+          d[0xF09052-0xF00000:0xF0905A-0xF00000]
+          == b'\x08\xed\x00\x06\x00\x01\x4e\x73')
+    check('$F08F70 really is movem.l d0/a3-a5,-(a7), mis-disassembled as DC.W',
+          d[0xF08F70-0xF00000:0xF08F74-0xF00000] == b'\x48\xe7\x80\x1c')
+
     # --- phase $600 is the bus-error watchdog test ----------------------------
     check('$600 walks $F82001 down by 2 with a byte read and NOP padding',
           d[0xF08F36-0xF00000:0xF08F48-0xF00000]
