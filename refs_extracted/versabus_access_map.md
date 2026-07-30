@@ -13041,3 +13041,61 @@ Hard prediction for a RAM dump after a task terminates: the TCB base reads `!tcb
 subordinate tags read as `$DEAB…` complements. **A scan counting `!TCB` undercounts** — this
 project's marker inventory and `FPS3K_RTOSDUMP` both match uppercase only. No current
 configuration terminates a task, so nothing measured so far is affected.
+
+## The TRAP #1 directive table, decoded (2026-07-30)
+
+TRAP #0's table was the smaller half. **The TRAP #1 dispatcher is `$F00310` and its table is
+at `$F003D8`, 77 entries of 4 bytes covering directives `$00`-`$4C`.**
+
+```
+F00310  andi.l  #$ffff,d0        ; directive number
+F00318  bmi.b   $f00378          ; negative -> the alternate path at $F00378
+F0031A  lsl.l   #$2,d0           ; *4
+F0031C  cmpi.l  #$130,d0
+F00322  bgt.w   $f003c6          ; BGT, so d0 == $130 is ADMITTED
+F00326  lea.l   $f003d8.l,a2     ; table base
+F0036A  adda.w  (a2),a2          ; handler = ENTRY ADDRESS + sign_extend(w0)
+F0036C  pea.l   $f003b2.l        ; synthesized return PC
+F00372  move.w  #$2000,-(a7)     ; ...and SR: a fabricated exception frame
+F00376  jmp     (a2)             ; the handler ends in RTE, returning to $F003B2
+```
+
+Two structural points:
+
+- **`w0` is a self-relative signed offset, not an address.** Read as absolute it produces
+  plausible-looking garbage — `RESUME` appears to collide with `T0CRTCB` at `$F02894`. Read
+  correctly, `RESUME` is `$F02CB4`. **77/77 handlers land inside the kernel region** and every
+  one sampled decodes as a valid instruction, which is what makes the reading safe.
+- **The dispatcher fabricates an exception frame and `jmp`s.** Handlers therefore end in
+  `rte`, not `rts`, and their return address is synthesized at dispatch time. This is the same
+  family as the `move.l (a0),-(a7)` / `rts` idiom and a second reason linear control-flow
+  analysis loses the thread in this kernel.
+
+### `$4C` is inside the firmware's own table
+
+The range check is `bgt`, not `bge`, so `d0 = $130` passes and directive `$4C` = 76 is the
+**last valid entry**, not an out-of-range one. This file previously said `$4C` was "beyond
+that table" — true of Motorola's published `TR1.EQ` list, but **not** of the table this
+firmware actually dispatches through. Corroboration: `$4C`'s handler at `$F02216` opens
+`movea.l $c66.w,a1`, and `$0C66` is the documented `!VCT` directory slot, exactly matching
+the connect-interrupt-vector behaviour already traced to `$F0226A`.
+
+### The directive names are confirmed by the code, not by the vendor list
+
+The handlers verify each other in pairs:
+
+| directive | handler | first instruction |
+|---|---|---|
+| `$11` SUSPND | `$F02CAC` | `bset.b #$9,$2c(a6)` |
+| `$12` RESUME | `$F02CB4` | `bclr.b #$9,$2c(a0)` |
+| `$13` WAIT | `$F02C3E` | `bset.b #$e,$2c(a6)` |
+| `$16` T0WAKEUP (TRAP #0) | `$F02C6E` | `bclr.b #$e,$2c(a0)` |
+
+**SUSPND/RESUME set and clear the same bit; WAIT/WAKEUP set and clear the same bit.** Two
+independent inverse pairs, one of them spanning both trap tables. That confirms the vendor
+directive names from the firmware's own behaviour rather than by matching numbers to a list —
+the check that failed for three days because the source numbers directives in decimal.
+
+It also identifies the field: **`TCB+$2C` is the task state word**, bit 9 = suspended,
+bit 14 = waiting. The full handler table for all 77 directives is reproducible from
+`$F003D8` with the offset arithmetic above.
