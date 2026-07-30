@@ -14787,3 +14787,48 @@ So the kernel's three busiest routines are, in order: **validate a user address 
 a semaphore**, and **insert a task into the ready queue by priority** — which is a reasonable
 summary of what an RTOS kernel spends its time doing, and all three are directives reached through
 their `bsr` entry.
+
+## The `$1F500` pool identified: a circular trace ring, and why it is always empty
+
+This project records `$1F500` (directory slot `$0C30`) as *"a pool of 9 records of `$1A` bytes
+behind an 8-byte first/last header (`$1F508`/`$1F5F2`), untouched in every configuration reached
+so far"* — allocated, sized, and unexplained.
+
+`$F01688`, the most-called **non-directive** routine in the kernel (11 callers), is its writer:
+
+```
+F0168E  movea.l $c30.w,a3      ; the pool directory slot
+F01692  ori.w   #$700,sr       ; critical section
+F01696  movea.l (a3),a5        ; current record pointer
+F01698  cmpa.l  $4(a3),a5      ; at the limit?
+F0169E  lea.l   $8(a3),a5      ; yes -> wrap to the first record
+F016A2  lea.l   $1a(a5),a4     ; advance by $1A
+F016A6  move.l  a4,(a3)        ; store the new head
+F016AA  move.l  d0,$10(a5)     ; record fields
+F016AE  move.l  a0,$8(a5)
+F016B2  move.l  a6,$c(a5)      ; a6 = the TCB
+F016BA  move.w  (a4),(a5)
+```
+
+A **circular ring buffer**: wrap-on-limit, fixed `$1A` stride, written under interrupt mask. The
+geometry closes to the byte — `$1F500 + 8 + 9 × $1A = $1F5F2`, exactly the documented limit —
+and the header the routine uses (`(a3)` current, `$4(a3)` limit, `$8(a3)` first record) is
+exactly the documented 8-byte first/last header.
+
+**Record layout**, from the writer:
+
+| offset | content |
+|---|---|
+| `+$00` | a word taken from the caller's stack |
+| `+$08` | `a0` |
+| `+$0C` | `a6` — the **TCB**, so each entry is attributed to a task |
+| `+$10` | `d0` |
+
+So it is an **event/trace log**, one entry per significant kernel event, tagged with the task it
+belongs to.
+
+**And it explains the dormancy.** `$F01688` executes **0 times** in a full boot: its callers are
+exception paths — `$F002E4` in the TRAP #1 supervisor route, gated on `btst #$f,$c34.w`, and
+`$F00ABE` in the TRAP #2-#15 fan-in handler. Nothing traps abnormally, so nothing is logged, and
+the pool stays at its 6 initialised header bytes. **The structure is not unused; it is a
+diagnostic buffer on a machine with no faults to report.**
