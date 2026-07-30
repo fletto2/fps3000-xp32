@@ -15817,3 +15817,37 @@ predicted, and the registry is where they land.
 For emulation: `!UST` is the single most populated RTOS structure (101 nonzero bytes) and is
 entirely derivable — nine records, fixed layout, names constructed from a template plus a channel
 number, all owners known from the TDTI table.
+
+## RTOS structure headers come in two families
+
+Comparing the first 16 bytes of every allocated structure:
+
+**Family A — `{marker, limit}`**: `+4` holds an address bounding the structure.
+
+| structure | `+4` | |
+|---|---|---|
+| `!IDV` | `$0001F8FF` | limit; records start at `+8` (`$0045` = vector, then TCB…) |
+| `!IOV` | `$0001F9FF` | limit; no records |
+| `!PAT` | `$0001F714` | first record of the pool; the **active head is at `+8`** and is null |
+| *(untagged pool `$1F500`)* | `$0001F5F2` | limit, with `+0` = `$0001F508` first — the documented first/last header, no marker |
+
+**Family B — `{marker, 0, …, size, count}`**: self-describing.
+
+| structure | `+$0C` | record size | count |
+|---|---|---:|---:|
+| `!UST` | `$00160009` | **22** | **9** |
+| `!GST` | `$000D0000` | **13** | **0** |
+
+`!UST`'s 22 and 9 are confirmed against its nine readable records. **`!GST`'s count is zero** —
+no global segments are allocated on this build, which is exactly why it shows only 10 nonzero
+bytes and why directive `$01` GTSEG's registry sits empty.
+
+So the family-B header answers "how many and how big" without walking anything, and family A
+answers "where does it end". For a model, that means `!UST` and `!GST` can be validated by
+arithmetic — record size × count against the populated extent — while `!IDV`, `!IOV` and `!PAT`
+need their chains walked.
+
+Two details worth keeping: `!UDR`'s `+4` is `$00190000`, whose high word is `$0019` = 25, most
+likely a record size in the family-B position but with no count beside it; and the `$1F500` trace
+pool is the only allocation with **no marker at all**, which is why it appears in the directory
+(slot `$0C30`) but not in any marker census.
