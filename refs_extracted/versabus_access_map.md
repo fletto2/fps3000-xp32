@@ -1528,6 +1528,57 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Phase `$1900` is the 16-to-32-bit width conversion, and `$FF0214` is the low-half latch
+
+This is the mechanism by which a **16-bit VersaBus SBC writes 32-bit words into a 32-bit
+chassis memory**, and the self-test proves it in both directions.
+
+`$1900` first establishes that the window is genuinely 32 bits wide: it writes
+`$55555555` to `$400000` as a longword and reads it back with `cmp.l` — the complementary
+pattern to the `$AAAA` used on the AP I/F, and the same all-data-lines logic one word
+wider. It then runs two helpers, each twice, varying only `$FF0216` bit 4:
+
+```
+$F09806:  move.l d0,(a0)  ;  move.w d1,(a0)        ;  cmp.l (a0),d2
+$F0981A:  move.l d0,(a0)  ;  move.w d1,$214(a6)    ;  cmp.w $2(a0),d2
+```
+
+| helper | `$FF0216` | required result | meaning |
+|---|---|---|---|
+| `$F09806` | `$10` | `$AAAA5555` | the CPU's word write **landed** in the high half |
+| `$F09806` | `$00` | `$55555555` | the CPU's word write was **suppressed** |
+| `$F0981A` | `$10` | low word `$5555` | `$FF0214` **did not reach** the window |
+| `$F0981A` | `$00` | low word `$AAAA` | `$FF0214` **supplied** the low half |
+
+**`$FF0216` bit 4 is a multiplexer on the low half of the 32-bit chassis word.** Set, the
+CPU's own word writes take effect and `$FF0214` is inert. Clear, CPU word writes are
+ignored and `$FF0214` sources the low half instead. The four cases are mutually
+complementary — each configuration's *positive* result is the other's *negative* — which
+is why the test needs exactly four probes and no more.
+
+**This is the first concrete evidence for the width-conversion role** that the card
+descriptions only hinted at. The chassis path is documented as
+`XLTR → UNIV FMT → XP32`, with the FMT card's own part description reading "UNIV FMT 32 BIT
+IEEE FPS3000", and this project has carried an open question about whether it does 16-to-32
+width conversion. Here is a firmware-visible mechanism for assembling a 32-bit word from a
+16-bit bus: latch the low half in `$FF0214`, then write the high half, with bit 4 selecting
+which source feeds the low lanes. *Note this does not identify which card implements it* —
+the SBC sees only the XLTR's registers, and whether the mux sits on the XLTR or further
+down the path is not observable from here.
+
+**It also resolves the `$216` naming conflict flagged above, against the asm.** The
+consolidated disassembly labels `$FF0216` `XLTR_DATA_HI`, which would make it the partner
+of `$FF0214` `XLTR_DATA_LO`. It cannot be: `$1700`/`$1800` use its **bit 5** as the window
+access gate and `$1900` uses its **bit 4** as this mux. A data register does not have
+per-bit control semantics. **`$FF0216` is a control register**, and the register table's
+"mode/page register (not a command register)" reading is the correct one. The `XLTR_DATA_HI`
+label should be treated as wrong wherever it appears.
+
+That leaves `$FF0214` correctly named: it *is* a data register, specifically the low-half
+latch, which explains the standing observation that it "never appears standalone — every
+access is the leading half of a 32-bit access paired with `$FF0216`". The pairing is real;
+the interpretation of the partner was not.
+
 ### `$FF0216` bit 5 gates the `$400000` chassis window, and `$1700`/`$1800` prove it
 
 The `$1700`/`$1800` pair looked identical in register shape. They are the **read** and

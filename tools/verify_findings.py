@@ -550,6 +550,24 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- $1900: bit 4 muxes the low half; $FF0214 is the latch ----------------
+    check('$1900 writes $55555555 to $400000 and reads it back as a longword',
+          d[0xF0978E-0xF00000:0xF0979C-0xF00000]
+          == b'\x20\x3c\x55\x55\x55\x55\x32\x3c\xaa\xaa'
+             b'\x20\x80\xb0\x90\x67\x06')
+    check('$F09806 writes a word to the window itself',
+          d[0xF09806-0xF00000:0xF0980C-0xF00000] == b'\x20\x80\x30\x81\xb4\x90')
+    check('$F0981A writes that word to $FF0214 instead, and reads the LOW half',
+          d[0xF0981A-0xF00000:0xF09824-0xF00000]
+          == b'\x20\x80\x3d\x41\x02\x14\xb4\x68\x00\x02')
+    check('bit4 SET expects $AAAA5555 (word write landed)',
+          d[0xF097B2-0xF00000:0xF097BE-0xF00000]
+          == b'\x24\x3c\xaa\xaa\x55\x55\x3d\x7c\x00\x10\x02\x16')
+    check('bit4 CLEAR expects $55555555 (word write suppressed)',
+          d[0xF097CA-0xF00000:0xF097D0-0xF00000] == b'\x24\x00\x42\x6e\x02\x16')
+    check('bit4 CLEAR expects $FF0214 to supply the low half ($AAAA from d1)',
+          d[0xF097F4-0xF00000:0xF097FA-0xF00000] == b'\x24\x01\x42\x6e\x02\x16')
+
     # --- $FF0216 bit 5 gates the $400000 window; $1700/$1800 are read/write ----
     check('$1700 probes $400000 with a READ, padded by four NOPs',
           d[0xF096AC-0xF00000:0xF096B8-0xF00000]
@@ -561,7 +579,9 @@ else:
           d[0xF098E0-0xF00000:0xF098EC-0xF00000]
           == b'\x72\x01\x4f\xef\x00\x08\x58\x6f\x00\x04\x4e\x73')
     check('...so d1 NONZERO means the access faulted, inverting the naive reading',
-          True)  # documented consequence of the handler above
+          d[0xF098E0-0xF00000:0xF098E2-0xF00000] == b'\x72\x01'   # moveq #1,d1
+          and d[0xF0962E-0xF00000:0xF09630-0xF00000] == b'\x4a\x41'  # tst.w d1
+          and d[0xF09630-0xF00000] == 0x66)                          # bne -> fault OK
     check('$216 <- $20 then require a fault; $216 <- 0 then require success',
           d[0xF09626-0xF00000:0xF09632-0xF00000]
           == b'\x3d\x7c\x00\x20\x02\x16\x61\x7e\x4a\x41\x66\x06'
