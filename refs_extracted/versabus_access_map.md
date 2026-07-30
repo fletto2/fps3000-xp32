@@ -16192,3 +16192,34 @@ bit 4     auto-increment the transfer address
 bit 5     0 = write chassis memory, 1 = read
 bit 6     write: which 16-bit half     read: which of two read forms
 ```
+
+## Bit 5 is a consistent direction bit — confirmed by execution on op `$6` too
+
+The harness carries a check that *"op `$26` = op `$6` with the read bit set"*, asserted purely as
+arithmetic: `(0x26 & 0x0F) == 0x6 and (0x26 & 0x20)`. True by construction, and it says nothing
+about what the firmware does. Now measured:
+
+| code | bit 5 | read path `$F04EB8` | write path `$F04EC0` |
+|---|---|---:|---:|
+| `$06` | 0 | **0** | **219** |
+| `$26` | 1 | **219** | **0** |
+
+Perfect complementary split. Op `$6`'s shared body at `$F04EA0` tests `btst #$5,$e87` and branches:
+read does `move.w (a1),$e74` — SBC RAM into the result register — while write takes `$F04EC0`.
+
+So **bit 5 is the direction bit for op `$6` as well as op `$3`**, which makes it a property of the
+command byte rather than of one operation. Combined with bit 4's auto-increment and bit 6's
+per-direction meaning, the command byte's upper bits are now measured across two independent
+operations.
+
+### The same probe mistake, twice
+
+Both attempts to test a direction bit initially used a site the firmware reaches **before** the
+branch — `$F04D74` for op `$3`, `$F04F30` for op `$6` — and both produced identical counts for
+codes that differ, which reads as "the bit has no effect". It does; the probe simply could not see
+it.
+
+The rule that fixes it: **instrument after the branch, not before.** A site both paths reach cannot
+distinguish them, and a null result from such a site is evidence about the probe rather than about
+the firmware. That is the third distinct form this session of the same underlying error — measuring
+something that cannot answer the question asked, then reading the answer as informative.
