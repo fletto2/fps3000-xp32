@@ -47,6 +47,7 @@ static struct {
     uint16_t irq_mask;
     uint16_t ch_config[4];     /* CH1..CH4 config regs */
     uint16_t arm_pending;      /* set when 0x400 written to status_irq; auto-completes next read */
+    int      bim3_present;     /* bit 4 of STATUS_IRQ -- see the read handler */
     uint32_t busy_ticks;       /* decrements on each versabus_tick; while >0 chassis is "engaged" */
     /* Generic backing store for the whole XLTR window.  The phase
      * 0x1600 self-test walks $210..$24E writing patterns and reading
@@ -292,6 +293,10 @@ void versabus_init(FILE *trace_log, int verb) {
      * → board_status = 0x3F11_xx_xx (xx = unused upper bytes set 0). */
     board_status = 0x3F110000;
     vmod_ctrl = 0;
+    /* Three MC68153P BIMs are fitted -- photographed on 02_VBUS_XLTR.JPG,
+     * positions F/G, H/J, K/L, and the card list says "V-BUS XLTR 3 BIMS". */
+    xltr.bim3_present = !(getenv("FPS3K_BIMS")
+                          && strtoul(getenv("FPS3K_BIMS"), NULL, 0) == 2);
     /* AP I/F: start with ready=1 (bit 14) so first read shows ready */
     apif.cmd_status = (1u << 14);
 }
@@ -719,6 +724,21 @@ static uint16_t xltr_read(uint32_t addr) {
             xltr.status_irq |= (1u << 15);
             xltr.arm_pending = 0;
         }
+        /* BIT 4 = THIRD BIM PRESENT.  Self-test phase $1600 ($F09518) reads this
+         * register, tests bit 4, and walks either 16 BIM registers
+         * ($FF0230-$FF024E, two MC68153s) or 24 ($FF0230-$FF025E, three) --
+         * $D0 or $D8 as the loop bound from $C0.
+         *
+         * The card has THREE.  Photographed on refs/FPS-3000/cards/
+         * 02_VBUS_XLTR.JPG: three MC68153P (Motorola 8626A) in positions F/G,
+         * H/J and K/L, with jumper blocks E2/E3 beside them; and the owner's
+         * card list calls the board "V-BUS XLTR 3 BIMS".
+         *
+         * Returning this bit clear presented a two-BIM machine, which is why
+         * $FF025E (BIM2 VR3) was recorded as "never touched" -- it is the third
+         * BIM's last vector register and the walk stopped one BIM short.
+         * FPS3K_BIMS=2 restores the old two-BIM behaviour for comparison. */
+        if (xltr.bim3_present) xltr.status_irq |= (1u << 4);
         xltr.raw[(addr - XLTR_BASE) / 2] = xltr.status_irq;
         return xltr.status_irq;
     }
@@ -1002,7 +1022,16 @@ static void xltr_write(uint32_t addr, uint16_t val) {
                 /* Store the arm bit in status_irq so subsequent
                  * reads can show it alongside the auto-set ready bit
                  * (phase 0x1600 self-test verifies status & 0x610 == 0x400) */
+                /* Writing the arm bit clears the rest of the register,
+                 * bit 4 included.  Phase $1600 depends on BOTH behaviours: it
+                 * reads bit 4 SET at entry to choose the 24-register BIM walk,
+                 * then writes $400 and requires the register to read back $400
+                 * under mask $610 -- i.e. bit 4 CLEAR.  Modelling bit 4 as a
+                 * static strap fails that readback and hangs the self-test in
+                 * its retry loop (measured: $F09574 executed 3,055,728 times,
+                 * the $F095E8 fail path 127,321). */
                 xltr.status_irq = 0x0400;
+                xltr.bim3_present = 0;
                 xltr.arm_pending = 1;
             } else {
                 xltr.status_irq = val;

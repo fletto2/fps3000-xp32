@@ -583,6 +583,14 @@ else:
     check('...and inside the $200 allocation stride, so they are FPS extension',
           all(0xFC <= o < 0x200 for o in (0x100, 0x102, 0x138, 0x160)))
 
+    # --- the model presents three BIMs; bit 4 is a one-shot -------------------
+    check('bit 4 of STATUS_IRQ is modelled as a one-shot presence flag',
+          'bim3_present' in _vb and 'xltr.bim3_present = 0;' in _vb)
+    check('...cleared by the $400 arm write, as phase $1600 requires',
+          'xltr.status_irq = 0x0400;' in _vb)
+    check('FPS3K_BIMS=2 restores the two-BIM behaviour',
+          'FPS3K_BIMS' in _vb)
+
     # --- card identifications from the photographs ----------------------------
     check('the AP I/F card part number in the card list is 612-4448-401',
           True)   # photographed: "2-4448-401" visible on 04_APIF.JPG

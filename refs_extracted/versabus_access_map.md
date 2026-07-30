@@ -1598,6 +1598,45 @@ The pattern across all of this is the session's recurring one, one level up: **t
 itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
 here changed what is known about the machine; it changed how much a passing suite is worth.
 
+### The emulator now models three BIMs — and bit 4 is a ONE-SHOT, not a strap
+
+Acting on the photograph, `$FF0218` bit 4 now reads set by default. The first attempt —
+modelling it as a **static** presence strap — **broke the boot**, and the failure was
+diagnostic rather than annoying.
+
+**Phase `$1600` requires bit 4 in *both* states.** It reads the register at entry and tests bit
+4 to choose a 16- or 24-register BIM walk; then it writes `$400` and requires the register to
+read back `$400` under mask **`$0610`** — bits 4, 9, 10 — i.e. **bit 4 clear**. A permanently-set
+bit 4 fails that readback, and the stage retries forever: measured `$F09574` executing
+**3,055,728** times and the `$F095E8` fail path **127,321**.
+
+So bit 4 is a **one-shot presence flag**: set at reset, **cleared by the `$400` arm write**. The
+firmware's own two uses of the same bit, four instructions apart, pin the semantics exactly —
+and a static strap is ruled out by the machine refusing to boot with one.
+
+**Modelled that way, everything works:**
+
+| | before | after |
+|---|---|---|
+| self-test `$1A00` / sequence C | 1 / 1 | **1 / 1** |
+| RTOS idle loop | 538,560 | **538,560** |
+| BIM registers touched | 16 of 24 | **24 of 24** |
+| **`$FF025E`** (BIM2 VR3) | **never** | **touched** |
+| **default RAM digest** | `f72fb0a5…` | **`f72fb0a5…` — unchanged** |
+
+**Zero bytes of post-boot RAM differ.** The BIM walk writes device registers, not memory, and
+the self-test's outcome is identical either way — so this is a correctness improvement with no
+golden-master churn, and no digest update to justify.
+
+That retires the last piece of the `$FF025E` puzzle. It was never an asymmetry in the firmware,
+nor a quirk of the card: **the walk stopped one BIM short because the model said two BIMs were
+fitted, and three are.** `FPS3K_BIMS=2` restores the old behaviour for comparison.
+
+*The sequence here is worth noting:* firmware analysis produced a binary question it could not
+answer (`$D0` or `$D8`?); a photograph answered it; implementing the answer failed; and the
+failure specified the mechanism more precisely than either source alone. **The wrong
+implementation was more informative than the right guess would have been.**
+
 ### SETTLED: three MC68153P BIMs are physically fitted — the emulator models two
 
 The fifth XLTR tile finds them, unambiguously: **three `MC68153P` chips** (Motorola, date code
