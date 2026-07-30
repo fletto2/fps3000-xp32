@@ -14974,3 +14974,38 @@ which no coverage or PC measurement could establish.
 
 **`FPS3K_POKE="0C34=C000"` plus a count of `$F00896` is therefore a spurious-exception detector**,
 using the firmware's own instrumentation. It costs one run and needs nothing added to the model.
+
+## The complete `$0C34` instrumentation map — eight identical hooks, self-numbering
+
+All eight hooks are the same five-instruction shape:
+
+```
+btst.b #<bit>,$c34.w
+beq.b  <skip>
+bsr.w  $f01688          ; the trace-ring writer
+dc.w   <marker>         ; fetched by the writer via $14(a7)
+<skip>:
+```
+
+| bit | test site | marker | gates |
+|---:|---|---|---|
+| 8 | `$F006D8` | `$DD08` | an `rte` path |
+| 9 | `$F008FC` | `$EE09` | precedes a full `movem` context save |
+| 10 | `$F0059A` | `$FD10` | precedes `bclr #$f,$148(a6)` |
+| 11 | `$F00B52` | `$AA11` | |
+| 12 | `$F00AB4` | `$AA12` | the TRAP #2-#15 fan-in handler |
+| 13 | `$F00F5E` | `$FF13` | precedes `subq.w #$1,$c52.w` |
+| 14 | `$F00896` | `$EE14` | the 37-vector exception stub |
+| 15 | `$F002DC` | `$FF15` | the supervisor TRAP #1 (ISR-exit) route |
+
+**The marker encodes its own hook number in BCD** — `$DD08`, `$EE09`, `$FD10`, `$AA11`, `$AA12`,
+`$FF13`, `$EE14`, `$FF15`: low byte `$08`…`$15` reads as decimal 8…15. **Eight for eight.** So a
+populated trace ring identifies which hook produced each record without any external table.
+
+That completes the mask: **eight trace points, one per bit, self-identifying, all disabled in the
+shipped build**, feeding a nine-record circular buffer that is consequently always empty.
+
+A note on how this was nearly missed: comparing the marker's low byte to the bit number *as hex*
+gives 2/8 and looks like a coincidence in two cases. `$10` is BCD 10, not 16. Same class of base
+error as reading `$FF0044` as below `$400000` earlier today — worth flagging twice, because both
+produced a confident wrong count that a second glance at the numbers fixed.
