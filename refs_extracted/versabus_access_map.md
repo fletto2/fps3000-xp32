@@ -1528,6 +1528,148 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### RESOLVED: every RMS68K directive named — and the "ASQ" naming was wrong
+
+*From `~/src/claude/versados/SR10/U9995/TR1.EQ` and `STR.EQ`, at the user's
+suggestion.* This document records that the firmware uses 14 distinct TRAP #1
+directives and that **"None could be matched to Motorola's published directive
+names."** They are all in the VERSAdos source tree, and the reason they never matched
+is that **the source numbers them in decimal** while the firmware loads hex immediates.
+
+**TRAP #1** — 13 of 14 named:
+
+| firmware | dec | name | meaning | agrees with |
+|---|---|---|---|---|
+| `$01` | 1 | `GTSEG` | allocate segment | "task+stack setup" — it is the stack *segment* |
+| `$0B` | 11 | `CRTCB` | create TCB | RDHC-only ✓ |
+| `$0D` | 13 | `START` | start task | RDHC-only ✓, pairs with `CRTCB` |
+| `$0F` | 15 | `TERM` | terminate task (self) | one site per task — the exit path |
+| `$10` | 16 | `TERMT` | terminate task (not self) | |
+| `$11` | 17 | `SUSPND` | suspend task (self) | |
+| `$12` | 18 | `RESUME` | resume suspended task | **"RDHC issues `$12` five times, XP4I…XP1I then USER"** — it *resumes the other five tasks* ✓✓ |
+| `$13` | 19 | `WAIT` | task becomes blocked | recorded as "the blocking wait" ✓✓ |
+| `$29` | 41 | `ATSEM` | **attach to semaphore** | |
+| `$2A` | 42 | `WTSEM` | **wait on semaphore** | |
+| `$2B` | 43 | `SGSEM` | **signal semaphore** | |
+| `$2D` | 45 | `CRSEM` | **create semaphore** | |
+| `$43` | 67 | `RSTATE` | receive task state | used with the literal `'USER'` ✓✓ |
+| `$4C` | 76 | — | **beyond this table**, which ends at 75 | traced as "connect interrupt vector"; `CISR` is 61 = `$3D`, so `$4C` is a later or vendor addition |
+
+**TRAP #0** — all five named:
+
+| firmware | dec | name | meaning |
+|---|---|---|---|
+| `$04` | 4 | `T0PAGAL` | **ALLOCATE PHYSICAL PAGES** |
+| `$06` | 6 | `T0GETTCB` | search TCB list |
+| `$16` | 22 | `T0WAKEUP` | wakeup task from exec mode |
+| `$18` | 24 | `T0QEVNTI` | place event in ASQ, caller is an interrupt routine |
+| `$1F` | 31 | `T0CRTCB` | create task control block |
+
+**`$04` = "ALLOCATE PHYSICAL PAGES"** is an exact confirmation of a result derived here
+independently from the arithmetic `end = base + (size<<8) - 1`. The name and the
+inference agree without either informing the other.
+
+#### Correction: `AXP1`/`HXP1` are semaphores, not ASQs
+
+`$29`/`$2A` were identified in this document as "look up an ASQ by name" and "post to
+that handle". They are **`ATSEM`** and **`WTSEM`** — attach to a semaphore by name, then
+wait on it. And the counts settle it beyond doubt: `$2D` = **`CRSEM`**, *create
+semaphore*, appears **twice per XP task, once in TCBIO1I, never in RDHC** — exactly the
+2/2/2/2/1/0 pattern this document attributes to "ASQ declarations". `$2B` = `SGSEM` is
+the signal.
+
+So **every use of "ASQ" for `AXP1`-`AXP4`/`HXP1`-`HXP4`/`HIO1` in this project is
+wrong**: those are semaphore names, the 10-byte records at `TCB+$138` are semaphore
+descriptors, and the nine entries in `!UST` are a semaphore registry.
+
+Which names the marker: **`T0FNDSEM` = "FIND ENTRY IN USER SEMAPHORE TABLE"**, so
+
+| marker | expansion | source |
+|---|---|---|
+| `!UST` | **User Semaphore Table** | `T0FNDSEM` |
+| `!GST` | **Global Segment Table** | `T0FNDGSG` "find segment name in GST" |
+| `!TST` | **Task Segment Table** | `T0FNDSEG` "find segment name in TST" |
+
+Three markers this document lists only as four-letter tags now have expansions from
+Motorola's own source. *And the real ASQ directives — `GTASQ` 31, `RDEVNT` 34, `QEVNT`
+35, `WTEVNT` 36 — appear **nowhere** in this firmware's TRAP #1 set. The FPS application
+is built on semaphores and uses ASQs only from interrupt context via TRAP #0 `$18`,
+which is why `!ASQ` has kernel code and no tagged instance.*
+
+### The FPS↔RMS68K interface is four pointers and two calls — and `$1F500` is a ring queue
+
+The "missing 27%" of the ROM is not undecoded: `$F04488 - $F00000` is **exactly 17,544
+bytes**, so it is precisely the RMS68K kernel region that `fps3k.asm` deliberately
+excludes. The question worth asking instead is how much of that kernel FPS modified.
+
+**Scanning for FPS pointers, opcode-agnostically** — every longword in `$F00000-$F04487`
+whose *value* lands in the application region — finds exactly four:
+
+| site | value | what |
+|---|---|---|
+| `$F00004` | `$F09C00` | the **reset vector's PC** |
+| `$F001A6` | `$F04500` | the panic stub's `jsr` target, followed by `bra .` |
+| `$F03FDA` | `$F044A2` | `move.l #$F044A2,$4C(a1)` — **installs** the driver-chain hook |
+| `$F040EA` | `$F044A2` | `move.l #$F044A2,$4C(a4)` — same, different base |
+
+And in the other direction, only **two** kernel entry points are called from the FPS
+region: `$F008B6` and `$F01688`. So the whole coupling is **four pointers out, two calls
+in, and TRAP #0/#1 for everything else** — which justifies treating the kernel as
+generic and is why excluding it from the annotated asm costs nothing.
+
+*A first version of this sweep reported eight fingerprints including two references to
+`$FF0100`, the 256-byte gap this project lists as unaccounted. All six of the extra hits
+were false positives: every one is a `$FF` immediate followed by a displacement —
+`cmpi.b #$FF,$18(a1)`, `movem.l …,$100(a6)` — which a longword-value test reads as
+`$00FFxxxx`. The `$FF0100` gap remains unaccounted.*
+
+#### Reset SSP is zero, and `MainInit` is the first thing to fix it
+
+```
+vector 0:  SSP = $00000000
+vector 1:  PC  = $00F09C00
+$F09C00    jmp MainInit.l        -> $F08700
+$F08700    lea $1FFD0,a7         <- the supervisor stack pointer
+```
+
+**The reset stack pointer is `$00000000`**, so nothing may push before `MainInit` runs —
+and its first instruction is the `lea` that fixes it. Worth knowing for any patched ROM:
+a `--reset` image that jumps elsewhere inherits a zero SSP, which is the same class of
+fault as the missing vector table that produced the first monitor burn's double fault.
+
+*This also corrects a reading from the template-diff work: `4FF9 0001FFD0` at offset
+`+$8EE` of XP1I's block was dismissed there as "region tail". It is `lea $1FFD0,a7`, the
+first instruction of `MainInit` — the diff window had simply run past XP1I's region.*
+
+#### `$F01688` identifies the last unidentified RTOS structure
+
+```
+$F01688  movem.l d0-d1/a3-a5,-(a7)
+$F0168C  move    sr,-(a7)
+$F0168E  movea.l $0C30.w,a3        ; the directory slot for $1F500
+$F01692  ori     #$700,sr          ; MASK ALL INTERRUPTS
+$F01696  movea.l (a3),a5           ; a5 = first  ($1F508)
+$F01698  cmpa.l  $4(a3),a5         ; compare against last ($1F5F2)
+$F0169E  lea     $8(a3),a5         ;   equal -> wrap to the base
+$F016A2  lea     $1A(a5),a4        ; step one record
+$F016A6  move.l  a4,(a3)           ; publish the new first
+$F016A8  move    (a7)+,sr          ; unmask
+$F016AA  move.l  d0,$10(a5)        ; fill the record
+$F016AE  move.l  a0,$8(a5)
+$F016B2  move.l  a6,$C(a5)
+```
+
+**That is a circular-queue enqueue.** So the untagged structure at `$1F500` — 9 records
+of `$1A` bytes behind a `first`/`last` header, which this document could only describe as
+"`!CCB` or `!DLY`, untouched in every configuration reached" — is a **9-entry ring buffer
+of `$1A`-byte records**, enqueued with interrupts masked, fields written at `+$8`, `+$C`
+and `+$10`. It is reached only from the FPS driver-chain hook at `$F044AC`, and only when
+bit 14 of `$0C34` is set, which is why no configuration has ever touched it.
+
+*A masked-interrupt ring buffer filled by a driver hook is the shape of a trace or
+deferred-event log. That is inference, not established — but the structure itself now is:
+all eight allocated RTOS structures have a decoded layout and a known writer.*
+
 ### Alternating wake/`$14` works, but buys 2 wakes not many — and op `$7` self-destructs
 
 Acting on the prediction: `FPS3K_RESPSEQ=<code>,<code>,…` cycles a **sequence** of

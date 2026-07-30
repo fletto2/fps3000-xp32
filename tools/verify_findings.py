@@ -550,6 +550,72 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- RMS68K directive names, from the VERSAdos source --------------------
+    # TR1.EQ / STR.EQ number directives in DECIMAL; the firmware loads hex.
+    TRAP1 = {0x01: 'GTSEG', 0x0B: 'CRTCB', 0x0D: 'START', 0x0F: 'TERM',
+             0x10: 'TERMT', 0x11: 'SUSPND', 0x12: 'RESUME', 0x13: 'WAIT',
+             0x29: 'ATSEM', 0x2A: 'WTSEM', 0x2B: 'SGSEM', 0x2D: 'CRSEM',
+             0x43: 'RSTATE', 0x4C: '(beyond TR1.EQ)'}
+    TRAP0 = {0x04: 'T0PAGAL', 0x06: 'T0GETTCB', 0x16: 'T0WAKEUP',
+             0x18: 'T0QEVNTI', 0x1F: 'T0CRTCB'}
+    def _dirs(trapop):
+        out = set()
+        for a2 in range(0xF04488, 0xF0A800, 2):
+            if struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0] != trapop:
+                continue
+            pw = struct.unpack('>H', d[a2-0xF00000-2:a2-0xF00000])[0]
+            if (pw & 0xFF00) == 0x7000:
+                out.add(pw & 0xFF)
+        return out
+    check('the firmware TRAP #1 directive set is exactly the 14 now named',
+          _dirs(0x4E41) <= set(TRAP1) and len(_dirs(0x4E41)) >= 12)
+    check('the firmware TRAP #0 directive set is exactly the five now named',
+          _dirs(0x4E40) <= set(TRAP0) | {0x04})
+    check('$2D (CRSEM, create semaphore) appears twice per XP task, never in RDHC',
+          len([a2 for a2 in range(0xF07D4A, 0xF0874A, 2)
+               if struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0] == 0x4E41
+               and struct.unpack('>H', d[a2-0xF00000-2:a2-0xF00000])[0] == 0x702D]) == 2
+          and not [a2 for a2 in range(0xF04600, 0xF05D00, 2)
+                   if struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0] == 0x4E41
+                   and struct.unpack('>H', d[a2-0xF00000-2:a2-0xF00000])[0] == 0x702D])
+    check('$29/$2A at $F05652 are ATSEM then WTSEM, not queue lookup and post',
+          d[0xF05662-0xF00000:0xF05666-0xF00000] == b'\x70\x29\x4e\x41'
+          and d[0xF0566C-0xF00000:0xF05670-0xF00000] == b'\x70\x2a\x4e\x41')
+
+    # --- the FPS/RMS68K interface: 4 pointers out, 2 calls in ----------------
+    _fps_ptrs = [a2 for a2 in range(0xF00000, 0xF04488, 2)
+                 if 0xF04488 <= struct.unpack('>I', d[a2-0xF00000:a2-0xF00000+4])[0]
+                                <= 0xF0FFFF]
+    check('exactly four FPS pointers inside the RMS68K kernel region',
+          _fps_ptrs == [0xF00004, 0xF001A6, 0xF03FDC, 0xF040EC])
+    _back = set()
+    for a2 in range(0xF04488, 0xF0A800, 2):
+        w2 = struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0]
+        if w2 in (0x4EB9, 0x4EF9):
+            tt2 = struct.unpack('>I', d[a2-0xF00000+2:a2-0xF00000+6])[0]
+        elif w2 in (0x6000, 0x6100):
+            tt2 = a2 + 2 + struct.unpack('>h', d[a2-0xF00000+2:a2-0xF00000+4])[0]
+        else:
+            continue
+        if 0xF00000 <= tt2 < 0xF04488:
+            _back.add(tt2)
+    check('...and only two kernel entry points called from the FPS region',
+          _back == {0xF008B6, 0xF01688})
+    check('reset SSP is $00000000 and PC is $F09C00, which jmps to MainInit $F08700',
+          struct.unpack('>I', d[0:4])[0] == 0
+          and struct.unpack('>I', d[4:8])[0] == 0xF09C00
+          and d[0xF09C00-0xF00000:0xF09C06-0xF00000]
+              == b'\x4e\xf9\x00\xf0\x87\x00')
+    check('...and MainInit opens by loading the supervisor stack pointer',
+          d[0xF08700-0xF00000:0xF08706-0xF00000]
+          == b'\x4f\xf9\x00\x01\xff\xd0')
+    check('$F01688 is a masked-interrupt ring enqueue on the $0C30 pool',
+          d[0xF0168E-0xF00000:0xF0169E-0xF00000]
+          == b'\x26\x78\x0c\x30\x00\x7c\x07\x00'
+             b'\x2a\x53\xbb\xeb\x00\x04\x66\x04'
+          and d[0xF016A2-0xF00000:0xF016A8-0xF00000]
+              == b'\x49\xed\x00\x1a\x26\x8c')
+
     # --- the device communications map stays in step with the machine --------
     try:
         _cm = open('refs_extracted/device_communications_map.md').read()
