@@ -471,10 +471,27 @@ else:
     # coverage assertion measures executed DECODED BYTES rather than raw PCs.
     import re as _re
     ASM_STARTS = {}
+    # EXCLUDE DC.W lines.  A denominator built from every hex-bytes line counts
+    # the 12,506 DC.W data words (25,012 bytes) alongside the 6,482 instructions
+    # (22,980 bytes) -- very nearly half -- and deflated every coverage figure
+    # this project measured.  Instruction coverage is 47%, not 44%.
     for _l in open('fps3k.asm'):
-        _m = _re.match(r'^  ([0-9a-f]{6}): ((?:[0-9a-f]{2} )+)', _l)
-        if _m:
+        _m = _re.match(r'^  ([0-9a-f]{6}): ((?:[0-9a-f]{2} )+)\s*(.*)$', _l)
+        if _m and not _m.group(3).strip().startswith('DC.W'):
             ASM_STARTS[int(_m.group(1), 16)] = len(_m.group(2).split())
+    check('asm has ~6.5k instructions and ~12.5k DC.W data words',
+          6300 <= len(ASM_STARTS) <= 6700)
+
+    # --- the 0% pre-task region is kernel-panic and kernel-hook code --------
+    check('panel issuer copy 1 $F04500 is called from the kernel panic stub $F001A4',
+          struct.unpack('>I', d[0xF001A6-0xF00000:0xF001AA-0xF00000])[0] == 0xF04500)
+    check('$F044A2 is a function POINTER stored at $F03FDC and $F040EC, not called',
+          struct.unpack('>I', d[0xF03FDC-0xF00000:0xF03FE0-0xF00000])[0] == 0xF044A2
+          and struct.unpack('>I', d[0xF040EC-0xF00000:0xF040F0-0xF00000])[0] == 0xF044A2)
+    check('...and it walks a driver chain: handler at +$1E, next at +$8',
+          d[0xF044C0-0xF00000:0xF044C8-0xF00000]
+              == b'\x22\x6d\x00\x1e\x2f\x0d\x4e\x91'   # movea.l $1E(a5),a1 / push a5 / jsr (a1)
+          and d[0xF044CC-0xF00000:0xF044D0-0xF00000] == b'\x20\x2d\x00\x08')
 
     # --- hook defects: POKE ungated, CHCMD suppressing coverage -------------
     check('FPS3K_POKE is gated on boot completion (the DMA10AA defect, repeated)',

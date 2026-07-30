@@ -80,6 +80,20 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- the 0% pre-task region resolved ----
+ (0xF04500,'PANEL ISSUER COPY 1 IS CORRECTLY DEAD.  It is called from $F001A4 and'),
+ (0xF04500,'  its address is stored at $F001A6 -- the hand-placed FPS stub at $F001A0'),
+ (0xF04500,'  inside the RMS68K kernel that issues PCMD_KERNEL_FATAL ($2B2) and hangs.'),
+ (0xF04500,'  So this copy serves ONLY the kernel panic path; reaching it would mean'),
+ (0xF04500,'  the kernel had died.  Its 0% coverage is not a driving gap.'),
+ (0xF044A2,'RTOS HOOK, not a called routine: this address is stored as a FUNCTION'),
+ (0xF044A2,'  POINTER at $F03FDC and $F040EC.  It tests bit 14 of $0C34, optionally'),
+ (0xF044A2,'  saves SR and calls $F01688, then falls into the chain walk below.'),
+ (0xF044C0,'DEVICE-DRIVER DISPATCH CHAIN: descriptors linked at +$8 with an entry'),
+ (0xF044C0,'  point at +$1E, polled in order until one returns carry set, then jmp'),
+ (0xF044C0,'  $F008B6.  This is how a device interrupt would reach a driver.  It never'),
+ (0xF044C0,'  runs because this configuration registers NO drivers -- consistent with'),
+ (0xF044C0,'  !IDV holding only the six task ISRs and !IOV being empty.'),
  # ---- driving the XP tasks: CHCMD suppresses coverage ----
  (0xF053BE,'RDHC\'s ASQ POST EXECUTES, but it is NOT what wakes the XP task.  The'),
  (0xF053BE,'  gate above (btst #1 of $10A1+(ch-1)*2) is set only by operation $14, so'),

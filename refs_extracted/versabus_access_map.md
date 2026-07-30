@@ -1473,6 +1473,72 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### Correction: my coverage denominators counted `DC.W` data as code
+
+Every coverage percentage produced in this session's measurements used a
+denominator built by regex over `fps3k.asm` lines with hex bytes — which matches
+`DC.W` data lines as readily as instructions. Of what the disassembler emits,
+**6,482 lines are instructions (22,980 bytes) and 12,506 are `DC.W` data words
+(25,012 bytes)** — very nearly half. Counting the data deflated every figure.
+
+| region | instruction bytes | data bytes | as reported | correct |
+|---|---|---|---|---|
+| pre-task | 120 | 256 | 0% | 0% |
+| RDHC | 5484 | 404 | 34% | **36%** |
+| IO1I | 422 | 164 | 33% | **46%** |
+| XP4I | 2342 | 218 | 13% | 14% |
+| XP3I | 2300 | 260 | 12% | 13% |
+| XP2I | 2310 | 250 | 31% | **34%** |
+| XP1I | 2358 | 206 | 37% | **40%** |
+| self-test | 5292 | 6 | 85% | 85% |
+| RTOS init | 2352 | 208 | 70% | **76%** |
+| **total** | **22980** | — | 43-44% | **47%** |
+
+**Instruction coverage is 47%, not 44%.** IO1I moves most (33% → 46%) because a
+quarter of its region is data. The direction of the error was always the same —
+understating — so no conclusion about *which* configuration covers more is
+affected, but the absolute numbers were low.
+
+### The 0% "pre-task" region is kernel-panic and kernel-hook code
+
+It is not 376 bytes of unreached code. It is **120 bytes of instructions and 256
+bytes of zero padding**, and every one of the three routines has a reason not to run:
+
+- **`$F04500`, panel issuer copy 1** (50 bytes) is called from **`$F001A4`** and its
+  address is stored at `$F001A6` — that is the hand-placed FPS stub at `$F001A0`
+  inside the RMS68K kernel that issues `PCMD_KERNEL_FATAL` (`$2B2`) and hangs. So
+  this copy exists *only* to serve the kernel's fatal-error path. **Correctly dead in
+  a healthy boot** — reaching it would mean the kernel had panicked.
+- **`$F04488`** (28 bytes), a `TRAP #0` directive-`$18` helper, is called from
+  `$F043E8` in the kernel. Reachable, just not exercised.
+- **`$F044A2-$F044DC`** (42 bytes) is one routine, and its address is stored as a
+  **function pointer at `$F03FDC` and `$F040EC`** — an RTOS hook, not called
+  directly. It tests bit 14 of `$0C34`, optionally saves SR and calls `$F01688`,
+  then **walks a linked list calling each node's handler at `+$1E` and following
+  `+$8` to the next**, stopping when one returns carry set, and finally jumps to
+  `$F008B6`:
+
+```
+$F044C0  movea.l $1e(a5),a1     ; node's handler
+$F044C4  move.l  a5,-(a7)
+$F044C6  jsr     (a1)
+$F044CA  bcs     -> done        ; handled
+$F044CC  move.l  $8(a5),d0      ; next node
+$F044D0  beq     -> done
+$F044D2  movea.l d0,a5
+$F044D4  bra     $F044C0
+```
+
+That is a **device-driver dispatch chain**: descriptors linked at `+$8` with an
+entry point at `+$1E`, polled in order until one claims the event. For emulation it
+is the path by which a device interrupt would reach a driver — and the reason it
+never runs is that this configuration registers no drivers, which is consistent
+with `!IDV` holding only the six task ISRs and `!IOV` being empty.
+
+*So "pre-task 0%" was never a driving gap. Two of the three routines are unreachable
+by design in a working machine, and the third needs a registered driver that this
+firmware configuration does not create.*
+
 ### `FPS3K_CHCMD=C801` was *suppressing* XP coverage, and `FPS3K_POKE` never booted
 
 Two hook defects found while trying to drive the XP tasks, both of the shape this

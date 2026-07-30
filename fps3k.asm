@@ -112,6 +112,9 @@ loc_F0449C:
 loc_F044A0:
 ;>>>> [R5/BOTH] Returns from subroutine in TCBIO1I host I/O channel task entry.
   f044a0: 4e 75                   rts      
+;### RTOS HOOK, not a called routine: this address is stored as a FUNCTION
+;###   POINTER at $F03FDC and $F040EC.  It tests bit 14 of $0C34, optionally
+;###   saves SR and calls $F01688, then falls into the chain walk below.
   f044a2: 08 38                   DC.W     0x0838
   f044a4: 00 0e                   DC.W     0x000e
   f044a6: 0c 34                   DC.W     0x0c34
@@ -126,6 +129,11 @@ loc_F044A0:
   f044bc: 4b ed ff b0             lea.l    -$50(a5), a5
 
 loc_F044C0:
+;### DEVICE-DRIVER DISPATCH CHAIN: descriptors linked at +$8 with an entry
+;###   point at +$1E, polled in order until one returns carry set, then jmp
+;###   $F008B6.  This is how a device interrupt would reach a driver.  It never
+;###   runs because this configuration registers NO drivers -- consistent with
+;###   !IDV holding only the six task ISRs and !IOV being empty.
   f044c0: 22 6d 00 1e             movea.l  $1e(a5), a1
   f044c4: 2f 0d                   move.l   a5, -(a7)
   f044c6: 4e 91                   jsr      (a1)
@@ -156,6 +164,11 @@ loc_F044D6:
   f044fa: 00 00                   DC.W     0x0000
   f044fc: 00 00                   DC.W     0x0000
   f044fe: 00 00                   DC.W     0x0000
+;### PANEL ISSUER COPY 1 IS CORRECTLY DEAD.  It is called from $F001A4 and
+;###   its address is stored at $F001A6 -- the hand-placed FPS stub at $F001A0
+;###   inside the RMS68K kernel that issues PCMD_KERNEL_FATAL ($2B2) and hangs.
+;###   So this copy serves ONLY the kernel panic path; reaching it would mean
+;###   the kernel had died.  Its 0% coverage is not a driving gap.
 ;### PANEL-COMMAND ISSUER, copy 1 of 8. All 8 are byte-identical over 48 bytes:
 ;### PanelIOConfigure copy 1/7 - pre-task init. Seven BYTE-IDENTICAL copies of
   f04500: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
