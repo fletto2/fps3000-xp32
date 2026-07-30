@@ -550,6 +550,27 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- the self-test spine: three sequences, $D0 checkpoints -----------------
+    check('sequence A bases d6 at $200 ($F08764)',
+          d[0xF08764-0xF00000:0xF0876A-0xF00000] == b'\x2c\x3c\x00\x00\x02\x00')
+    check('sequence B re-bases d6 to $1000 after XLTR_MODE1 <- $2000',
+          d[0xF087D4-0xF00000:0xF087DE-0xF00000]
+          == b'\x3d\x7c\x20\x00\x02\x02\x3c\x3c\x10\x00')
+    check('sequence C re-bases d6 to $2000',
+          d[0xF08862-0xF00000:0xF08866-0xF00000] == b'\x3c\x3c\x20\x00')
+    check('each sequence ends VMOD <- $D0 then XLTR_MODE1 <- $8000',
+          all(d[a-0xF00000:a-0xF00000+10]
+              == b'\x3a\xbc\x00\xd0\x3d\x7c\x80\x00\x02\x02'
+              for a in (0xF087AA, 0xF08832, 0xF088CC)))
+    check('the DRAM test relocates the supervisor stack to $800 first',
+          d[0xF08886-0xF00000:0xF0888A-0xF00000] == b'\x4f\xf8\x08\x00')
+    check('...because it then tests $1F000-$1F400, which contains $1FFD0',
+          d[0xF08892-0xF00000:0xF0889E-0xF00000]
+          == b'\x20\x7c\x00\x01\xf0\x00\x22\x7c\x00\x01\xf4\x00')
+    check('and the last region tested is $10000-$20000, the staging buffer',
+          d[0xF088A8-0xF00000:0xF088B4-0xF00000]
+          == b'\x20\x7c\x00\x01\x00\x00\x22\x7c\x00\x02\x00\x00')
+
     # --- the PTM tick: T3 = $27C7 in dual-8-bit mode off the 800 kHz E clock --
     check('$F0A2C6 programs T3 = $27C7 (MSB $27, LSB $C7)',
           d[0xF0A2C8-0xF00000:0xF0A2CC-0xF00000] == b'\x00\x0d\x30\x3c')

@@ -1528,6 +1528,61 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The self-test is THREE sequences separated by `$D0` checkpoint handshakes
+
+The spine is `$F08764-$F088D0`, and it settles what the phase beacons mean. `d6` is the
+phase counter, bumped `addi.w #$100,d6` between tests and written to **CHANNEL_SELECT**
+with its low byte cleared (`$F098F0`) — which is why `$FF0204` is the hottest register on
+the board at ~33 k writes against 7 reads. **The SBC broadcasts its test progress to the
+chassis.**
+
+Each sequence ends with the identical four-instruction epilogue —
+
+```
+move.w  #$d0,(a5)              ; VMOD_CTRL <- $D0   the checkpoint marker
+move.w  #$8000,$202(a6)        ; XLTR_MODE1 bit 15  request
+move.l  #loc_F088FA,$154.l     ; install a handler
+btst d4/d5 on $F70018          ; wait for the chassis to answer
+```
+
+— and the next sequence opens by clearing VMOD and writing `XLTR_MODE1 <- $2000`. So
+`$2000` is *run mode* and `$8000` is *request/handshake*, and the `$D0` markers are a
+three-step conversation with the chassis. This is what the emulator's board-status bit 5
+models by counting `$D0` writes; the spine confirms that reading was right.
+
+| | `d6` base | tests | run under |
+|---|---|---|---|
+| **A** | `$200` | 8: `$F08C4A`, `$F08D1A`, `RAMAddressingTest`, `BoardStatusPoll_3F11`, `PTMInit`, `$F08E2E`, `$F08F1C`, `$F08F70`, `$F0905A` | the board's power-on XLTR mode |
+| **B** | `$1000` | 11: `MemBusProbe`, `$F0918C`, `$F09236`, `$F09338`, `$F093CE`, `$F094F0`, `$F09518`, `$F09602`, `$F096C4`, `$F09776`, `$F09832` | **after `XLTR_MODE1 <- $2000`** |
+| **C** | `$2000` | DRAM, then `$F09AD6`, `$F09B20` | ditto |
+
+That accounts exactly for the observed phase range `$0100-$1A00` plus `$2000` — the groups
+are not an arbitrary numbering, they are three passes with the counter re-based.
+
+**Sequence C is the DRAM test, and it is destructive and self-aware.** It walks the two
+64 KB halves with a scratch area outside each:
+
+```
+a0=$0      a1=$400     a2=$1F000   -> $F08A4C
+a1=$10000                          -> $F08992    ; lower RAM, $0-$10000
+lea $800.w,a7                      ; MOVE THE SUPERVISOR STACK
+a0=$1F000  a1=$1F400  a2=$0        -> $F08A4C
+a0=$10000  a1=$20000               -> $F08992    ; THE MICROCODE STAGING BUFFER
+```
+
+The `lea $800.w,a7` at `$F08886` is the tell: the normal supervisor stack at `$1FFD0` lies
+*inside* the `$1F000-$1F400` region about to be written, so the test relocates its own
+stack to `$800` first. A test that did not know it was destroying its own stack would not
+do that. **And the second half tested is `$10000-$20000` — the XP32 microcode staging
+buffer**, so the machine verifies the buffer the entire ROM exists to fill before it will
+run.
+
+**Documentation status, as a work list.** 42 distinct subroutines are called from
+`$F08700-$F09C00`; **3 carry a `;###` note and 39 do not**. The spine above is the frame
+they hang on, and sequence B is the high-value group for board mapping — it is the one
+that runs with the XLTR enabled, so those eleven tests are where off-board communication
+is exercised.
+
 ### The system tick is 10 ms — and the emulator's is 27% slow
 
 The PTM's operational programming is a nine-write sequence at `$F0A298`-`$F0A2E4`, and the
