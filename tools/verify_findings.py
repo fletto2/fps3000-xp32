@@ -570,6 +570,17 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- tools/refs.py exists and is validated against its controls -----------
+    check('tools/refs.py parses disassembler output rather than raw opcodes',
+          'fps3k.asm' in open('tools/refs.py').read()
+          and 'DC.W' in open('tools/refs.py').read())
+    check('...and skips lea/pea, which compute without accessing',
+          "startswith(('lea','pea'))" in open('tools/refs.py').read())
+    check('$10AA has no named write target in the ROM -- confirming the off-board read',
+          not [a2 for a2 in range(0xF04488, 0xF0FFF0, 2)
+               if word(a2) in (0x33FC, 0x23FC, 0x13FC)
+               and long_(a2 + 4) & 0xFFFFFF == 0x10AA])
+
     # --- $0E74: the chassis-mailbox claim is RETRACTED ------------------------
     # An earlier version asserted "every write to $0E74 is zero", counting only
     # immediate-source stores.  There are 11 register-sourced writes, plainly

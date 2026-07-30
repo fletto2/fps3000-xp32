@@ -1563,6 +1563,43 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### `tools/refs.py`: stop hand-decoding opcodes — and it settles `$10AA` vs `$0E74`
+
+Six times this session I hand-decoded 68000 opcodes to enumerate references, and six times the
+decoder was too narrow: wrong addressing mode, wrong source operand, wrong instruction form,
+data mistaken for code. The disassembler had already solved that problem correctly. **`tools/refs.py`
+parses its operand text instead**, classifying each reference by which side of the comma the
+address sits on (`R` source, `W` destination, `RMW`, `T` test), stripping `[SYMBOL]`
+annotations, resolving base registers, and skipping `lea`/`pea` and `DC.W` lines.
+
+**Validated against four controls before use**, which is the practice these failures earned:
+
+| control | expected | result |
+|---|---|---|
+| `$FF0048` | the `$F07EF6` read an absolute scan misses | **found**, `[R] move.w $48(a5),$1068.l` |
+| `$0E74` | register-sourced writes my hand-decoder missed | **found**, 37 refs incl. `[W] move.w d1,$e74.l` |
+| `$FF0204` | writes ≫ reads | **13 refs**, writes and tests |
+| `$10AA` | documented as never a named write target | **1 ref**, a read |
+
+It immediately surfaced a form I had not thought to look for at all —
+`move.w (a7,d0.w),$e74.l`, an indexed-from-stack write — and a read that matters:
+`$F04924 [R] move.w $e74.l,$204(a5)`, sending `$0E74`'s value **out to CHANNEL_SELECT**.
+
+**And it settles why `$10AA` and `$0E74` looked alike but are not.** `$10AA` has **exactly one**
+reference in the whole ROM and it is a *read* — the firmware never names it as a write
+destination, which is precisely the documented conclusion reached independently by a runtime
+write-watchpoint. `$0E74` has **eleven** named register-sourced writes. My broken detector saw
+"only zero writes" for both because it counted only immediate stores; the validated tool
+separates them cleanly. **So the `$10AA` off-board finding is now confirmed by a second
+independent method, and my `$0E74` claim was specific error rather than a flaw in the
+analogy.**
+
+*One honest limitation:* the tool clears base registers at every `rts`/`rte`/`jmp`/`bra`, so a
+base established in a caller and used after a branch is dropped. It reports **1** site for
+`$FF0048` where the looser scoped sweep reported 13. **Counts are lower bounds**, deliberately
+— after six false negatives from over-narrow detectors and one false positive flood from an
+over-broad one, a tool that under-reports and says so is the useful failure direction.
+
 ### RETRACTED: `$0E74` is NOT a chassis mailbox — it is an op RESULT word
 
 *The entry that stood here claimed `$0E74` was written only from off-board, on the `$10AA`
