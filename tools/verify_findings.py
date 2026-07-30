@@ -99,6 +99,16 @@ else:
         if extra: cmd += extra
         subprocess.run(cmd, env=e, capture_output=True, timeout=400)
         return open(f'{tmp}/t').read(), open(f'{tmp}/r', 'rb').read()
+
+    def run_err(env, cycles):
+        """Same, but returns the emulator's STDERR -- where the diagnostic
+        channels (RTOSDUMP, RAMWATCH, the exit summary) all write.  run()
+        returns the PC trace, and using it for a stderr assertion makes the
+        check vacuous, which is how the first RTOSDUMP checks failed."""
+        e = dict(os.environ); e.update(env)
+        r = subprocess.run([EMU, '-rom', ROM, '-cycles', str(cycles)],
+                           env=e, capture_output=True, timeout=400)
+        return r.stderr.decode('utf-8', 'replace')
     tr, ram = run({}, 400_000_000)
     check('boot: all 6 task ISR vectors installed',
           all(struct.unpack('>I', ram[v:v+4])[0] == h for v, h in
@@ -440,6 +450,19 @@ else:
     check('the acknowledge roughly doubles XP1I coverage (116 -> 240)',
           len({l for l in trk.split() if 'F07D00' <= l <= 'F086FF'}) > 200 and
           len({l for l in trn2.split() if 'F07D00' <= l <= 'F086FF'}) < 130)
+
+    # --- FPS3K_RTOSDUMP reports the decoded state ---------------------------
+    out = run_err({'FPS3K_RTOSDUMP': '1'}, 400_000_000)
+    check('FPS3K_RTOSDUMP names all six tasks and their ASQ/stack blocks',
+          all(f'{n}  block=' in out for n in
+              ('RDHC', 'IO1I', 'XP4I', 'XP3I', 'XP2I', 'XP1I')))
+    check('...prints the !IDV interrupt wiring with !VCT owners agreeing',
+          all(f'!VCT owner={k}' in out for k in range(1, 7)))
+    check('...and reports heap bottom $1DD00, 33 pages, staging $10000-$1DCFF',
+          'bottom $1DD00 (33 pages handed out)' in out
+          and '$10000-$1DCFF (56576 bytes)' in out)
+    check('...and flags the non-task $BF byte at vector $2D rather than '
+          'reporting it as task 191', '$2D=flags:$BF' in out)
 
     # --- the eight RTOS structures, read out of RAM ------------------------
     _, rs = run({}, 400_000_000)

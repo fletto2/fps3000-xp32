@@ -1473,6 +1473,52 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### `FPS3K_RTOSDUMP`: the findings above, as a readout
+
+Everything in the three sections that follow is a *readout* rather than an
+inference, so it can be printed. `FPS3K_RTOSDUMP=1` decodes the RMS68K state out
+of RAM at exit:
+
+```
+=== RMS68K state (decoded from RAM) ===
+structure directory (TRAP #0 directive $04, page allocator):
+  $0C20 -> $1FD00  !GST        $0C6E -> $1F800  !IDV
+  $0C24 -> $1FB00  !UST        $0C2C -> $1F700  !PAT
+  $0C66 -> $1FA00  ....        $0C28 -> $1F600  !UDR
+  $0C6A -> $1F900  !IOV        $0C30 -> $1F500  ....
+tasks (TCB: name +$10, ASQ/stack block +$138, saved SP +$13C):
+  $1F300  RDHC  block=$1DD00  sp=$1DE16     $1ED00  XP3I  block=$1E300  sp=$1E414
+  $1F100  IO1I  block=$1DF00  sp=$1E00A     $1EB00  XP2I  block=$1E500  sp=$1E614
+  $1EF00  XP4I  block=$1E100  sp=$1E214     $1E900  XP1I  block=$1E700  sp=$1E814
+!IDV interrupt table @ $1F800 {vector, TCB, ISR entry, ISR exit}:
+  vec $45  TCB $1E900 XP1I  in $F07EE6  out $F07F08   !VCT owner=1
+  ... (six records, !VCT owner 1..6 agreeing with the TCB in every row)
+!VCT owned vectors @ $1FA00: $2D=flags:$BF $41->task6 $45->task1 ... $4A->task5
+!UST ASQ registry @ $1FB00  9 of 22 records of $16 bytes:  XP1I/AXP1 ... IO1I/HIO1
+heap: top $1FE00, bottom $1DD00 (33 pages handed out)  ->  microcode staging
+       buffer usable range $10000-$1DCFF (56576 bytes)
+=== end RMS68K state ===
+```
+
+The `!VCT owner=` column is a **consistency check that costs nothing**: it reads
+the vector number out of `!IDV` and the owning task out of `!VCT`, two structures
+built by different code at different times, and they agree in all six rows.
+
+33 pages: 9 for the structures, 12 for the six TCBs, 12 for the six ASQ/stack
+blocks. `$1FE00 - $1DD00 = $2100 = 33 × 256`, exactly.
+
+Three bugs were fixed before this output was right, and all three are the
+familiar shape: the task walk started one page-pair too high and printed **no
+tasks at all**; the heap bottom was computed from the lowest *structure* and so
+reported `$1F500` instead of `$1DD00`; and the `!VCT` filter excluded `$00` and
+`$FF` but not `$BF`, reporting the flag byte at vector `$2D` as "task 191". The
+harness checks then failed a fourth time because they asserted against `run()`,
+which returns the **PC trace** — the dump goes to stderr, so the assertions were
+vacuous. A `run_err()` helper now exists for exactly that.
+
+*A correction to a figure this document introduced two sections ago: `$1DD00 -
+$10000 = $DD00` is 56,576 bytes, which is **55.25 KB**, not 56.25 KB.*
+
 ### All eight RTOS structures decoded — including `!IDV`, the interrupt table
 
 With the allocator understood, the eight blocks can simply be read. They do not
@@ -1677,7 +1723,7 @@ nonzero-byte scan. RDHC's ASQ/stack block at `$1DD00-$1DEFF` contains **zero
 nonzero bytes** — RDHC declares no ASQ and never pushed deep enough to write it —
 so a nonzero scan cannot see it, even though the allocator has handed it out and
 RDHC will write it the moment it does any real work. The correct bound is
-**`$10000-$1DCFF`, 56.25 KB**.
+**`$10000-$1DCFF`, 55.25 KB (56,576 bytes)**.
 
 *This is the same instrument defect as the others in this document, in its purest
 form yet: an allocated-but-untouched buffer is indistinguishable from free memory

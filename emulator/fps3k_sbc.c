@@ -52,6 +52,18 @@ static uint8_t  ram[RAM_SIZE];
 
 /* Exposed so versabus.c can apply its boot-complete gate (vector $128). */
 uint8_t *versabus_ram_ptr(void) { return ram; }
+
+/* Small big-endian RAM readers, used by FPS3K_RTOSDUMP.  Bounds-clamped so a
+ * garbage pointer in a half-initialised structure cannot walk off the array. */
+static uint16_t rd16(uint32_t a) {
+    if (a + 1 >= RAM_SIZE) return 0;
+    return (uint16_t)((ram[a] << 8) | ram[a + 1]);
+}
+static uint32_t rd32(uint32_t a) {
+    if (a + 3 >= RAM_SIZE) return 0;
+    return ((uint32_t)ram[a] << 24) | ((uint32_t)ram[a + 1] << 16)
+         | ((uint32_t)ram[a + 2] << 8) | (uint32_t)ram[a + 3];
+}
 /* Written-ness tracking.  FPS3K_UNINIT logs every read of a RAM byte the
  * CPU has never written -- the complete set of values this firmware
  * consumes but does not produce, which is exactly what a chassis model
@@ -667,6 +679,115 @@ int main(int argc, char **argv) {
         }
     }
 
+    /* FPS3K_RTOSDUMP: decode the RMS68K state out of RAM and print it.
+     *
+     * Everything here is a readout, not an inference.  Directive $04 is a
+     * 256-byte page allocator whose eight structure sites register their
+     * blocks in a directory at $0C20/$0C24/$0C66/$0C6A/$0C6E/$0C2C/$0C28/
+     * $0C30; !IDV holds the complete interrupt wiring as {vector, TCB, ISR
+     * entry, ISR exit}; $1FA00 is !VCT, one byte per exception vector holding
+     * the owning task number; !UST is the ASQ name registry.  Derivation is in
+     * refs_extracted/versabus_access_map.md. */
+    if (getenv("FPS3K_RTOSDUMP")) {
+        static const uint32_t slots[8] = { 0x0C20, 0x0C24, 0x0C66, 0x0C6A,
+                                           0x0C6E, 0x0C2C, 0x0C28, 0x0C30 };
+        uint32_t heap_lo = 0x20000;
+        fprintf(stderr, "\n=== RMS68K state (decoded from RAM) ===\n");
+        fprintf(stderr, "structure directory (TRAP #0 directive $04, page allocator):\n");
+        for (int k = 0; k < 8; k++) {
+            uint32_t b = rd32(slots[k]);
+            if (b < 0x20000 && b) {
+                char tag[5] = { 0 };
+                for (int j = 0; j < 4; j++) {
+                    uint8_t c = ram[b + j];
+                    tag[j] = (c >= 32 && c < 127) ? (char)c : '.';
+                }
+                fprintf(stderr, "  $%04X -> $%05X  %s\n", slots[k], b, tag);
+                if (b < heap_lo) heap_lo = b;
+            } else {
+                fprintf(stderr, "  $%04X -> $%05X  (not allocated)\n", slots[k], b);
+            }
+        }
+        /* tasks: TCBs stride $200 downward from the lowest structure */
+        fprintf(stderr, "tasks (TCB: name +$10, ASQ/stack block +$138, "
+                        "saved SP +$13C; vector and handler come from !IDV below):\n");
+        /* TCBs continue the same downward heap, starting one page-pair below
+         * the lowest structure, each $200 (two pages).  Walk down while the
+         * '!TCB' tag is present. */
+        for (uint32_t t = heap_lo - 0x200; t >= 0x1000 && ram[t] == '!'; t -= 0x200) {
+            uint32_t blk = rd32(t + 0x138);
+            fprintf(stderr, "  $%05X  %c%c%c%c  block=$%05X  sp=$%05X\n", t,
+                    ram[t + 0x10], ram[t + 0x11], ram[t + 0x12], ram[t + 0x13],
+                    blk, rd32(t + 0x13C));
+            if (blk && blk < heap_lo) heap_lo = blk;
+        }
+        /* !IDV: the interrupt wiring */
+        {
+            uint32_t idv = rd32(0x0C6E);
+            if (idv && idv < 0x20000) {
+                fprintf(stderr, "!IDV interrupt table @ $%05X "
+                                "{vector, TCB, ISR entry, ISR exit}:\n", idv);
+                for (int k = 0; k < 6; k++) {
+                    uint32_t e = idv + 8 + k * 14;
+                    uint16_t v = rd16(e);
+                    if (!v) break;
+                    uint32_t tcb = rd32(e + 2);
+                    fprintf(stderr, "  vec $%02X  TCB $%05X %c%c%c%c  "
+                                    "in $%06X  out $%06X   !VCT owner=%u\n",
+                            v, tcb,
+                            ram[tcb + 0x10], ram[tcb + 0x11],
+                            ram[tcb + 0x12], ram[tcb + 0x13],
+                            rd32(e + 6), rd32(e + 10),
+                            ram[rd32(0x0C66) + v]);
+                }
+            }
+        }
+        /* !VCT: every owned vector, including any not in !IDV */
+        {
+            uint32_t vct = rd32(0x0C66);
+            fprintf(stderr, "!VCT owned vectors @ $%05X (byte[vector] = task):", vct);
+            int n = 0;
+            for (int v = 0; v < 256; v++) {
+                uint8_t o = ram[vct + v];
+                if (!o || o == 0xFF) continue;          /* unowned / not-default */
+                if (o & 0x80) {
+                    /* high bit set: a map flag byte, not a task number.  $BF
+                     * (bit 6 cleared from $FF) appears at vector $2D; what
+                     * clears it is $F012E6 in the kernel and is not yet known. */
+                    fprintf(stderr, " $%02X=flags:$%02X", v, o);
+                } else {
+                    fprintf(stderr, " $%02X->task%u", v, o);
+                }
+                n++;
+            }
+            fprintf(stderr, "%s\n", n ? "" : "  (none)");
+        }
+        /* !UST: the ASQ registry */
+        {
+            uint32_t ust = rd32(0x0C24);
+            if (ust && ust < 0x20000) {
+                uint16_t rsz = rd16(ust + 0x0C), used = rd16(ust + 0x0E);
+                fprintf(stderr, "!UST ASQ registry @ $%05X  %u of %u records "
+                                "of $%X bytes:", ust, used,
+                        (unsigned)((rd16(ust + 0x0A) * 256 - 0x14) / (rsz ? rsz : 1)),
+                        rsz);
+                for (int k = 0; k < used && k < 32; k++) {
+                    uint32_t e = ust + 0x14 + k * rsz;
+                    fprintf(stderr, "  %c%c%c%c/%c%c%c%c",
+                            ram[e], ram[e+1], ram[e+2], ram[e+3],
+                            ram[e+8], ram[e+9], ram[e+10], ram[e+11]);
+                }
+                fprintf(stderr, "\n");
+            }
+        }
+        fprintf(stderr, "heap: top $1FE00, bottom $%05X (%u pages handed out)"
+                        "  ->  microcode staging buffer usable range "
+                        "$10000-$%05X (%u bytes)\n",
+                heap_lo, (0x1FE00 - heap_lo) / 256,
+                heap_lo - 1, heap_lo - 0x10000);
+        fprintf(stderr, "=== end RMS68K state ===\n");
+    }
+
     fprintf(stderr, "\n[done] %llu cycles, %llu instructions\n",
             (unsigned long long)total_cycles,
             (unsigned long long)total_instr);
@@ -690,6 +811,7 @@ int main(int argc, char **argv) {
             "FPS3K_RAMWATCH","FPS3K_VECWATCH","FPS3K_UNINIT",
             "FPS3K_CHASSIS_UNINIT","FPS3K_LOGCHASSIS","FPS3K_BUSPC",
             "FPS3K_BSTAT19_B5","FPS3K_PCLOG","FPS3K_REGLOG","FPS3K_APIF_LEGACY",
+            "FPS3K_RTOSDUMP",
         };
         int any = 0;
         fprintf(stderr, "[done] hooks active:");
