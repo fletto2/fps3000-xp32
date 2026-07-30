@@ -550,6 +550,26 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- $FF0216 bit 5 gates the $400000 window; $1700/$1800 are read/write ----
+    check('$1700 probes $400000 with a READ, padded by four NOPs',
+          d[0xF096AC-0xF00000:0xF096B8-0xF00000]
+          == b'\x30\x11\x4e\x71\x4e\x71\x4e\x71\x4e\x71\x4e\x75')
+    check('$1800 probes it with a WRITE, same padding',
+          d[0xF096B8-0xF00000:0xF096C4-0xF00000]
+          == b'\x42\x51\x4e\x71\x4e\x71\x4e\x71\x4e\x71\x4e\x75')
+    check('the BERR handler sets d1=1, trims the frame by 8, skips PC by 4',
+          d[0xF098E0-0xF00000:0xF098EC-0xF00000]
+          == b'\x72\x01\x4f\xef\x00\x08\x58\x6f\x00\x04\x4e\x73')
+    check('...so d1 NONZERO means the access faulted, inverting the naive reading',
+          True)  # documented consequence of the handler above
+    check('$216 <- $20 then require a fault; $216 <- 0 then require success',
+          d[0xF09626-0xF00000:0xF09632-0xF00000]
+          == b'\x3d\x7c\x00\x20\x02\x16\x61\x7e\x4a\x41\x66\x06'
+          and d[0xF09648-0xF00000:0xF09652-0xF00000]
+          == b'\x42\x6e\x02\x16\x61\x5e\x4a\x81\x67\x06')
+    check('a fixed +4 skip lands inside the NOP padding (F096AE + 4 = F096B2)',
+          0xF096AC + 2 + 4 == 0xF096B2)
+
     # --- phase $1600 specifies the XLTR register file --------------------------
     check('$1600 reads STATUS_IRQ and branches on bit 4 to pick $D0 or $D8',
           d[0xF09522-0xF00000:0xF09536-0xF00000]

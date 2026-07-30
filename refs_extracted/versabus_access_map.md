@@ -1528,6 +1528,62 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### `$FF0216` bit 5 gates the `$400000` chassis window, and `$1700`/`$1800` prove it
+
+The `$1700`/`$1800` pair looked identical in register shape. They are the **read** and
+**write** halves of one test, and what they test is an access gate.
+
+Both install a private bus-error handler and probe `a1 = $400000` through a one-instruction
+accessor:
+
+```
+$F096AC:  move.w (a1),d0    nop nop nop nop   rts     ; $1700 -- READ probe
+$F096B8:  clr.w  (a1)       nop nop nop nop   rts     ; $1800 -- WRITE probe
+```
+
+and the handler is a trap-and-continue:
+
+```
+$F098E0:  moveq   #$1,d1          ; FLAG: a bus error happened
+          lea     $8(a7),a7       ; drop 8 bytes of the 14-byte group-0 frame
+          addq.w  #$4,$4(a7)      ; advance the saved PC by 4
+          rte
+```
+
+**So `d1` nonzero means the access FAULTED, not that it succeeded** — and reading the test
+with that polarity inverts its meaning:
+
+| `$FF0216` | expectation | assertion |
+|---|---|---|
+| `$20` | `tst d1` / `bne` — **bus error REQUIRED** | fail if the access is answered |
+| `$0` | `tst d1` / `beq` — **access must SUCCEED** | fail if it faults |
+
+**`$FF0216` bit 5 blocks the `$400000` window.** It is a protect/disable bit, not an
+enable: setting it makes chassis memory raise a bus error, clearing it lets the window
+respond. The self-test verifies the gate in both directions and for both access
+directions, which is four combinations and exactly the eight call sites observed
+(`$F096AC` x4, `$F096B8` x4).
+
+**The four NOPs are landing padding for the 68000's imprecise bus error.** A 68000 reports
+a bus fault some cycles after the instruction that caused it, so the probe cannot be the
+last instruction before `rts`. The handler's `addq.w #$4` is calibrated against that
+padding: `move.w (a1),d0` at `$F096AC` is two bytes, so the saved PC is `$F096AE` and +4
+resumes at `$F096B2` — *inside the NOPs*. The padding is what makes a fixed +4 skip safe
+regardless of which instruction the fault is attributed to.
+
+The frame arithmetic is worth spelling out because an emulator has to match it. The 68000
+group-0 frame is 14 bytes — SSW, 4-byte fault address, IR, SR, 4-byte PC. `lea $8(a7),a7`
+lands a7 on the SR, leaving `{SR, PC}` — a normal 6-byte RTE frame. `$4(a7)` is then the
+**low word** of that PC longword, and `addq.w #4` advances it. *This is the code that the
+vendored Musashi patch exists to satisfy*: the core was hard-coded for the 68010's frame
+format, and against a 68010 frame the `lea $8` would land on the wrong word and the `rte`
+would return to garbage.
+
+**Emulator consequence.** The model must (a) raise a bus error on `$400000` accesses when
+`$FF0216` bit 5 is set, (b) answer them when it is clear, and (c) push a genuine 68000
+7-word frame. Getting (c) wrong fails silently into a wild `rte`, which is the worst
+failure mode available — and this stage is the only place in the ROM that exercises it.
+
 ### Phase `$1600` is a written specification of the XLTR register file
 
 `$F09518` is the most informative single stage on the board: it writes known values to
