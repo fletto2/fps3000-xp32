@@ -16473,3 +16473,34 @@ that is the `$FF0008` bulk-port observation, already flagged above.
 The sweep is cheap — ten runs — and worth repeating whenever a hook is added, since the failure is
 invisible without it: the run completes, prints counts, and reports a final PC that only looks
 wrong if you know what a healthy one is.
+
+## Independent check of the `ds/` AMD device emulators (2026-07-30)
+
+New external work in `ds/` (gitignored): C emulations of **Am29116, Am2910, Am29540, Am29520,
+Am29821, Am29705** and the `amd_bus` parts, with 136 test assertions, plus four inference
+documents and an adversarial review of those documents.
+
+**Built and ran it here: compiles clean at `-O2 -Wall`, 136 assertions, 0 failures.**
+
+Its central claim — that the panel codes are literal Am29116 instructions under the datasheet's
+5-field format `B/W(1) | Quad(2) | Opcode(4) | SRC/Dest(4) | RAM(5)` — is verifiable from the ROM
+and **checks out exactly**:
+
+| range | SRC/Dest | name | conformance |
+|---|---|---|---|
+| `$258`-`$25F` | 2 | TORIA | **8/8** |
+| `$260`-`$27D` | 3 | TODRA | **30/30** |
+
+Every code in both ranges has Opcode = 1, consistent with the SUBRC decode this project already
+records. And the boundary corroborates an existing note: `$281` and `$29E` decode to
+**SRC/Dest = 4**, a different field value — which is exactly why this file says those four codes
+"cannot be Am29116 instructions in the `$258`-`$27D` sense at all".
+
+So two independent routes now agree on the panel-code decode: the project's original SUBRC
+reading, and a chip-level emulator built from the datasheets. That does **not** settle the
+interpretation question — whether these are dispatch indices that happen to be valid instructions,
+or literal instructions whose RAM reads have side effects — which remains open exactly as recorded.
+
+The review's own caveats are worth keeping visible: its EU-PROM plan carries 3 SERIOUS issues and
+its AU-microcode plan 1 FATAL (a circular NOP/byte-map dependency) by its own adversarial pass.
+Those are the honest limits of both inference routes, self-identified.
