@@ -1563,6 +1563,43 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### `FPS3K_POKEONCE`: a write-once release — RDHC escapes, then halts on the *next* command
+
+The read-override experiment established the mechanism and the wrong tool. `FPS3K_POKEONCE`
+is the right one: same syntax as `FPS3K_POKE`, but it performs a **real RAM write, once**, when
+the boot-complete gate first opens, and then leaves the memory alone so the kernel's own
+save/restore keeps working. Default-off; the default RAM digest is byte-identical with it
+present.
+
+| | read-override (`FPS3K_POKE`) | **write-once (`FPS3K_POKEONCE`)** |
+|---|---|---|
+| escapes the spin | 3 | **1** |
+| RTOS idle loop | **8** (collapsed) | **2,416** (healthy) |
+| trace lines | — | 9,680,659 |
+| self-test | — | completes |
+
+**The write-once release works and does not damage the machine.** RDHC leaves `$F056B8`, runs
+`$F056BA` and `$F056BE` — and then the spin count goes back up to 183,093.
+
+**That is exactly what the one-way-issuer finding predicts.** `PanelIOConfigure_25A` halts on
+*every* call, so releasing RDHC from one spin merely lets it proceed to its next panel command,
+which parks it again. A single release cannot free the task; only a release *per issuer call*
+can, which is presumably what a real chassis provides by answering each command.
+
+So the two experiments together give a complete account:
+
+- the resume address is **TCB+`$FC`**, measured holding `$F056B8` while parked;
+- writing a different value **does** release the task — mechanism confirmed twice;
+- forcing the field permanently destroys the scheduler, so the hook must write once;
+- and one write is not enough, because the halt is per-command, not once per task.
+
+**A process note.** The first attempt at this experiment reported all-zero counts and looked
+like a total failure of the new hook. The cause was my own command: `2>&1 >/dev/null | head -3`
+closed the pipe early and killed the emulator by `SIGPIPE` before it flushed the trace. The hook
+had fired correctly all along. *An empty result file and a broken feature are indistinguishable
+until you check that the run finished* — and the check that separated them was simply counting
+the trace lines, which were zero rather than merely uninteresting.
+
 ### The intervention works — RDHC leaves the spin — but a read-override is the wrong tool
 
 Forcing RDHC's saved PC with the existing hook,

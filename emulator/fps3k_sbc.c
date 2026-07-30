@@ -205,6 +205,42 @@ static int poke_lookup(uint32_t a, uint8_t *out) {
     return 0;
 }
 
+/* FPS3K_POKEONCE="addr=word,..." -- same syntax as FPS3K_POKE, but performs a
+ * REAL RAM WRITE, ONCE, when the boot-complete gate first opens.
+ *
+ * FPS3K_POKE overrides every READ of its addresses, forever.  That models a
+ * value the chassis continuously supplies, and it is the wrong shape for a
+ * value the chassis SETS at one moment.  Measured: forcing RDHC's saved PC
+ * (TCB+$FC at $1F3FC) with FPS3K_POKE does release it from the bra . at
+ * $F056B8 -- spin iterations fall 182,124 -> 20 and execution reaches $F056BA
+ * -- but the machine then collapses (RTOS idle 3,661 -> 8), because the kernel
+ * can never save a NEW pc for the task: every context switch reads the forced
+ * value back.  A hook that forces a value is not a model of an event that sets
+ * one.
+ *
+ * This writes once and then leaves the memory alone, so the kernel's own
+ * save/restore continues to work afterwards.  Unset (the default) nothing
+ * happens and no write occurs. */
+static void pokeonce_apply(uint8_t *ram) {
+    static int done;
+    const char *e = getenv("FPS3K_POKEONCE");
+    if (done || !e) return;
+    done = 1;
+    char buf[512];
+    snprintf(buf, sizeof buf, "%s", e);
+    for (char *tk = strtok(buf, ","); tk; tk = strtok(NULL, ",")) {
+        char *eq = strchr(tk, '=');
+        if (!eq) continue;
+        *eq = 0;
+        uint32_t a = (uint32_t)strtoul(tk, NULL, 16);
+        uint32_t v = (uint32_t)strtoul(eq + 1, NULL, 16);
+        if (a + 1 >= 0x20000) continue;
+        ram[a]     = (uint8_t)(v >> 8);
+        ram[a + 1] = (uint8_t)(v & 0xFF);
+        fprintf(stderr, "[POKEONCE] $%05X <- $%04X (one-time write)\n", a, v);
+    }
+}
+
 /* Only inject once the RTOS is up.  $10AA lies in the RAM the power-on
  * diagnostics walk, so a location that reads back a constant regardless of
  * what was written fails a pattern test -- with the injection active from
@@ -824,6 +860,16 @@ int main(int argc, char **argv) {
 
     /* Run loop */
     while (!stop_now && total_cycles < max_cycles) {
+        /* One-time RAM writes, applied the first time the boot gate opens --
+         * vector $128 holding F05DD6 means TCBIO1I has started.  Same gate the
+         * other injections use, for the same reason: the power-on diagnostics
+         * walk RAM and any value planted before them is either overwritten or
+         * fails a pattern test. */
+        {
+            uint32_t v128 = ((uint32_t)ram[0x128] << 24) | ((uint32_t)ram[0x129] << 16)
+                          | ((uint32_t)ram[0x12A] << 8)  |  (uint32_t)ram[0x12B];
+            if (v128 == 0xF05DD6) pokeonce_apply(ram);
+        }
         int n = m68k_execute(1024);
         total_cycles += n;
         versabus_tick(n);

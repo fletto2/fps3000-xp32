@@ -583,6 +583,15 @@ else:
     check('...and inside the $200 allocation stride, so they are FPS extension',
           all(0xFC <= o < 0x200 for o in (0x100, 0x102, 0x138, 0x160)))
 
+    # --- FPS3K_POKEONCE writes once and leaves the memory alone ---------------
+    _sbc = open('emulator/fps3k_sbc.c').read()
+    check('FPS3K_POKEONCE exists and performs a real one-time write',
+          'FPS3K_POKEONCE' in _sbc and 'one-time write' in _sbc)
+    check('...gated on the same boot-complete condition as the other injections',
+          'v128 == 0xF05DD6) pokeonce_apply' in _sbc)
+    check('...and is distinct from FPS3K_POKE, which overrides reads',
+          'makes reads of those RAM' in _sbc)
+
     # --- FPS3K_POKE forces reads permanently, unlike a one-time event ---------
     check('FPS3K_POKE is documented as overriding RAM READS, not writing once',
           'makes reads of those RAM' in open('emulator/fps3k_sbc.c').read())
