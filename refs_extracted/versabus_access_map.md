@@ -15120,3 +15120,47 @@ Two corroborations:
 Emulation consequence: a model that delivers the PTM interrupt at any other level, or that lets a
 clock read complete without the guard being observable, breaks timestamp monotonicity in a way
 that only shows up in the trace ring — which is itself disabled by default, so it would be silent.
+
+## Boot takes 100-120M cycles, and the 7-of-16 wall is not a time limit
+
+Two measurements that bound how every result in this file should be read.
+
+### The boot is 12.5-15 simulated seconds
+
+| cycles | simulated | final PC | where |
+|---:|---:|---|---|
+| 40M | 5.00 s | `$F09A94` | DRAM tests |
+| 80M | 10.00 s | `$F099E6` | DRAM tests |
+| 100M | 12.50 s | `$F08956` | self-test |
+| **120M** | **15.00 s** | **`$F00FD0`** | **RTOS idle loop** |
+| 140M | 17.50 s | `$F00FC2` | idle loop |
+
+**Boot completes between 100M and 120M cycles.** This project runs everything at 150M, which
+leaves roughly **35M cycles — about 4 seconds — of post-boot execution**. Every driven-configuration
+result here was obtained in that window.
+
+Corroboration from the kernel's own clock: at 40M and 80M cycles `$0C42`, the tick base, still
+reads **`$CDEF09AB`** — a self-test pattern, not a time. The RTOS clock is not live until the
+diagnostics release that memory, which is a second, independent way to see that boot is
+unfinished.
+
+The DRAM tests dominate, which fits the documented refresh test: fill, busy-wait 300,000
+iterations (0.675 s), verify.
+
+### More time does not buy more chassis conversation
+
+The obvious hypothesis was that the seven-operation wall is a cycle-budget artefact. It is not:
+
+| cycles | ops dispatched | `$F04930` entries |
+|---:|---|---:|
+| 150M | 7/16 — `$0`-`$5`, `$F` | 224 |
+| **400M** | **7/16 — identical** | **1468** |
+
+**6.5× the interrupt entries, zero additional operations.** The sequence still stops after six
+codes. That eliminates time as an explanation and confirms the earlier reading: delivery is
+acknowledgement-gated, the SBC stops acknowledging once it parks, and no amount of running
+changes that.
+
+Worth noting 1468 is the same count this file records elsewhere for the `$10AA` arm path — it
+appears to be a saturation figure for the raise-every-200k-cycles hook rather than anything about
+the firmware.
