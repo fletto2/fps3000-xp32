@@ -13817,3 +13817,34 @@ code path than the one under investigation.
 only 7 distinct operations dispatch. Delivery is plentiful; something downstream of the ISR is
 not re-latching new codes. That is the next thing to measure — and it should be measured, not
 guessed at, given the last two attempts.
+
+### Measured: the ISR spends 218 of its 224 entries re-latching the SBC's own stale MODE0
+
+Watching `$E87` — the byte the dispatcher actually tests, not `$E86` — gives the command stream
+the ISR sees, at `FPS3K_BIM0LVL=7` with a 16-entry script:
+
+```
+00 14 01 14 02 14 03 14 04 05 14 14 14 …      $14 x218, everything else x1
+```
+
+Three facts fall out, none of them guessable from the earlier aggregate counts:
+
+1. **Every scripted code is delivered exactly once**, in order, `$00` through `$05`. The script
+   does not skip or corrupt entries — it simply stops after six.
+2. **`$14` is not a chassis code at all.** It is the SBC's *own* last write to MODE0 being read
+   back by the ISR. Once the script stops advancing, nothing stamps a new value, so `$F04930`
+   re-latches the stale register 218 times and dispatches on it — the ISR is processing its own
+   echo.
+3. `$14` decodes as op `$4` with bit 4 (auto-increment) set, which is why op `$4` appeared in
+   the dispatched set. **It is unrelated to `$14 = D2_FIN` in the 42-entry
+   `PanelStatusDispatch` table** — same number, different table, and conflating them would be
+   easy.
+
+This is what "delivery stops after a handful" looks like at single-code resolution, and it
+confirms the circular-deadlock reading from the code side: the script needs an acknowledgement,
+the spinning SBC cannot give one, and the interrupt keeps firing into a register nobody is
+updating. The two failed fixes were both aimed at machinery that was working; the broken part is
+that **nothing re-stamps MODE0 once the SBC stops acknowledging.**
+
+That also makes the fix concrete for the first time: the chassis model must stamp a fresh code on
+every raise, independent of acknowledgement — not pulse the line, and not latch the ack bit.
