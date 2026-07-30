@@ -1598,6 +1598,49 @@ The pattern across all of this is the session's recurring one, one level up: **t
 itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
 here changed what is known about the machine; it changed how much a passing suite is worth.
 
+### EXEC card survey: the EU PROM count is partial, and that limitation is the finding
+
+CLAUDE.md carries a TBD directly on the EU: *"Bipolar PROMs on the EXEC card — these are the
+fixed EU program store (Hockney's 2K x 80). Concrete chip count and width split TBD"*, and notes
+that the split *"has to be settled before an EU PROM dump can be assembled, because it decides
+whether a dump holds one instruction stream or two."*
+
+**What the photograph establishes:**
+
+| part | where | note |
+|---|---|---|
+| **`AM29116DCB 8443EPT`** | centre-right | the EU controller, in ceramic — one visible in this band |
+| **`AM2168-45PCB`** | large array, centre-left | 4K x 4 SRAM — **the AU writable control store** |
+| **`29F52 SDC 8617 SINGAPORE`** | many, left side | the **PALs** this project identifies, in quantity |
+| **`225-0071-00N`** white-labelled | one column, **exactly 5** | the EU PROMs, `-002` through `-007` seen |
+| `L29C520PC-R` x2, `AM2984IDC`, `AM29823DC-8` | scattered | PLD and AMD support logic |
+| `DL14CB300`, `STTLDFMM-145` | centre | **delay lines** — 300 and 145 ns |
+| `SN74S381N` | centre | a 4-bit ALU, on the EXEC card |
+
+**What it does not establish, and why that matters.** I read **one column of five PROMs**. The
+overview strip shows **further columns of white-labelled parts** at the far left and at roughly
+one-eighth across, which may be more PROMs or may be more PALs — the two are visually identical
+at this resolution, both being white-labelled DIPs, and CLAUDE.md already records one occasion
+when *"the white-labelled chips earlier mistaken for EU PROMs are PALs"*.
+
+So the count remains open, and the arithmetic is why it matters:
+
+| if the PROMs are | 80 bits needs | five would be |
+|---|---|---|
+| 8 bits wide | **10** devices | half the word — implying a second bank |
+| 4 bits wide | **20** devices | a quarter |
+
+**A second bank of five would be the interesting answer**, because the EXEC card carries *two*
+Am29116s and 2 x 40 bits is the natural split for two independent instruction streams — which is
+precisely the question a PROM dump has to answer before it can be assembled. *I am not claiming
+that; I am recording that the observation which would settle it is one careful count away, and
+that distinguishing PROMs from PALs by eye at this resolution is exactly the error this project
+has made before.*
+
+The remaining work is mechanical: tile the left third of `05_XP32_EXEC.JPG` at full resolution
+and read every white label. That is a better use of the photographs than anything else currently
+outstanding, because it converts a hardware TBD into a number.
+
 ### UNIV FMT carries ALUs and shifters — it is a FORMAT converter, not a width converter
 
 The UNIV FMT card's role is recorded as unestablished: *"Whether it also does 16-to-32-bit width
