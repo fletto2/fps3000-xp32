@@ -570,6 +570,16 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- RDHC's wait is entered twice while the waker fires constantly --------
+    check('the ISR exit stub is the trap #1 that wakes RDHC',
+          d[0xF050FC-0xF00000:0xF05102-0xF00000] == b'\x44\xfc\x00\x0c\x4e\x41')
+    check('RDHC enters its wait via moveq #$13 / trap #1',
+          d[0xF04738-0xF00000:0xF04740-0xF00000][:2] == b'\x70\x13'
+          or d[0xF0473C-0xF00000:0xF04740-0xF00000][:2] in (b'\x4e\x41', b'\x70\x13'))
+    check('...and leaves by testing command-byte bit 7',
+          d[0xF04740-0xF00000:0xF04748-0xF00000]
+          == b'\x08\x39\x00\x07\x00\x00\x0e\x87')
+
     # --- two distinct acknowledges on MODE0 bit 10 ----------------------------
     check('the ISR SETS bit 10 on every command, before dispatching',
           d[0xF04942-0xF00000:0xF04950-0xF00000]

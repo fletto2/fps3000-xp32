@@ -1563,6 +1563,45 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The wake fires 966 times; RDHC's wait is entered TWICE
+
+Following the narrowed question — what wakes RDHC and how often — measures out sharply, and
+rules out the answer I expected:
+
+| PC | count | |
+|---|---|---|
+| `$F04930` | 966 | panel-status ISR entry |
+| `$F0495C` | 964 | bit-7=1 dispatcher |
+| `$F04A6E` | **2** | bit-7=0 dispatcher (the 16 chassis ops) |
+| `$F050F8` | 966 | ISR exit stub |
+| **`$F050FC`** | **966** | **the `trap #1` that wakes RDHC** |
+| `$F0473C` | **2** | RDHC **enters** its wait |
+| `$F04740` | **2** | RDHC **leaves** its wait |
+
+**The wake directive is issued 966 times and RDHC's wait is entered twice.** So the wake
+mechanism is not the bottleneck — it fires constantly, and 964 of those calls had nothing to
+wake because RDHC was not waiting.
+
+That relocates the question again. RDHC is not looping wait → wake → process → wait; it enters
+the wait exactly twice in a 300 M-cycle run. **Where RDHC spends the rest of the run is now the
+open question**, and it is a question about RDHC's control flow rather than about the chassis
+interface at all.
+
+*One further asymmetry worth recording:* the ISR dispatches to the **bit-7=1** route 964 times
+and to the **bit-7=0** route (the sixteen chassis operations) only **twice**. Since a scripted
+sequence leaves `panel_resp_code` at its last entry once exhausted, and my last entry was `$94`
+— bit 7 set — the model re-delivers that code indefinitely. So the 964 are an artefact of the
+sequence running dry, not a property of the machine. **A test harness that repeats its final
+input forever will make that input look overwhelmingly common**, and the ratio here is 482:1.
+
+This closes the thread that began with "why does only one reply ship". The chain of
+explanations went: model drops replies → firmware replies per-op → replies are a separate
+bit-7 command → delivery is pull-based → delivery is fine, acknowledge is two things → the
+acknowledge fires constantly and RDHC simply is not there to receive it. **Each step was
+supported by the evidence available when it was made, and each was superseded by evidence the
+next experiment produced.** The useful output is not any one of those statements but the
+measurement above, which is stable regardless of what explains it.
+
 ### There are TWO acknowledges, and the reply is gated by RDHC's wake rate
 
 The failed push experiment said the obstacle was in the arm/acknowledge state machine. It is,
