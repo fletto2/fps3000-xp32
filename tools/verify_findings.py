@@ -3200,13 +3200,13 @@ check('TRAP #1 entry tests a CCR sentinel, not just supervisor mode',
       == b'\x3f\x17\x02\x2f\x00\x0c\x00\x01\x02\x17\x00\x7f'
          b'\x67\x08\x0c\x2f\x00\x0c\x00\x01\x67\x08')
 check('the ISR-exit path adjusts the stacked PC by -6 at $F00282',
-      _rom[0xF00280 - _B:0xF00284 - _B] == b'\x58\x8f\x5f\x97')
+      _rom[0xF00280 - _B:0xF00284 - _B] == b'\x58\x8f\x5d\x97')
 check('...and reads it back at $3c(a7), past the 60 bytes of saved registers',
       _rom[0xF00284 - _B:0xF00288 - _B] == b'\x48\xe7\xff\xfe'
       and _rom[0xF00296 - _B:0xF0029A - _B] == b'\x28\x6f\x00\x3c')
 check('the !IDV walk compares at offset 10 and strides 14 bytes',
       _rom[0xF0029A - _B:0xF0029E - _B] == b'\xb9\xed\x00\x0a'
-      and _rom[0xF0029E - _B:0xF002A4 - _B] == b'\xd2\xfc\x00\x00\x00\x0e')
+      and _rom[0xF0029E - _B:0xF002A4 - _B] == b'\xdb\xfc\x00\x00\x00\x0e')
 check('it wakes the matched record\'s TCB via T0WAKEUP at $F02C6C',
       _rom[0xF002AC - _B:0xF002B6 - _B]
       == b'\x2c\x6d\xff\xf4\x41\xd6\x61\x00\x29\xb8')
