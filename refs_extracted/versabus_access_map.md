@@ -1528,6 +1528,65 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Two more phase specifications, and the set is now read end to end
+
+**`$15xx` is a CHANNEL_SELECT read-back test.** Six phases, one PC, and the beacon
+*is* the test:
+
+```
+$F094F2  cmpi.b  #$5,d6 / bgt -> done      ; d6 = 0..5, six iterations
+$F094FA  move.w  d6,$204(a6)               ; write the counter
+$F094FE  cmp.w   $204(a6),d6               ; READ IT BACK, must match
+$F09504  move.l  #$f0f0f0f0,d7             ; else error
+```
+
+So the six "phases" `$1500`-`$1505` are the **six values being written**, and
+`$FF0204` is specified as a plain read/write register holding 0-5. This is the only
+group where the beacon write and the test are the same instruction — and it explains a
+figure from the access log: `$FF0204` shows **7 reads** against 32,967 writes, six of
+which are this test's read-backs. The register that carries every phase beacon is
+itself validated exactly once, by six writes and six reads.
+
+**`$23xx` is a DRAM data-retention test**, and it is the only phase that measures time:
+
+```
+$F09A8A  move.l  #$09abcdef,d0        ; a distinctive pattern
+$F09A92  move.l  d0,(a0)+             ; fill
+$F09A94  cmpa.l  #$1fff0,a0 / bne
+$F09A9C  lea     $4(a0),a0            ;   STEP OVER $1FFF0-$1FFF3
+$F09AA4  move.l  #$493e0,d5           ; 300,000
+$F09AAA  subq.l  #$1,d5 / bne         ;   busy-wait
+$F09AAE  cmp.l   (a2)+,d0             ; then verify every longword
+$F09ABC  cmpa.l  #$1fff0,a2 / lea $4(a2),a2   ;   stepping over it again
+```
+
+Fill, wait ~300,000 iterations, verify — that is a **refresh test**: it checks DRAM
+holds its contents across a delay rather than just accepting a write. And it **skips
+`$1FFF0`-`$1FFF3` in both the fill and the verify**, which is the firmware stating
+that those four bytes are a device and not memory — corroborating the VMOD control
+register's width from the other direction, since the access log shows `$1FFF0` touched
+at 1, 2 and 4 bytes and `$1FFF1` at byte width only.
+
+#### The self-test read as a specification: what it establishes
+
+| group | what it specifies |
+|---|---|
+| `$01xx` | 68000 register integrity, `moveq` sign-extension, all registers incl. USP |
+| `$15xx` | `$FF0204` is a plain read/write register (values 0-5 round-trip) |
+| `$16xx` | `$FF0210`-`$FF0216` are four writable registers (walking ones); `MODE0` checked masked `$FF`, `STATUS_IRQ` masked `$610` |
+| `$17xx` | `$FF0216` **bit 5** = chassis-memory bus-error enable, both polarities |
+| `$18xx` | `$FF0216` **bit 6** is **transparent**, all four read/write × set/clear cases |
+| `$19xx` | `$FF0216` **bit 4** = 16-bit-access enable; longwords always round-trip |
+| `$1Axx` | `$FF0216` **bit 7** = AP I/F bus-error enable; `$FF000E` is plain storage |
+| `$23xx` | DRAM retention across a 300,000-iteration delay; `$1FFF0`-`$1FFF3` is not memory |
+| `$29xx` | chassis memory over `$400000`-`$403FFF`, stride 4, four patterns |
+
+*Read this way the self-test is the closest thing to a hardware manual this project
+has.* It states positive behaviour, negative behaviour, and per-bit masks, with the
+`$F0F0F0F0` marker as the assertion — and three of the emulator's rules have now been
+either confirmed or corrected against it (`$400000` BERR gate confirmed; AP I/F gate
+narrowed to bit 7; the word-access rule re-derived as bit 4 *and* bit 5 clear).
+
 ### `$E58` is a longword INDEX, and the window's size is still not pinned
 
 Reconciling the 16 KB self-test extent with op `$3`'s `page = addr >> 20`. Reading the

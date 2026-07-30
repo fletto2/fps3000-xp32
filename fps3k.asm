@@ -9279,6 +9279,13 @@ loc_F094F2:
   f094f8: 42 87                   clr.l    d7
 
 loc_F094FA:
+;### PHASE $15xx IS A CHANNEL_SELECT READ-BACK TEST, and the BEACON IS THE
+;###   TEST: write d6 (0..5), read $204 back, require a match.  So the six
+;###   "phases" $1500-$1505 are the six VALUES, and $FF0204 is specified as a
+;###   plain read/write register.  This is the only group where the beacon write
+;###   and the test are one instruction -- and it explains why $FF0204 shows 7
+;###   reads against 32,967 writes: six are these read-backs.  The register that
+;###   carries every beacon is itself validated exactly once.
   f094fa: 3d 46 02 04             move.w   d6, $204(a6)  [XLTR_CHANNEL_SELECT]
   f094fe: bc 6e 02 04             cmp.w    $204(a6)  [XLTR_CHANNEL_SELECT], d6
   f09502: 67 06                   beq.b    loc_F0950A
@@ -10065,11 +10072,19 @@ loc_F09A7E:
   f09a88: 42 47                   clr.w    d7
 
 loc_F09A8A:
+;### PHASE $23xx IS A DRAM RETENTION TEST -- the only phase that measures TIME.
+;###   Fill with $09ABCDEF, busy-wait $493E0 = 300,000 iterations, then verify
+;###   every longword.  Fill-wait-verify is a REFRESH test: it checks DRAM holds
+;###   its contents across a delay, not merely that a write sticks.
   f09a8a: 20 3c 09 ab cd ef       move.l   #$9abcdef, d0
   f09a90: 24 48                   movea.l  a0, a2
 
 loc_F09A92:
   f09a92: 20 c0                   move.l   d0, (a0)+
+;### AND IT STEPS OVER $1FFF0-$1FFF3 in both the fill and the verify -- the
+;###   firmware stating that those four bytes are a DEVICE, not memory.  That
+;###   corroborates the VMOD control register width from the other direction,
+;###   since the access log shows $1FFF0 touched at 1, 2 and 4 bytes.
   f09a94: b1 fc 00 01 ff f0       cmpa.l   #$1fff0, a0
   f09a9a: 66 04                   bne.b    loc_F09AA0
 ;>>>> [R12/BOTH] Advances the memory pointer (a0) by 4 bytes during a RAM write pattern verification loop in the ROMChecksum test.

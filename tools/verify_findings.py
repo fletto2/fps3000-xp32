@@ -550,6 +550,23 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- phases $15xx and $23xx ----------------------------------------------
+    check('$15xx writes CHANNEL_SELECT 0..5 and reads each back',
+          d[0xF094F2-0xF00000:0xF094F8-0xF00000] == b'\x0c\x06\x00\x05\x6e\x1e'
+          and d[0xF094FA-0xF00000:0xF09504-0xF00000]
+              == b'\x3d\x46\x02\x04\xbc\x6e\x02\x04\x67\x06')
+    check('$23xx fills with $09ABCDEF, waits 300,000 iterations, then verifies',
+          struct.unpack('>I', d[0xF09A8A-0xF00000+2:0xF09A8A-0xF00000+6])[0]
+              == 0x09ABCDEF
+          and struct.unpack('>I', d[0xF09AA4-0xF00000+2:0xF09AA4-0xF00000+6])[0]
+              == 0x000493E0
+          and d[0xF09AAA-0xF00000:0xF09AAE-0xF00000] == b'\x53\x85\x66\xfc')
+    check('...and steps over $1FFF0-$1FFF3 in both the fill and the verify',
+          d[0xF09A94-0xF00000:0xF09AA0-0xF00000]
+              == b'\xb1\xfc\x00\x01\xff\xf0\x66\x04\x41\xe8\x00\x04'
+          and d[0xF09ABC-0xF00000:0xF09AC8-0xF00000]
+              == b'\xb5\xfc\x00\x01\xff\xf0\x66\x04\x45\xea\x00\x04')
+
     # --- op $3: $E58 is a longword INDEX, offsets windowed up to 4 MB --------
     check('op $3 takes page = index >> 20 and offset = (index & $FFFFF) << 2',
           d[0xF04D70-0xF00000:0xF04D78-0xF00000]

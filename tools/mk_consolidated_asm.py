@@ -80,6 +80,22 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- phases $15xx and $23xx complete the specification set ----
+ (0xF094FA,'PHASE $15xx IS A CHANNEL_SELECT READ-BACK TEST, and the BEACON IS THE'),
+ (0xF094FA,'  TEST: write d6 (0..5), read $204 back, require a match.  So the six'),
+ (0xF094FA,'  "phases" $1500-$1505 are the six VALUES, and $FF0204 is specified as a'),
+ (0xF094FA,'  plain read/write register.  This is the only group where the beacon write'),
+ (0xF094FA,'  and the test are one instruction -- and it explains why $FF0204 shows 7'),
+ (0xF094FA,'  reads against 32,967 writes: six are these read-backs.  The register that'),
+ (0xF094FA,'  carries every beacon is itself validated exactly once.'),
+ (0xF09A8A,'PHASE $23xx IS A DRAM RETENTION TEST -- the only phase that measures TIME.'),
+ (0xF09A8A,'  Fill with $09ABCDEF, busy-wait $493E0 = 300,000 iterations, then verify'),
+ (0xF09A8A,'  every longword.  Fill-wait-verify is a REFRESH test: it checks DRAM holds'),
+ (0xF09A8A,'  its contents across a delay, not merely that a write sticks.'),
+ (0xF09A94,'AND IT STEPS OVER $1FFF0-$1FFF3 in both the fill and the verify -- the'),
+ (0xF09A94,'  firmware stating that those four bytes are a DEVICE, not memory.  That'),
+ (0xF09A94,'  corroborates the VMOD control register width from the other direction,'),
+ (0xF09A94,'  since the access log shows $1FFF0 touched at 1, 2 and 4 bytes.'),
  # ---- $E58 is a longword INDEX; the window size is NOT pinned ----
  (0xF04D7E,'$E58 HOLDS A LONGWORD INDEX, NOT A BYTE ADDRESS.  Bits 0-19 index within a'),
  (0xF04D7E,'  page, bits 20+ are the page number written to MODE2, and the offset is'),
