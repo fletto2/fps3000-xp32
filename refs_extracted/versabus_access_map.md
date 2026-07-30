@@ -16443,3 +16443,33 @@ it still perturbs the self-test, because the override only applies once a sequen
 inside `versabus.c`, which currently has none — `fps3k_sbc.c` detects completion by watching vector
 `$128`. Deliberately not patched here: the two existing gates were added with measurements
 attached, and this deserves the same rather than a quick edit.
+
+### Sweeping every hook for the same defect: exactly one is affected
+
+Running each hook alone and checking whether the boot still reaches the RTOS rest state:
+
+| hook | final PC | |
+|---|---|---|
+| **`FPS3K_CHSEL_RD=28`** | **`$F08920`** | **boot incomplete — in the self-test** |
+| `FPS3K_DATAIN=1` | `$F00FCC` | ok |
+| `FPS3K_RESP=0x94` | `$F00FCC` | ok |
+| `FPS3K_CHCMD=C801` | `$F00FCC` | ok |
+| `FPS3K_MBOX=00010000` | `$F00FCC` | ok |
+| `FPS3K_INJECT=2` | `$F00FE6` | ok |
+| `FPS3K_DMA10AA=2` | `$F00FCC` | ok |
+| `FPS3K_POKE=10AA=0002` | `$F00FCC` | ok |
+| `FPS3K_BSTAT19=35` | `$F00FCC` | ok |
+| `FPS3K_NOACK=1` | `$F00FCC` | ok |
+
+**One defect in ten hooks.** `FPS3K_DMA10AA` and `FPS3K_POKE` booting cleanly is itself the check
+that their gates still work — the fix that was applied to them, and the reason this defect class
+was recognised at all, is confirmed by the same sweep that isolates the hook which never received
+it.
+
+That bounds the problem: no other hook silently runs measurements on a machine still in its
+diagnostics, so **only results taken with `FPS3K_CHSEL_RD` need re-examination**. In this project
+that is the `$FF0008` bulk-port observation, already flagged above.
+
+The sweep is cheap — ten runs — and worth repeating whenever a hook is added, since the failure is
+invisible without it: the run completes, prints counts, and reports a final PC that only looks
+wrong if you know what a healthy one is.
