@@ -1327,6 +1327,12 @@ loc_F04F04:
   f04f14: 60 16                   bra.b    loc_F04F2C
 
 loc_F04F16:
+;### OP $5 IS XPSEL -- IT WRITES THE CHANNEL REGISTER, not just validates.
+;###   These are the ONLY writes to $E60/$E62 in the whole ROM, and $E60 is
+;###   exactly what op $4 validates ($F04E3A) and what RDHC command 1 defaults
+;###   its channel from ($F0537E).  So op $5 is the select-channel primitive
+;###   and the prerequisite for every operation on "the current channel".
+;###   High word $E60, low word $E62, bit 6 selecting as usual ($45 = high).
   f04f16: 42 79 00 00 0e 60       clr.w    $e60.l
   f04f1c: 33 e8 02 04 00 00 0e 62  move.w   $204(a0)  [XLTR_CHANNEL_SELECT], $e62.l
   f04f24: 33 fc 00 00 00 00 0e 74  move.w   #$0, $e74.l
@@ -1509,6 +1515,17 @@ ChannelConfigDispatch:
   f05100: 4e 41                   trap     #$1
 
 loc_F05102:
+;### BEWARE LONG FPS3K_SEQ SCRIPTS -- THEY SILENTLY DROP THEIR TAIL.  A 27-code
+;###   sequence reached ops 1 2 4 5 8 9 D and not 0 3 6 7 A B C E, which read as
+;###   those eight being unreachable.  All sixteen ARE individually reachable:
+;###   FPS3K_SEQ=0B:0001 reaches op $B, and so on for every one.  The sequence
+;###   simply stops after about FOUR TO SIX codes.  Pacing is NOT the cause --
+;###   gaps of 20M, 2M, 500K and 200K cycles and a 3x longer run give identical
+;###   results.  The limiter is ARM EVENTS: a code is handed over only when the
+;###   SBC issues another panel command, and it stops after a handful.  Put the
+;###   "unreachable" ops first and they are the ones that run.
+;###   Switching to ONE OPERATION PER RUN took RDHC from 36% to 47% and the
+;###   whole-firmware figure from 51% to 54% -- no new hook, no new inference.
 ;### THE CHASSIS COMMAND TABLE, all 16 entries now decoded (was 2 of 16).
 ;###   The command byte is the LOW BYTE OF XLTR_MODE0, saved at $E86/$E87:
 ;###     bits 0-3 operation (this table)     bit 5 direction (0 write, 1 read)

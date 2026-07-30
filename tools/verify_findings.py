@@ -482,6 +482,43 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- op $5 is XPSEL: it WRITES $E60/$E62 --------------------------------
+    check('op $5 stores CHANNEL_SELECT into $E60/$E62 (it is XPSEL, not just a check)',
+          d[0xF04F16-0xF00000:0xF04F1C-0xF00000]
+              == b'\x42\x79\x00\x00\x0e\x60'
+          and d[0xF04F1C-0xF00000:0xF04F24-0xF00000]
+              == b'\x33\xe8\x02\x04\x00\x00\x0e\x62')
+    check('...and $E60 is what op $4 validates and cmd 1 defaults from',
+          d[0xF04E3A-0xF00000:0xF04E40-0xF00000] == b'\x22\x39\x00\x00\x0e\x60'
+          and d[0xF0537E-0xF00000:0xF05384-0xF00000] == b'\x38\x39\x00\x00\x0e\x62')
+    # every operation is individually reachable; long sequences drop their tail
+    reach = []
+    for op in (0x00, 0x03, 0x06, 0x0A, 0x0B, 0x0E):
+        entry = {0x00: 'F04A84', 0x03: 'F04D4E', 0x06: 'F04F30',
+                 0x0A: 'F04FBA', 0x0B: 'F05002', 0x0E: 'F050CA'}[op]
+        reach.append(run({'FPS3K_SEQ': f'{op:02X}:0001'},
+                         400_000_000)[0].split('\n').count(entry) >= 1)
+    check('each chassis operation IS reachable on its own (6 sampled of 16)',
+          all(reach))
+    long_seq = ('05:0001,45:0000,01:1000,41:0000,02:0008,42:0000,09:0001,49:0000,'
+                '04:0001,0D:0001,08:0000,0A:0000,0B:0000,0C:0000,03:0001,06:0002,'
+                '07:0000,0E:0000,00:0028')
+    tl = run({'FPS3K_SEQ': long_seq}, 400_000_000)[0].split('\n')
+    check('...but a long sequence silently drops its tail (op $E never arrives)',
+          tl.count('F04EE4') >= 1 and tl.count('F050CA') == 0)
+    # Compare the DERIVED fact (which operation entry points ran), not raw trace
+    # equality -- a 100x smaller gap shifts cycle-level timing, so identical
+    # traces was never what the measurement showed.
+    OPENTRY = ('F04A84', 'F04CF2', 'F04D20', 'F04D4E', 'F04E3A', 'F04EE4',
+               'F04F30', 'F04F3A', 'F04F52', 'F04FA0', 'F04FBA', 'F05002',
+               'F0502C', 'F05092', 'F050CA')
+    def ops_of(env):
+        tt = run(env, 400_000_000)[0].split('\n')
+        return tuple(o for o in OPENTRY if tt.count(o) >= 1)
+    check('...and the truncation is arm-driven, not pacing: SEQGAP changes nothing',
+          ops_of({'FPS3K_SEQ': long_seq, 'FPS3K_SEQGAP': '200000'})
+          == ops_of({'FPS3K_SEQ': long_seq}))
+
     # --- the XP3I "outlier" is the $105E presence gate ----------------------
     def rpct(env, lo, hi):
         ex = set()

@@ -1473,6 +1473,86 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### One operation per run: RDHC 36% → 47%, total 54%
+
+Acting on the truncation finding below — replacing the single long `FPS3K_SEQ` with
+**one chassis operation per run**, unioned over 63 configurations:
+
+| region | instruction bytes | previous union | now |
+|---|---|---|---|
+| **RDHC** | 5484 | 36% | **47%** |
+| IO1I | 422 | 46% | 46% |
+| XP1I | 2358 | 40% | 40% |
+| XP2I | 2310 | 34% | 34% |
+| XP3I | 2300 | 34% | 34% |
+| XP4I | 2342 | 37% | 37% |
+| self-test | 5292 | 85% | 85% |
+| RTOS init | 2352 | 76% | 76% |
+| pre-task | 120 | 0% | 0% |
+| **total** | **22980** | 51% | **54%** |
+
+**RDHC gains 11 points from nothing but changing the shape of the experiment.** No
+new hook, no new hardware inference — the long sequence had been discarding its own
+tail, and every op in that tail was reachable the whole time.
+
+*The lesson generalises past this project: when a driving mechanism has a hidden
+capacity limit, a longer script does not probe more, it probes the same and hides the
+rest. Sixteen one-code runs cost the same wall-clock as one sixteen-code run and
+actually deliver sixteen codes.*
+
+### Op `$5` is `XPSEL`, and the scripted-sequence hook delivers only ~4-6 codes
+
+Two corrections to how the chassis operations were characterised and exercised.
+
+#### Op `$5` writes `$E60`; it is the select-channel primitive
+
+The operations table above described op `$5` as "validate CHANNEL_SELECT against
+`$105E`". It also **stores** the value:
+
+```
+$F04F16  clr.w   $0E60
+$F04F1C  move.w  $204(a0),$0E62      ; CHANNEL_SELECT -> the channel register
+```
+
+`$E60`/`$E62` are the only writes to that pair anywhere in the ROM, and `$E60` is
+exactly what op `$4` validates (`$F04E3A`) and what command 1 defaults its channel
+from (`$F0537E`). So **op `$5` is `XPSEL`** — the select-channel primitive from the
+CPFORTRAN table — and it is the prerequisite for every operation that works on "the
+current channel". High word at `$E60`, low at `$E62`, so `$45` sets the high half in
+the usual bit-6 pattern.
+
+#### Long scripted sequences are worse than short ones, and pacing is not why
+
+A 27-code sequence reached ops `1 2 4 5 8 9 D` and not `0 3 6 7 A B C E`, which read
+as those eight being unreachable. **They are all individually reachable** — a
+one-code run `FPS3K_SEQ=0B:0001` reaches op `$B`, and the same holds for every one
+of `$0`, `$3`, `$6`, `$7`, `$A`, `$C`, `$E`.
+
+The sequence simply stops after **about four to six codes**. My first hypothesis was
+pacing: `FPS3K_SEQGAP` defaults to 20 M cycles and 27 codes would need 540 M against
+a 400 M budget. **That hypothesis is wrong.** Gaps of 20 M, 2 M, 500 K and 200 K, and
+a run three times longer, all give byte-identical results:
+
+| gap | cycles | RDHC | ops reached |
+|---|---|---|---|
+| 20 M | 400 M | 12% | `124589D` |
+| 2 M | 400 M | 12% | `124589D` |
+| 500 K | 400 M | 12% | `124589D` |
+| 200 K | 400 M | 12% | `124589D` |
+| 2 M | 1200 M | 12% | `124589D` |
+
+The limiter is **arm events, not time**: a code is handed over only when the SBC
+issues another panel command, and after a handful of operations it stops issuing. Put
+the "unreachable" ops first and they are the ones that run (`00,03,06,07,...` reaches
+`0 3 6 7`), which settles it.
+
+*So a long `FPS3K_SEQ` is actively misleading — its tail is silently dropped, and a
+reader sees "op $A does nothing" when op `$A` was never delivered. The right shape
+for exercising the operation set is many one-code runs, unioned. That also means the
+existing modelling caveat — "the chassis can only answer, it cannot initiate" — has a
+measurable consequence: roughly five operations per conversation is all this model
+can drive.*
+
 ### The "XP3I outlier" was the `$105E` presence gate; all four tasks are symmetric
 
 XP3I sitting at 12-13% while XP1I reached 40% was recorded here as unexplained. It
@@ -2219,7 +2299,7 @@ explained — it is a field of the command byte, tested by the handlers themselv
 | `$2` | `$F04D20` | **set transfer count** half into `$E64`/`$E66` |
 | `$3` | `$F04D4E` | **read/write CHASSIS memory** through the `$400000` window (below) |
 | `$4` | `$F04E3A` | validate the channel in `$E60` against `$105E`, else `$25C` |
-| `$5` | `$F04EE4` | validate CHANNEL_SELECT against `$105E`, else `$25C` |
+| `$5` | `$F04EE4` | **select channel** — validate CHANNEL_SELECT against `$105E`, then **store it into `$E60`/`$E62`** (`$F04F16`/`$F04F1C`); this is `XPSEL` |
 | `$6` | `$F04F30` | **read/write SBC RAM at the address in `$E58`** (below) |
 | `$7` | `$F04F3A` | **mask BIM0 ch0** — `bclr #4` (IRE) on `$FF0230`, clear `$E74` |
 | `$8` | `$F04F52` | if MODE1 bit 14 set and CHANNEL_SELECT is 0, panel `$258` (CH1 reset) |

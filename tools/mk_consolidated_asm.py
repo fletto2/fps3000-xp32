@@ -80,6 +80,24 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- op $5 is XPSEL; long sequences drop their tail ----
+ (0xF04F16,'OP $5 IS XPSEL -- IT WRITES THE CHANNEL REGISTER, not just validates.'),
+ (0xF04F16,'  These are the ONLY writes to $E60/$E62 in the whole ROM, and $E60 is'),
+ (0xF04F16,'  exactly what op $4 validates ($F04E3A) and what RDHC command 1 defaults'),
+ (0xF04F16,'  its channel from ($F0537E).  So op $5 is the select-channel primitive'),
+ (0xF04F16,'  and the prerequisite for every operation on "the current channel".'),
+ (0xF04F16,'  High word $E60, low word $E62, bit 6 selecting as usual ($45 = high).'),
+ (0xF05102,'BEWARE LONG FPS3K_SEQ SCRIPTS -- THEY SILENTLY DROP THEIR TAIL.  A 27-code'),
+ (0xF05102,'  sequence reached ops 1 2 4 5 8 9 D and not 0 3 6 7 A B C E, which read as'),
+ (0xF05102,'  those eight being unreachable.  All sixteen ARE individually reachable:'),
+ (0xF05102,'  FPS3K_SEQ=0B:0001 reaches op $B, and so on for every one.  The sequence'),
+ (0xF05102,'  simply stops after about FOUR TO SIX codes.  Pacing is NOT the cause --'),
+ (0xF05102,'  gaps of 20M, 2M, 500K and 200K cycles and a 3x longer run give identical'),
+ (0xF05102,'  results.  The limiter is ARM EVENTS: a code is handed over only when the'),
+ (0xF05102,'  SBC issues another panel command, and it stops after a handful.  Put the'),
+ (0xF05102,'  "unreachable" ops first and they are the ones that run.'),
+ (0xF05102,'  Switching to ONE OPERATION PER RUN took RDHC from 36% to 47% and the'),
+ (0xF05102,'  whole-firmware figure from 51% to 54% -- no new hook, no new inference.'),
  # ---- the XP3I outlier resolved ----
  (0xF08616,'THE "XP3I OUTLIER" WAS THE $105E PRESENCE GATE, nothing about the code.'),
  (0xF08616,'  With the emulator default FPS3K_CHANNELS=2 (the real 2-AC machine),'),
