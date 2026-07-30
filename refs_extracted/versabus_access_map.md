@@ -15386,3 +15386,42 @@ set. It is not defensive about the handoff, because on a real machine nothing se
 except a CP program that has already connected itself. Forcing the gate without the counterparty
 is a state the firmware was never written to survive — which is a stronger statement than "it
 crashed", and it is only sayable because the writable poke ruled out the alternative.
+
+## The service path replicates across all four XP tasks — with four different XP4I offsets
+
+The bit-14 guard exists once per task, and searching for the instruction rather than assuming the
+grid finds all four:
+
+| task | guard site | status address |
+|---|---|---|
+| XP1I | `$F07E86` | `$1066` |
+| XP2I | `$F07486` | `$106C` |
+| XP3I | `$F06A86` | `$1072` |
+| XP4I | **`$F06088`** | `$1078` |
+
+The status addresses are a perfect **6-byte stride** — `$1066`, `$106C`, `$1072`, `$1078` —
+confirming `$1066 + (ch-1)*6` at the same instruction in all four copies, which this project had
+derived from the ISR's write side only.
+
+The code addresses are not. XP1I→XP2I and XP2I→XP3I step by exactly `$A00`; **XP3I→XP4I is
+`$9FE`**, i.e. XP4I sits `+$2` off the grid at this site.
+
+### XP4I is off-grid by a *different* amount in every field measured
+
+| field | delta |
+|---|---:|
+| task body (template byte-diff) | `−$1E` |
+| `!IDV` ISR entry | `−$18` |
+| saved resume PC (`TCB+$0FC`) | `+$6` |
+| service-loop guard (this) | `+$2` |
+
+**Four fields, four distinct offsets, all in the same copy.** A relocated or compiler-emitted
+fourth instance has one uniform delta by construction; only hand-patching produces four. This is
+now the strongest evidence for the "hand-written assembly, not compiled" finding — stronger than
+the original `$1E` observation, because a single odd displacement can be explained away and four
+mutually inconsistent ones cannot.
+
+Method note: the first three were found by assuming the `$A00` grid, and that assumption *failed*
+for XP4I at every offset tried (`0`, `−$18`, `−$1E`, `+$6`). Searching the ROM for the instruction
+encoding found it immediately. Grid arithmetic is a hypothesis about this firmware, not a property
+of it.
