@@ -1528,6 +1528,65 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### There is a seventh task, named `USER`, and this ROM never creates it
+
+Sweeping for `d7` writes — now known to carry the operation code — turned up **nine
+sites: one in RDHC and two in each XP task.** The first per XP task is the expected
+template copy (`$F07F1C` = RDHC's `$F056C4` + `$2858`). The second has no RDHC twin,
+and it is a different routine entirely:
+
+```
+$F0856A  move.w  d0,d7            ; here d7 is a CHANNEL index, not an operation
+$F0856C  subq.w  #$1,d7
+$F0856E  lsl.w   #$2,d7           ; (ch-1)*4
+$F08570  movea.w d7,a2
+$F08572  tst.l   $10AE(a2)        ; per-channel GATE
+$F08576  beq     -> $F08608       ;   zero -> skip entirely
+$F0857A  lea     -$60(a7),a7      ; 96-byte frame
+$F0857E  pea     (a7)
+$F08580  move.l  #$0,-(a7)
+$F08586  move.l  #$55534552,-(a7) ; 'USER'
+$F0858C  moveq   #$43,d0
+$F08590  trap    #1               ; DIRECTIVE $43 -- resolve a TASK by name
+$F0859A  move.l  d0,$10BE(a2)     ; store the result per channel
+```
+
+**Directive `$43` has exactly four sites — one per XP task** (`$F06774`, `$F0718C`,
+`$F07B8C`, `$F0858C`) — and each pushes the literal `'USER'`. So every XP channel
+controller tries to resolve a task called `USER`, gated on its per-channel longword
+at `$10AE`, and files the answer at `$10BE`.
+
+**No such task exists.** The TDTI table creates exactly `RDHC IO1I XP4I XP3I XP2I
+XP1I`. But the name table at `$F0467E`, which RDHC walks issuing directive `$12`, has
+**six entries: `XP1I XP2I XP3I XP4I USER USER`** — two `USER` slots — and `'USER'`
+occurs **13 times** in the ROM, including immediately before each XP task's entry
+point (`$F05F40`, `$F06940`, `$F07340`, `$F07D40`).
+
+*So the firmware is built around a seventh task that the ROM does not supply.* That
+fits the FPS-3000 programming model exactly: the host issues `CPLOAD` to load a
+**control-processor program**, and that program is the `USER` task; the four XP
+channel controllers notify it through directive `$43` when their work completes. The
+ROM is the half of the system that boots the machine and moves microcode — the other
+half arrives from the host.
+
+Three consequences.
+
+**Directive `$43` is task-lookup-by-name**, the task-level analogue of `$29` for
+queues. That is a third directive identified, and the pair `$29`/`$43` shows the
+kernel resolves both queues and tasks by 4-byte name at runtime rather than by
+compile-time index.
+
+**It explains a limit on how far an XP transaction can be driven here.** The
+completion notification has no recipient, so no configuration of the chassis model
+can carry an XP channel through a full cycle — not because a register is missing but
+because the *counterparty* is missing. `$10AE` being zero is what keeps that from
+being an error rather than a hang.
+
+**And it is a concrete, testable prediction for hardware**: on a real machine running
+a CP program, `$10BE + (ch-1)*4` holds a task handle, and `$10AE + (ch-1)*4` is
+nonzero. On this ROM alone both stay zero. Anyone dumping SBC RAM from a working
+FPS-3000 can check that in one read.
+
 ### RESOLVED: `$0A` is distinguished by `d7`, the preserved operation code
 
 The operation sweep found that `$0A` and `$14` complete while the other 27 live

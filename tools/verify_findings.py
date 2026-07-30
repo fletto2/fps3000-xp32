@@ -541,6 +541,37 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- the seventh task: USER, never created ------------------------------
+    check('each XP task pushes the literal \'USER\' and issues directive $43',
+          d[0xF08586-0xF00000:0xF0858E-0xF00000]
+          == b'\x2f\x3c\x55\x53\x45\x52\x70\x43')
+    check('...at exactly four sites, one per XP task',
+          [a2 for a2 in range(0xF04400, 0xF0A800, 2)
+           if struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0] == 0x7043]
+          == [0xF06774, 0xF0718C, 0xF07B8C, 0xF0858C])
+    check('...gated on the per-channel longword $10AE, result filed at $10BE',
+          d[0xF08572-0xF00000:0xF08578-0xF00000] == b'\x4a\xaa\x10\xae\x67\x00'
+          and d[0xF0859A-0xF00000:0xF0859E-0xF00000] == b'\x25\x40\x10\xbe')
+    check("the name table at $F0467E is XP1I..XP4I then USER twice",
+          [d[0xF0467E-0xF00000+8*i:0xF0467E-0xF00000+8*i+4] for i in range(6)]
+          == [b'XP1I', b'XP2I', b'XP3I', b'XP4I', b'USER', b'USER'])
+    check('...but no USER task exists: TDTI creates only the six known names',
+          [d[0xF0A600-0xF00000+0x60*i+4:0xF0A600-0xF00000+0x60*i+8] for i in range(6)]
+          == [b'RDHC', b'IO1I', b'XP4I', b'XP3I', b'XP2I', b'XP1I'])
+    check('d7 is written 9 times: once in RDHC, twice per XP task',
+          [a2 for a2 in range(0xF04400, 0xF0A800, 2)
+           if struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0] == 0x3E00]
+          == [0xF056C4, 0xF06104, 0xF06752, 0xF06B1C, 0xF0716A,
+              0xF0751C, 0xF07B6A, 0xF07F1C, 0xF0856A])
+    check('...and cmpi.w #$A,d7 appears exactly 5 times, one per dispatch copy',
+          [a2 for a2 in range(0xF04400, 0xF0A800, 2)
+           if struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0] == 0x0C47
+           and struct.unpack('>H', d[a2-0xF00000+2:a2-0xF00000+4])[0] == 0x000A]
+          == [0xF05AD2, 0xF06512, 0xF06F2A, 0xF0792A, 0xF0832A])
+    _, ru = run({}, 400_000_000)
+    check('on this ROM alone $10AE and $10BE stay zero for all four channels',
+          not any(ru[0x10AE:0x10BE]) and not any(ru[0x10BE:0x10CE]))
+
     # --- RESOLVED: $0A is distinguished by d7, the preserved operation code --
     check('PanelSendAndWait preserves the operation code in d7 ($F056C4)',
           d[0xF056C4-0xF00000:0xF056C6-0xF00000] == b'\x3e\x00')

@@ -7420,6 +7420,24 @@ loc_F0856A:
   f0857a: 4f ef ff a0             lea.l    -$60(a7), a7
   f0857e: 48 57                   pea.l    (a7)
   f08580: 2f 3c 00 00 00 00       move.l   #$0, -(a7)
+;### *** THERE IS A SEVENTH TASK, NAMED USER, AND THIS ROM NEVER CREATES IT. ***
+;###   #$55534552 is the ASCII literal 'USER', pushed with a longword and a
+;###   pointer for DIRECTIVE $43 -- task-lookup-by-name, the task-level analogue
+;###   of $29 for queues.  Exactly four sites, one per XP task: $F06774 $F0718C
+;###   $F07B8C $F0858C.  So every XP channel controller tries to resolve a task
+;###   called USER, gated on its per-channel longword at $10AE, filing the
+;###   answer at $10BE.  TDTI creates only RDHC IO1I XP4I XP3I XP2I XP1I -- but
+;###   the name table at $F0467E has SIX entries, XP1I..XP4I then USER TWICE,
+;###   and 'USER' occurs 13 times in the ROM including just before each XP
+;###   task entry point.  This fits the FPS-3000 model exactly: the host issues
+;###   CPLOAD to load a CONTROL-PROCESSOR PROGRAM, and that program is the USER
+;###   task the XP controllers notify on completion.  The ROM is the half of the
+;###   system that boots the machine and moves microcode; the other half arrives
+;###   from the host.  Consequence for emulation: no chassis model can carry an
+;###   XP channel through a full cycle, because the COUNTERPARTY is missing, not
+;###   a register.  Hardware prediction: on a real machine running a CP program
+;###   $10BE+(ch-1)*4 holds a task handle and $10AE+(ch-1)*4 is nonzero; on this
+;###   ROM alone both stay zero.  One RAM dump settles it.
   f08586: 2f 3c 55 53 45 52       move.l   #$55534552, -(a7)
   f0858c: 70 43                   moveq    #$43, d0
   f0858e: 41 d7                   lea.l    (a7), a0

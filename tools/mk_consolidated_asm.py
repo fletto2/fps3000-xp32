@@ -80,6 +80,25 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- THE SEVENTH TASK: 'USER', never created ----
+ (0xF08586,'*** THERE IS A SEVENTH TASK, NAMED USER, AND THIS ROM NEVER CREATES IT. ***'),
+ (0xF08586,'  #$55534552 is the ASCII literal \'USER\', pushed with a longword and a'),
+ (0xF08586,'  pointer for DIRECTIVE $43 -- task-lookup-by-name, the task-level analogue'),
+ (0xF08586,'  of $29 for queues.  Exactly four sites, one per XP task: $F06774 $F0718C'),
+ (0xF08586,'  $F07B8C $F0858C.  So every XP channel controller tries to resolve a task'),
+ (0xF08586,'  called USER, gated on its per-channel longword at $10AE, filing the'),
+ (0xF08586,'  answer at $10BE.  TDTI creates only RDHC IO1I XP4I XP3I XP2I XP1I -- but'),
+ (0xF08586,'  the name table at $F0467E has SIX entries, XP1I..XP4I then USER TWICE,'),
+ (0xF08586,'  and \'USER\' occurs 13 times in the ROM including just before each XP'),
+ (0xF08586,'  task entry point.  This fits the FPS-3000 model exactly: the host issues'),
+ (0xF08586,'  CPLOAD to load a CONTROL-PROCESSOR PROGRAM, and that program is the USER'),
+ (0xF08586,'  task the XP controllers notify on completion.  The ROM is the half of the'),
+ (0xF08586,'  system that boots the machine and moves microcode; the other half arrives'),
+ (0xF08586,'  from the host.  Consequence for emulation: no chassis model can carry an'),
+ (0xF08586,'  XP channel through a full cycle, because the COUNTERPARTY is missing, not'),
+ (0xF08586,'  a register.  Hardware prediction: on a real machine running a CP program'),
+ (0xF08586,'  $10BE+(ch-1)*4 holds a task handle and $10AE+(ch-1)*4 is nonzero; on this'),
+ (0xF08586,'  ROM alone both stay zero.  One RAM dump settles it.'),
  # ---- RESOLVED: $0A is distinguished by d7 ----
  (0xF056C4,'THIS PRESERVES THE OPERATION CODE.  $F0572C does lsl.w #2,d0 to build the'),
  (0xF056C4,'  jump index, destroying the code -- so PanelSendAndWait saves it in d7'),
