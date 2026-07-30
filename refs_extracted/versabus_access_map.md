@@ -1563,6 +1563,50 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### RESOLVED: the reply is shipped by the acknowledge path, not by op handlers
+
+I left "which ops ship a reply?" as an open question needing a per-op census. Doing it answers
+something better: **no op handler ships a reply at all.**
+
+Only three sites branch into the reply region, and none of them is an op handler:
+
+| target | reached from |
+|---|---|
+| `$F04910` | `$F04902 bne` |
+| `$F0491E` | `$F0490E bra` |
+| **`$F04924`** | **`$F048D6 bra`** |
+
+And `$F048D6` is the tail of an acknowledge sequence:
+
+```
+$F048C8:  move.w $e86.l,d1       ; the latched command
+$F048CE:  bclr.b #$a,d1          ; clear bit 10 -- ACKNOWLEDGE
+$F048D2:  move.w d1,$200(a5)     ; write it back to MODE0
+$F048D6:  bra    loc_F04924      ; -> ship $0E74 to CHANNEL_SELECT
+```
+
+**So acknowledging and replying are the same act.** The op handlers store their result into
+`$0E74` and exit via `ChannelConfigDispatch`; a separate path clears the MODE0 acknowledge bit
+and ships whatever `$0E74` holds at that moment. The reply is not attached to an operation —
+it is attached to the **command-arm cycle**.
+
+That resolves the open question the right way round: **"one reply per run" is firmware
+structure, not a model limitation.** In a two-op sequence both handlers ran and both stored
+their results, but only one acknowledge cycle occurred, so only one value was shipped — and the
+one shipped was whatever `$0E74` held when that cycle ran. Nothing was dropped by the emulator.
+
+*A consequence worth stating for anyone driving the machine:* the value a chassis receives is
+`$0E74` **at acknowledge time**, not the result of the command it just issued. Issuing two ops
+before an acknowledge means the second overwrites the first's result and only one comes back.
+A chassis that wants a specific op's answer must let the acknowledge cycle complete between
+commands — which is exactly the `FPS3K_SEQGAP` spacing the model already implements for a
+different reason.
+
+The neighbouring code at `$F048D8` is the documented bit-7 command arm, testing the latched
+command's low five bits for `$14` (command waiting → `jsr $F052F8`) and `$13` (→ RTOS directive
+`$12`, RESUME). So this region is the whole command lifecycle in one place: **arm, dispatch,
+acknowledge, reply.**
+
 ### One reply per run, and a counting trap in the access log
 
 Chasing why a two-op sequence ships only one reply produced a smaller result than expected and

@@ -570,6 +570,19 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- acknowledge and reply are the same act -------------------------------
+    check('$F048C8 clears MODE0 bit 10 then branches to the reply write',
+          d[0xF048C8-0xF00000:0xF048D8-0xF00000]
+          == b'\x32\x39\x00\x00\x0e\x86\x08\x81\x00\x0a'
+             b'\x3b\x41\x02\x00\x60\x4c')
+    check('...and $F048D6 + $4C + 2 lands exactly on $F04924',
+          0xF048D6 + 2 + 0x4C == 0xF04924)
+    check('the bit-7 arm tests the latched command for $14 and $13',
+          d[0xF048DE-0xF00000:0xF048E8-0xF00000]
+          == b'\x02\x40\x00\x1f\x0c\x40\x00\x14\x66\x0c'
+          and d[0xF048FA-0xF00000:0xF04904-0xF00000]
+              == b'\x02\x40\x00\x1f\x0c\x40\x00\x13\x66\x0c')
+
     # --- access-log lines are BUS CYCLES, not executions ----------------------
     check('the reply instruction at $F04924 is move.w $0E74,$204(a5) -- 5 bus cycles',
           d[0xF04924-0xF00000:0xF0492C-0xF00000]
