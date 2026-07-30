@@ -1528,6 +1528,51 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Phase `$18xx` is a *negative* specification: bit 6 is transparent
+
+The remaining chassis-memory group tests **bit 6** (`$40`) of `$FF0216`, and every one
+of its four phases requires **no fault**:
+
+| phase | `$FF0216` | probe | required |
+|---|---|---|---|
+| `$1800` | `$40` (bit 6 set) | read `$F096AC` | `d1 == 0` — no fault |
+| `$1801` | `$00` | read | `d1 == 0` |
+| `$1802` | `$40` | **write** `$F096B8` | `d1 == 0` |
+| `$1803` | `$00` | write | `d1 == 0` |
+
+**Bit 6 does not gate bus errors at all**, and the firmware proves it across the full
+2 × 2 of read/write × set/clear. That is worth having as a positive statement rather
+than an absence: the self-test does not merely exercise the bits that *do* something,
+it verifies that bit 6 is **transparent** to `$400000` access. A chassis model that
+made bit 6 do anything to that window would fail phase `$18xx`.
+
+So the three probe-tested bits of `$FF0216` now have roles:
+
+| bit | role | established by |
+|---|---|---|
+| 5 | **chassis-memory (`$400000`) bus-error enable** | phase `$17xx`, both polarities |
+| 6 | **transparent** to `$400000`, read and write | phase `$18xx`, all four combinations |
+| 7 | **AP I/F bus-error enable** | phase `$1Axx`, both polarities |
+
+This tightens what this document could previously say — that `$10/$20/$40/$80` "are
+set-then-test probe pairs in the boot diagnostics only". They are not
+interchangeable probe values; three of them name distinct behaviours and one of those
+behaviours is *no behaviour*, deliberately checked.
+
+**And it makes the resting value meaningful.** `$FF0216` settles at **`$C0`** =
+bits 6 + 7. Bit 6 is transparent, so the operationally significant half is **bit 7 set
+— the AP I/F fault enable is live in normal service.** That is exactly the condition
+the emulator's narrowed gate now tests (`arm_pending && (data_hi & 0x80)`), so the
+resting value and the gate agree: in service the AP I/F is armed to fault while the
+chassis holds the bus, and bit 5 stays clear so chassis memory remains readable.
+
+*Note the shape of these three groups taken together: `$17xx` asserts a bit does
+something in both directions, `$18xx` asserts a bit does nothing in four
+combinations, `$1Axx` asserts the third bit does something and that the port behind
+it is plain storage. That is a register specification written as tests — and it is a
+better source for a chassis model than any amount of usage-pattern inference, because
+it states the negative cases too.*
+
 ### `$FF0216` carries two BERR-enable bits, and the AP I/F gate was too loose
 
 Phase `$1Axx` is the only group that touches the AP I/F, and it is that card's

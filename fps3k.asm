@@ -9506,6 +9506,25 @@ loc_F096C4:
 
 loc_F096E6:
   f096e6: 42 41                   clr.w    d1
+;### PHASE $18xx IS A NEGATIVE SPECIFICATION: bit 6 of $FF0216 is TRANSPARENT.
+;###   All four phases require NO fault (beq, d1 == 0), across the full 2x2 of
+;###     $1800  bit 6 SET,   READ    $1802  bit 6 SET,   WRITE
+;###     $1801  bit 6 CLEAR, READ    $1803  bit 6 CLEAR, WRITE
+;###   So the self-test does not merely exercise bits that DO something -- it
+;###   verifies that bit 6 does NOTHING to $400000 access.  A chassis model that
+;###   made bit 6 affect that window would fail this group.
+;###   The three probe-tested bits of $FF0216 therefore are:
+;###     bit 5  chassis-memory ($400000) bus-error enable   (phase $17xx)
+;###     bit 6  TRANSPARENT to $400000, read and write      (phase $18xx)
+;###     bit 7  AP I/F bus-error enable                     (phase $1Axx)
+;###   which tightens "$10/$20/$40/$80 are set-then-test probe pairs": they are
+;###   not interchangeable probe values, and one of the behaviours is NO
+;###   behaviour, deliberately checked.
+;###   AND IT MAKES THE RESTING VALUE MEANINGFUL.  $FF0216 settles at $C0 =
+;###   bits 6+7.  Bit 6 is transparent, so the operative half is BIT 7 SET --
+;###   the AP I/F fault enable is LIVE IN NORMAL SERVICE, exactly the condition
+;###   the emulator gate now tests.  Bit 5 stays clear, so chassis memory stays
+;###   readable.  Resting value and gate agree.
   f096e8: 3d 7c 00 40 02 16       move.w   #$40, $216(a6)  [XLTR_DATA_HI]
   f096ee: 61 00 ff bc             bsr.w    loc_F096AC
   f096f2: 4a 41                   tst.w    d1

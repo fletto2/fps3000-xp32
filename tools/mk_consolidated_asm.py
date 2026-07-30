@@ -80,6 +80,26 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- phase $18xx is a NEGATIVE specification ----
+ (0xF096E8,'PHASE $18xx IS A NEGATIVE SPECIFICATION: bit 6 of $FF0216 is TRANSPARENT.'),
+ (0xF096E8,'  All four phases require NO fault (beq, d1 == 0), across the full 2x2 of'),
+ (0xF096E8,'    $1800  bit 6 SET,   READ    $1802  bit 6 SET,   WRITE'),
+ (0xF096E8,'    $1801  bit 6 CLEAR, READ    $1803  bit 6 CLEAR, WRITE'),
+ (0xF096E8,'  So the self-test does not merely exercise bits that DO something -- it'),
+ (0xF096E8,'  verifies that bit 6 does NOTHING to $400000 access.  A chassis model that'),
+ (0xF096E8,'  made bit 6 affect that window would fail this group.'),
+ (0xF096E8,'  The three probe-tested bits of $FF0216 therefore are:'),
+ (0xF096E8,'    bit 5  chassis-memory ($400000) bus-error enable   (phase $17xx)'),
+ (0xF096E8,'    bit 6  TRANSPARENT to $400000, read and write      (phase $18xx)'),
+ (0xF096E8,'    bit 7  AP I/F bus-error enable                     (phase $1Axx)'),
+ (0xF096E8,'  which tightens "$10/$20/$40/$80 are set-then-test probe pairs": they are'),
+ (0xF096E8,'  not interchangeable probe values, and one of the behaviours is NO'),
+ (0xF096E8,'  behaviour, deliberately checked.'),
+ (0xF096E8,'  AND IT MAKES THE RESTING VALUE MEANINGFUL.  $FF0216 settles at $C0 ='),
+ (0xF096E8,'  bits 6+7.  Bit 6 is transparent, so the operative half is BIT 7 SET --'),
+ (0xF096E8,'  the AP I/F fault enable is LIVE IN NORMAL SERVICE, exactly the condition'),
+ (0xF096E8,'  the emulator gate now tests.  Bit 5 stays clear, so chassis memory stays'),
+ (0xF096E8,'  readable.  Resting value and gate agree.'),
  # ---- $FF0216 holds TWO BERR-enable bits ----
  (0xF0984C,'PHASE $1Axx IS THE AP I/F SPECIFICATION, and it names BIT 7 of $FF0216:'),
  (0xF0984C,'    $1A00  bit 7 SET   -> the probe MUST fault'),

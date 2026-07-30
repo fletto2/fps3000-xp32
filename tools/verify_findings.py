@@ -550,6 +550,20 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- phase $18xx: bit 6 is transparent, all four combinations -----------
+    for _ph, _at, _val, _probe in (('$1800', 0xF096E8, 0x40, 'read'),
+                                   ('$1802', 0xF0972E, 0x40, 'write')):
+        check(f'phase {_ph} sets $FF0216 bit 6 for the {_probe} probe',
+              d[_at-0xF00000:_at-0xF00000+6]
+              == bytes([0x3d, 0x7c, 0x00, _val, 0x02, 0x16]))
+    # all four $18xx phases branch on beq (require d1 == 0, i.e. NO fault)
+    check('all four $18xx phases require NO fault (beq, not bne)',
+          all(d[a2-0xF00000:a2-0xF00000+4] == b'\x4a\x41\x67\x06'
+              for a2 in (0xF096F2, 0xF09714, 0xF09738, 0xF0975A)))
+    check('...whereas $17xx and $1Axx require a fault on their set case (bne)',
+          d[0xF0962E-0xF00000:0xF09632-0xF00000] == b'\x4a\x41\x66\x06'
+          and d[0xF09854-0xF00000:0xF09856-0xF00000] == b'\x66\x06')
+
     # --- phase $1Axx: $FF0216 bit 7 is the AP I/F bus-error enable ------------
     check('phase $1A00 sets $FF0216 bit 7 and requires a fault',
           d[0xF0984C-0xF00000:0xF09856-0xF00000]
