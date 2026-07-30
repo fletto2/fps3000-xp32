@@ -1,6 +1,6 @@
 ; ============================================================================
 ; FPS-3000 Control Processor firmware - consolidated disassembly
-; FPS3K_U11_U12_JOIN.bin   MD5 47f133c1c2bab61f887e7e2a92a43dac   built 2026-07-29
+; FPS3K_U11_U12_JOIN.bin   MD5 47f133c1c2bab61f887e7e2a92a43dac   built 2026-07-30
 ; ============================================================================
 ;
 ; THE file to read. Supersedes fps3k_clean.asm. Built by
@@ -10008,6 +10008,9 @@ loc_F09F06:
   f09f16: 20 c2                   move.l   d2, (a0)+
   f09f18: 20 c2                   move.l   d2, (a0)+
   f09f1a: 30 c2                   move.w   d2, (a0)+
+;### !VCT BUILD.  a2 = $28 (the exception vector table); the loop writes ONE
+;###   BYTE PER VECTOR up to $400, and the 10 bytes of $FF written just above
+;###   cover vectors 0-9.  So byte k of the block at $1FA00 IS vector number k.
   f09f1c: 45 f8 00 28             lea.l    $28.w, a2
   f09f20: 74 ff                   moveq    #$ff, d2
 
@@ -10015,6 +10018,12 @@ loc_F09F22:
   f09f22: b9 da                   cmpa.l   (a2)+, a4
 ;>>>> [R8/BOTH] This `beq.b loc_F0F28` instruction in `Init_RMS68K_StoreTags` conditionally skips writing a marker byte (0xFF) to the current address if the comparison `cmpa.l (a2)+, a4` indicates a match, used during the initialization of RMS68K system tables.
   f09f24: 67 02                   beq.b    loc_F09F28
+;###   $FF marks a vector that differs from the reference handler in a4.
+;###   Later the kernel at $F0226A (directive $4C, connect vector) overwrites
+;###   each connected byte with the OWNING TASK NUMBER.  Measured: $41->6 RDHC,
+;###   $45->1 XP1I, $46->2, $47->3, $48->4, $4A->5 IO1I, and the four orphan
+;###   BIM vectors $42/$43/$44/$49 read 0.  This is the !VCT instance, untagged,
+;###   and it fixes the task numbering the ROM never states: XP1I=1 .. RDHC=6.
   f09f26: 10 82                   move.b   d2, (a0)
 
 loc_F09F28:
@@ -10157,6 +10166,13 @@ loc_F0A028:
   f0a028: 21 c8 0c 30             move.l   a0, $c30.w
   f0a02c: 61 00 03 04             bsr.w    MemoryClear
 ;>>>> [R8/BOTH] Advances the TCB initialization pointer by 8 bytes to the task list section in the TCB definition table.
+;### RECORD POOL, the other untagged structure ($0C30 -> $1F500).  Instead of a
+;###   marker tag this site writes a two-pointer header: first = base+8, and
+;###   last = first + ((size*256 - 8) div $1A) * $1A -- a divu/mulu pair that
+;###   rounds DOWN to whole $1A-byte records.  One page gives 9 records,
+;###   first=$1F508 last=$1F5F2, which is what RAM holds.  Untagged and
+;###   unchanged in every configuration reached so far; by elimination it is
+;###   !CCB or !DLY, and the $1A record size is the discriminator.
   f0a030: 45 e8 00 08             lea.l    $8(a0), a2
   f0a034: 20 8a                   move.l   a2, (a0)
   f0a036: e1 8a                   lsl.l    #$8, d2

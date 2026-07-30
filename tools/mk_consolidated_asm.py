@@ -80,6 +80,23 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- the two untagged structures ----
+ (0xF09F1C,'!VCT BUILD.  a2 = $28 (the exception vector table); the loop writes ONE'),
+ (0xF09F1C,'  BYTE PER VECTOR up to $400, and the 10 bytes of $FF written just above'),
+ (0xF09F1C,'  cover vectors 0-9.  So byte k of the block at $1FA00 IS vector number k.'),
+ (0xF09F26,'  $FF marks a vector that differs from the reference handler in a4.'),
+ (0xF09F26,'  Later the kernel at $F0226A (directive $4C, connect vector) overwrites'),
+ (0xF09F26,'  each connected byte with the OWNING TASK NUMBER.  Measured: $41->6 RDHC,'),
+ (0xF09F26,'  $45->1 XP1I, $46->2, $47->3, $48->4, $4A->5 IO1I, and the four orphan'),
+ (0xF09F26,'  BIM vectors $42/$43/$44/$49 read 0.  This is the !VCT instance, untagged,'),
+ (0xF09F26,'  and it fixes the task numbering the ROM never states: XP1I=1 .. RDHC=6.'),
+ (0xF0A030,'RECORD POOL, the other untagged structure ($0C30 -> $1F500).  Instead of a'),
+ (0xF0A030,'  marker tag this site writes a two-pointer header: first = base+8, and'),
+ (0xF0A030,'  last = first + ((size*256 - 8) div $1A) * $1A -- a divu/mulu pair that'),
+ (0xF0A030,'  rounds DOWN to whole $1A-byte records.  One page gives 9 records,'),
+ (0xF0A030,'  first=$1F508 last=$1F5F2, which is what RAM holds.  Untagged and'),
+ (0xF0A030,'  unchanged in every configuration reached so far; by elimination it is'),
+ (0xF0A030,'  !CCB or !DLY, and the $1A record size is the discriminator.'),
  # ---- the RTOS page allocator (TRAP #0 directive $04), 8 sites ----
  (0xF09E78,'ALLOCATOR SITE 1/8 -- TRAP #0 directive $04 is the RTOS PAGE ALLOCATOR.'),
  (0xF09E78,'  Size (in 256-byte pages) goes in via a0; the block comes back in a0.'),

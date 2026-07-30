@@ -441,6 +441,28 @@ else:
           len({l for l in trk.split() if 'F07D00' <= l <= 'F086FF'}) > 200 and
           len({l for l in trn2.split() if 'F07D00' <= l <= 'F086FF'}) < 130)
 
+    # --- $1FA00 is !VCT: byte[vector number] = owning task ----------------
+    _, rv = run({}, 400_000_000)
+    OWN = {0x41: 6, 0x45: 1, 0x46: 2, 0x47: 3, 0x48: 4, 0x4A: 5}
+    check('$1FA00[vector] holds the owning task number for all six TCB vectors',
+          all(rv[0x1FA00 + v] == n for v, n in OWN.items()))
+    check('...and the four orphan BIM vectors $42/$43/$44/$49 read 0 (unowned)',
+          all(rv[0x1FA00 + v] == 0 for v in (0x42, 0x43, 0x44, 0x49)))
+    check('vector-map init: lea $28,a2 then one byte per longword up to $400',
+          d[0xF09F1C-0xF00000:0xF09F20-0xF00000] == b'\x45\xf8\x00\x28' and
+          d[0xF09F2C-0xF00000:0xF09F32-0xF00000] == b'\xb5\xfc\x00\x00\x04\x00')
+    check('...preceded by 10 bytes of $FF (vectors 0-9): move.l,move.l,move.w',
+          d[0xF09F16-0xF00000:0xF09F1C-0xF00000] == b'\x20\xc2\x20\xc2\x30\xc2')
+    check('$1F500 pool header: first = base+8, last = first + 9*$1A',
+          struct.unpack('>I', rv[0x1F500:0x1F504])[0] == 0x1F508 and
+          struct.unpack('>I', rv[0x1F504:0x1F508])[0] == 0x1F508 + 9 * 0x1A)
+    check('pool record size $1A comes from a divu/mulu pair at $F0A03A',
+          d[0xF0A03A-0xF00000:0xF0A042-0xF00000] ==
+          b'\x84\xfc\x00\x1a\xc4\xfc\x00\x1a')
+    check('pool header stores: first at $F0A034, last at $F0A044 (matches RAMWATCH)',
+          d[0xF0A034-0xF00000:0xF0A036-0xF00000] == b'\x20\x8a' and
+          d[0xF0A044-0xF00000:0xF0A048-0xF00000] == b'\x21\x42\x00\x04')
+
     # --- the downward page heap ------------------------------------------
     _, rh = run({}, 400_000_000)
     g32 = lambda x: struct.unpack('>I', rh[x:x+4])[0]

@@ -1473,6 +1473,105 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The two untagged structures: `!VCT` is a vector-ownership table
+
+The eight allocations include two that stamp no marker tag. Both are now
+identified, and one of them is the most directly useful RAM structure found so
+far.
+
+#### `$1FA00` (slot `$0C66`) — one byte per exception vector, holding the owner
+
+Site 3's post-allocation code at `$F09F0E` is not a tag stamp, it is a table
+build:
+
+```
+$F09F0E  moveq   #1,d2
+$F09F10  bsr     $F0A332          ; BulkClear one page
+$F09F14  moveq   #-1,d2
+$F09F16  move.l  d2,(a0)+         ; \
+$F09F18  move.l  d2,(a0)+         ;  > 10 bytes pre-set to $FF
+$F09F1A  move.w  d2,(a0)+         ; /   -- vectors 0..9
+$F09F1C  lea     $28,a2           ; a2 = the vector table, from vector 10
+$F09F20  moveq   #-1,d2
+$F09F22  cmpa.l  (a2)+,a4         ; compare each vector against a4
+$F09F24  beq     $F09F28          ;   equal -> leave the byte 0
+$F09F26  move.b  d2,(a0)          ;   differs -> mark $FF
+$F09F28  lea     $1(a0),a0        ; ONE BYTE PER VECTOR
+$F09F2C  cmpa.l  #$400,a2
+$F09F32  bne     $F09F22
+```
+
+Ten bytes advanced before the loop, then one byte per longword from `$28` to
+`$400`: **byte `k` of the block corresponds to exception vector number `k`,**
+exactly. The block is 256 bytes for 256 vectors.
+
+Then the kernel fills it in. `$F0226A` — one routine, the only code that writes
+non-`$FF` values here — stores a small integer per vector, and the values are
+decisive:
+
+| byte | vector | value | owner |
+|---|---|---|---|
+| `+$41` | `$41` | 6 | `TCBRDHC` |
+| `+$42` | `$42` | **0** | — |
+| `+$43` | `$43` | **0** | — |
+| `+$44` | `$44` | **0** | — |
+| `+$45` | `$45` | 1 | `TCBXP1I` |
+| `+$46` | `$46` | 2 | `TCBXP2I` |
+| `+$47` | `$47` | 3 | `TCBXP3I` |
+| `+$48` | `$48` | 4 | `TCBXP4I` |
+| `+$49` | `$49` | **0** | — |
+| `+$4A` | `$4A` | 5 | `TCBIO1I` |
+
+Six for six against the TCB vector numbers, and **the four vectors that this
+document already recorded as "programmed in a BIM vector register but belonging to
+no TCB" — `$42`, `$43`, `$44`, `$49` — read exactly zero.** That is an
+independent confirmation of a finding that previously rested on comparing two
+tables by eye.
+
+So `$1FA00` is the **`!VCT` structure**: `byte[vector number] = owning task
+number, 0 = unowned`, written by the directive `$4C` (connect interrupt vector)
+implementation at `$F0226A`. `!VCT` was listed as having kernel code but no tagged
+instance; the instance is here, untagged.
+
+It also fixes the **canonical task numbering**, which nothing else in the ROM
+states outright: `XP1I`=1, `XP2I`=2, `XP3I`=3, `XP4I`=4, `IO1I`=5, `RDHC`=6. Note
+this is *not* the TCB allocation order (which runs RDHC first) nor the ASQ-block
+order (XP1I first) — it is a third ordering, and it is the one the kernel uses.
+
+*For emulation this is a free readout: dump `$1FA00` and you have the complete
+vector-to-task ownership map without tracing a single `$4C` call.*
+
+#### `$1F500` (slot `$0C30`) — a 9-slot pool of 26-byte records
+
+Site 8's code at `$F0A030` writes a two-pointer header instead of a tag:
+
+```
+$F0A030  lea     $8(a0),a2        ; first = base + 8
+$F0A034  move.l  a2,(a0)
+$F0A036  lsl.l   #8,d2            ; size in bytes
+$F0A038  subq.l  #8,d2            ;   less the header
+$F0A03A  divu    #$1A,d2          ; \ round DOWN to a whole
+$F0A03E  mulu    #$1A,d2          ; /   number of $1A-byte records
+$F0A042  add.l   a2,d2
+$F0A044  move.l  d2,$4(a0)        ; last = first + n*$1A
+```
+
+One page: `(256-8) div 26 = 9` records of 26 bytes, giving `first = $1F508`,
+`last = $1F5F2` — which is exactly what RAM holds. Untagged, and unchanged across
+all three golden masters, so nothing exercises it in any configuration reached so
+far. By elimination it is `!CCB` or `!DLY`; the record size `$1A` is the
+discriminator to look for if either structure's layout ever turns up.
+
+#### Methodological note: first writer vs last writer
+
+A watchpoint on any of these addresses reports the **power-on RAM test** first —
+`$F098FC` writes each location its own address (address-uniqueness), `$F09944` and
+`$F099BC` write the four patterns at `$F09BB6`. Reading the first few watch lines
+makes a genuine structure look like RAM-test residue, and reading the *contents*
+without the watch makes the residue look like a structure. Only the **last** writer
+identifies what a location is for. Both misreadings happened here before the
+tables above came out right.
+
 ### The whole RAM heap, and a 512-byte correction to the staging buffer
 
 Following the allocator down gives the complete picture. **The heap starts at
