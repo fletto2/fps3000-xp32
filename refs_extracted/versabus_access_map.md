@@ -14624,3 +14624,31 @@ Note `+$0FA` appears in the sweep with 5 accesses, exactly where the shifted `TC
 Usage-derived mapping like this is worth more than the vendor file for this build: it cannot be
 wrong about which offsets the firmware touches, and it flags disagreements instead of inheriting
 them.
+
+### A better enclosing-routine finder, and what it says about bit 10
+
+The "greatest directive-handler start ≤ address" heuristic is wrong for kernel-internal code — it
+reports the `$F003D0` stub for anything below the lowest handler. Replacing it with a **scan back
+to the instruction after the previous `rts`/`rte`/`jmp`/`bra`** gives true routine boundaries:
+
+| bit | site | enclosing routine |
+|---:|---|---|
+| 13 | `bset $F00718` | `$F00718` (the site is the routine start; 2 callers, `$F00702` and `$F01326`) |
+| 13 | `bclr $F007B6` | `$F007A0` |
+| 10 | `bset $F00D9A` | `$F00D9A` |
+| 10 | `btst $F0300E` | **`$F02FDA`** |
+
+`$F02FDA` is the **lowercase `!tcb` teardown routine** decoded earlier today — the one that pushes
+a block onto the free list at `$E34`, one's-complements each subordinate marker, and stamps the
+TCB `!tcb`. So **bit 10 is consulted while a task's structures are being freed**, and the two
+attribution methods agree: the directive-based mapping put this site "inside `$0F` TERM", and
+TERM's handler at `$F02F64` runs into exactly this teardown code.
+
+Bits 10 and 13 remain unnamed — `$F00D9A`, `$F007A0` and `$F02FDA` have **no `bsr`/`jsr` callers**
+because they are fall-through continuations rather than separately-called routines, so naming them
+needs execution tracing rather than more static structure. Recorded as bounded rather than
+pursued further.
+
+The finder itself is the reusable part: routine boundaries from terminator scan-back are correct
+where handler-table attribution is not, and the difference matters for any field or flag whose
+sites lie outside the directive handlers.
