@@ -16858,3 +16858,200 @@ scheduler's dequeue at `$F00536`.
 stack base, the running task, every task, and the runnable ones. `$0C0C` holding RDHC matches the
 documented "`$00C0C` is the current-task TCB pointer", and the empty ready queue matches the six
 `$4000` WAITING flags: every task blocked, none runnable, RDHC merely the last to have run.
+
+## `$0C00` is the allocatable-RAM region list, and it makes the staging bound dynamic (2026-07-30)
+
+`$0C00` was one of two scheduler-adjacent kernel pointers still unidentified. It is
+written **once**, at `$F09D72` (`move.l a3,$c00.w` with `a3 = $1a(a0)`), and read at
+`$F01280`, `$F014AA` and `$F01580` — which are inside TRAP #0 `$04` (`T0PAGAL`, handler
+`$F01240`) and TRAP #0 `$05` (handler `$F01496`). So **both readers are the page
+allocator and its complement**, which is what identifies the structure.
+
+Record layout, read off the accessors that builder and consumer share
+(`tst.w (a1)` / `bmi`, `cmp.b $1(a0),d1`, `cmp.l $2(a0),d2`, `movea.l $6(a1),a3`,
+advance `lea $a(a1),a1`) — **10 bytes**:
+
+| offset | width | meaning |
+|---|---|---|
+| `+$00` | word | flags; **sign bit set = end of list** |
+| `+$01` | byte | 4-bit class key (builder derives it `(<flags> >> 8) & $F`) |
+| `+$02` | long | region base |
+| `+$06` | long | region limit |
+
+Live on a clean boot, header at `$1FE00`, list at `$1FE1A`:
+
+```
+[0] flags=$0000 class=$00  base=$00001100  limit=$0001FE00   span = 126,208 bytes
+[1] $FFFF  <- terminator
+```
+
+**One region: `$1100`–`$1FE00`.** Built by `$F09DDC`-`$F09E1A` and — measured with a
+ranged watchpoint over a full boot — **never written again**. It is a static
+description of allocatable RAM, not a moving free pointer; the allocator's
+high-water mark lives elsewhere and carves **downward from the `$1FE00` limit**,
+which is why the 33 boot pages tile `$1DD00`-`$1FDFF` inside this region.
+
+### The consequence: the S-record staging bound is dynamic
+
+This file has documented the usable staging area as `$10000-$1DCFF` (55.25 KB), with
+`$1DD00` as the heap bottom "after a clean boot". The region list shows *why* those two
+numbers are the same number: **the page heap and the microcode staging buffer are the
+same declared region, growing toward each other.** `$1DD00` is not a constant — it is
+the boot-time high-water mark of a downward heap.
+
+So a host that creates further tasks, segments or semaphores lowers the heap bottom and
+**silently shrinks the safe staging area**, and the firmware's own S-record bounds check
+(`$10000-$1FFFF`, at `$F051FE`/`$F05206` and again at `$F055A2`) does not know about it.
+The existing hazard note — "a record addressed past `$1E8F0` corrupts RTOS state" — is
+the special case of this for the boot configuration only; the general statement is that
+the check tests a **fixed** bound against a **moving** structure.
+
+The monitor workspace at `$0F800`-`$0FF00` is also inside the declared region, but it
+sits 123 KB below the limit, so it is far behind the staging buffer in the queue.
+
+### Measurement note: `FPS3K_RAMWATCH` was a single-longword watchpoint
+
+`FPS3K_RAMWATCH=1FE00-1FE28` parsed as `strtoul(...,16)` = `$1FE00` and **silently
+discarded the range**, so a sweep over this 40-byte structure logged writes to its first
+4 bytes only — and the untouched remainder read as "the allocator never updates the
+record" before the matcher itself was checked. Same class as the false negatives
+recorded above. The hook now accepts `<lo>-<hi>`; the conclusion happens to survive, but
+it was not evidence until the range worked.
+
+## The kernel dispatch tables are now fully named — and my TRAP #1 stride was wrong (2026-07-30)
+
+### Correction: the TRAP #1 table stride is 4 bytes, not 2
+
+The dispatcher at `$F00316` reads:
+
+```
+F00316  tst.w   d0
+F00318  bmi     $f00378          ; NEGATIVE -> the extension path, below
+F0031A  lsl.l   #$2, d0          ; <-- scale by FOUR
+F0031C  cmpi.l  #$130, d0        ; $130/4 = 76, so directives 0..76
+F00322  bgt     $f003c6
+F00326  lea     $f003d8.l, a2
+F0032C  adda.l  d0, a2
+F0032E  move.w  $2(a2), d2       ; word1 = flags
+...
+F0036A  adda.w  (a2), a2         ; word0 = self-relative handler offset
+```
+
+So each slot is **4 bytes** — `{self-relative offset word, flags word}` — not the 2-byte
+entry an earlier pass here assumed. **60 of 77 slots are live** (stride 2 gave a
+plausible-looking 73, which is how the error survived).
+
+The error was invisible to the obvious check: directive *names* come from the directive
+*number* via `TR1.EQ`, so 13 of 13 previously-established names still lined up under the
+wrong stride. What separates them is execution — run a boot and ask which handlers are
+actually entered:
+
+| stride | handlers that execute | inside the 14 known directives? |
+|---|---|---|
+| 2 | 2 | **neither** |
+| 4 | 4 | **all four, none outside** |
+
+`tools/disasm_kernel.py` already used stride 4 and is unaffected; the 81.5% kernel
+coverage figure stands.
+
+### `$4C` is a normal built-in after all
+
+Under stride 4, slot `$4C` resolves to handler **`$F02216`**, and the `$4C` implementation
+this project documents at `$F0226A` sits 84 bytes inside it — and executes exactly
+**6 times** per boot, once per task, while the error stub `$F003D0` executes **zero**
+times. `$4C` is not dispatched by any exotic route. It is only *unnamed*, because
+`TR1.EQ` stops at directive 75 and `$4C` is 76.
+
+### There is a second dispatch path, for NEGATIVE directive numbers
+
+`$F00378`, reached when `tst.w d0` is minus, indexes a **user-extensible directive
+table** whose head is the kernel global `$0C28`:
+
+```
+a2 = [$0C28]; neg.w d0; if d0 > count($4(a2)) -> error
+a2 = $6(a2, ((d0-1) * $0A).w)          ; 10-byte records after a 6-byte header
+if $6(a2) == 0 -> error                 ; handler
+if !btst #$4,$5(a2): cmp.l $14(a6),(a2) ; owner check against the TCB
+jump $6(a2)
+```
+
+`[$0C28]` is `$1F600`, whose marker is `21554452` = **`!UDR`** — so the previously
+unexplained `!UDR` allocation is the **User Directive table**, the registry for
+add-on directives, 25 slots, installed by directive `$3A` = `CDIR` ("CONFIGURE
+DIRECTIVE", handler `$F03880`). **All 25 handler slots are zero on this machine** and
+this ROM never calls `CDIR`, so the whole negative-directive path is dead here — but it
+is the documented extension point a host-loaded CP program would use.
+
+### 84 directives named from the Motorola equate files
+
+`TR1.EQ` yields 62 TRAP #1 names and `STR.EQ` 22 in-range TRAP #0 names. Both are folded
+into `tools/disasm_kernel.py`, taking named directive labels in `fps3k_kernel.asm` from
+**19 to 124**. Highlights that settle open questions:
+
+- **`$05` = `T0PGFR`, "FREE PHYSICAL PAGES"** — derived independently here first, from
+  `$F0411E` unlinking a node and then calling `$F01494` (the dual-entry of the `$05`
+  handler), *then* confirmed by name. Two routes, same answer.
+- `$02` `DESEG`, `$1F` `GTASQ`, `$20` `DEASQ`, `$22` `RDEVNT`, `$24` `WTEVNT`,
+  `$3D` `CISR` "CONNECT TO INTERRUPT SERVICE ROUTINE", `$3A` `CDIR`.
+
+### `$0C18` is the channel-control-block list, and it explains the missing `!CCB`
+
+Three `lea $c18.w` sites (`$F03D44`, `$F03E4C`, `$F0411E`), all inside the handler at
+`$F03D0C` — which under the corrected stride is directive **`$3C` = `CMR`, "REQUEST
+CHANNEL"**. So `$0C18` heads the **channel control block** list, the same objects
+`TCB.EQ` chains per-task through `TCBCHAN` ("LINK TO NEXT CHANNEL CONTROL BLOCK").
+
+**This closes a standing open item.** `!CCB` is one of the marker tags with no live
+instance anywhere in RAM, and the reason is now concrete rather than mysterious: a CCB is
+only ever created by `CMR`, and **this firmware never issues directive `$3C`**. The list
+head is null because nothing ever requested a channel through the RTOS — the FPS layer
+talks to its channels directly through the AP I/F windows instead. Singly linked: **link at `+$04`, key longword at `+$14`**, walked
+`movea.l (a3),aN` / `lea $4(aN),a3`. `$F0411E` is the unlink — it splices with
+`move.l $4(a3),(a4)` and then calls `$F01494`, i.e. frees the node's pages. Empty (`0`)
+at rest on this machine.
+
+## The TCB layout, checked against Motorola's own `TCB.EQ` (2026-07-30)
+
+`TCB.EQ` is a `DS`-based layout starting at offset 0; simulating it gives 63 fields and a
+total size of **`$140` (320 bytes)**, which is what makes the observed `$200` TCB stride a
+2-page allocation with room to spare. Against the offsets measured here:
+
+| offset | Motorola name | agrees with |
+|---|---|---|
+| `+$04` | `TCBALL` — link for ALL TCB list | the six-node chain from `$0C10` |
+| `+$0C` | `TCBREADY` — link for READY list | *same chain* — see below |
+| `+$10` | `TCBNAME` — 4-byte task name | measured |
+| `+$2C` | `TCBSTATE` — current task state | measured `$40000000` |
+| `+$2D` | `TCBSTAT2` — 2nd byte of state word | the enqueue/dequeue pair |
+| `+$6C` | `TCBENTRY` — task initial entry point | documented |
+
+**The state bits are named, and they confirm the scheduler reading exactly:**
+
+- `TSKSBLCK EQU 14` — "TASK IS BLOCKED". The resting state word `$4000` is bit 14, so the
+  six tasks are **BLOCKED**; "WAITING" was the right substance under the wrong name.
+- `TSK2NRDY EQU 4` — **"TASK IS ON READY LIST"**. That is precisely the bit the matched
+  pair `bset.b #$4,$2d(a0)` (`$F007C2`) / `bclr.b #$4,$2d(a6)` (`$F0053C`) sets and
+  clears. The enqueue/dequeue inference is confirmed by Motorola's own name for the bit.
+
+**Caveat on which list `$0C10` heads.** `+$04` and `+$0C` hold **identical values in all
+six TCBs**, so walking either yields the same six-node chain and this dump cannot
+distinguish them. The chain is the all-TCB list by content (it contains every task,
+including the five that are blocked and off the ready list, and `$0C14` — the ready-queue
+head — is null), but the *link field* used is not resolved by measurement alone.
+
+### `TCB+$138` is a pointer, and the ASQ descriptors are one hop further
+
+`TCB.EQ` calls `+$138` `TCBECNT`, which conflicts with this project's note that the
+10-byte ASQ descriptors live *at* `TCB+$138`. Measurement dissolves the conflict: `+$138`
+holds **two longwords — a 2-page block base and a pointer into it** — and the blocks
+tile `$1DD00-$1E8FF` at stride `$200` in exact reverse task order. The descriptors are at
+the **base of the block**, not at `TCB+$138`:
+
+```
+XP1I block $1E700:  "AXP1" 00000014 0002   "HXP1" 0000002A 0002
+IO1I block $1DF00:  "HIO1" 000000C4 0002
+RDHC block $1DD00:  (all zeros)
+```
+
+2/2/2/2/1/0 — the declared counts, exactly. So the existing claim is right about the
+descriptors and imprecise only about the indirection.

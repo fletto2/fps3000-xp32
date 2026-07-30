@@ -3,8 +3,8 @@
 ; Range   : 0xF00000-0xF04487  (17544 bytes)
 ; Method  : recursive descent seeded from the TRAP #0 jump
 ;           table at 0xF001D6 + exception vectors
-; Coverage: 14302/17544 bytes as code  (81.5%)
-; Instructions: 4352   Labels: 889
+; Coverage: 16676/17544 bytes as code  (95.1%)
+; Instructions: 5055   Labels: 973
 
   f00000: 00 00 00 00              ori.b    #$0, d0
   f00004: 00 f0                    DC.W     $00f0
@@ -80,13 +80,10 @@
   f000f8: 00 00 00 00              ori.b    #$0, d0
   f000fc: 00 00 00 00              ori.b    #$0, d0
   f00100: 4e f9 00 f0 05 0c        jmp      $f0050c.l
-  f00106: 42 6f                    DC.W     $426f
-  f00108: 00 06                    DC.W     $0006
-  f0010a: 3d 7c                    DC.W     $3d7c
-  f0010c: 00 01                    DC.W     $0001
-  f0010e: 01 02                    DC.W     $0102
-  f00110: 4e 73                    DC.W     $4e73
-  f00112: 4e 75                    DC.W     $4e75
+  f00106: 42 6f 00 06              clr.w    $6(a7)
+  f0010a: 3d 7c 00 01 01 02        move.w   #$1, $102(a6)
+  f00110: 4e 73                    rte      
+  f00112: 4e 75                    rts      
   f00114: 4e b9                    DC.W     $4eb9
   f00116: 00 f0                    DC.W     $00f0
   f00118: 01 86                    DC.W     $0186
@@ -284,7 +281,7 @@ loc_F002AA:
   f002b6: 4c df 7f ff              movem.l  (a7)+, d0-d7/a0-a6
   f002ba: 4f ef 00 04              lea.l    $4(a7), a7
   f002be: 4e 73                    rte      
-  f002c0: 60 04                    DC.W     $6004
+  f002c0: 60 04                    bra.b    $f002c6
 
 loc_F002C2:
   f002c2: 61 00 fe c2              bsr.w    $f00186
@@ -334,10 +331,9 @@ loc_F00310:
   f00340: 20 6e 00 36              movea.l  $36(a6), a0
   f00344: 61 00 14 16              bsr.w    $f0175c
   f00348: 60 08                    bra.b    $f00352
-  f0034a: 4e 71                    DC.W     $4e71
-  f0034c: 54 6e                    DC.W     $546e
-  f0034e: 01 02                    DC.W     $0102
-  f00350: 60 60                    DC.W     $6060
+  f0034a: 4e 71                    nop      
+  f0034c: 54 6e 01 02              addq.w   #$2, $102(a6)
+  f00350: 60 60                    bra.b    $f003b2
 
 loc_F00352:
   f00352: 28 46                    movea.l  d6, a4
@@ -346,9 +342,8 @@ loc_F00352:
   f0035a: 41 d4                    lea.l    (a4), a0
   f0035c: 61 00 13 b0              bsr.w    $f0170e
   f00360: 60 06                    bra.b    $f00368
-  f00362: 56 6e                    DC.W     $566e
-  f00364: 01 02                    DC.W     $0102
-  f00366: 60 4a                    DC.W     $604a
+  f00362: 56 6e 01 02              addq.w   #$3, $102(a6)
+  f00366: 60 4a                    bra.b    $f003b2
 
 loc_F00368:
   f00368: 2a 48                    movea.l  a0, a5
@@ -398,14 +393,14 @@ loc_F003C6:
 TRAP1_dir_00:
   f003d0: 3d 7c 00 01 01 02        move.w   #$1, $102(a6)
   f003d6: 4e 73                    rte      
-
-loc_F003D8:
-  f003d8: ff f8                    dc.w     $fff8
-  f003da: 00 00 15 20              ori.b    #$20, d0
-  f003de: 1c c0                    move.b   d0, (a6)+
-  f003e0: 16 aa 18 c0              move.b   $18c0(a2), (a3)
-  f003e4: 18 1e                    move.b   (a6)+, d4
-  f003e6: 18 c0                    move.b   d0, (a4)+
+  f003d8: ff f8                    DC.W     $fff8
+  f003da: 00 00                    DC.W     $0000
+  f003dc: 15 20                    DC.W     $1520
+  f003de: 1c c0                    DC.W     $1cc0
+  f003e0: 16 aa                    DC.W     $16aa
+  f003e2: 18 c0                    DC.W     $18c0
+  f003e4: 18 1e                    DC.W     $181e
+  f003e6: 18 c0                    DC.W     $18c0
   f003e8: 19 8a                    DC.W     $198a
   f003ea: 18 80                    DC.W     $1880
   f003ec: 19 8e                    DC.W     $198e
@@ -644,12 +639,9 @@ loc_F005E8:
   f005f0: 20 6e 00 36              movea.l  $36(a6), a0
   f005f4: 61 00 11 66              bsr.w    $f0175c
   f005f8: 60 0c                    bra.b    $f00606
-  f005fa: 4e 71                    DC.W     $4e71
-  f005fc: 08 ec                    DC.W     $08ec
-  f005fe: 00 0a                    DC.W     $000a
-  f00600: 00 04                    DC.W     $0004
-  f00602: 60 00                    DC.W     $6000
-  f00604: ff 7c                    DC.W     $ff7c
+  f005fa: 4e 71                    nop      
+  f005fc: 08 ec 00 0a 00 04        bset.b   #$a, $4(a4)
+  f00602: 60 00 ff 7c              bra.w    $f00580
 
 loc_F00606:
   f00606: dc 87                    add.l    d7, d6
@@ -668,15 +660,16 @@ loc_F00606:
 loc_F00642:
   f00642: 2f 6d 00 12 00 02        move.l   $12(a5), $2(a7)
   f00648: 60 00 ff 36              bra.w    $f00580
-  f0064c: 60 00                    DC.W     $6000
-  f0064e: fe be                    DC.W     $febe
+
+loc_F0064C:
+  f0064c: 60 00 fe be              bra.w    $f0050c
 
 loc_F00650:
   f00650: 60 08                    bra.b    $f0065a
-  f00652: 60 16                    DC.W     $6016
-  f00654: 60 1a                    DC.W     $601a
-  f00656: 60 f4                    DC.W     $60f4
-  f00658: 60 22                    DC.W     $6022
+  f00652: 60 16                    bra.b    $f0066a
+  f00654: 60 1a                    bra.b    $f00670
+  f00656: 60 f4                    bra.b    $f0064c
+  f00658: 60 22                    bra.b    $f0067c
 
 loc_F0065A:
   f0065a: 4a 38 0c 5b              tst.b    $c5b.w
@@ -684,20 +677,23 @@ loc_F0065A:
   f00660: 61 30                    bsr.b    $f00692
   f00662: 3e ae 00 fa              move.w   $fa(a6), (a7)
   f00666: 60 00 ff 00              bra.w    $f00568
-  f0066a: 4a 6e                    DC.W     $4a6e
-  f0066c: 01 02                    DC.W     $0102
-  f0066e: 67 06                    DC.W     $6706
+
+loc_F0066A:
+  f0066a: 4a 6e 01 02              tst.w    $102(a6)
+  f0066e: 67 06                    beq.b    $f00676
 
 loc_F00670:
   f00670: 41 d6                    lea.l    (a6), a0
   f00672: 61 00 01 88              bsr.w    $f007fc
+
+loc_F00676:
   f00676: 48 7a fe 94              pea.l    $f0050c(pc)
   f0067a: 60 16                    bra.b    $f00692
-  f0067c: 3e ae                    DC.W     $3eae
-  f0067e: 00 fa                    DC.W     $00fa
-  f00680: 48 7a                    DC.W     $487a
-  f00682: fe e6                    DC.W     $fee6
-  f00684: 60 1c                    DC.W     $601c
+
+loc_F0067C:
+  f0067c: 3e ae 00 fa              move.w   $fa(a6), (a7)
+  f00680: 48 7a fe e6              pea.l    $f00568(pc)
+  f00684: 60 1c                    bra.b    $f006a2
 
 loc_F00686:
   f00686: 41 d6                    lea.l    (a6), a0
@@ -734,6 +730,8 @@ loc_F006B0:
 
 loc_F006D2:
   f006d2: 40 e7                    move.w   sr, -(a7)
+
+loc_F006D4:
   f006d4: 00 7c 07 00              ori.w    #$700, sr
   f006d8: 08 38 00 08 0c 34        btst.b   #$8, $c34.w
   f006de: 67 06                    beq.b    $f006e6
@@ -743,10 +741,10 @@ loc_F006D2:
 loc_F006E6:
   f006e6: 4e 73                    rte      
 
-TRAP0_dir_01_bsr:
+TRAP0_T0P_bsr:
   f006e8: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_01:
+TRAP0_T0P:
   f006ea: 00 7c 07 00              ori.w    #$700, sr
 
 loc_F006EE:
@@ -811,10 +809,10 @@ loc_F0077C:
   f00782: 4c df 30 80              movem.l  (a7)+, d7/a4-a5
   f00786: 4e 75                    rts      
 
-TRAP0_dir_02_bsr:
+TRAP0_T0V_bsr:
   f00788: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_02:
+TRAP0_T0V:
   f0078a: 00 7c 07 00              ori.w    #$700, sr
 
 loc_F0078E:
@@ -839,10 +837,10 @@ loc_F007A0:
   f007bc: 22 5f                    movea.l  (a7)+, a1
   f007be: 4e 73                    rte      
 
-TRAP0_dir_03_bsr:
+TRAP0_T0RYDLAY_bsr:
   f007c0: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_03:
+TRAP0_T0RYDLAY:
   f007c2: 08 e8 00 04 00 2d        bset.b   #$4, $2d(a0)
   f007c8: 66 30                    bne.b    $f007fa
   f007ca: 48 e7 00 60              movem.l  a1-a2, -(a7)
@@ -879,18 +877,18 @@ loc_F00804:
 loc_F00812:
   f00812: 60 ac                    bra.b    $f007c0
 
-TRAP0_dir_0E_bsr:
+TRAP0_T0PAUSE_bsr:
   f00814: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_0E:
+TRAP0_T0PAUSE:
   f00816: 1d 7c 00 f0 00 25        move.b   #$f0, $25(a6)
   f0081c: 61 00 ff 1e              bsr.w    $f0073c
   f00820: 60 00 fc ea              bra.w    $f0050c
 
-TRAP0_dir_15_bsr:
+TRAP0_T0EXABRT_bsr:
   f00824: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_15:
+TRAP0_T0EXABRT:
   f00826: 08 c7 00 0f              bset.b   #$f, d7
   f0082a: 31 47 00 2a              move.w   d7, $2a(a0)
   f0082e: 42 68 00 5c              clr.w    $5c(a0)
@@ -966,38 +964,28 @@ loc_F008D4:
   f008f0: 41 d6                    lea.l    (a6), a0
   f008f2: 61 00 ff 1e              bsr.w    $f00812
   f008f6: 60 00 fd 94              bra.w    $f0068c
-  f008fa: 40 e7                    DC.W     $40e7
-  f008fc: 08 38                    DC.W     $0838
-  f008fe: 00 09                    DC.W     $0009
-  f00900: 0c 34                    DC.W     $0c34
-  f00902: 67 06                    DC.W     $6706
-  f00904: 61 00                    DC.W     $6100
-  f00906: 0d 82                    DC.W     $0d82
-  f00908: ee 09                    DC.W     $ee09
-  f0090a: 48 e7                    DC.W     $48e7
-  f0090c: ff fe                    DC.W     $fffe
-  f0090e: 4e 69                    DC.W     $4e69
-  f00910: 2f 09                    DC.W     $2f09
-  f00912: 2f 38                    DC.W     $2f38
-  f00914: 0c 62                    DC.W     $0c62
-  f00916: 20 6f                    DC.W     $206f
-  f00918: 00 46                    DC.W     $0046
-  f0091a: 2c 68                    DC.W     $2c68
-  f0091c: 00 02                    DC.W     $0002
-  f0091e: 48 56                    DC.W     $4856
-  f00920: 2f 28                    DC.W     $2f28
-  f00922: 00 06                    DC.W     $0006
-  f00924: 40 c0                    DC.W     $40c0
-  f00926: 02 40                    DC.W     $0240
-  f00928: 0f ff                    DC.W     $0fff
-  f0092a: 3f 00                    DC.W     $3f00
-  f0092c: 22 68                    DC.W     $2268
-  f0092e: 00 0a                    DC.W     $000a
-  f00930: 30 50                    DC.W     $3050
-  f00932: 2a 6e                    DC.W     $2a6e
-  f00934: 00 36                    DC.W     $0036
-  f00936: 60 00                    DC.W     $6000
-  f00938: fd 9c                    DC.W     $fd9c
+  f008fa: 40 e7                    move.w   sr, -(a7)
+  f008fc: 08 38 00 09 0c 34        btst.b   #$9, $c34.w
+  f00902: 67 06                    beq.b    $f0090a
+  f00904: 61 00 0d 82              bsr.w    $f01688
+  f00908: ee 09                    lsr.b    #$7, d1
+
+loc_F0090A:
+  f0090a: 48 e7 ff fe              movem.l  d0-d7/a0-a6, -(a7)
+  f0090e: 4e 69                    move     usp, a1
+  f00910: 2f 09                    move.l   a1, -(a7)
+  f00912: 2f 38 0c 62              move.l   $c62.w, -(a7)
+  f00916: 20 6f 00 46              movea.l  $46(a7), a0
+  f0091a: 2c 68 00 02              movea.l  $2(a0), a6
+  f0091e: 48 56                    pea.l    (a6)
+  f00920: 2f 28 00 06              move.l   $6(a0), -(a7)
+  f00924: 40 c0                    move.w   sr, d0
+  f00926: 02 40 0f ff              andi.w   #$fff, d0
+  f0092a: 3f 00                    move.w   d0, -(a7)
+  f0092c: 22 68 00 0a              movea.l  $a(a0), a1
+  f00930: 30 50                    movea.w  (a0), a0
+  f00932: 2a 6e 00 36              movea.l  $36(a6), a5
+  f00936: 60 00 fd 9c              bra.w    $f006d4
 
 loc_F0093A:
   f0093a: 08 17 00 0d              btst.b   #$d, (a7)
@@ -1068,82 +1056,48 @@ loc_F009B8:
   f009d6: 48 44                    swap     d4
   f009d8: 36 04                    move.w   d4, d3
   f009da: 60 a4                    bra.b    $f00980
-  f009dc: 2f 08                    DC.W     $2f08
-  f009de: 20 78                    DC.W     $2078
-  f009e0: 0e 48                    DC.W     $0e48
-  f009e2: 02 50                    DC.W     $0250
-  f009e4: ff df                    DC.W     $ffdf
-  f009e6: 20 5f                    DC.W     $205f
-  f009e8: 4e 73                    DC.W     $4e73
-  f009ea: 52 78                    DC.W     $5278
-  f009ec: 0c 5c                    DC.W     $0c5c
-  f009ee: 0c 78                    DC.W     $0c78
-  f009f0: 00 64                    DC.W     $0064
-  f009f2: 0c 5c                    DC.W     $0c5c
-  f009f4: 6b 24                    DC.W     $6b24
-  f009f6: 2f 09                    DC.W     $2f09
-  f009f8: 22 78                    DC.W     $2278
-  f009fa: 0c 3a                    DC.W     $0c3a
-  f009fc: 33 7c                    DC.W     $337c
-  f009fe: 00 15                    DC.W     $0015
-  f00a00: 00 04                    DC.W     $0004
-  f00a02: 33 7c                    DC.W     $337c
-  f00a04: 00 35                    DC.W     $0035
-  f00a06: 00 04                    DC.W     $0004
-  f00a08: 33 7c                    DC.W     $337c
-  f00a0a: 00 2e                    DC.W     $002e
-  f00a0c: 00 04                    DC.W     $0004
-  f00a0e: 33 7c                    DC.W     $337c
-  f00a10: 00 3e                    DC.W     $003e
-  f00a12: 00 04                    DC.W     $0004
-  f00a14: 22 5f                    DC.W     $225f
-  f00a16: 42 78                    DC.W     $4278
-  f00a18: 0c 5c                    DC.W     $0c5c
-  f00a1a: 4e 73                    DC.W     $4e73
-  f00a1c: 4a b8                    DC.W     $4ab8
-  f00a1e: 0c 78                    DC.W     $0c78
-  f00a20: 66 10                    DC.W     $6610
-  f00a22: 00 7c                    DC.W     $007c
-  f00a24: 70 00                    DC.W     $7000
-  f00a26: 48 e7                    DC.W     $48e7
-  f00a28: ff fe                    DC.W     $fffe
-  f00a2a: 21 cf                    DC.W     $21cf
-  f00a2c: 0c 78                    DC.W     $0c78
-  f00a2e: 46 ef                    DC.W     $46ef
-  f00a30: 00 3c                    DC.W     $003c
-  f00a32: 2e 78                    DC.W     $2e78
-  f00a34: 0c 78                    DC.W     $0c78
-  f00a36: 00 7c                    DC.W     $007c
-  f00a38: 07 00                    DC.W     $0700
-  f00a3a: 10 39                    DC.W     $1039
-  f00a3c: 00 f7                    DC.W     $00f7
-  f00a3e: 00 30                    DC.W     $0030
-  f00a40: 00 00                    DC.W     $0000
-  f00a42: 00 20                    DC.W     $0020
-  f00a44: 13 c0                    DC.W     $13c0
-  f00a46: 00 f7                    DC.W     $00f7
-  f00a48: 00 30                    DC.W     $0030
-  f00a4a: 2e 78                    DC.W     $2e78
-  f00a4c: 0c 78                    DC.W     $0c78
-  f00a4e: 4c df                    DC.W     $4cdf
-  f00a50: ff ff                    DC.W     $ffff
-  f00a52: 42 b8                    DC.W     $42b8
-  f00a54: 0c 78                    DC.W     $0c78
-  f00a56: 4e 73                    DC.W     $4e73
-  f00a58: 48 f8                    DC.W     $48f8
-  f00a5a: ff ff                    DC.W     $ffff
-  f00a5c: 08 08                    DC.W     $0808
-  f00a5e: 31 d7                    DC.W     $31d7
-  f00a60: 08 06                    DC.W     $0806
-  f00a62: 21 ef                    DC.W     $21ef
-  f00a64: 00 02                    DC.W     $0002
-  f00a66: 08 00                    DC.W     $0800
-  f00a68: 00 7c                    DC.W     $007c
-  f00a6a: 07 00                    DC.W     $0700
-  f00a6c: 4c f8                    DC.W     $4cf8
-  f00a6e: ff ff                    DC.W     $ffff
-  f00a70: 08 08                    DC.W     $0808
-  f00a72: 4e 73                    DC.W     $4e73
+  f009dc: 2f 08                    move.l   a0, -(a7)
+  f009de: 20 78 0e 48              movea.l  $e48.w, a0
+  f009e2: 02 50 ff df              andi.w   #$ffdf, (a0)
+  f009e6: 20 5f                    movea.l  (a7)+, a0
+  f009e8: 4e 73                    rte      
+  f009ea: 52 78 0c 5c              addq.w   #$1, $c5c.w
+  f009ee: 0c 78 00 64 0c 5c        cmpi.w   #$64, $c5c.w
+  f009f4: 6b 24                    bmi.b    $f00a1a
+  f009f6: 2f 09                    move.l   a1, -(a7)
+  f009f8: 22 78 0c 3a              movea.l  $c3a.w, a1
+  f009fc: 33 7c 00 15 00 04        move.w   #$15, $4(a1)
+  f00a02: 33 7c 00 35 00 04        move.w   #$35, $4(a1)
+  f00a08: 33 7c 00 2e 00 04        move.w   #$2e, $4(a1)
+  f00a0e: 33 7c 00 3e 00 04        move.w   #$3e, $4(a1)
+  f00a14: 22 5f                    movea.l  (a7)+, a1
+  f00a16: 42 78 0c 5c              clr.w    $c5c.w
+
+loc_F00A1A:
+  f00a1a: 4e 73                    rte      
+  f00a1c: 4a b8 0c 78              tst.l    $c78.w
+  f00a20: 66 10                    bne.b    $f00a32
+  f00a22: 00 7c 70 00              ori.w    #$7000, sr
+  f00a26: 48 e7 ff fe              movem.l  d0-d7/a0-a6, -(a7)
+  f00a2a: 21 cf 0c 78              move.l   a7, $c78.w
+  f00a2e: 46 ef 00 3c              move.w   $3c(a7), sr
+
+loc_F00A32:
+  f00a32: 2e 78 0c 78              movea.l  $c78.w, a7
+  f00a36: 00 7c 07 00              ori.w    #$700, sr
+  f00a3a: 10 39 00 f7 00 30        move.b   $f70030.l, d0
+  f00a40: 00 00 00 20              ori.b    #$20, d0
+  f00a44: 13 c0 00 f7 00 30        move.b   d0, $f70030.l
+  f00a4a: 2e 78 0c 78              movea.l  $c78.w, a7
+  f00a4e: 4c df ff ff              movem.l  (a7)+, d0-d7/a0-a7
+  f00a52: 42 b8 0c 78              clr.l    $c78.w
+  f00a56: 4e 73                    rte      
+  f00a58: 48 f8 ff ff 08 08        movem.l  d0-d7/a0-a7, $808.w
+  f00a5e: 31 d7 08 06              move.w   (a7), $806.w
+  f00a62: 21 ef 00 02 08 00        move.l   $2(a7), $800.w
+  f00a68: 00 7c 07 00              ori.w    #$700, sr
+  f00a6c: 4c f8 ff ff 08 08        movem.l  $808.w, d0-d7/a0-a7
+  f00a72: 4e 73                    rte      
   f00a74: 61 20                    DC.W     $6120
 
 loc_F00A76:
@@ -1307,8 +1261,8 @@ loc_F00B74:
   f00ba2: 20 6e 00 36              movea.l  $36(a6), a0
   f00ba6: 61 00 0b b4              bsr.w    $f0175c
   f00baa: 60 04                    bra.b    $f00bb0
-  f00bac: 4e 71                    DC.W     $4e71
-  f00bae: 60 3c                    DC.W     $603c
+  f00bac: 4e 71                    nop      
+  f00bae: 60 3c                    bra.b    $f00bec
 
 loc_F00BB0:
   f00bb0: 22 46                    movea.l  d6, a1
@@ -1322,8 +1276,8 @@ loc_F00BB0:
   f00bc4: 20 6e 00 36              movea.l  $36(a6), a0
   f00bc8: 61 00 0b 92              bsr.w    $f0175c
   f00bcc: 60 04                    bra.b    $f00bd2
-  f00bce: 4e 71                    DC.W     $4e71
-  f00bd0: 60 1a                    DC.W     $601a
+  f00bce: 4e 71                    nop      
+  f00bd0: 60 1a                    bra.b    $f00bec
 
 loc_F00BD2:
   f00bd2: 28 46                    movea.l  d6, a4
@@ -1418,8 +1372,8 @@ loc_F00CA6:
   f00cac: 20 6e 00 36              movea.l  $36(a6), a0
   f00cb0: 61 00 0a aa              bsr.w    $f0175c
   f00cb4: 60 04                    bra.b    $f00cba
-  f00cb6: 4e 71                    DC.W     $4e71
-  f00cb8: 60 26                    DC.W     $6026
+  f00cb6: 4e 71                    nop      
+  f00cb8: 60 26                    bra.b    $f00ce0
 
 loc_F00CBA:
   f00cba: 7e 1d                    moveq    #$1d, d7
@@ -1503,18 +1457,11 @@ loc_F00D58:
   f00d78: 41 ee 01 40              lea.l    $140(a6), a0
   f00d7c: 61 00 08 3e              bsr.w    $f015bc
   f00d80: 60 18                    bra.b    $f00d9a
-  f00d82: 08 ae                    DC.W     $08ae
-  f00d84: 00 06                    DC.W     $0006
-  f00d86: 00 29                    DC.W     $0029
-  f00d88: 4c ee                    DC.W     $4cee
-  f00d8a: 7f ff                    DC.W     $7fff
-  f00d8c: 00 74                    DC.W     $0074
-  f00d8e: 08 ae                    DC.W     $08ae
-  f00d90: 00 06                    DC.W     $0006
-  f00d92: 00 2d                    DC.W     $002d
-  f00d94: 1d 40                    DC.W     $1d40
-  f00d96: 00 26                    DC.W     $0026
-  f00d98: 4e 73                    DC.W     $4e73
+  f00d82: 08 ae 00 06 00 29        bclr.b   #$6, $29(a6)
+  f00d88: 4c ee 7f ff 00 74        movem.l  $74(a6), d0-d7/a0-a6
+  f00d8e: 08 ae 00 06 00 2d        bclr.b   #$6, $2d(a6)
+  f00d94: 1d 40 00 26              move.b   d0, $26(a6)
+  f00d98: 4e 73                    rte      
 
 loc_F00D9A:
   f00d9a: 08 ee 00 0a 00 2c        bset.b   #$a, $2c(a6)
@@ -1598,12 +1545,9 @@ loc_F00E60:
   f00e72: 41 d5                    lea.l    (a5), a0
   f00e74: 61 00 07 62              bsr.w    $f015d8
   f00e78: 60 32                    bra.b    $f00eac
-  f00e7a: 4c df                    DC.W     $4cdf
-  f00e7c: 14 02                    DC.W     $1402
-  f00e7e: 20 72                    DC.W     $2072
-  f00e80: 10 08                    DC.W     $1008
-  f00e82: 61 00                    DC.W     $6100
-  f00e84: f9 04                    DC.W     $f904
+  f00e7a: 4c df 14 02              movem.l  (a7)+, d1/a2/a4
+  f00e7e: 20 72 10 08              movea.l  $8(a2, d1.w), a0
+  f00e82: 61 00 f9 04              bsr.w    $f00788
 
 loc_F00E86:
   f00e86: 1e 2c 00 73              move.b   $73(a4), d7
@@ -1706,10 +1650,10 @@ loc_F00F84:
   f00f8e: 61 00 f8 6c              bsr.w    $f007fc
   f00f92: 60 00 f6 f8              bra.w    $f0068c
 
-TRAP0_dir_1C_bsr:
+TRAP0_T0RDTIM_bsr:
   f00f96: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_1C:
+TRAP0_T0RDTIM:
   f00f98: 2f 08                    move.l   a0, -(a7)
   f00f9a: 20 78 0c 4e              movea.l  $c4e.w, a0
 
@@ -1824,10 +1768,9 @@ loc_F010A2:
   f010b6: 20 6d 00 36              movea.l  $36(a5), a0
   f010ba: 61 00 06 a0              bsr.w    $f0175c
   f010be: 60 08                    bra.b    $f010c8
-  f010c0: 4e 71                    DC.W     $4e71
-  f010c2: 4c df                    DC.W     $4cdf
-  f010c4: 00 38                    DC.W     $0038
-  f010c6: 60 16                    DC.W     $6016
+  f010c0: 4e 71                    nop      
+  f010c2: 4c df 00 38              movem.l  (a7)+, d3-d5
+  f010c6: 60 16                    bra.b    $f010de
 
 loc_F010C8:
   f010c8: 4c df 00 70              movem.l  (a7)+, d4-d6
@@ -1918,10 +1861,10 @@ loc_F0115C:
 loc_F01194:
   f01194: 4e 73                    rte      
 
-TRAP0_dir_22_bsr:
+TRAP0_T0RQPA_bsr:
   f01196: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_22:
+TRAP0_T0RQPA:
   f01198: 48 e7 10 70              movem.l  d3/a1-a3, -(a7)
   f0119c: 20 09                    move.l   a1, d0
   f0119e: 22 78 0c 2c              movea.l  $c2c.w, a1
@@ -2264,10 +2207,10 @@ loc_F01480:
 TRAP0_dir_1B:
   f01490: 61 00 ec f4              bsr.w    $f00186
 
-TRAP0_dir_05_bsr:
+TRAP0_T0PGFR_bsr:
   f01494: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_05:
+TRAP0_T0PGFR:
   f01496: 48 e7 00 0c              movem.l  a4-a5, -(a7)
   f0149a: 24 01                    move.l   d1, d2
   f0149c: 6e 0a                    bgt.b    $f014a8
@@ -2406,10 +2349,10 @@ loc_F015B6:
   f015b6: 54 af 00 02              addq.l   #$2, $2(a7)
   f015ba: 60 ec                    bra.b    $f015a8
 
-TRAP0_dir_0B_bsr:
+TRAP0_T0QEVNTN_bsr:
   f015bc: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_0B:
+TRAP0_T0QEVNTN:
   f015be: 2a 49                    movea.l  a1, a5
   f015c0: 22 48                    movea.l  a0, a1
   f015c2: 20 51                    movea.l  (a1), a0
@@ -2425,10 +2368,10 @@ loc_F015D4:
   f015d4: 22 4d                    movea.l  a5, a1
   f015d6: 60 02                    bra.b    $f015da
 
-TRAP0_dir_17_bsr:
+TRAP0_T0QEVNTT_bsr:
   f015d8: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_17:
+TRAP0_T0QEVNTT:
   f015da: 0c 90 21 54 43 42        cmpi.l   #$21544342, (a0)
   f015e0: 66 ec                    bne.b    $f015ce
   f015e2: 2a 48                    movea.l  a0, a5
@@ -2462,7 +2405,7 @@ loc_F01618:
   f01624: 02 81 00 00 00 ff        andi.l   #$ff, d1
   f0162a: 61 00 11 38              bsr.w    $f02764
   f0162e: 60 02                    bra.b    $f01632
-  f01630: 60 28                    DC.W     $6028
+  f01630: 60 28                    bra.b    $f0165a
 
 loc_F01632:
   f01632: 48 e7 3c 00              movem.l  d2-d5, -(a7)
@@ -2552,10 +2495,10 @@ loc_F016D8:
   f016f8: 4c df 38 03              movem.l  (a7)+, d0-d1/a3-a5
   f016fc: 4e 75                    rts      
 
-TRAP0_dir_0D_bsr:
+TRAP0_T0GTXTCB_bsr:
   f016fe: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_0D:
+TRAP0_T0GTXTCB:
   f01700: 20 08                    move.l   a0, d0
   f01702: 67 06                    beq.b    $f0170a
   f01704: 4a 81                    tst.l    d1
@@ -2612,13 +2555,13 @@ loc_F01758:
   f01758: 40 e7                    move.w   sr, -(a7)
   f0175a: 60 06                    bra.b    $f01762
 
-TRAP0_dir_08_bsr:
+TRAP0_T0LOGPHY_bsr:
   f0175c: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_08:
+TRAP0_T0LOGPHY:
   f0175e: 08 86 00 00              bclr.b   #$0, d6
 
-TRAP0_dir_1A:
+TRAP0_T0LOGPHO:
   f01762: 02 86 00 ff ff ff        andi.l   #$ffffff, d6
   f01768: 42 80                    clr.l    d0
   f0176a: 26 06                    move.l   d6, d3
@@ -2667,10 +2610,10 @@ loc_F017BC:
   f017c0: 2c 03                    move.l   d3, d6
   f017c2: 4e 73                    rte      
 
-TRAP0_dir_07_bsr:
+TRAP0_T0FNDSEG_bsr:
   f017c4: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_07:
+TRAP0_T0FNDSEG:
   f017c6: 42 80                    clr.l    d0
   f017c8: 2a 08                    move.l   a0, d5
   f017ca: 67 20                    beq.b    $f017ec
@@ -2699,10 +2642,10 @@ loc_F017EC:
 loc_F017F2:
   f017f2: 4e 73                    rte      
 
-TRAP0_dir_09_bsr:
+TRAP0_T0FNDGSG_bsr:
   f017f4: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_09:
+TRAP0_T0FNDGSG:
   f017f6: 42 83                    clr.l    d3
   f017f8: 42 80                    clr.l    d0
   f017fa: 22 78 0c 20              movea.l  $c20.w, a1
@@ -2768,10 +2711,10 @@ loc_F01872:
   f01872: 20 43                    movea.l  d3, a0
   f01874: 4e 73                    rte      
 
-TRAP0_dir_0C_bsr:
+TRAP0_T0FNDSEM_bsr:
   f01876: 40 e7                    move.w   sr, -(a7)
 
-TRAP0_dir_0C:
+TRAP0_T0FNDSEM:
   f01878: 42 82                    clr.l    d2
   f0187a: 42 83                    clr.l    d3
   f0187c: 42 81                    clr.l    d1
@@ -2843,10 +2786,10 @@ TRAP1_GTSEG:
   f01906: 66 1c                    bne.b    $f01924
   f01908: 06 6e 00 0a 01 02        addi.w   #$a, $102(a6)
   f0190e: 4e 73                    rte      
-  f01910: 5a 6e                    DC.W     $5a6e
-  f01912: 01 02                    DC.W     $0102
-  f01914: 60 00                    DC.W     $6000
-  f01916: 01 72                    DC.W     $0172
+
+loc_F01910:
+  f01910: 5a 6e 01 02              addq.w   #$5, $102(a6)
+  f01914: 60 00 01 72              bra.w    $f01a88
 
 loc_F01918:
   f01918: 5c 6e 01 02              addq.w   #$6, $102(a6)
@@ -2860,182 +2803,151 @@ loc_F01924:
   f01928: 20 6d 00 36              movea.l  $36(a5), a0
   f0192c: 61 00 fe 96              bsr.w    $f017c4
   f01930: 60 e6                    bra.b    $f01918
-  f01932: 4a 85                    DC.W     $4a85
-  f01934: 67 da                    DC.W     $67da
-  f01936: 30 2c                    DC.W     $302c
-  f01938: 00 0a                    DC.W     $000a
-  f0193a: 32 2c                    DC.W     $322c
-  f0193c: 00 08                    DC.W     $0008
-  f0193e: 02 41                    DC.W     $0241
-  f01940: 27 ff                    DC.W     $27ff
-  f01942: 08 01                    DC.W     $0801
-  f01944: 00 08                    DC.W     $0008
-  f01946: 67 04                    DC.W     $6704
-  f01948: 08 81                    DC.W     $0881
-  f0194a: 00 07                    DC.W     $0007
-  f0194c: 08 00                    DC.W     $0800
-  f0194e: 00 0a                    DC.W     $000a
-  f01950: 66 0a                    DC.W     $660a
-  f01952: 08 00                    DC.W     $0800
-  f01954: 00 0b                    DC.W     $000b
-  f01956: 67 10                    DC.W     $6710
-  f01958: 08 c1                    DC.W     $08c1
-  f0195a: 00 0f                    DC.W     $000f
-  f0195c: 08 c1                    DC.W     $08c1
-  f0195e: 00 08                    DC.W     $0008
-  f01960: 08 c1                    DC.W     $08c1
-  f01962: 00 07                    DC.W     $0007
-  f01964: 08 81                    DC.W     $0881
-  f01966: 00 0d                    DC.W     $000d
-  f01968: 42 87                    DC.W     $4287
-  f0196a: 2c 2c                    DC.W     $2c2c
-  f0196c: 00 10                    DC.W     $0010
-  f0196e: 08 01                    DC.W     $0801
-  f01970: 00 08                    DC.W     $0008
-  f01972: 67 04                    DC.W     $6704
-  f01974: 08 81                    DC.W     $0881
-  f01976: 00 0d                    DC.W     $000d
-  f01978: 08 01                    DC.W     $0801
-  f0197a: 00 0d                    DC.W     $000d
-  f0197c: 67 02                    DC.W     $6702
-  f0197e: 42 86                    DC.W     $4286
-  f01980: 1e 06                    DC.W     $1e06
-  f01982: de ac                    DC.W     $deac
-  f01984: 00 14                    DC.W     $0014
-  f01986: 06 87                    DC.W     $0687
-  f01988: 00 00                    DC.W     $0000
-  f0198a: 00 ff                    DC.W     $00ff
-  f0198c: e0 8f                    DC.W     $e08f
-  f0198e: 02 86                    DC.W     $0286
-  f01990: 00 ff                    DC.W     $00ff
-  f01992: ff 00                    DC.W     $ff00
-  f01994: 22 46                    DC.W     $2246
-  f01996: 08 01                    DC.W     $0801
-  f01998: 00 08                    DC.W     $0008
-  f0199a: 66 1e                    DC.W     $661e
-  f0199c: 08 81                    DC.W     $0881
-  f0199e: 00 07                    DC.W     $0007
-  f019a0: 66 18                    DC.W     $6618
-  f019a2: 41 f8                    DC.W     $41f8
-  f019a4: 0c 74                    DC.W     $0c74
-  f019a6: 08 00                    DC.W     $0800
-  f019a8: 00 0e                    DC.W     $000e
-  f019aa: 66 02                    DC.W     $6602
-  f019ac: 52 88                    DC.W     $5288
-  f019ae: 08 2d                    DC.W     $082d
-  f019b0: 00 0f                    DC.W     $000f
-  f019b2: 00 28                    DC.W     $0028
-  f019b4: 66 02                    DC.W     $6602
-  f019b6: 54 88                    DC.W     $5488
-  f019b8: 12 10                    DC.W     $1210
-  f019ba: 48 47                    DC.W     $4847
-  f019bc: 3e 01                    DC.W     $3e01
-  f019be: 02 47                    DC.W     $0247
-  f019c0: 87 ff                    DC.W     $87ff
-  f019c2: 3f 01                    DC.W     $3f01
-  f019c4: 48 47                    DC.W     $4847
-  f019c6: 20 47                    DC.W     $2047
-  f019c8: 61 00                    DC.W     $6100
-  f019ca: f8 74                    DC.W     $f874
-  f019cc: 60 2c                    DC.W     $602c
-  f019ce: 53 80                    DC.W     $5380
-  f019d0: 67 08                    DC.W     $6708
-  f019d2: 5e 6e                    DC.W     $5e6e
-  f019d4: 01 02                    DC.W     $0102
-  f019d6: 60 00                    DC.W     $6000
-  f019d8: 00 ac                    DC.W     $00ac
-  f019da: 50 6e                    DC.W     $506e
-  f019dc: 01 02                    DC.W     $0102
-  f019de: 60 f6                    DC.W     $60f6
-  f019e0: 06 6e                    DC.W     $066e
-  f019e2: 00 0b                    DC.W     $000b
-  f019e4: 01 02                    DC.W     $0102
-  f019e6: 08 07                    DC.W     $0807
-  f019e8: 00 07                    DC.W     $0007
-  f019ea: 66 ea                    DC.W     $66ea
-  f019ec: 22 07                    DC.W     $2207
-  f019ee: 41 d3                    DC.W     $41d3
-  f019f0: 61 00                    DC.W     $6100
-  f019f2: fa a2                    DC.W     $faa2
-  f019f4: 60 e0                    DC.W     $60e0
-  f019f6: 61 00                    DC.W     $6100
-  f019f8: e7 8e                    DC.W     $e78e
-  f019fa: 26 48                    DC.W     $2648
-  f019fc: 2e 02                    DC.W     $2e02
-  f019fe: 2a 02                    DC.W     $2a02
-  f01a00: e1 8d                    DC.W     $e18d
-  f01a02: 08 17                    DC.W     $0817
-  f01a04: 00 0d                    DC.W     $000d
-  f01a06: 67 02                    DC.W     $6702
-  f01a08: 2c 0b                    DC.W     $2c0b
-  f01a0a: 22 46                    DC.W     $2246
-  f01a0c: 20 6d                    DC.W     $206d
-  f01a0e: 00 36                    DC.W     $0036
-  f01a10: 61 00                    DC.W     $6100
-  f01a12: fd 4a                    DC.W     $fd4a
-  f01a14: 60 ca                    DC.W     $60ca
-  f01a16: 60 c8                    DC.W     $60c8
-  f01a18: 4a 30                    DC.W     $4a30
-  f01a1a: 50 07                    DC.W     $5007
-  f01a1c: 66 c2                    DC.W     $66c2
-  f01a1e: 21 ac                    DC.W     $21ac
-  f01a20: 00 0c                    DC.W     $000c
-  f01a22: 50 20                    DC.W     $5020
-  f01a24: 30 2c                    DC.W     $302c
-  f01a26: 00 0a                    DC.W     $000a
-  f01a28: 02 40                    DC.W     $0240
-  f01a2a: 4f ff                    DC.W     $4fff
-  f01a2c: 08 00                    DC.W     $0800
-  f01a2e: 00 0a                    DC.W     $000a
-  f01a30: 67 04                    DC.W     $6704
-  f01a32: 08 c0                    DC.W     $08c0
-  f01a34: 00 0e                    DC.W     $000e
-  f01a36: 31 80                    DC.W     $3180
-  f01a38: 50 24                    DC.W     $5024
-  f01a3a: 31 bc                    DC.W     $31bc
-  f01a3c: 00 01                    DC.W     $0001
-  f01a3e: 50 06                    DC.W     $5006
-  f01a40: 08 00                    DC.W     $0800
-  f01a42: 00 0e                    DC.W     $000e
-  f01a44: 67 06                    DC.W     $6706
-  f01a46: 31 bc                    DC.W     $31bc
-  f01a48: 00 03                    DC.W     $0003
-  f01a4a: 50 06                    DC.W     $5006
-  f01a4c: 20 09                    DC.W     $2009
-  f01a4e: e0 88                    DC.W     $e088
-  f01a50: 31 80                    DC.W     $3180
-  f01a52: 50 00                    DC.W     $5000
-  f01a54: d0 87                    DC.W     $d087
-  f01a56: 53 80                    DC.W     $5380
-  f01a58: 31 80                    DC.W     $3180
-  f01a5a: 50 02                    DC.W     $5002
-  f01a5c: 20 0b                    DC.W     $200b
-  f01a5e: 90 89                    DC.W     $9089
-  f01a60: e0 88                    DC.W     $e088
-  f01a62: 31 80                    DC.W     $3180
-  f01a64: 50 04                    DC.W     $5004
-  f01a66: 11 81                    DC.W     $1181
-  f01a68: 50 26                    DC.W     $5026
-  f01a6a: 08 f0                    DC.W     $08f0
-  f01a6c: 00 0f                    DC.W     $000f
-  f01a6e: 50 24                    DC.W     $5024
-  f01a70: 52 28                    DC.W     $5228
-  f01a72: 00 05                    DC.W     $0005
-  f01a74: 2d 4b                    DC.W     $2d4b
-  f01a76: 01 20                    DC.W     $0120
-  f01a78: 08 17                    DC.W     $0817
-  f01a7a: 00 09                    DC.W     $0009
-  f01a7c: 67 06                    DC.W     $6706
-  f01a7e: e1 8f                    DC.W     $e18f
-  f01a80: 2d 47                    DC.W     $2d47
-  f01a82: 01 24                    DC.W     $0124
-  f01a84: 4f ef                    DC.W     $4fef
-  f01a86: 00 02                    DC.W     $0002
+  f01932: 4a 85                    tst.l    d5
+  f01934: 67 da                    beq.b    $f01910
+  f01936: 30 2c 00 0a              move.w   $a(a4), d0
+  f0193a: 32 2c 00 08              move.w   $8(a4), d1
+  f0193e: 02 41 27 ff              andi.w   #$27ff, d1
+  f01942: 08 01 00 08              btst.b   #$8, d1
+  f01946: 67 04                    beq.b    $f0194c
+  f01948: 08 81 00 07              bclr.b   #$7, d1
+
+loc_F0194C:
+  f0194c: 08 00 00 0a              btst.b   #$a, d0
+  f01950: 66 0a                    bne.b    $f0195c
+  f01952: 08 00 00 0b              btst.b   #$b, d0
+  f01956: 67 10                    beq.b    $f01968
+  f01958: 08 c1 00 0f              bset.b   #$f, d1
+
+loc_F0195C:
+  f0195c: 08 c1 00 08              bset.b   #$8, d1
+  f01960: 08 c1 00 07              bset.b   #$7, d1
+  f01964: 08 81 00 0d              bclr.b   #$d, d1
+
+loc_F01968:
+  f01968: 42 87                    clr.l    d7
+  f0196a: 2c 2c 00 10              move.l   $10(a4), d6
+  f0196e: 08 01 00 08              btst.b   #$8, d1
+  f01972: 67 04                    beq.b    $f01978
+  f01974: 08 81 00 0d              bclr.b   #$d, d1
+
+loc_F01978:
+  f01978: 08 01 00 0d              btst.b   #$d, d1
+  f0197c: 67 02                    beq.b    $f01980
+  f0197e: 42 86                    clr.l    d6
+
+loc_F01980:
+  f01980: 1e 06                    move.b   d6, d7
+  f01982: de ac 00 14              add.l    $14(a4), d7
+  f01986: 06 87 00 00 00 ff        addi.l   #$ff, d7
+  f0198c: e0 8f                    lsr.l    #$8, d7
+  f0198e: 02 86 00 ff ff 00        andi.l   #$ffff00, d6
+  f01994: 22 46                    movea.l  d6, a1
+  f01996: 08 01 00 08              btst.b   #$8, d1
+  f0199a: 66 1e                    bne.b    $f019ba
+  f0199c: 08 81 00 07              bclr.b   #$7, d1
+  f019a0: 66 18                    bne.b    $f019ba
+  f019a2: 41 f8 0c 74              lea.l    $c74.w, a0
+  f019a6: 08 00 00 0e              btst.b   #$e, d0
+  f019aa: 66 02                    bne.b    $f019ae
+  f019ac: 52 88                    addq.l   #$1, a0
+
+loc_F019AE:
+  f019ae: 08 2d 00 0f 00 28        btst.b   #$f, $28(a5)
+  f019b4: 66 02                    bne.b    $f019b8
+  f019b6: 54 88                    addq.l   #$2, a0
+
+loc_F019B8:
+  f019b8: 12 10                    move.b   (a0), d1
+
+loc_F019BA:
+  f019ba: 48 47                    swap     d7
+  f019bc: 3e 01                    move.w   d1, d7
+  f019be: 02 47 87 ff              andi.w   #$87ff, d7
+  f019c2: 3f 01                    move.w   d1, -(a7)
+  f019c4: 48 47                    swap     d7
+  f019c6: 20 47                    movea.l  d7, a0
+  f019c8: 61 00 f8 74              bsr.w    $f0123e
+  f019cc: 60 2c                    bra.b    $f019fa
+  f019ce: 53 80                    subq.l   #$1, d0
+  f019d0: 67 08                    beq.b    $f019da
+  f019d2: 5e 6e 01 02              addq.w   #$7, $102(a6)
+
+loc_F019D6:
+  f019d6: 60 00 00 ac              bra.w    $f01a84
+
+loc_F019DA:
+  f019da: 50 6e 01 02              addq.w   #$8, $102(a6)
+  f019de: 60 f6                    bra.b    $f019d6
+
+loc_F019E0:
+  f019e0: 06 6e 00 0b 01 02        addi.w   #$b, $102(a6)
+  f019e6: 08 07 00 07              btst.b   #$7, d7
+  f019ea: 66 ea                    bne.b    $f019d6
+  f019ec: 22 07                    move.l   d7, d1
+  f019ee: 41 d3                    lea.l    (a3), a0
+  f019f0: 61 00 fa a2              bsr.w    $f01494
+  f019f4: 60 e0                    bra.b    $f019d6
+  f019f6: 61 00 e7 8e              bsr.w    $f00186
+
+loc_F019FA:
+  f019fa: 26 48                    movea.l  a0, a3
+  f019fc: 2e 02                    move.l   d2, d7
+  f019fe: 2a 02                    move.l   d2, d5
+  f01a00: e1 8d                    lsl.l    #$8, d5
+  f01a02: 08 17 00 0d              btst.b   #$d, (a7)
+  f01a06: 67 02                    beq.b    $f01a0a
+  f01a08: 2c 0b                    move.l   a3, d6
+
+loc_F01A0A:
+  f01a0a: 22 46                    movea.l  d6, a1
+  f01a0c: 20 6d 00 36              movea.l  $36(a5), a0
+  f01a10: 61 00 fd 4a              bsr.w    $f0175c
+  f01a14: 60 ca                    bra.b    $f019e0
+  f01a16: 60 c8                    bra.b    $f019e0
+  f01a18: 4a 30 50 07              tst.b    $7(a0, d5.w)
+  f01a1c: 66 c2                    bne.b    $f019e0
+  f01a1e: 21 ac 00 0c 50 20        move.l   $c(a4), $20(a0, d5.w)
+  f01a24: 30 2c 00 0a              move.w   $a(a4), d0
+  f01a28: 02 40 4f ff              andi.w   #$4fff, d0
+  f01a2c: 08 00 00 0a              btst.b   #$a, d0
+  f01a30: 67 04                    beq.b    $f01a36
+  f01a32: 08 c0 00 0e              bset.b   #$e, d0
+
+loc_F01A36:
+  f01a36: 31 80 50 24              move.w   d0, $24(a0, d5.w)
+  f01a3a: 31 bc 00 01 50 06        move.w   #$1, $6(a0, d5.w)
+  f01a40: 08 00 00 0e              btst.b   #$e, d0
+  f01a44: 67 06                    beq.b    $f01a4c
+  f01a46: 31 bc 00 03 50 06        move.w   #$3, $6(a0, d5.w)
+
+loc_F01A4C:
+  f01a4c: 20 09                    move.l   a1, d0
+  f01a4e: e0 88                    lsr.l    #$8, d0
+  f01a50: 31 80 50 00              move.w   d0, (a0, d5.w)
+  f01a54: d0 87                    add.l    d7, d0
+  f01a56: 53 80                    subq.l   #$1, d0
+  f01a58: 31 80 50 02              move.w   d0, $2(a0, d5.w)
+  f01a5c: 20 0b                    move.l   a3, d0
+  f01a5e: 90 89                    sub.l    a1, d0
+  f01a60: e0 88                    lsr.l    #$8, d0
+  f01a62: 31 80 50 04              move.w   d0, $4(a0, d5.w)
+  f01a66: 11 81 50 26              move.b   d1, $26(a0, d5.w)
+  f01a6a: 08 f0 00 0f 50 24        bset.b   #$f, $24(a0, d5.w)
+  f01a70: 52 28 00 05              addq.b   #$1, $5(a0)
+  f01a74: 2d 4b 01 20              move.l   a3, $120(a6)
+  f01a78: 08 17 00 09              btst.b   #$9, (a7)
+  f01a7c: 67 06                    beq.b    $f01a84
+  f01a7e: e1 8f                    lsl.l    #$8, d7
+  f01a80: 2d 47 01 24              move.l   d7, $124(a6)
+
+loc_F01A84:
+  f01a84: 4f ef 00 02              lea.l    $2(a7), a7
 
 loc_F01A88:
   f01a88: 4e 73                    rte      
 
-TRAP1_dir_02:
+TRAP1_DESEG:
   f01a8a: 2e 2c 00 0c              move.l   $c(a4), d7
   f01a8e: 38 2c 00 08              move.w   $8(a4), d4
   f01a92: 28 4d                    movea.l  a5, a4
@@ -3054,10 +2966,8 @@ loc_F01AAC:
   f01ab0: 41 d5                    lea.l    (a5), a0
   f01ab2: 61 00 fd 10              bsr.w    $f017c4
   f01ab6: 60 08                    bra.b    $f01ac0
-  f01ab8: 5e 6e                    DC.W     $5e6e
-  f01aba: 01 02                    DC.W     $0102
-  f01abc: 60 00                    DC.W     $6000
-  f01abe: 00 b0                    DC.W     $00b0
+  f01ab8: 5e 6e 01 02              addq.w   #$7, $102(a6)
+  f01abc: 60 00 00 b0              bra.w    $f01b6e
 
 loc_F01AC0:
   f01ac0: 4a ac 00 40              tst.l    $40(a4)
@@ -3080,8 +2990,7 @@ loc_F01AE2:
   f01af4: 20 75 50 20              movea.l  $20(a5, d5.w), a0
   f01af8: 61 00 fc fa              bsr.w    $f017f4
   f01afc: 60 04                    bra.b    $f01b02
-  f01afe: 61 00                    DC.W     $6100
-  f01b00: e6 86                    DC.W     $e686
+  f01afe: 61 00 e6 86              bsr.w    $f00186
 
 loc_F01B02:
   f01b02: 3c 28 00 10              move.w   $10(a0), d6
@@ -3115,8 +3024,7 @@ loc_F01B2C:
   f01b4e: 20 40                    movea.l  d0, a0
   f01b50: 61 00 f9 42              bsr.w    $f01494
   f01b54: 60 04                    bra.b    $f01b5a
-  f01b56: 61 00                    DC.W     $6100
-  f01b58: e6 2e                    DC.W     $e62e
+  f01b56: 61 00 e6 2e              bsr.w    $f00186
 
 loc_F01B5A:
   f01b5a: 42 b5 50 20              clr.l    $20(a5, d5.w)
@@ -3173,8 +3081,7 @@ loc_F01BAE:
   f01bd4: 20 6d 00 0c              movea.l  $c(a5), a0
   f01bd8: 61 00 f8 ba              bsr.w    $f01494
   f01bdc: 60 04                    bra.b    $f01be2
-  f01bde: 61 00                    DC.W     $6100
-  f01be0: e5 a6                    DC.W     $e5a6
+  f01bde: 61 00 e5 a6              bsr.w    $f00186
 
 loc_F01BE2:
   f01be2: db fc 00 00 00 12        adda.l   #$12, a5
@@ -3194,7 +3101,7 @@ loc_F01BFC:
   f01bfc: 40 e7                    move.w   sr, -(a7)
   f01bfe: 60 00 fe e2              bra.w    $f01ae2
 
-TRAP1_dir_03:
+TRAP1_TRSEG:
   f01c02: 26 4d                    movea.l  a5, a3
   f01c04: 42 b8 0c 62              clr.l    $c62.w
   f01c08: 2a 6e 00 36              movea.l  $36(a6), a5
@@ -3202,8 +3109,7 @@ TRAP1_dir_03:
   f01c10: 41 d5                    lea.l    (a5), a0
   f01c12: 61 00 fb b0              bsr.w    $f017c4
   f01c16: 60 08                    bra.b    $f01c20
-  f01c18: 5e 6e                    DC.W     $5e6e
-  f01c1a: 01 02                    DC.W     $0102
+  f01c18: 5e 6e 01 02              addq.w   #$7, $102(a6)
 
 loc_F01C1C:
   f01c1c: 60 00 01 52              bra.w    $f01d70
@@ -3233,10 +3139,9 @@ loc_F01C46:
   f01c52: 20 6b 00 36              movea.l  $36(a3), a0
   f01c56: 61 00 fb 6c              bsr.w    $f017c4
   f01c5a: 60 0c                    bra.b    $f01c68
-  f01c5c: 4a 85                    DC.W     $4a85
-  f01c5e: 66 0e                    DC.W     $660e
-  f01c60: 5a 6e                    DC.W     $5a6e
-  f01c62: 01 02                    DC.W     $0102
+  f01c5c: 4a 85                    tst.l    d5
+  f01c5e: 66 0e                    bne.b    $f01c6e
+  f01c60: 5a 6e 01 02              addq.w   #$5, $102(a6)
 
 loc_F01C64:
   f01c64: 60 00 01 0a              bra.w    $f01d70
@@ -3244,129 +3149,92 @@ loc_F01C64:
 loc_F01C68:
   f01c68: 5c 6e 01 02              addq.w   #$6, $102(a6)
   f01c6c: 60 f6                    bra.b    $f01c64
-  f01c6e: 2a 09                    DC.W     $2a09
-  f01c70: 2c 2a                    DC.W     $2c2a
-  f01c72: 00 10                    DC.W     $0010
-  f01c74: 08 2a                    DC.W     $082a
-  f01c76: 00 0e                    DC.W     $000e
-  f01c78: 00 08                    DC.W     $0008
-  f01c7a: 66 14                    DC.W     $6614
-  f01c7c: 42 86                    DC.W     $4286
-  f01c7e: 3c 35                    DC.W     $3c35
-  f01c80: 50 00                    DC.W     $5000
-  f01c82: 08 2a                    DC.W     $082a
-  f01c84: 00 0d                    DC.W     $000d
-  f01c86: 00 08                    DC.W     $0008
-  f01c88: 67 04                    DC.W     $6704
-  f01c8a: dc 75                    DC.W     $dc75
-  f01c8c: 50 04                    DC.W     $5004
-  f01c8e: e1 8e                    DC.W     $e18e
-  f01c90: 42 80                    DC.W     $4280
-  f01c92: 30 35                    DC.W     $3035
-  f01c94: 50 02                    DC.W     $5002
-  f01c96: 90 75                    DC.W     $9075
-  f01c98: 50 00                    DC.W     $5000
-  f01c9a: 24 00                    DC.W     $2400
-  f01c9c: 52 40                    DC.W     $5240
-  f01c9e: 2a 00                    DC.W     $2a00
-  f01ca0: e1 8d                    DC.W     $e18d
-  f01ca2: 61 00                    DC.W     $6100
-  f01ca4: fa b8                    DC.W     $fab8
-  f01ca6: 60 0a                    DC.W     $600a
-  f01ca8: 60 08                    DC.W     $6008
-  f01caa: 4a 85                    DC.W     $4a85
-  f01cac: 66 0c                    DC.W     $660c
-  f01cae: 61 00                    DC.W     $6100
-  f01cb0: e4 d6                    DC.W     $e4d6
-  f01cb2: 06 6e                    DC.W     $066e
-  f01cb4: 00 0b                    DC.W     $000b
-  f01cb6: 01 02                    DC.W     $0102
-  f01cb8: 60 aa                    DC.W     $60aa
-  f01cba: 4a 30                    DC.W     $4a30
-  f01cbc: 50 07                    DC.W     $5007
-  f01cbe: 66 f2                    DC.W     $66f2
-  f01cc0: 22 06                    DC.W     $2206
-  f01cc2: 28 09                    DC.W     $2809
-  f01cc4: e0 89                    DC.W     $e089
-  f01cc6: d4 41                    DC.W     $d441
-  f01cc8: 31 81                    DC.W     $3181
-  f01cca: 50 00                    DC.W     $5000
-  f01ccc: 31 82                    DC.W     $3182
-  f01cce: 50 02                    DC.W     $5002
-  f01cd0: 92 75                    DC.W     $9275
-  f01cd2: 40 00                    DC.W     $4000
-  f01cd4: 44 41                    DC.W     $4441
-  f01cd6: d2 75                    DC.W     $d275
-  f01cd8: 40 04                    DC.W     $4004
-  f01cda: 31 81                    DC.W     $3181
-  f01cdc: 50 04                    DC.W     $5004
-  f01cde: 21 b5                    DC.W     $21b5
-  f01ce0: 40 20                    DC.W     $4020
-  f01ce2: 50 20                    DC.W     $5020
-  f01ce4: 31 b5                    DC.W     $31b5
-  f01ce6: 40 26                    DC.W     $4026
-  f01ce8: 50 26                    DC.W     $5026
-  f01cea: 36 35                    DC.W     $3635
-  f01cec: 40 24                    DC.W     $4024
-  f01cee: 08 2a                    DC.W     $082a
-  f01cf0: 00 0f                    DC.W     $000f
-  f01cf2: 00 08                    DC.W     $0008
-  f01cf4: 67 10                    DC.W     $6710
-  f01cf6: 08 83                    DC.W     $0883
-  f01cf8: 00 0e                    DC.W     $000e
-  f01cfa: 08 2a                    DC.W     $082a
-  f01cfc: 00 0e                    DC.W     $000e
-  f01cfe: 00 0a                    DC.W     $000a
-  f01d00: 67 04                    DC.W     $6704
-  f01d02: 08 c3                    DC.W     $08c3
-  f01d04: 00 0e                    DC.W     $000e
-  f01d06: 08 c3                    DC.W     $08c3
-  f01d08: 00 0f                    DC.W     $000f
-  f01d0a: 31 83                    DC.W     $3183
-  f01d0c: 50 24                    DC.W     $5024
-  f01d0e: 31 bc                    DC.W     $31bc
-  f01d10: 00 01                    DC.W     $0001
-  f01d12: 50 06                    DC.W     $5006
-  f01d14: 08 03                    DC.W     $0803
-  f01d16: 00 0e                    DC.W     $000e
-  f01d18: 67 06                    DC.W     $6706
-  f01d1a: 31 bc                    DC.W     $31bc
-  f01d1c: 00 03                    DC.W     $0003
-  f01d1e: 50 06                    DC.W     $5006
-  f01d20: 42 b5                    DC.W     $42b5
-  f01d22: 40 20                    DC.W     $4020
-  f01d24: 42 b5                    DC.W     $42b5
-  f01d26: 40 24                    DC.W     $4024
-  f01d28: 42 b5                    DC.W     $42b5
-  f01d2a: 40 00                    DC.W     $4000
-  f01d2c: 42 b5                    DC.W     $42b5
-  f01d2e: 40 04                    DC.W     $4004
-  f01d30: 53 2d                    DC.W     $532d
-  f01d32: 00 05                    DC.W     $0005
-  f01d34: 52 28                    DC.W     $5228
-  f01d36: 00 05                    DC.W     $0005
-  f01d38: 32 30                    DC.W     $3230
-  f01d3a: 50 00                    DC.W     $5000
-  f01d3c: d2 70                    DC.W     $d270
-  f01d3e: 50 04                    DC.W     $5004
-  f01d40: e1 89                    DC.W     $e189
-  f01d42: 2d 41                    DC.W     $2d41
-  f01d44: 01 20                    DC.W     $0120
-  f01d46: 08 03                    DC.W     $0803
-  f01d48: 00 0d                    DC.W     $000d
-  f01d4a: 67 24                    DC.W     $6724
-  f01d4c: 24 2e                    DC.W     $242e
-  f01d4e: 00 14                    DC.W     $0014
-  f01d50: b4 ab                    DC.W     $b4ab
-  f01d52: 00 14                    DC.W     $0014
-  f01d54: 67 1a                    DC.W     $671a
-  f01d56: 20 70                    DC.W     $2070
-  f01d58: 50 20                    DC.W     $5020
-  f01d5a: 22 03                    DC.W     $2203
-  f01d5c: 28 4b                    DC.W     $284b
-  f01d5e: 61 00                    DC.W     $6100
-  f01d60: fa 94                    DC.W     $fa94
-  f01d62: 60 04                    DC.W     $6004
+
+loc_F01C6E:
+  f01c6e: 2a 09                    move.l   a1, d5
+  f01c70: 2c 2a 00 10              move.l   $10(a2), d6
+  f01c74: 08 2a 00 0e 00 08        btst.b   #$e, $8(a2)
+  f01c7a: 66 14                    bne.b    $f01c90
+  f01c7c: 42 86                    clr.l    d6
+  f01c7e: 3c 35 50 00              move.w   (a5, d5.w), d6
+  f01c82: 08 2a 00 0d 00 08        btst.b   #$d, $8(a2)
+  f01c88: 67 04                    beq.b    $f01c8e
+  f01c8a: dc 75 50 04              add.w    $4(a5, d5.w), d6
+
+loc_F01C8E:
+  f01c8e: e1 8e                    lsl.l    #$8, d6
+
+loc_F01C90:
+  f01c90: 42 80                    clr.l    d0
+  f01c92: 30 35 50 02              move.w   $2(a5, d5.w), d0
+  f01c96: 90 75 50 00              sub.w    (a5, d5.w), d0
+  f01c9a: 24 00                    move.l   d0, d2
+  f01c9c: 52 40                    addq.w   #$1, d0
+  f01c9e: 2a 00                    move.l   d0, d5
+  f01ca0: e1 8d                    lsl.l    #$8, d5
+  f01ca2: 61 00 fa b8              bsr.w    $f0175c
+  f01ca6: 60 0a                    bra.b    $f01cb2
+  f01ca8: 60 08                    bra.b    $f01cb2
+  f01caa: 4a 85                    tst.l    d5
+  f01cac: 66 0c                    bne.b    $f01cba
+  f01cae: 61 00 e4 d6              bsr.w    $f00186
+
+loc_F01CB2:
+  f01cb2: 06 6e 00 0b 01 02        addi.w   #$b, $102(a6)
+  f01cb8: 60 aa                    bra.b    $f01c64
+
+loc_F01CBA:
+  f01cba: 4a 30 50 07              tst.b    $7(a0, d5.w)
+  f01cbe: 66 f2                    bne.b    $f01cb2
+  f01cc0: 22 06                    move.l   d6, d1
+  f01cc2: 28 09                    move.l   a1, d4
+  f01cc4: e0 89                    lsr.l    #$8, d1
+  f01cc6: d4 41                    add.w    d1, d2
+  f01cc8: 31 81 50 00              move.w   d1, (a0, d5.w)
+  f01ccc: 31 82 50 02              move.w   d2, $2(a0, d5.w)
+  f01cd0: 92 75 40 00              sub.w    (a5, d4.w), d1
+  f01cd4: 44 41                    neg.w    d1
+  f01cd6: d2 75 40 04              add.w    $4(a5, d4.w), d1
+  f01cda: 31 81 50 04              move.w   d1, $4(a0, d5.w)
+  f01cde: 21 b5 40 20 50 20        move.l   $20(a5, d4.w), $20(a0, d5.w)
+  f01ce4: 31 b5 40 26 50 26        move.w   $26(a5, d4.w), $26(a0, d5.w)
+  f01cea: 36 35 40 24              move.w   $24(a5, d4.w), d3
+  f01cee: 08 2a 00 0f 00 08        btst.b   #$f, $8(a2)
+  f01cf4: 67 10                    beq.b    $f01d06
+  f01cf6: 08 83 00 0e              bclr.b   #$e, d3
+  f01cfa: 08 2a 00 0e 00 0a        btst.b   #$e, $a(a2)
+  f01d00: 67 04                    beq.b    $f01d06
+  f01d02: 08 c3 00 0e              bset.b   #$e, d3
+
+loc_F01D06:
+  f01d06: 08 c3 00 0f              bset.b   #$f, d3
+  f01d0a: 31 83 50 24              move.w   d3, $24(a0, d5.w)
+  f01d0e: 31 bc 00 01 50 06        move.w   #$1, $6(a0, d5.w)
+  f01d14: 08 03 00 0e              btst.b   #$e, d3
+  f01d18: 67 06                    beq.b    $f01d20
+  f01d1a: 31 bc 00 03 50 06        move.w   #$3, $6(a0, d5.w)
+
+loc_F01D20:
+  f01d20: 42 b5 40 20              clr.l    $20(a5, d4.w)
+  f01d24: 42 b5 40 24              clr.l    $24(a5, d4.w)
+  f01d28: 42 b5 40 00              clr.l    (a5, d4.w)
+  f01d2c: 42 b5 40 04              clr.l    $4(a5, d4.w)
+  f01d30: 53 2d 00 05              subq.b   #$1, $5(a5)
+  f01d34: 52 28 00 05              addq.b   #$1, $5(a0)
+  f01d38: 32 30 50 00              move.w   (a0, d5.w), d1
+  f01d3c: d2 70 50 04              add.w    $4(a0, d5.w), d1
+  f01d40: e1 89                    lsl.l    #$8, d1
+  f01d42: 2d 41 01 20              move.l   d1, $120(a6)
+  f01d46: 08 03 00 0d              btst.b   #$d, d3
+  f01d4a: 67 24                    beq.b    $f01d70
+  f01d4c: 24 2e 00 14              move.l   $14(a6), d2
+  f01d50: b4 ab 00 14              cmp.l    $14(a3), d2
+  f01d54: 67 1a                    beq.b    $f01d70
+  f01d56: 20 70 50 20              movea.l  $20(a0, d5.w), a0
+  f01d5a: 22 03                    move.l   d3, d1
+  f01d5c: 28 4b                    movea.l  a3, a4
+  f01d5e: 61 00 fa 94              bsr.w    $f017f4
+  f01d62: 60 04                    bra.b    $f01d68
   f01d64: 61 00                    DC.W     $6100
   f01d66: e4 20                    DC.W     $e420
   f01d68: 26 4c                    DC.W     $264c
@@ -3377,12 +3245,12 @@ loc_F01C68:
 loc_F01D70:
   f01d70: 4e 73                    rte      
 
-TRAP1_dir_04:
+TRAP1_ATTSEG:
   f01d72: 2a 4e                    movea.l  a6, a5
   f01d74: 42 b8 0c 62              clr.l    $c62.w
   f01d78: 60 0c                    bra.b    $f01d86
 
-TRAP1_dir_05:
+TRAP1_SHRSEG:
   f01d7a: bb ce                    cmpa.l   a6, a5
   f01d7c: 66 08                    bne.b    $f01d86
   f01d7e: 06 6e 00 09 01 02        addi.w   #$9, $102(a6)
@@ -3394,19 +3262,18 @@ loc_F01D86:
   f01d8e: 20 6c 00 0c              movea.l  $c(a4), a0
   f01d92: 61 00 fa 60              bsr.w    $f017f4
   f01d96: 60 1e                    bra.b    $f01db6
-  f01d98: 5e 6e                    DC.W     $5e6e
-  f01d9a: 01 02                    DC.W     $0102
-  f01d9c: 60 00                    DC.W     $6000
-  f01d9e: 00 dc                    DC.W     $00dc
-  f01da0: 5a 6e                    DC.W     $5a6e
-  f01da2: 01 02                    DC.W     $0102
+  f01d98: 5e 6e 01 02              addq.w   #$7, $102(a6)
+  f01d9c: 60 00 00 dc              bra.w    $f01e7a
+
+loc_F01DA0:
+  f01da0: 5a 6e 01 02              addq.w   #$5, $102(a6)
 
 loc_F01DA4:
   f01da4: 60 00 00 d4              bra.w    $f01e7a
-  f01da8: 06 6e                    DC.W     $066e
-  f01daa: 00 0b                    DC.W     $000b
-  f01dac: 01 02                    DC.W     $0102
-  f01dae: 60 f4                    DC.W     $60f4
+
+loc_F01DA8:
+  f01da8: 06 6e 00 0b 01 02        addi.w   #$b, $102(a6)
+  f01dae: 60 f4                    bra.b    $f01da4
 
 loc_F01DB0:
   f01db0: 5c 6e 01 02              addq.w   #$6, $102(a6)
@@ -3419,104 +3286,76 @@ loc_F01DB6:
   f01dc0: 41 d2                    lea.l    (a2), a0
   f01dc2: 61 00 fa 00              bsr.w    $f017c4
   f01dc6: 60 e8                    bra.b    $f01db0
-  f01dc8: 4a 85                    DC.W     $4a85
-  f01dca: 67 d4                    DC.W     $67d4
-  f01dcc: 42 85                    DC.W     $4285
-  f01dce: 3a 2b                    DC.W     $3a2b
-  f01dd0: 00 10                    DC.W     $0010
-  f01dd2: e1 8d                    DC.W     $e18d
-  f01dd4: 08 2c                    DC.W     $082c
-  f01dd6: 00 0a                    DC.W     $000a
-  f01dd8: 00 08                    DC.W     $0008
-  f01dda: 67 1c                    DC.W     $671c
-  f01ddc: ba ac                    DC.W     $baac
-  f01dde: 00 14                    DC.W     $0014
-  f01de0: 64 0a                    DC.W     $640a
-  f01de2: 06 6e                    DC.W     $066e
-  f01de4: 00 10                    DC.W     $0010
-  f01de6: 01 02                    DC.W     $0102
-  f01de8: 60 00                    DC.W     $6000
-  f01dea: 00 90                    DC.W     $0090
-  f01dec: 2a 2c                    DC.W     $2a2c
-  f01dee: 00 14                    DC.W     $0014
-  f01df0: 06 85                    DC.W     $0685
-  f01df2: 00 00                    DC.W     $0000
-  f01df4: 00 ff                    DC.W     $00ff
-  f01df6: 42 05                    DC.W     $4205
-  f01df8: 24 05                    DC.W     $2405
-  f01dfa: 2c 2c                    DC.W     $2c2c
-  f01dfc: 00 10                    DC.W     $0010
-  f01dfe: 42 06                    DC.W     $4206
-  f01e00: 08 2c                    DC.W     $082c
-  f01e02: 00 0d                    DC.W     $000d
-  f01e04: 00 08                    DC.W     $0008
-  f01e06: 67 04                    DC.W     $6704
-  f01e08: 2c 2b                    DC.W     $2c2b
-  f01e0a: 00 0c                    DC.W     $000c
-  f01e0c: 41 d2                    DC.W     $41d2
-  f01e0e: 61 00                    DC.W     $6100
-  f01e10: f9 4c                    DC.W     $f94c
-  f01e12: 60 94                    DC.W     $6094
-  f01e14: 60 92                    DC.W     $6092
-  f01e16: 4a 85                    DC.W     $4a85
-  f01e18: 66 04                    DC.W     $6604
-  f01e1a: 61 00                    DC.W     $6100
-  f01e1c: e3 6a                    DC.W     $e36a
-  f01e1e: 4a 30                    DC.W     $4a30
-  f01e20: 50 07                    DC.W     $5007
-  f01e22: 66 84                    DC.W     $6684
-  f01e24: 25 ab                    DC.W     $25ab
-  f01e26: 00 04                    DC.W     $0004
-  f01e28: 50 20                    DC.W     $5020
-  f01e2a: 42 32                    DC.W     $4232
-  f01e2c: 50 27                    DC.W     $5027
-  f01e2e: 20 06                    DC.W     $2006
-  f01e30: e0 8e                    DC.W     $e08e
-  f01e32: 35 86                    DC.W     $3586
-  f01e34: 50 00                    DC.W     $5000
-  f01e36: e0 8a                    DC.W     $e08a
-  f01e38: dc 42                    DC.W     $dc42
-  f01e3a: 53 46                    DC.W     $5346
-  f01e3c: 35 86                    DC.W     $3586
-  f01e3e: 50 02                    DC.W     $5002
-  f01e40: 44 80                    DC.W     $4480
-  f01e42: d0 ab                    DC.W     $d0ab
-  f01e44: 00 0c                    DC.W     $000c
-  f01e46: e0 88                    DC.W     $e088
-  f01e48: 35 80                    DC.W     $3580
-  f01e4a: 50 04                    DC.W     $5004
-  f01e4c: 35 bc                    DC.W     $35bc
-  f01e4e: 00 01                    DC.W     $0001
-  f01e50: 50 06                    DC.W     $5006
-  f01e52: 08 2b                    DC.W     $082b
-  f01e54: 00 0e                    DC.W     $000e
-  f01e56: 00 08                    DC.W     $0008
-  f01e58: 67 06                    DC.W     $6706
-  f01e5a: 35 bc                    DC.W     $35bc
-  f01e5c: 00 03                    DC.W     $0003
-  f01e5e: 50 06                    DC.W     $5006
-  f01e60: 35 ab                    DC.W     $35ab
-  f01e62: 00 08                    DC.W     $0008
-  f01e64: 50 24                    DC.W     $5024
-  f01e66: 08 f2                    DC.W     $08f2
-  f01e68: 00 0f                    DC.W     $000f
-  f01e6a: 50 24                    DC.W     $5024
-  f01e6c: 52 2a                    DC.W     $522a
-  f01e6e: 00 05                    DC.W     $0005
-  f01e70: 52 6b                    DC.W     $526b
-  f01e72: 00 0a                    DC.W     $000a
-  f01e74: 2d 6b                    DC.W     $2d6b
-  f01e76: 00 0c                    DC.W     $000c
-  f01e78: 01 20                    DC.W     $0120
+  f01dc8: 4a 85                    tst.l    d5
+  f01dca: 67 d4                    beq.b    $f01da0
+  f01dcc: 42 85                    clr.l    d5
+  f01dce: 3a 2b 00 10              move.w   $10(a3), d5
+  f01dd2: e1 8d                    lsl.l    #$8, d5
+  f01dd4: 08 2c 00 0a 00 08        btst.b   #$a, $8(a4)
+  f01dda: 67 1c                    beq.b    $f01df8
+  f01ddc: ba ac 00 14              cmp.l    $14(a4), d5
+  f01de0: 64 0a                    bcc.b    $f01dec
+  f01de2: 06 6e 00 10 01 02        addi.w   #$10, $102(a6)
+  f01de8: 60 00 00 90              bra.w    $f01e7a
+
+loc_F01DEC:
+  f01dec: 2a 2c 00 14              move.l   $14(a4), d5
+  f01df0: 06 85 00 00 00 ff        addi.l   #$ff, d5
+  f01df6: 42 05                    clr.b    d5
+
+loc_F01DF8:
+  f01df8: 24 05                    move.l   d5, d2
+  f01dfa: 2c 2c 00 10              move.l   $10(a4), d6
+  f01dfe: 42 06                    clr.b    d6
+  f01e00: 08 2c 00 0d 00 08        btst.b   #$d, $8(a4)
+  f01e06: 67 04                    beq.b    $f01e0c
+  f01e08: 2c 2b 00 0c              move.l   $c(a3), d6
+
+loc_F01E0C:
+  f01e0c: 41 d2                    lea.l    (a2), a0
+  f01e0e: 61 00 f9 4c              bsr.w    $f0175c
+  f01e12: 60 94                    bra.b    $f01da8
+  f01e14: 60 92                    bra.b    $f01da8
+  f01e16: 4a 85                    tst.l    d5
+  f01e18: 66 04                    bne.b    $f01e1e
+  f01e1a: 61 00 e3 6a              bsr.w    $f00186
+
+loc_F01E1E:
+  f01e1e: 4a 30 50 07              tst.b    $7(a0, d5.w)
+  f01e22: 66 84                    bne.b    $f01da8
+  f01e24: 25 ab 00 04 50 20        move.l   $4(a3), $20(a2, d5.w)
+  f01e2a: 42 32 50 27              clr.b    $27(a2, d5.w)
+  f01e2e: 20 06                    move.l   d6, d0
+  f01e30: e0 8e                    lsr.l    #$8, d6
+  f01e32: 35 86 50 00              move.w   d6, (a2, d5.w)
+  f01e36: e0 8a                    lsr.l    #$8, d2
+  f01e38: dc 42                    add.w    d2, d6
+  f01e3a: 53 46                    subq.w   #$1, d6
+  f01e3c: 35 86 50 02              move.w   d6, $2(a2, d5.w)
+  f01e40: 44 80                    neg.l    d0
+  f01e42: d0 ab 00 0c              add.l    $c(a3), d0
+  f01e46: e0 88                    lsr.l    #$8, d0
+  f01e48: 35 80 50 04              move.w   d0, $4(a2, d5.w)
+  f01e4c: 35 bc 00 01 50 06        move.w   #$1, $6(a2, d5.w)
+  f01e52: 08 2b 00 0e 00 08        btst.b   #$e, $8(a3)
+  f01e58: 67 06                    beq.b    $f01e60
+  f01e5a: 35 bc 00 03 50 06        move.w   #$3, $6(a2, d5.w)
+
+loc_F01E60:
+  f01e60: 35 ab 00 08 50 24        move.w   $8(a3), $24(a2, d5.w)
+  f01e66: 08 f2 00 0f 50 24        bset.b   #$f, $24(a2, d5.w)
+  f01e6c: 52 2a 00 05              addq.b   #$1, $5(a2)
+  f01e70: 52 6b 00 0a              addq.w   #$1, $a(a3)
+  f01e74: 2d 6b 00 0c 01 20        move.l   $c(a3), $120(a6)
 
 loc_F01E7A:
   f01e7a: 4e 73                    rte      
 
-TRAP1_dir_48:
+TRAP1_MOVEPL:
   f01e7c: 2c 2c 00 08              move.l   $8(a4), d6
   f01e80: 60 2a                    bra.b    $f01eac
 
-TRAP1_dir_06:
+TRAP1_MOVELL:
   f01e82: 22 2d 00 36              move.l   $36(a5), d1
   f01e86: 67 1c                    beq.b    $f01ea4
   f01e88: 2a 2c 00 18              move.l   $18(a4), d5
@@ -3524,12 +3363,11 @@ TRAP1_dir_06:
   f01e90: 20 41                    movea.l  d1, a0
   f01e92: 61 00 f8 c4              bsr.w    $f01758
   f01e96: 60 14                    bra.b    $f01eac
-  f01e98: 60 0a                    DC.W     $600a
-  f01e9a: 4a 85                    DC.W     $4a85
-  f01e9c: 67 06                    DC.W     $6706
-  f01e9e: 4a 30                    DC.W     $4a30
-  f01ea0: 50 07                    DC.W     $5007
-  f01ea2: 66 08                    DC.W     $6608
+  f01e98: 60 0a                    bra.b    $f01ea4
+  f01e9a: 4a 85                    tst.l    d5
+  f01e9c: 67 06                    beq.b    $f01ea4
+  f01e9e: 4a 30 50 07              tst.b    $7(a0, d5.w)
+  f01ea2: 66 08                    bne.b    $f01eac
 
 loc_F01EA4:
   f01ea4: 06 6e 00 0c 01 02        addi.w   #$c, $102(a6)
@@ -3540,9 +3378,8 @@ loc_F01EAC:
   f01eae: 41 ec 00 0c              lea.l    $c(a4), a0
   f01eb2: 61 00 f8 5a              bsr.w    $f0170e
   f01eb6: 60 06                    bra.b    $f01ebe
-  f01eb8: 5e 6e                    DC.W     $5e6e
-  f01eba: 01 02                    DC.W     $0102
-  f01ebc: 4e 73                    DC.W     $4e73
+  f01eb8: 5e 6e 01 02              addq.w   #$7, $102(a6)
+  f01ebc: 4e 73                    rte      
 
 loc_F01EBE:
   f01ebe: 08 2e 00 0f 00 28        btst.b   #$f, $28(a6)
@@ -3560,12 +3397,11 @@ loc_F01ED6:
   f01ee4: 20 41                    movea.l  d1, a0
   f01ee6: 61 00 f8 70              bsr.w    $f01758
   f01eea: 60 14                    bra.b    $f01f00
-  f01eec: 60 0a                    DC.W     $600a
-  f01eee: 4a 85                    DC.W     $4a85
-  f01ef0: 67 06                    DC.W     $6706
-  f01ef2: 4a 30                    DC.W     $4a30
-  f01ef4: 50 07                    DC.W     $5007
-  f01ef6: 66 08                    DC.W     $6608
+  f01eec: 60 0a                    bra.b    $f01ef8
+  f01eee: 4a 85                    tst.l    d5
+  f01ef0: 67 06                    beq.b    $f01ef8
+  f01ef2: 4a 30 50 07              tst.b    $7(a0, d5.w)
+  f01ef6: 66 08                    bne.b    $f01f00
 
 loc_F01EF8:
   f01ef8: 06 6e 00 0d 01 02        addi.w   #$d, $102(a6)
@@ -3613,14 +3449,13 @@ loc_F01F46:
   f01f46: 5c 8f                    addq.l   #$6, a7
   f01f48: 4e 73                    rte      
 
-TRAP1_dir_07:
+TRAP1_DCLSHR:
   f01f4a: 2a 6e 00 36              movea.l  $36(a6), a5
   f01f4e: 2e 2c 00 0c              move.l   $c(a4), d7
   f01f52: 41 d5                    lea.l    (a5), a0
   f01f54: 61 00 f8 6e              bsr.w    $f017c4
   f01f58: 60 08                    bra.b    $f01f62
-  f01f5a: 5e 6e                    DC.W     $5e6e
-  f01f5c: 01 02                    DC.W     $0102
+  f01f5a: 5e 6e 01 02              addq.w   #$7, $102(a6)
 
 loc_F01F5E:
   f01f5e: 60 00 00 d2              bra.w    $f02032
@@ -3666,60 +3501,40 @@ loc_F01FBE:
   f01fc8: 20 75 50 20              movea.l  $20(a5, d5.w), a0
   f01fcc: 61 00 f8 26              bsr.w    $f017f4
   f01fd0: 60 0e                    bra.b    $f01fe0
-  f01fd2: b1 fc                    DC.W     $b1fc
-  f01fd4: 00 00                    DC.W     $0000
-  f01fd6: 00 00                    DC.W     $0000
-  f01fd8: 66 0c                    DC.W     $660c
-  f01fda: 5a 6e                    DC.W     $5a6e
-  f01fdc: 01 02                    DC.W     $0102
-  f01fde: 60 52                    DC.W     $6052
+  f01fd2: b1 fc 00 00 00 00        cmpa.l   #$0, a0
+  f01fd8: 66 0c                    bne.b    $f01fe6
+  f01fda: 5a 6e 01 02              addq.w   #$5, $102(a6)
+  f01fde: 60 52                    bra.b    $f02032
 
 loc_F01FE0:
   f01fe0: 5c 6e 01 02              addq.w   #$6, $102(a6)
   f01fe4: 60 4c                    bra.b    $f02032
-  f01fe6: 8d 75                    DC.W     $8d75
-  f01fe8: 50 24                    DC.W     $5024
-  f01fea: 21 75                    DC.W     $2175
-  f01fec: 50 20                    DC.W     $5020
-  f01fee: 00 04                    DC.W     $0004
-  f01ff0: 20 82                    DC.W     $2082
-  f01ff2: 31 41                    DC.W     $3141
-  f01ff4: 00 08                    DC.W     $0008
-  f01ff6: 31 7c                    DC.W     $317c
-  f01ff8: 00 01                    DC.W     $0001
-  f01ffa: 00 0a                    DC.W     $000a
-  f01ffc: 42 83                    DC.W     $4283
-  f01ffe: 36 35                    DC.W     $3635
-  f02000: 50 00                    DC.W     $5000
-  f02002: d6 75                    DC.W     $d675
-  f02004: 50 04                    DC.W     $5004
-  f02006: e1 8b                    DC.W     $e18b
-  f02008: 21 43                    DC.W     $2143
-  f0200a: 00 0c                    DC.W     $000c
-  f0200c: 36 35                    DC.W     $3635
-  f0200e: 50 02                    DC.W     $5002
-  f02010: 96 75                    DC.W     $9675
-  f02012: 50 00                    DC.W     $5000
-  f02014: 52 43                    DC.W     $5243
-  f02016: 31 43                    DC.W     $3143
-  f02018: 00 10                    DC.W     $0010
-  f0201a: 33 40                    DC.W     $3340
-  f0201c: 00 0e                    DC.W     $000e
-  f0201e: 31 7c                    DC.W     $317c
-  f02020: 00 01                    DC.W     $0001
-  f02022: 00 0a                    DC.W     $000a
-  f02024: 08 2c                    DC.W     $082c
-  f02026: 00 0c                    DC.W     $000c
-  f02028: 00 08                    DC.W     $0008
-  f0202a: 67 06                    DC.W     $6706
-  f0202c: 08 e8                    DC.W     $08e8
-  f0202e: 00 0f                    DC.W     $000f
-  f02030: 00 0a                    DC.W     $000a
+
+loc_F01FE6:
+  f01fe6: 8d 75 50 24              or.w     d6, $24(a5, d5.w)
+  f01fea: 21 75 50 20 00 04        move.l   $20(a5, d5.w), $4(a0)
+  f01ff0: 20 82                    move.l   d2, (a0)
+  f01ff2: 31 41 00 08              move.w   d1, $8(a0)
+  f01ff6: 31 7c 00 01 00 0a        move.w   #$1, $a(a0)
+  f01ffc: 42 83                    clr.l    d3
+  f01ffe: 36 35 50 00              move.w   (a5, d5.w), d3
+  f02002: d6 75 50 04              add.w    $4(a5, d5.w), d3
+  f02006: e1 8b                    lsl.l    #$8, d3
+  f02008: 21 43 00 0c              move.l   d3, $c(a0)
+  f0200c: 36 35 50 02              move.w   $2(a5, d5.w), d3
+  f02010: 96 75 50 00              sub.w    (a5, d5.w), d3
+  f02014: 52 43                    addq.w   #$1, d3
+  f02016: 31 43 00 10              move.w   d3, $10(a0)
+  f0201a: 33 40 00 0e              move.w   d0, $e(a1)
+  f0201e: 31 7c 00 01 00 0a        move.w   #$1, $a(a0)
+  f02024: 08 2c 00 0c 00 08        btst.b   #$c, $8(a4)
+  f0202a: 67 06                    beq.b    $f02032
+  f0202c: 08 e8 00 0f 00 0a        bset.b   #$f, $a(a0)
 
 loc_F02032:
   f02032: 4e 73                    rte      
 
-TRAP1_dir_09:
+TRAP1_RCVSA:
   f02034: 3e 2c 00 08              move.w   $8(a4), d7
   f02038: 08 07 00 0d              btst.b   #$d, d7
   f0203c: 66 1c                    bne.b    $f0205a
@@ -3728,11 +3543,9 @@ TRAP1_dir_09:
   f02044: 20 6e 00 36              movea.l  $36(a6), a0
   f02048: 61 00 f7 12              bsr.w    $f0175c
   f0204c: 60 0a                    bra.b    $f02058
-  f0204e: 4e 71                    DC.W     $4e71
-  f02050: 06 6e                    DC.W     $066e
-  f02052: 00 0c                    DC.W     $000c
-  f02054: 01 02                    DC.W     $0102
-  f02056: 4e 73                    DC.W     $4e73
+  f0204e: 4e 71                    nop      
+  f02050: 06 6e 00 0c 01 02        addi.w   #$c, $102(a6)
+  f02056: 4e 73                    rte      
 
 loc_F02058:
   f02058: 24 46                    movea.l  d6, a2
@@ -3745,22 +3558,22 @@ loc_F0205A:
   f02068: 20 6d 00 36              movea.l  $36(a5), a0
   f0206c: 61 00 f6 ee              bsr.w    $f0175c
   f02070: 60 22                    bra.b    $f02094
-  f02072: 60 0a                    DC.W     $600a
-  f02074: 4a 45                    DC.W     $4a45
-  f02076: 67 06                    DC.W     $6706
-  f02078: 4a 30                    DC.W     $4a30
-  f0207a: d0 07                    DC.W     $d007
-  f0207c: 66 16                    DC.W     $6616
-  f0207e: 5e 6e                    DC.W     $5e6e
-  f02080: 01 02                    DC.W     $0102
-  f02082: 4e 73                    DC.W     $4e73
+  f02072: 60 0a                    bra.b    $f0207e
+  f02074: 4a 45                    tst.w    d5
+  f02076: 67 06                    beq.b    $f0207e
+  f02078: 4a 30 d0 07              tst.b    $7(a0, a5.w)
+  f0207c: 66 16                    bne.b    $f02094
+
+loc_F0207E:
+  f0207e: 5e 6e 01 02              addq.w   #$7, $102(a6)
+  f02082: 4e 73                    rte      
 
 loc_F02084:
   f02084: 2e 2c 00 0c              move.l   $c(a4), d7
   f02088: 20 6d 00 36              movea.l  $36(a5), a0
   f0208c: 61 00 f7 36              bsr.w    $f017c4
   f02090: 60 02                    bra.b    $f02094
-  f02092: 60 ea                    DC.W     $60ea
+  f02092: 60 ea                    bra.b    $f0207e
 
 loc_F02094:
   f02094: 42 80                    clr.l    d0
@@ -3789,7 +3602,7 @@ loc_F020DA:
   f020dc: 2d 40 01 20              move.l   d0, $120(a6)
   f020e0: 4e 73                    rte      
 
-TRAP1_dir_3D:
+TRAP1_CISR:
   f020e2: 22 78 0c 66              movea.l  $c66.w, a1
   f020e6: 24 78 0c 6a              movea.l  $c6a.w, a2
   f020ea: 42 87                    clr.l    d7
@@ -3829,11 +3642,9 @@ loc_F02130:
   f02136: 20 6d 00 36              movea.l  $36(a5), a0
   f0213a: 61 00 f6 20              bsr.w    $f0175c
   f0213e: 60 0a                    bra.b    $f0214a
-  f02140: 4e 71                    DC.W     $4e71
-  f02142: 06 6e                    DC.W     $066e
-  f02144: 00 0c                    DC.W     $000c
-  f02146: 01 02                    DC.W     $0102
-  f02148: 4e 73                    DC.W     $4e73
+  f02140: 4e 71                    nop      
+  f02142: 06 6e 00 0c 01 02        addi.w   #$c, $102(a6)
+  f02148: 4e 73                    rte      
 
 loc_F0214A:
   f0214a: 36 82                    move.w   d2, (a3)
@@ -3959,7 +3770,7 @@ loc_F02252:
   f02278: 20 ac 00 0c              move.l   $c(a4), (a0)
   f0227c: 4e 73                    rte      
 
-TRAP1_dir_3E:
+TRAP1_SINT:
   f0227e: 42 82                    clr.l    d2
   f02280: 14 2c 00 03              move.b   $3(a4), d2
   f02284: 22 78 0c 66              movea.l  $c66.w, a1
@@ -3995,16 +3806,15 @@ loc_F022AC:
 
 loc_F022CE:
   f022ce: 4e 73                    rte      
-  f022d0: 08 38                    DC.W     $0838
-  f022d2: 00 07                    DC.W     $0007
-  f022d4: 0c 35                    DC.W     $0c35
-  f022d6: 67 06                    DC.W     $6706
-  f022d8: 61 00                    DC.W     $6100
-  f022da: f3 ae                    DC.W     $f3ae
-  f022dc: dd 07                    DC.W     $dd07
-  f022de: 4e 73                    DC.W     $4e73
+  f022d0: 08 38 00 07 0c 35        btst.b   #$7, $c35.w
+  f022d6: 67 06                    beq.b    $f022de
+  f022d8: 61 00 f3 ae              bsr.w    $f01688
+  f022dc: dd 07                    addx.b   d7, d6
 
-TRAP1_dir_3A:
+loc_F022DE:
+  f022de: 4e 73                    rte      
+
+TRAP1_CDIR:
   f022e0: 24 78 0c 28              movea.l  $c28.w, a2
   f022e4: 20 0a                    move.l   a2, d0
   f022e6: 67 54                    beq.b    $f0233c
@@ -4034,11 +3844,9 @@ loc_F02322:
   f02328: 20 6e 00 36              movea.l  $36(a6), a0
   f0232c: 61 00 f4 2e              bsr.w    $f0175c
   f02330: 60 24                    bra.b    $f02356
-  f02332: 4e 71                    DC.W     $4e71
-  f02334: 06 6e                    DC.W     $066e
-  f02336: 00 0c                    DC.W     $000c
-  f02338: 01 02                    DC.W     $0102
-  f0233a: 4e 73                    DC.W     $4e73
+  f02332: 4e 71                    nop      
+  f02334: 06 6e 00 0c 01 02        addi.w   #$c, $102(a6)
+  f0233a: 4e 73                    rte      
 
 loc_F0233C:
   f0233c: 58 6e 01 02              addq.w   #$4, $102(a6)
@@ -4076,7 +3884,7 @@ loc_F0237E:
   f0237e: 42 aa 00 06              clr.l    $6(a2)
   f02382: 4e 73                    rte      
 
-TRAP1_dir_1F:
+TRAP1_GTASQ:
   f02384: 4a ad 00 40              tst.l    $40(a5)
   f02388: 67 06                    beq.b    $f02390
   f0238a: 5c 6e 01 02              addq.w   #$6, $102(a6)
@@ -4092,9 +3900,8 @@ loc_F02390:
   f023a4: 20 43                    movea.l  d3, a0
   f023a6: 61 00 ee 96              bsr.w    $f0123e
   f023aa: 60 06                    bra.b    $f023b2
-  f023ac: 50 6e                    DC.W     $506e
-  f023ae: 01 02                    DC.W     $0102
-  f023b0: 60 46                    DC.W     $6046
+  f023ac: 50 6e 01 02              addq.w   #$8, $102(a6)
+  f023b0: 60 46                    bra.b    $f023f8
 
 loc_F023B2:
   f023b2: 26 48                    movea.l  a0, a3
@@ -4117,7 +3924,7 @@ loc_F023B2:
 loc_F023F8:
   f023f8: 4e 73                    rte      
 
-TRAP1_dir_20:
+TRAP1_DEASQ:
   f023fa: 28 4e                    movea.l  a6, a4
   f023fc: 60 02                    bra.b    $f02400
 
@@ -4136,13 +3943,12 @@ TRAP0_dir_11:
   f02420: e0 81                    asr.l    #$8, d1
   f02422: 61 00 f0 70              bsr.w    $f01494
   f02426: 60 04                    bra.b    $f0242c
-  f02428: 61 00                    DC.W     $6100
-  f0242a: dd 5c                    DC.W     $dd5c
+  f02428: 61 00 dd 5c              bsr.w    $f00186
 
 loc_F0242C:
   f0242c: 4e 73                    rte      
 
-TRAP1_dir_23:
+TRAP1_QEVNT:
   f0242e: 26 4c                    movea.l  a4, a3
   f02430: 28 6d 00 40              movea.l  $40(a5), a4
   f02434: 20 0c                    move.l   a4, d0
@@ -4164,7 +3970,7 @@ loc_F02450:
   f02456: 20 6e 00 36              movea.l  $36(a6), a0
   f0245a: 61 00 f3 00              bsr.w    $f0175c
   f0245e: 60 0a                    bra.b    $f0246a
-  f02460: 4e 71                    DC.W     $4e71
+  f02460: 4e 71                    nop      
 
 loc_F02462:
   f02462: 06 6e 00 0c 01 02        addi.w   #$c, $102(a6)
@@ -4215,9 +4021,8 @@ loc_F024C4:
   f024c6: 24 4b                    movea.l  a3, a2
   f024c8: 61 00 02 9a              bsr.w    $f02764
   f024cc: 60 06                    bra.b    $f024d4
-  f024ce: 5a 6e                    DC.W     $5a6e
-  f024d0: 01 02                    DC.W     $0102
-  f024d2: 60 48                    DC.W     $6048
+  f024ce: 5a 6e 01 02              addq.w   #$5, $102(a6)
+  f024d2: 60 48                    bra.b    $f0251c
 
 loc_F024D4:
   f024d4: 28 6d 00 40              movea.l  $40(a5), a4
@@ -4272,7 +4077,7 @@ loc_F0252A:
   f0252c: 6e f0                    bgt.b    $f0251e
   f0252e: 4e 75                    rts      
 
-TRAP1_dir_22:
+TRAP1_RDEVNT:
   f02530: 28 6e 00 40              movea.l  $40(a6), a4
   f02534: 20 0c                    move.l   a4, d0
   f02536: 66 06                    bne.b    $f0253e
@@ -4300,11 +4105,9 @@ loc_F0255C:
   f02560: 20 6e 00 36              movea.l  $36(a6), a0
   f02564: 61 00 f1 f6              bsr.w    $f0175c
   f02568: 60 0a                    bra.b    $f02574
-  f0256a: 4e 71                    DC.W     $4e71
-  f0256c: 06 6e                    DC.W     $066e
-  f0256e: 00 0c                    DC.W     $000c
-  f02570: 01 02                    DC.W     $0102
-  f02572: 4e 73                    DC.W     $4e73
+  f0256a: 4e 71                    nop      
+  f0256c: 06 6e 00 0c 01 02        addi.w   #$c, $102(a6)
+  f02572: 4e 73                    rte      
 
 loc_F02574:
   f02574: 26 46                    movea.l  d6, a3
@@ -4392,6 +4195,8 @@ loc_F02626:
   f02628: 2c 2b 00 12              move.l   $12(a3), d6
   f0262c: 08 06 00 00              btst.b   #$0, d6
   f02630: 67 08                    beq.b    $f0263a
+
+loc_F02632:
   f02632: 37 7c 02 00 00 16        move.w   #$200, $16(a3)
   f02638: 4e 73                    rte      
 
@@ -4399,23 +4204,20 @@ loc_F0263A:
   f0263a: 20 6a 00 36              movea.l  $36(a2), a0
   f0263e: 61 00 f1 1c              bsr.w    $f0175c
   f02642: 60 22                    bra.b    $f02666
-  f02644: 60 02                    DC.W     $6002
-  f02646: 60 ea                    DC.W     $60ea
-  f02648: e0 8e                    DC.W     $e08e
-  f0264a: dc 70                    DC.W     $dc70
-  f0264c: 50 04                    DC.W     $5004
-  f0264e: e1 8e                    DC.W     $e18e
-  f02650: dc 03                    DC.W     $dc03
-  f02652: 3e 30                    DC.W     $3e30
-  f02654: 50 02                    DC.W     $5002
-  f02656: 52 87                    DC.W     $5287
-  f02658: e1 8f                    DC.W     $e18f
-  f0265a: 9e 83                    DC.W     $9e83
-  f0265c: 17 7c                    DC.W     $177c
-  f0265e: 00 01                    DC.W     $0001
-  f02660: 00 16                    DC.W     $0016
-  f02662: 17 47                    DC.W     $1747
-  f02664: 00 17                    DC.W     $0017
+  f02644: 60 02                    bra.b    $f02648
+  f02646: 60 ea                    bra.b    $f02632
+
+loc_F02648:
+  f02648: e0 8e                    lsr.l    #$8, d6
+  f0264a: dc 70 50 04              add.w    $4(a0, d5.w), d6
+  f0264e: e1 8e                    lsl.l    #$8, d6
+  f02650: dc 03                    add.b    d3, d6
+  f02652: 3e 30 50 02              move.w   $2(a0, d5.w), d7
+  f02656: 52 87                    addq.l   #$1, d7
+  f02658: e1 8f                    lsl.l    #$8, d7
+  f0265a: 9e 83                    sub.l    d3, d7
+  f0265c: 17 7c 00 01 00 16        move.b   #$1, $16(a3)
+  f02662: 17 47 00 17              move.b   d7, $17(a3)
 
 loc_F02666:
   f02666: 42 87                    clr.l    d7
@@ -4429,7 +4231,7 @@ loc_F02672:
   f02676: 6e fa                    bgt.b    $f02672
   f02678: 4e 73                    rte      
 
-TRAP1_dir_21:
+TRAP1_SETASQ:
   f0267a: 28 6e 00 40              movea.l  $40(a6), a4
   f0267e: 20 0c                    move.l   a4, d0
   f02680: 66 06                    bne.b    $f02688
@@ -4484,8 +4286,8 @@ loc_F026EC:
   f026f6: 20 6d 00 36              movea.l  $36(a5), a0
   f026fa: 61 00 f0 60              bsr.w    $f0175c
   f026fe: 60 04                    bra.b    $f02704
-  f02700: 4e 71                    DC.W     $4e71
-  f02702: 60 38                    DC.W     $6038
+  f02700: 4e 71                    nop      
+  f02702: 60 38                    bra.b    $f0273c
 
 loc_F02704:
   f02704: 29 49 00 12              move.l   a1, $12(a4)
@@ -4501,8 +4303,8 @@ loc_F02718:
   f0271c: 20 6d 00 36              movea.l  $36(a5), a0
   f02720: 61 00 f0 3a              bsr.w    $f0175c
   f02724: 60 04                    bra.b    $f0272a
-  f02726: 4e 71                    DC.W     $4e71
-  f02728: 60 12                    DC.W     $6012
+  f02726: 4e 71                    nop      
+  f02728: 60 12                    bra.b    $f0273c
 
 loc_F0272A:
   f0272a: dc 87                    add.l    d7, d6
@@ -4575,7 +4377,7 @@ loc_F027BC:
   f027bc: 54 af 00 02              addq.l   #$2, $2(a7)
   f027c0: 4e 73                    rte      
 
-TRAP1_dir_25:
+TRAP1_RTEVNT:
   f027c2: 2a 48                    movea.l  a0, a5
   f027c4: 28 6e 00 40              movea.l  $40(a6), a4
   f027c8: 7a 42                    moveq    #$42, d5
@@ -4589,12 +4391,10 @@ loc_F027D4:
   f027da: 20 6e 00 36              movea.l  $36(a6), a0
   f027de: 61 00 ef 7c              bsr.w    $f0175c
   f027e2: 60 0c                    bra.b    $f027f0
-  f027e4: 4e 71                    DC.W     $4e71
-  f027e6: 3e 3c                    DC.W     $3e3c
-  f027e8: 80 99                    DC.W     $8099
-  f027ea: 41 d6                    DC.W     $41d6
-  f027ec: 61 00                    DC.W     $6100
-  f027ee: e0 36                    DC.W     $e036
+  f027e4: 4e 71                    nop      
+  f027e6: 3e 3c 80 99              move.w   #$8099, d7
+  f027ea: 41 d6                    lea.l    (a6), a0
+  f027ec: 61 00 e0 36              bsr.w    $f00824
 
 loc_F027F0:
   f027f0: df ae 01 3c              add.l    d7, $13c(a6)
@@ -4633,7 +4433,7 @@ loc_F02842:
 loc_F0284E:
   f0284e: 4e 73                    rte      
 
-TRAP1_dir_24:
+TRAP1_WTEVNT:
   f02850: 28 6e 00 40              movea.l  $40(a6), a4
   f02854: 20 0c                    move.l   a4, d0
   f02856: 66 06                    bne.b    $f0285e
@@ -4677,154 +4477,121 @@ loc_F028B2:
   f028b2: 41 d3                    lea.l    (a3), a0
   f028b4: 61 00 ee 58              bsr.w    $f0170e
   f028b8: 60 02                    bra.b    $f028bc
-  f028ba: 60 08                    DC.W     $6008
+  f028ba: 60 08                    bra.b    $f028c4
 
 loc_F028BC:
   f028bc: 30 3c 00 06              move.w   #$6, d0
   f028c0: 60 00 01 20              bra.w    $f029e2
-  f028c4: 42 80                    DC.W     $4280
-  f028c6: 10 38                    DC.W     $1038
-  f028c8: 0c 73                    DC.W     $0c73
-  f028ca: 48 40                    DC.W     $4840
-  f028cc: 30 3c                    DC.W     $303c
-  f028ce: 00 02                    DC.W     $0002
-  f028d0: 20 40                    DC.W     $2040
-  f028d2: 61 00                    DC.W     $6100
-  f028d4: e9 6a                    DC.W     $e96a
-  f028d6: 60 08                    DC.W     $6008
-  f028d8: 30 3c                    DC.W     $303c
-  f028da: 00 08                    DC.W     $0008
-  f028dc: 60 00                    DC.W     $6000
-  f028de: 01 04                    DC.W     $0104
-  f028e0: 2a 48                    DC.W     $2a48
-  f028e2: 34 3c                    DC.W     $343c
-  f028e4: 00 7f                    DC.W     $007f
-  f028e6: 42 98                    DC.W     $4298
-  f028e8: 51 ca                    DC.W     $51ca
-  f028ea: ff fc                    DC.W     $fffc
-  f028ec: 2b 53                    DC.W     $2b53
-  f028ee: 00 10                    DC.W     $0010
-  f028f0: 20 2b                    DC.W     $202b
-  f028f2: 00 04                    DC.W     $0004
-  f028f4: 08 03                    DC.W     $0803
-  f028f6: 00 00                    DC.W     $0000
-  f028f8: 66 14                    DC.W     $6614
-  f028fa: 08 03                    DC.W     $0803
-  f028fc: 00 0f                    DC.W     $000f
-  f028fe: 67 06                    DC.W     $6706
-  f02900: 4a 80                    DC.W     $4a80
-  f02902: 66 0a                    DC.W     $660a
-  f02904: 60 04                    DC.W     $6004
-  f02906: 3c 2e                    DC.W     $3c2e
-  f02908: 00 70                    DC.W     $0070
-  f0290a: 20 2e                    DC.W     $202e
-  f0290c: 00 14                    DC.W     $0014
-  f0290e: 3b 46                    DC.W     $3b46
-  f02910: 00 70                    DC.W     $0070
-  f02912: 2b 40                    DC.W     $2b40
-  f02914: 00 14                    DC.W     $0014
-  f02916: 61 00                    DC.W     $6100
-  f02918: 00 dc                    DC.W     $00dc
-  f0291a: 42 04                    DC.W     $4204
-  f0291c: 08 03                    DC.W     $0803
-  f0291e: 00 0f                    DC.W     $000f
-  f02920: 66 04                    DC.W     $6604
-  f02922: 02 44                    DC.W     $0244
-  f02924: 1f ff                    DC.W     $1fff
-  f02926: 3b 44                    DC.W     $3b44
-  f02928: 00 28                    DC.W     $0028
-  f0292a: 2b 45                    DC.W     $2b45
-  f0292c: 00 6c                    DC.W     $006c
-  f0292e: 2b 45                    DC.W     $2b45
-  f02930: 00 fc                    DC.W     $00fc
-  f02932: 48 44                    DC.W     $4844
-  f02934: 30 04                    DC.W     $3004
-  f02936: e0 48                    DC.W     $e048
-  f02938: 67 10                    DC.W     $6710
-  f0293a: 08 03                    DC.W     $0803
-  f0293c: 00 00                    DC.W     $0000
-  f0293e: 66 0e                    DC.W     $660e
-  f02940: 4a 04                    DC.W     $4a04
-  f02942: 67 06                    DC.W     $6706
-  f02944: b8 2e                    DC.W     $b82e
-  f02946: 00 25                    DC.W     $0025
-  f02948: 63 04                    DC.W     $6304
-  f0294a: 18 2e                    DC.W     $182e
-  f0294c: 00 25                    DC.W     $0025
-  f0294e: 1b 44                    DC.W     $1b44
-  f02950: 00 25                    DC.W     $0025
-  f02952: b0 04                    DC.W     $b004
-  f02954: 63 02                    DC.W     $6302
-  f02956: 10 04                    DC.W     $1004
-  f02958: 1b 40                    DC.W     $1b40
-  f0295a: 00 24                    DC.W     $0024
-  f0295c: 1b 40                    DC.W     $1b40
-  f0295e: 00 26                    DC.W     $0026
-  f02960: 2a bc                    DC.W     $2abc
-  f02962: 21 54                    DC.W     $2154
-  f02964: 43 42                    DC.W     $4342
-  f02966: 1b 7c                    DC.W     $1b7c
-  f02968: 00 80                    DC.W     $0080
-  f0296a: 00 2c                    DC.W     $002c
-  f0296c: 3b 7c                    DC.W     $3b7c
-  f0296e: 00 01                    DC.W     $0001
-  f02970: 00 3a                    DC.W     $003a
-  f02972: 1b 7c                    DC.W     $1b7c
-  f02974: 00 fa                    DC.W     $00fa
-  f02976: 00 72                    DC.W     $0072
-  f02978: 3b 7c                    DC.W     $3b7c
-  f0297a: 00 01                    DC.W     $0001
-  f0297c: 00 30                    DC.W     $0030
-  f0297e: 24 4d                    DC.W     $244d
-  f02980: d5 fc                    DC.W     $d5fc
-  f02982: 00 00                    DC.W     $0000
-  f02984: 01 60                    DC.W     $0160
-  f02986: 2b 4a                    DC.W     $2b4a
-  f02988: 00 36                    DC.W     $0036
-  f0298a: 24 bc                    DC.W     $24bc
-  f0298c: 21 54                    DC.W     $2154
-  f0298e: 53 54                    DC.W     $5354
-  f02990: 15 7c                    DC.W     $157c
-  f02992: 00 04                    DC.W     $0004
-  f02994: 00 04                    DC.W     $0004
-  f02996: 35 7c                    DC.W     $357c
-  f02998: 00 24                    DC.W     $0024
-  f0299a: 00 06                    DC.W     $0006
-  f0299c: 35 7c                    DC.W     $357c
-  f0299e: 00 44                    DC.W     $0044
-  f029a0: 00 08                    DC.W     $0008
-  f029a2: 20 78                    DC.W     $2078
-  f029a4: 0c 10                    DC.W     $0c10
-  f029a6: 20 2d                    DC.W     $202d
-  f029a8: 00 10                    DC.W     $0010
-  f029aa: 22 2d                    DC.W     $222d
-  f029ac: 00 14                    DC.W     $0014
-  f029ae: b1 fc                    DC.W     $b1fc
-  f029b0: 00 00                    DC.W     $0000
-  f029b2: 00 00                    DC.W     $0000
-  f029b4: 67 20                    DC.W     $6720
-  f029b6: b0 a8                    DC.W     $b0a8
-  f029b8: 00 10                    DC.W     $0010
-  f029ba: 66 06                    DC.W     $6606
-  f029bc: b2 a8                    DC.W     $b2a8
-  f029be: 00 14                    DC.W     $0014
-  f029c0: 67 06                    DC.W     $6706
-  f029c2: 20 68                    DC.W     $2068
-  f029c4: 00 04                    DC.W     $0004
-  f029c6: 60 e6                    DC.W     $60e6
-  f029c8: 72 02                    DC.W     $7202
-  f029ca: 41 d5                    DC.W     $41d5
-  f029cc: 61 00                    DC.W     $6100
-  f029ce: ea c6                    DC.W     $eac6
-  f029d0: 30 3c                    DC.W     $303c
-  f029d2: 00 06                    DC.W     $0006
-  f029d4: 60 0c                    DC.W     $600c
-  f029d6: 2b 78                    DC.W     $2b78
-  f029d8: 0c 10                    DC.W     $0c10
-  f029da: 00 04                    DC.W     $0004
-  f029dc: 21 cd                    DC.W     $21cd
-  f029de: 0c 10                    DC.W     $0c10
-  f029e0: 4e 73                    DC.W     $4e73
+
+loc_F028C4:
+  f028c4: 42 80                    clr.l    d0
+  f028c6: 10 38 0c 73              move.b   $c73.w, d0
+  f028ca: 48 40                    swap     d0
+  f028cc: 30 3c 00 02              move.w   #$2, d0
+  f028d0: 20 40                    movea.l  d0, a0
+  f028d2: 61 00 e9 6a              bsr.w    $f0123e
+  f028d6: 60 08                    bra.b    $f028e0
+  f028d8: 30 3c 00 08              move.w   #$8, d0
+  f028dc: 60 00 01 04              bra.w    $f029e2
+
+loc_F028E0:
+  f028e0: 2a 48                    movea.l  a0, a5
+  f028e2: 34 3c 00 7f              move.w   #$7f, d2
+
+loc_F028E6:
+  f028e6: 42 98                    clr.l    (a0)+
+  f028e8: 51 ca ff fc              dbra     d2, $f028e6
+  f028ec: 2b 53 00 10              move.l   (a3), $10(a5)
+  f028f0: 20 2b 00 04              move.l   $4(a3), d0
+  f028f4: 08 03 00 00              btst.b   #$0, d3
+  f028f8: 66 14                    bne.b    $f0290e
+  f028fa: 08 03 00 0f              btst.b   #$f, d3
+  f028fe: 67 06                    beq.b    $f02906
+  f02900: 4a 80                    tst.l    d0
+  f02902: 66 0a                    bne.b    $f0290e
+  f02904: 60 04                    bra.b    $f0290a
+
+loc_F02906:
+  f02906: 3c 2e 00 70              move.w   $70(a6), d6
+
+loc_F0290A:
+  f0290a: 20 2e 00 14              move.l   $14(a6), d0
+
+loc_F0290E:
+  f0290e: 3b 46 00 70              move.w   d6, $70(a5)
+  f02912: 2b 40 00 14              move.l   d0, $14(a5)
+  f02916: 61 00 00 dc              bsr.w    $f029f4
+  f0291a: 42 04                    clr.b    d4
+  f0291c: 08 03 00 0f              btst.b   #$f, d3
+  f02920: 66 04                    bne.b    $f02926
+  f02922: 02 44 1f ff              andi.w   #$1fff, d4
+
+loc_F02926:
+  f02926: 3b 44 00 28              move.w   d4, $28(a5)
+  f0292a: 2b 45 00 6c              move.l   d5, $6c(a5)
+  f0292e: 2b 45 00 fc              move.l   d5, $fc(a5)
+  f02932: 48 44                    swap     d4
+  f02934: 30 04                    move.w   d4, d0
+  f02936: e0 48                    lsr.w    #$8, d0
+  f02938: 67 10                    beq.b    $f0294a
+  f0293a: 08 03 00 00              btst.b   #$0, d3
+  f0293e: 66 0e                    bne.b    $f0294e
+  f02940: 4a 04                    tst.b    d4
+  f02942: 67 06                    beq.b    $f0294a
+  f02944: b8 2e 00 25              cmp.b    $25(a6), d4
+  f02948: 63 04                    bls.b    $f0294e
+
+loc_F0294A:
+  f0294a: 18 2e 00 25              move.b   $25(a6), d4
+
+loc_F0294E:
+  f0294e: 1b 44 00 25              move.b   d4, $25(a5)
+  f02952: b0 04                    cmp.b    d4, d0
+  f02954: 63 02                    bls.b    $f02958
+  f02956: 10 04                    move.b   d4, d0
+
+loc_F02958:
+  f02958: 1b 40 00 24              move.b   d0, $24(a5)
+  f0295c: 1b 40 00 26              move.b   d0, $26(a5)
+  f02960: 2a bc 21 54 43 42        move.l   #$21544342, (a5)
+  f02966: 1b 7c 00 80 00 2c        move.b   #$80, $2c(a5)
+  f0296c: 3b 7c 00 01 00 3a        move.w   #$1, $3a(a5)
+  f02972: 1b 7c 00 fa 00 72        move.b   #$fa, $72(a5)
+  f02978: 3b 7c 00 01 00 30        move.w   #$1, $30(a5)
+  f0297e: 24 4d                    movea.l  a5, a2
+  f02980: d5 fc 00 00 01 60        adda.l   #$160, a2
+  f02986: 2b 4a 00 36              move.l   a2, $36(a5)
+  f0298a: 24 bc 21 54 53 54        move.l   #$21545354, (a2)
+  f02990: 15 7c 00 04 00 04        move.b   #$4, $4(a2)
+  f02996: 35 7c 00 24 00 06        move.w   #$24, $6(a2)
+  f0299c: 35 7c 00 44 00 08        move.w   #$44, $8(a2)
+  f029a2: 20 78 0c 10              movea.l  $c10.w, a0
+  f029a6: 20 2d 00 10              move.l   $10(a5), d0
+  f029aa: 22 2d 00 14              move.l   $14(a5), d1
+
+loc_F029AE:
+  f029ae: b1 fc 00 00 00 00        cmpa.l   #$0, a0
+  f029b4: 67 20                    beq.b    $f029d6
+  f029b6: b0 a8 00 10              cmp.l    $10(a0), d0
+  f029ba: 66 06                    bne.b    $f029c2
+  f029bc: b2 a8 00 14              cmp.l    $14(a0), d1
+  f029c0: 67 06                    beq.b    $f029c8
+
+loc_F029C2:
+  f029c2: 20 68 00 04              movea.l  $4(a0), a0
+  f029c6: 60 e6                    bra.b    $f029ae
+
+loc_F029C8:
+  f029c8: 72 02                    moveq    #$2, d1
+  f029ca: 41 d5                    lea.l    (a5), a0
+  f029cc: 61 00 ea c6              bsr.w    $f01494
+  f029d0: 30 3c 00 06              move.w   #$6, d0
+  f029d4: 60 0c                    bra.b    $f029e2
+
+loc_F029D6:
+  f029d6: 2b 78 0c 10 00 04        move.l   $c10.w, $4(a5)
+  f029dc: 21 cd 0c 10              move.l   a5, $c10.w
+  f029e0: 4e 73                    rte      
 
 loc_F029E2:
   f029e2: 08 03 00 00              btst.b   #$0, d3
@@ -4884,10 +4651,9 @@ loc_F02A4A:
   f02a4e: 20 6e 00 36              movea.l  $36(a6), a0
   f02a52: 61 00 ed 08              bsr.w    $f0175c
   f02a56: 60 08                    bra.b    $f02a60
-  f02a58: 4e 71                    DC.W     $4e71
-  f02a5a: 54 6e                    DC.W     $546e
-  f02a5c: 01 02                    DC.W     $0102
-  f02a5e: 4e 73                    DC.W     $4e73
+  f02a58: 4e 71                    nop      
+  f02a5a: 54 6e 01 02              addq.w   #$2, $102(a6)
+  f02a5e: 4e 73                    rte      
 
 loc_F02A60:
   f02a60: 4a 94                    tst.l    (a4)
@@ -4957,11 +4723,9 @@ loc_F02ADE:
   f02b08: 20 6d 00 36              movea.l  $36(a5), a0
   f02b0c: 61 00 ec 4e              bsr.w    $f0175c
   f02b10: 60 0a                    bra.b    $f02b1c
-  f02b12: 4e 71                    DC.W     $4e71
-  f02b14: 06 6e                    DC.W     $066e
-  f02b16: 00 0c                    DC.W     $000c
-  f02b18: 01 02                    DC.W     $0102
-  f02b1a: 4e 73                    DC.W     $4e73
+  f02b12: 4e 71                    nop      
+  f02b14: 06 6e 00 0c 01 02        addi.w   #$c, $102(a6)
+  f02b1a: 4e 73                    rte      
 
 loc_F02B1C:
   f02b1c: 2b 46 00 fc              move.l   d6, $fc(a5)
@@ -5003,7 +4767,7 @@ loc_F02B68:
 loc_F02B84:
   f02b84: 4e 73                    rte      
 
-TRAP1_dir_19:
+TRAP1_STOP:
   f02b86: 20 46                    movea.l  d6, a0
   f02b88: 4a 90                    tst.l    (a0)
   f02b8a: 66 38                    bne.b    $f02bc4
@@ -5092,7 +4856,7 @@ loc_F02C4E:
   f02c60: 61 00 db 9a              bsr.w    $f007fc
   f02c64: 4e 73                    rte      
 
-TRAP1_dir_14:
+TRAP1_WAKEUP:
   f02c66: bb ce                    cmpa.l   a6, a5
   f02c68: 60 00 00 0a              bra.w    $f02c74
 
@@ -5139,11 +4903,11 @@ loc_F02CC4:
   f02cc4: 61 00 da fa              bsr.w    $f007c0
   f02cc8: 4e 73                    rte      
 
-TRAP1_dir_1E:
+TRAP1_DELAYW:
   f02cca: 7e 01                    moveq    #$1, d7
   f02ccc: 60 02                    bra.b    $f02cd0
 
-TRAP1_dir_15:
+TRAP1_DELAY:
   f02cce: 42 87                    clr.l    d7
 
 loc_F02CD0:
@@ -5244,12 +5008,12 @@ loc_F02DAC:
   f02dae: 3d 7c 00 05 01 02        move.w   #$5, $102(a6)
   f02db4: 60 f4                    bra.b    $f02daa
 
-TRAP1_dir_16:
+TRAP1_RELINQ:
   f02db6: 41 d6                    lea.l    (a6), a0
   f02db8: 61 00 da 4a              bsr.w    $f00804
   f02dbc: 4e 73                    rte      
 
-TRAP1_dir_18:
+TRAP1_SETPRI:
   f02dbe: 08 2e 00 0f 00 28        btst.b   #$f, $28(a6)
   f02dc4: 66 10                    bne.b    $f02dd6
   f02dc6: 08 28 00 0f 00 28        btst.b   #$f, $28(a0)
@@ -5396,7 +5160,7 @@ loc_F02F2C:
   f02f2e: 61 00 d8 90              bsr.w    $f007c0
   f02f32: 4e 73                    rte      
 
-TRAP1_dir_0E:
+TRAP1_ABORT:
   f02f34: 08 ee 00 01 00 29        bset.b   #$1, $29(a6)
   f02f3a: 3d 48 00 2a              move.w   a0, $2a(a6)
   f02f3e: 66 06                    bne.b    $f02f46
@@ -5580,10 +5344,9 @@ loc_F03100:
   f03106: 41 d4                    lea.l    (a4), a0
   f03108: 61 00 e3 8a              bsr.w    $f01494
   f0310c: 4e 73                    rte      
-  f0310e: 61 00                    DC.W     $6100
-  f03110: d0 76                    DC.W     $d076
+  f0310e: 61 00 d0 76              bsr.w    $f00186
 
-TRAP1_dir_17:
+TRAP1_TSKATTR:
   f03112: 08 28 00 07 00 2d        btst.b   #$7, $2d(a0)
   f03118: 67 06                    beq.b    $f03120
   f0311a: 06 6e 00 0a 01 02        addi.w   #$a, $102(a6)
@@ -5593,12 +5356,12 @@ loc_F03120:
   f03126: 3d 68 00 28 01 22        move.w   $28(a0), $122(a6)
   f0312c: 4e 73                    rte      
 
-TRAP1_dir_1A:
+TRAP1_EXPVCT:
   f0312e: 2d 6e 01 20 00 48        move.l   $120(a6), $48(a6)
   f03134: 08 ee 00 04 00 29        bset.b   #$4, $29(a6)
   f0313a: 4e 73                    rte      
 
-TRAP1_dir_1B:
+TRAP1_TRPVCT:
   f0313c: 2d 6e 01 20 00 4c        move.l   $120(a6), $4c(a6)
   f03142: 08 ee 00 03 00 29        bset.b   #$3, $29(a6)
   f03148: 4e 73                    rte      
@@ -5647,11 +5410,10 @@ loc_F03194:
   f03196: 20 55                    movea.l  (a5), a0
   f03198: 61 00 e6 dc              bsr.w    $f01876
   f0319c: 60 0a                    bra.b    $f031a8
-  f0319e: 4a 80                    DC.W     $4a80
-  f031a0: 66 4e                    DC.W     $664e
-  f031a2: 5a 6e                    DC.W     $5a6e
-  f031a4: 01 02                    DC.W     $0102
-  f031a6: 60 e0                    DC.W     $60e0
+  f0319e: 4a 80                    tst.l    d0
+  f031a0: 66 4e                    bne.b    $f031f0
+  f031a2: 5a 6e 01 02              addq.w   #$5, $102(a6)
+  f031a6: 60 e0                    bra.b    $f03188
 
 loc_F031A8:
   f031a8: 2d 40 01 20              move.l   d0, $120(a6)
@@ -5685,135 +5447,97 @@ loc_F031E0:
   f031e4: 61 00 d5 a2              bsr.w    $f00788
   f031e8: 53 47                    subq.w   #$1, d7
   f031ea: 66 f4                    bne.b    $f031e0
+
+loc_F031EC:
   f031ec: 60 00 01 08              bra.w    $f032f6
-  f031f0: 08 ee                    DC.W     $08ee
-  f031f2: 00 07                    DC.W     $0007
-  f031f4: 00 29                    DC.W     $0029
-  f031f6: 2d 40                    DC.W     $2d40
-  f031f8: 01 20                    DC.W     $0120
-  f031fa: 26 00                    DC.W     $2600
-  f031fc: 23 ae                    DC.W     $23ae
-  f031fe: 00 10                    DC.W     $0010
-  f03200: 30 00                    DC.W     $3000
-  f03202: 23 ae                    DC.W     $23ae
-  f03204: 00 14                    DC.W     $0014
-  f03206: 30 04                    DC.W     $3004
-  f03208: 23 88                    DC.W     $2388
-  f0320a: 30 08                    DC.W     $3008
-  f0320c: 4a 41                    DC.W     $4a41
-  f0320e: 66 40                    DC.W     $6640
-  f03210: 33 bc                    DC.W     $33bc
-  f03212: 00 01                    DC.W     $0001
-  f03214: 30 0c                    DC.W     $300c
-  f03216: 13 86                    DC.W     $1386
-  f03218: 30 0f                    DC.W     $300f
-  f0321a: 13 87                    DC.W     $1387
-  f0321c: 30 0e                    DC.W     $300e
-  f0321e: 33 87                    DC.W     $3387
-  f03220: 30 10                    DC.W     $3010
-  f03222: 42 b1                    DC.W     $42b1
-  f03224: 30 12                    DC.W     $3012
-  f03226: 33 42                    DC.W     $3342
-  f03228: 00 0e                    DC.W     $000e
-  f0322a: 0c 46                    DC.W     $0c46
-  f0322c: 00 01                    DC.W     $0001
-  f0322e: 66 08                    DC.W     $6608
-  f03230: 33 bc                    DC.W     $33bc
-  f03232: 00 01                    DC.W     $0001
-  f03234: 30 10                    DC.W     $3010
-  f03236: 60 b4                    DC.W     $60b4
-  f03238: 0c 46                    DC.W     $0c46
-  f0323a: 00 02                    DC.W     $0002
-  f0323c: 67 ae                    DC.W     $67ae
-  f0323e: 4a 87                    DC.W     $4a87
-  f03240: 66 aa                    DC.W     $66aa
-  f03242: 42 b1                    DC.W     $42b1
-  f03244: 30 00                    DC.W     $3000
-  f03246: 33 bc                    DC.W     $33bc
-  f03248: 04 00                    DC.W     $0400
-  f0324a: 30 0c                    DC.W     $300c
-  f0324c: 60 00                    DC.W     $6000
-  f0324e: ff 46                    DC.W     $ff46
-  f03250: c3 43                    DC.W     $c343
-  f03252: bc 31                    DC.W     $bc31
-  f03254: 30 0f                    DC.W     $300f
-  f03256: 66 94                    DC.W     $6694
-  f03258: 4a 87                    DC.W     $4a87
-  f0325a: 67 08                    DC.W     $6708
-  f0325c: 0c 86                    DC.W     $0c86
-  f0325e: 00 00                    DC.W     $0000
-  f03260: 00 03                    DC.W     $0003
-  f03262: 67 46                    DC.W     $6746
-  f03264: 0c 86                    DC.W     $0c86
-  f03266: 00 00                    DC.W     $0000
-  f03268: 00 02                    DC.W     $0002
-  f0326a: 66 06                    DC.W     $6606
-  f0326c: 4a b1                    DC.W     $4ab1
-  f0326e: 30 00                    DC.W     $3000
-  f03270: 67 68                    DC.W     $6768
-  f03272: 23 83                    DC.W     $2383
-  f03274: 10 10                    DC.W     $1010
-  f03276: 33 bc                    DC.W     $33bc
-  f03278: ff ff                    DC.W     $ffff
-  f0327a: 10 0c                    DC.W     $100c
-  f0327c: 13 86                    DC.W     $1386
-  f0327e: 10 0f                    DC.W     $100f
-  f03280: 42 31                    DC.W     $4231
-  f03282: 10 0e                    DC.W     $100e
-  f03284: 33 42                    DC.W     $3342
-  f03286: 00 0e                    DC.W     $000e
-  f03288: 52 71                    DC.W     $5271
-  f0328a: 30 0c                    DC.W     $300c
-  f0328c: 4a 87                    DC.W     $4a87
-  f0328e: 66 00                    DC.W     $6600
-  f03290: ff 3c                    DC.W     $ff3c
-  f03292: 0c 46                    DC.W     $0c46
-  f03294: 00 03                    DC.W     $0003
-  f03296: 66 00                    DC.W     $6600
-  f03298: 00 5e                    DC.W     $005e
-  f0329a: 4a b1                    DC.W     $4ab1
-  f0329c: 30 00                    DC.W     $3000
-  f0329e: 66 56                    DC.W     $6656
-  f032a0: 41 f1                    DC.W     $41f1
-  f032a2: 30 10                    DC.W     $3010
-  f032a4: 61 00                    DC.W     $6100
-  f032a6: d4 42                    DC.W     $d442
-  f032a8: 4e 73                    DC.W     $4e73
-  f032aa: 4a b1                    DC.W     $4ab1
-  f032ac: 30 00                    DC.W     $3000
-  f032ae: 66 00                    DC.W     $6600
-  f032b0: fe dc                    DC.W     $fedc
-  f032b2: 2d 43                    DC.W     $2d43
-  f032b4: 01 20                    DC.W     $0120
-  f032b6: 23 ae                    DC.W     $23ae
-  f032b8: 00 10                    DC.W     $0010
-  f032ba: 30 00                    DC.W     $3000
-  f032bc: 52 71                    DC.W     $5271
-  f032be: 30 0c                    DC.W     $300c
-  f032c0: 13 87                    DC.W     $1387
-  f032c2: 30 0e                    DC.W     $300e
-  f032c4: 60 08                    DC.W     $6008
-  f032c6: 41 f1                    DC.W     $41f1
-  f032c8: 30 10                    DC.W     $3010
-  f032ca: 61 00                    DC.W     $6100
-  f032cc: d4 bc                    DC.W     $d4bc
-  f032ce: 4a 31                    DC.W     $4a31
-  f032d0: 30 11                    DC.W     $3011
-  f032d2: 6b f2                    DC.W     $6bf2
-  f032d4: 13 87                    DC.W     $1387
-  f032d6: 30 11                    DC.W     $3011
-  f032d8: 60 1c                    DC.W     $601c
-  f032da: 2d 43                    DC.W     $2d43
-  f032dc: 01 20                    DC.W     $0120
-  f032de: 23 ae                    DC.W     $23ae
-  f032e0: 00 10                    DC.W     $0010
-  f032e2: 30 00                    DC.W     $3000
-  f032e4: 52 71                    DC.W     $5271
-  f032e6: 30 0c                    DC.W     $300c
-  f032e8: 4a 87                    DC.W     $4a87
-  f032ea: 67 0a                    DC.W     $670a
-  f032ec: 60 00                    DC.W     $6000
-  f032ee: fe de                    DC.W     $fede
+
+loc_F031F0:
+  f031f0: 08 ee 00 07 00 29        bset.b   #$7, $29(a6)
+  f031f6: 2d 40 01 20              move.l   d0, $120(a6)
+  f031fa: 26 00                    move.l   d0, d3
+  f031fc: 23 ae 00 10 30 00        move.l   $10(a6), (a1, d3.w)
+  f03202: 23 ae 00 14 30 04        move.l   $14(a6), $4(a1, d3.w)
+  f03208: 23 88 30 08              move.l   a0, $8(a1, d3.w)
+  f0320c: 4a 41                    tst.w    d1
+  f0320e: 66 40                    bne.b    $f03250
+  f03210: 33 bc 00 01 30 0c        move.w   #$1, $c(a1, d3.w)
+  f03216: 13 86 30 0f              move.b   d6, $f(a1, d3.w)
+  f0321a: 13 87 30 0e              move.b   d7, $e(a1, d3.w)
+  f0321e: 33 87 30 10              move.w   d7, $10(a1, d3.w)
+  f03222: 42 b1 30 12              clr.l    $12(a1, d3.w)
+  f03226: 33 42 00 0e              move.w   d2, $e(a1)
+  f0322a: 0c 46 00 01              cmpi.w   #$1, d6
+  f0322e: 66 08                    bne.b    $f03238
+  f03230: 33 bc 00 01 30 10        move.w   #$1, $10(a1, d3.w)
+  f03236: 60 b4                    bra.b    $f031ec
+
+loc_F03238:
+  f03238: 0c 46 00 02              cmpi.w   #$2, d6
+  f0323c: 67 ae                    beq.b    $f031ec
+  f0323e: 4a 87                    tst.l    d7
+  f03240: 66 aa                    bne.b    $f031ec
+  f03242: 42 b1 30 00              clr.l    (a1, d3.w)
+  f03246: 33 bc 04 00 30 0c        move.w   #$400, $c(a1, d3.w)
+  f0324c: 60 00 ff 46              bra.w    $f03194
+
+loc_F03250:
+  f03250: c3 43                    exg.l    d1, d3
+  f03252: bc 31 30 0f              cmp.b    $f(a1, d3.w), d6
+  f03256: 66 94                    bne.b    $f031ec
+  f03258: 4a 87                    tst.l    d7
+  f0325a: 67 08                    beq.b    $f03264
+  f0325c: 0c 86 00 00 00 03        cmpi.l   #$3, d6
+  f03262: 67 46                    beq.b    $f032aa
+
+loc_F03264:
+  f03264: 0c 86 00 00 00 02        cmpi.l   #$2, d6
+  f0326a: 66 06                    bne.b    $f03272
+  f0326c: 4a b1 30 00              tst.l    (a1, d3.w)
+  f03270: 67 68                    beq.b    $f032da
+
+loc_F03272:
+  f03272: 23 83 10 10              move.l   d3, $10(a1, d1.w)
+  f03276: 33 bc ff ff 10 0c        move.w   #$ffff, $c(a1, d1.w)
+  f0327c: 13 86 10 0f              move.b   d6, $f(a1, d1.w)
+  f03280: 42 31 10 0e              clr.b    $e(a1, d1.w)
+  f03284: 33 42 00 0e              move.w   d2, $e(a1)
+  f03288: 52 71 30 0c              addq.w   #$1, $c(a1, d3.w)
+  f0328c: 4a 87                    tst.l    d7
+  f0328e: 66 00 ff 3c              bne.w    $f031cc
+  f03292: 0c 46 00 03              cmpi.w   #$3, d6
+  f03296: 66 00 00 5e              bne.w    $f032f6
+  f0329a: 4a b1 30 00              tst.l    (a1, d3.w)
+  f0329e: 66 56                    bne.b    $f032f6
+  f032a0: 41 f1 30 10              lea.l    $10(a1, d3.w), a0
+  f032a4: 61 00 d4 42              bsr.w    $f006e8
+  f032a8: 4e 73                    rte      
+
+loc_F032AA:
+  f032aa: 4a b1 30 00              tst.l    (a1, d3.w)
+  f032ae: 66 00 fe dc              bne.w    $f0318c
+  f032b2: 2d 43 01 20              move.l   d3, $120(a6)
+  f032b6: 23 ae 00 10 30 00        move.l   $10(a6), (a1, d3.w)
+  f032bc: 52 71 30 0c              addq.w   #$1, $c(a1, d3.w)
+  f032c0: 13 87 30 0e              move.b   d7, $e(a1, d3.w)
+  f032c4: 60 08                    bra.b    $f032ce
+
+loc_F032C6:
+  f032c6: 41 f1 30 10              lea.l    $10(a1, d3.w), a0
+  f032ca: 61 00 d4 bc              bsr.w    $f00788
+
+loc_F032CE:
+  f032ce: 4a 31 30 11              tst.b    $11(a1, d3.w)
+  f032d2: 6b f2                    bmi.b    $f032c6
+  f032d4: 13 87 30 11              move.b   d7, $11(a1, d3.w)
+  f032d8: 60 1c                    bra.b    $f032f6
+
+loc_F032DA:
+  f032da: 2d 43 01 20              move.l   d3, $120(a6)
+  f032de: 23 ae 00 10 30 00        move.l   $10(a6), (a1, d3.w)
+  f032e4: 52 71 30 0c              addq.w   #$1, $c(a1, d3.w)
+  f032e8: 4a 87                    tst.l    d7
+  f032ea: 67 0a                    beq.b    $f032f6
+  f032ec: 60 00 fe de              bra.w    $f031cc
 
 loc_F032F0:
   f032f0: 06 6e 00 0b 01 02        addi.w   #$b, $102(a6)
@@ -5871,16 +5595,14 @@ loc_F0335A:
   f0335a: 06 6e 00 09 01 02        addi.w   #$9, $102(a6)
   f03360: 4e 73                    rte      
 
-TRAP1_dir_2C:
+TRAP1_DESEM:
   f03362: 2a 46                    movea.l  d6, a5
   f03364: 28 4e                    movea.l  a6, a4
   f03366: 20 55                    movea.l  (a5), a0
   f03368: 61 00 e5 0c              bsr.w    $f01876
   f0336c: 60 08                    bra.b    $f03376
-  f0336e: 5e 6e                    DC.W     $5e6e
-  f03370: 01 02                    DC.W     $0102
-  f03372: 60 00                    DC.W     $6000
-  f03374: 01 1a                    DC.W     $011a
+  f0336e: 5e 6e 01 02              addq.w   #$7, $102(a6)
+  f03372: 60 00 01 1a              bra.w    $f0348e
 
 loc_F03376:
   f03376: 26 00                    move.l   d0, d3
@@ -5990,7 +5712,7 @@ loc_F0348A:
 loc_F0348E:
   f0348e: 4e 73                    rte      
 
-TRAP1_dir_2E:
+TRAP1_DESEMA:
   f03490: 28 4e                    movea.l  a6, a4
   f03492: 60 02                    bra.b    $f03496
 
@@ -6017,15 +5739,14 @@ loc_F034AE:
   f034ae: 40 e7                    move.w   sr, -(a7)
   f034b0: 60 00 fe c4              bra.w    $f03376
 
-TRAP1_dir_40:
+TRAP1_EXMON:
   f034b4: 24 4d                    movea.l  a5, a2
   f034b6: 20 6c 00 08              movea.l  $8(a4), a0
   f034ba: 22 2c 00 0c              move.l   $c(a4), d1
   f034be: 61 00 e2 3e              bsr.w    $f016fe
   f034c2: 60 06                    bra.b    $f034ca
-  f034c4: 5e 6e                    DC.W     $5e6e
-  f034c6: 01 02                    DC.W     $0102
-  f034c8: 4e 73                    DC.W     $4e73
+  f034c4: 5e 6e 01 02              addq.w   #$7, $102(a6)
+  f034c8: 4e 73                    rte      
 
 loc_F034CA:
   f034ca: 2a 48                    movea.l  a0, a5
@@ -6068,9 +5789,8 @@ loc_F03514:
   f0352a: 41 d5                    lea.l    (a5), a0
   f0352c: 61 00 e0 aa              bsr.w    $f015d8
   f03530: 60 06                    bra.b    $f03538
-  f03532: 5a 6e                    DC.W     $5a6e
-  f03534: 01 02                    DC.W     $0102
-  f03536: 4e 73                    DC.W     $4e73
+  f03532: 5a 6e 01 02              addq.w   #$5, $102(a6)
+  f03536: 4e 73                    rte      
 
 loc_F03538:
   f03538: 08 ed 00 05 00 29        bset.b   #$5, $29(a5)
@@ -6094,7 +5814,7 @@ TRAP0_dir_14:
   f03568: 08 aa 00 0a 00 2c        bclr.b   #$a, $2c(a2)
   f0356e: 60 12                    bra.b    $f03582
 
-TRAP1_dir_41:
+TRAP1_DEMON:
   f03570: 24 48                    movea.l  a0, a2
   f03572: 08 2a 00 06 00 29        btst.b   #$6, $29(a2)
   f03578: 66 08                    bne.b    $f03582
@@ -6123,7 +5843,7 @@ loc_F035BE:
   f035c0: 61 00 d1 fe              bsr.w    $f007c0
   f035c4: 4e 73                    rte      
 
-TRAP1_dir_42:
+TRAP1_EXMMSK:
   f035c6: 10 28 01 48              move.b   $148(a0), d0
   f035ca: 21 6c 00 08 01 48        move.l   $8(a4), $148(a0)
   f035d0: 02 00 00 38              andi.b   #$38, d0
@@ -6145,14 +5865,14 @@ loc_F035E0:
   f03602: 20 6e 00 36              movea.l  $36(a6), a0
   f03606: 61 00 e1 54              bsr.w    $f0175c
   f0360a: 4e 75                    rts      
-  f0360c: 4e 71                    DC.W     $4e71
-  f0360e: 06 6e                    DC.W     $066e
-  f03610: 00 0c                    DC.W     $000c
-  f03612: 01 02                    DC.W     $0102
-  f03614: 60 06                    DC.W     $6006
+  f0360c: 4e 71                    nop      
+  f0360e: 06 6e 00 0c 01 02        addi.w   #$c, $102(a6)
+  f03614: 60 06                    bra.b    $f0361c
 
 loc_F03616:
   f03616: 06 6e 00 0a 01 02        addi.w   #$a, $102(a6)
+
+loc_F0361C:
   f0361c: 58 8f                    addq.l   #$4, a7
   f0361e: 4e 73                    rte      
 
@@ -6183,7 +5903,7 @@ loc_F03632:
   f03666: 28 ed 01 58              move.l   $158(a5), (a4)+
   f0366a: 4e 73                    rte      
 
-TRAP1_dir_44:
+TRAP1_PSTATE:
   f0366c: 26 46                    movea.l  d6, a3
   f0366e: 08 2d 00 0a 00 2c        btst.b   #$a, $2c(a5)
   f03674: 66 08                    bne.b    $f0367e
@@ -6213,7 +5933,7 @@ loc_F0368E:
   f036bc: 1b 40 00 fb              move.b   d0, $fb(a5)
   f036c0: 4e 73                    rte      
 
-TRAP1_dir_45:
+TRAP1_REXMON:
   f036c2: 26 4c                    movea.l  a4, a3
   f036c4: 08 2d 00 0a 00 2c        btst.b   #$a, $2c(a5)
   f036ca: 66 08                    bne.b    $f036d4
@@ -6245,11 +5965,9 @@ loc_F036D4:
   f03728: 20 6d 00 36              movea.l  $36(a5), a0
   f0372c: 61 00 e0 2e              bsr.w    $f0175c
   f03730: 60 0a                    bra.b    $f0373c
-  f03732: 4e 71                    DC.W     $4e71
-  f03734: 06 6e                    DC.W     $066e
-  f03736: 00 0f                    DC.W     $000f
-  f03738: 01 02                    DC.W     $0102
-  f0373a: 4e 73                    DC.W     $4e73
+  f03732: 4e 71                    nop      
+  f03734: 06 6e 00 0f 01 02        addi.w   #$f, $102(a6)
+  f0373a: 4e 73                    rte      
 
 loc_F0373C:
   f0373c: 08 86 00 00              bclr.b   #$0, d6
@@ -6269,7 +5987,7 @@ loc_F0374C:
 loc_F03762:
   f03762: 4e 73                    rte      
 
-TRAP1_dir_08:
+TRAP1_SNPTRC:
   f03764: 2c 08                    move.l   a0, d6
   f03766: 2a 48                    movea.l  a0, a5
   f03768: 22 79 00 00 0c 30        movea.l  $c30.l, a1
@@ -6282,7 +6000,7 @@ TRAP1_dir_08:
   f0377c: 20 6e 00 36              movea.l  $36(a6), a0
   f03780: 61 00 df da              bsr.w    $f0175c
   f03784: 60 0a                    bra.b    $f03790
-  f03786: 4e 71                    DC.W     $4e71
+  f03786: 4e 71                    nop      
 
 loc_F03788:
   f03788: 06 6e 00 0c 01 02        addi.w   #$c, $102(a6)
@@ -6308,7 +6026,7 @@ loc_F03796:
   f037b0: 24 cd                    move.l   a5, (a2)+
   f037b2: 4e 73                    rte      
 
-TRAP1_dir_49:
+TRAP1_STDTIM:
   f037b4: 08 2e 00 0f 00 28        btst.b   #$f, $28(a6)
   f037ba: 66 08                    bne.b    $f037c4
   f037bc: 06 6e 00 09 01 02        addi.w   #$9, $102(a6)
@@ -6390,7 +6108,7 @@ loc_F03850:
 loc_F03860:
   f03860: 4e 73                    rte      
 
-TRAP1_dir_4A:
+TRAP1_GTDTIM:
   f03862: 61 00 d7 32              bsr.w    $f00f96
   f03866: 20 38 0c 3e              move.l   $c3e.w, d0
   f0386a: 0c 81 05 26 5c 00        cmpi.l   #$5265c00, d1
@@ -6402,7 +6120,7 @@ loc_F0387A:
   f0387a: 48 d4 00 03              movem.l  d0-d1, (a4)
   f0387e: 4e 73                    rte      
 
-TRAP1_dir_1D:
+TRAP1_RQSTPA:
   f03880: 24 2c 00 0a              move.l   $a(a4), d2
   f03884: 36 2c 00 08              move.w   $8(a4), d3
   f03888: 7c 01                    moveq    #$1, d6
@@ -6567,8 +6285,8 @@ loc_F039E6:
   f039ee: 20 6e 00 36              movea.l  $36(a6), a0
   f039f2: 61 00 dd 68              bsr.w    $f0175c
   f039f6: 60 04                    bra.b    $f039fc
-  f039f8: 60 18                    DC.W     $6018
-  f039fa: 60 16                    DC.W     $6016
+  f039f8: 60 18                    bra.b    $f03a12
+  f039fa: 60 16                    bra.b    $f03a12
 
 loc_F039FC:
   f039fc: 2a 46                    movea.l  d6, a5
@@ -6581,7 +6299,7 @@ loc_F039FC:
 loc_F03A12:
   f03a12: 4e 73                    rte      
 
-TRAP1_dir_33:
+TRAP1_SERVER:
   f03a14: 3e 2c 00 04              move.w   $4(a4), d7
   f03a18: 08 2e 00 0f 00 28        btst.b   #$f, $28(a6)
   f03a1e: 66 04                    bne.b    $f03a24
@@ -6595,11 +6313,9 @@ loc_F03A24:
   f03a2c: 20 6e 00 36              movea.l  $36(a6), a0
   f03a30: 61 00 dd 2a              bsr.w    $f0175c
   f03a34: 60 0a                    bra.b    $f03a40
-  f03a36: 4e 71                    DC.W     $4e71
-  f03a38: 06 6e                    DC.W     $066e
-  f03a3a: 00 0c                    DC.W     $000c
-  f03a3c: 01 02                    DC.W     $0102
-  f03a3e: 4e 73                    DC.W     $4e73
+  f03a36: 4e 71                    nop      
+  f03a38: 06 6e 00 0c 01 02        addi.w   #$c, $102(a6)
+  f03a3e: 4e 73                    rte      
 
 loc_F03A40:
   f03a40: 4a ae 00 40              tst.l    $40(a6)
@@ -6633,7 +6349,7 @@ loc_F03A66:
 loc_F03AA0:
   f03aa0: 4e 73                    rte      
 
-TRAP1_dir_34:
+TRAP1_DSERVE:
   f03aa2: 24 08                    move.l   a0, d2
   f03aa4: 02 82 00 00 00 0f        andi.l   #$f, d2
   f03aaa: 45 f8 0c 9a              lea.l    $c9a.w, a2
@@ -6716,7 +6432,7 @@ loc_F03B60:
   f03b60: 40 e7                    move.w   sr, -(a7)
   f03b62: 60 00 ff 68              bra.w    $f03acc
 
-TRAP1_dir_35:
+TRAP1_DERQST:
   f03b66: 22 08                    move.l   a0, d1
   f03b68: 02 81 00 00 00 0f        andi.l   #$f, d1
   f03b6e: 20 08                    move.l   a0, d0
@@ -6759,7 +6475,7 @@ loc_F03BBA:
 loc_F03BD0:
   f03bd0: 4e 73                    rte      
 
-TRAP1_dir_36:
+TRAP1_AKRQST:
   f03bd2: 08 2d 00 0b 00 2c        btst.b   #$b, $2c(a5)
   f03bd8: 66 10                    bne.b    $f03bea
   f03bda: 08 2d 00 02 00 2d        btst.b   #$2, $2d(a5)
@@ -6853,7 +6569,7 @@ loc_F03CB4:
   f03cba: 08 ed 00 09 00 2c        bset.b   #$9, $2c(a5)
   f03cc0: 4e 73                    rte      
 
-TRAP1_dir_1C:
+TRAP1_TSKINFO:
   f03cc2: 08 2e 00 0f 00 28        btst.b   #$f, $28(a6)
   f03cc8: 66 08                    bne.b    $f03cd2
   f03cca: 06 6e 00 09 01 02        addi.w   #$9, $102(a6)
@@ -6865,11 +6581,9 @@ loc_F03CD2:
   f03cdc: 20 6e 00 36              movea.l  $36(a6), a0
   f03ce0: 61 00 da 7a              bsr.w    $f0175c
   f03ce4: 60 0a                    bra.b    $f03cf0
-  f03ce6: 4e 71                    DC.W     $4e71
-  f03ce8: 06 6e                    DC.W     $066e
-  f03cea: 00 0c                    DC.W     $000c
-  f03cec: 01 02                    DC.W     $0102
-  f03cee: 4e 73                    DC.W     $4e73
+  f03ce6: 4e 71                    nop      
+  f03ce8: 06 6e 00 0c 01 02        addi.w   #$c, $102(a6)
+  f03cee: 4e 73                    rte      
 
 loc_F03CF0:
   f03cf0: 08 2c 00 0f 00 08        btst.b   #$f, $8(a4)
@@ -6886,7 +6600,7 @@ loc_F03D04:
   f03d06: 51 c8 ff fc              dbra     d0, $f03d04
   f03d0a: 4e 73                    rte      
 
-TRAP1_dir_3C:
+TRAP1_CMR:
   f03d0c: 2c 08                    move.l   a0, d6
   f03d0e: 08 06 00 00              btst.b   #$0, d6
   f03d12: 66 10                    bne.b    $f03d24
@@ -6895,7 +6609,7 @@ TRAP1_dir_3C:
   f03d18: 20 6e 00 36              movea.l  $36(a6), a0
   f03d1c: 61 00 da 3e              bsr.w    $f0175c
   f03d20: 60 08                    bra.b    $f03d2a
-  f03d22: 4e 71                    DC.W     $4e71
+  f03d22: 4e 71                    nop      
 
 loc_F03D24:
   f03d24: 70 02                    moveq    #$2, d0
@@ -6934,9 +6648,8 @@ loc_F03D5C:
   f03d72: 06 45 00 1c              addi.w   #$1c, d5
   f03d76: 61 00 d9 e4              bsr.w    $f0175c
   f03d7a: 60 06                    bra.b    $f03d82
-  f03d7c: 4e 71                    DC.W     $4e71
-  f03d7e: 60 00                    DC.W     $6000
-  f03d80: 02 98                    DC.W     $0298
+  f03d7c: 4e 71                    nop      
+  f03d7e: 60 00 02 98              bra.w    $f04018
 
 loc_F03D82:
   f03d82: 42 80                    clr.l    d0
@@ -7095,11 +6808,9 @@ loc_F03EB0:
   f03ebe: 48 e7 80 38              movem.l  d0/a2-a4, -(a7)
   f03ec2: 61 00 d3 7a              bsr.w    $f0123e
   f03ec6: 60 0a                    bra.b    $f03ed2
-  f03ec8: 4c df                    DC.W     $4cdf
-  f03eca: 1c 01                    DC.W     $1c01
-  f03ecc: 70 08                    DC.W     $7008
-  f03ece: 61 00                    DC.W     $6100
-  f03ed0: ff 52                    DC.W     $ff52
+  f03ec8: 4c df 1c 01              movem.l  (a7)+, d0/a2-a4
+  f03ecc: 70 08                    moveq    #$8, d0
+  f03ece: 61 00 ff 52              bsr.w    $f03e22
 
 loc_F03ED2:
   f03ed2: 4c df 1c 01              movem.l  (a7)+, d0/a2-a4
@@ -7231,6 +6942,8 @@ loc_F04010:
 loc_F04014:
   f04014: 70 09                    moveq    #$9, d0
   f04016: 61 f4                    bsr.b    $f0400c
+
+loc_F04018:
   f04018: 70 02                    moveq    #$2, d0
   f0401a: 61 f0                    bsr.b    $f0400c
 
@@ -7269,8 +6982,8 @@ loc_F04064:
   f0406a: 2c 07                    move.l   d7, d6
   f0406c: 61 00 d6 ee              bsr.w    $f0175c
   f04070: 60 0c                    bra.b    $f0407e
-  f04072: 4e 71                    DC.W     $4e71
-  f04074: 60 a2                    DC.W     $60a2
+  f04072: 4e 71                    nop      
+  f04074: 60 a2                    bra.b    $f04018
   f04076: 00 08                    DC.W     $0008
   f04078: 12 08                    DC.W     $1208
   f0407a: 08 08                    DC.W     $0808
@@ -7402,6 +7115,8 @@ loc_F04162:
 loc_F04172:
   f04172: 08 29 00 01 00 49        btst.b   #$1, $49(a1)
   f04178: 67 04                    beq.b    $f0417e
+
+loc_F0417A:
   f0417a: 70 83                    moveq    #$83, d0
   f0417c: 61 54                    bsr.b    $f041d2
 
@@ -7450,10 +7165,10 @@ loc_F041D6:
   f041ee: 7a 04                    moveq    #$4, d5
   f041f0: 61 00 d5 6a              bsr.w    $f0175c
   f041f4: 60 08                    bra.b    $f041fe
-  f041f6: 4e 71                    DC.W     $4e71
-  f041f8: 20 5f                    DC.W     $205f
-  f041fa: 70 c7                    DC.W     $70c7
-  f041fc: 61 d4                    DC.W     $61d4
+  f041f6: 4e 71                    nop      
+  f041f8: 20 5f                    movea.l  (a7)+, a0
+  f041fa: 70 c7                    moveq    #$c7, d0
+  f041fc: 61 d4                    bsr.b    $f041d2
 
 loc_F041FE:
   f041fe: 20 5f                    movea.l  (a7)+, a0
@@ -7470,148 +7185,115 @@ loc_F04200:
   f04224: 23 41 00 30              move.l   d1, $30(a1)
   f04228: 00 69 80 00 00 48        ori.w    #$8000, $48(a1)
   f0422e: 60 72                    bra.b    $f042a2
-  f04230: 41 ee                    DC.W     $41ee
-  f04232: 00 44                    DC.W     $0044
-  f04234: 08 2a                    DC.W     $082a
-  f04236: 00 00                    DC.W     $0000
-  f04238: 00 03                    DC.W     $0003
-  f0423a: 67 16                    DC.W     $6716
-  f0423c: 4a 90                    DC.W     $4a90
-  f0423e: 67 62                    DC.W     $6762
-  f04240: 26 50                    DC.W     $2650
-  f04242: 20 ab                    DC.W     $20ab
-  f04244: 00 0c                    DC.W     $000c
-  f04246: 42 ab                    DC.W     $42ab
-  f04248: 00 0c                    DC.W     $000c
-  f0424a: 02 6b                    DC.W     $026b
-  f0424c: 7f ff                    DC.W     $7fff
-  f0424e: 00 48                    DC.W     $0048
-  f04250: 60 ea                    DC.W     $60ea
-  f04252: 61 00                    DC.W     $6100
-  f04254: 00 f6                    DC.W     $00f6
-  f04256: 66 00                    DC.W     $6600
-  f04258: fe fc                    DC.W     $fefc
-  f0425a: 20 a9                    DC.W     $20a9
-  f0425c: 00 0c                    DC.W     $000c
-  f0425e: 42 a9                    DC.W     $42a9
-  f04260: 00 0c                    DC.W     $000c
-  f04262: 02 69                    DC.W     $0269
-  f04264: 7f ff                    DC.W     $7fff
-  f04266: 00 48                    DC.W     $0048
-  f04268: 60 38                    DC.W     $6038
-  f0426a: 08 2e                    DC.W     $082e
-  f0426c: 00 07                    DC.W     $0007
-  f0426e: 00 28                    DC.W     $0028
-  f04270: 67 00                    DC.W     $6700
-  f04272: fd a2                    DC.W     $fda2
-  f04274: 08 a9                    DC.W     $08a9
-  f04276: 00 01                    DC.W     $0001
-  f04278: 00 49                    DC.W     $0049
-  f0427a: 66 26                    DC.W     $6626
-  f0427c: 70 06                    DC.W     $7006
-  f0427e: 61 00                    DC.W     $6100
-  f04280: 00 e8                    DC.W     $00e8
-  f04282: 61 00                    DC.W     $6100
-  f04284: 00 c6                    DC.W     $00c6
-  f04286: 66 00                    DC.W     $6600
-  f04288: fe cc                    DC.W     $fecc
-  f0428a: 20 a9                    DC.W     $20a9
-  f0428c: 00 0c                    DC.W     $000c
-  f0428e: 42 a9                    DC.W     $42a9
-  f04290: 00 0c                    DC.W     $000c
-  f04292: 02 69                    DC.W     $0269
-  f04294: 7f ff                    DC.W     $7fff
-  f04296: 00 48                    DC.W     $0048
-  f04298: 08 e9                    DC.W     $08e9
-  f0429a: 00 01                    DC.W     $0001
-  f0429c: 00 49                    DC.W     $0049
-  f0429e: 66 00                    DC.W     $6600
-  f042a0: fe da                    DC.W     $feda
+  f04230: 41 ee 00 44              lea.l    $44(a6), a0
+  f04234: 08 2a 00 00 00 03        btst.b   #$0, $3(a2)
+  f0423a: 67 16                    beq.b    $f04252
+
+loc_F0423C:
+  f0423c: 4a 90                    tst.l    (a0)
+  f0423e: 67 62                    beq.b    $f042a2
+  f04240: 26 50                    movea.l  (a0), a3
+  f04242: 20 ab 00 0c              move.l   $c(a3), (a0)
+  f04246: 42 ab 00 0c              clr.l    $c(a3)
+  f0424a: 02 6b 7f ff 00 48        andi.w   #$7fff, $48(a3)
+  f04250: 60 ea                    bra.b    $f0423c
+
+loc_F04252:
+  f04252: 61 00 00 f6              bsr.w    $f0434a
+  f04256: 66 00 fe fc              bne.w    $f04154
+  f0425a: 20 a9 00 0c              move.l   $c(a1), (a0)
+  f0425e: 42 a9 00 0c              clr.l    $c(a1)
+  f04262: 02 69 7f ff 00 48        andi.w   #$7fff, $48(a1)
+  f04268: 60 38                    bra.b    $f042a2
+  f0426a: 08 2e 00 07 00 28        btst.b   #$7, $28(a6)
+  f04270: 67 00 fd a2              beq.w    $f04014
+  f04274: 08 a9 00 01 00 49        bclr.b   #$1, $49(a1)
+  f0427a: 66 26                    bne.b    $f042a2
+  f0427c: 70 06                    moveq    #$6, d0
+  f0427e: 61 00 00 e8              bsr.w    $f04368
+  f04282: 61 00 00 c6              bsr.w    $f0434a
+  f04286: 66 00 fe cc              bne.w    $f04154
+  f0428a: 20 a9 00 0c              move.l   $c(a1), (a0)
+  f0428e: 42 a9 00 0c              clr.l    $c(a1)
+  f04292: 02 69 7f ff 00 48        andi.w   #$7fff, $48(a1)
+  f04298: 08 e9 00 01 00 49        bset.b   #$1, $49(a1)
+  f0429e: 66 00 fe da              bne.w    $f0417a
 
 loc_F042A2:
   f042a2: 60 00 00 da              bra.w    $f0437e
-  f042a6: 0c 29                    DC.W     $0c29
-  f042a8: 00 ff                    DC.W     $00ff
-  f042aa: 00 18                    DC.W     $0018
-  f042ac: 66 04                    DC.W     $6604
-  f042ae: 7e 85                    DC.W     $7e85
-  f042b0: 61 76                    DC.W     $6176
-  f042b2: 0c 29                    DC.W     $0c29
-  f042b4: 00 80                    DC.W     $0080
-  f042b6: 00 18                    DC.W     $0018
-  f042b8: 65 08                    DC.W     $6508
-  f042ba: 0c 29                    DC.W     $0c29
-  f042bc: 00 8f                    DC.W     $008f
-  f042be: 00 18                    DC.W     $0018
-  f042c0: 63 08                    DC.W     $6308
-  f042c2: 61 00                    DC.W     $6100
-  f042c4: 00 86                    DC.W     $0086
-  f042c6: 66 00                    DC.W     $6600
-  f042c8: fe 8c                    DC.W     $fe8c
-  f042ca: 2a 49                    DC.W     $2a49
-  f042cc: 0c 2d                    DC.W     $0c2d
-  f042ce: 00 10                    DC.W     $0010
-  f042d0: 00 18                    DC.W     $0018
-  f042d2: 65 5a                    DC.W     $655a
-  f042d4: 0c 2d                    DC.W     $0c2d
-  f042d6: 00 7f                    DC.W     $007f
-  f042d8: 00 18                    DC.W     $0018
-  f042da: 63 10                    DC.W     $6310
-  f042dc: 0c 2d                    DC.W     $0c2d
-  f042de: 00 80                    DC.W     $0080
-  f042e0: 00 18                    DC.W     $0018
-  f042e2: 65 4a                    DC.W     $654a
-  f042e4: 0c 2d                    DC.W     $0c2d
-  f042e6: 00 8f                    DC.W     $008f
-  f042e8: 00 18                    DC.W     $0018
-  f042ea: 62 42                    DC.W     $6242
-  f042ec: 20 2a                    DC.W     $202a
-  f042ee: 00 08                    DC.W     $0008
-  f042f0: 66 04                    DC.W     $6604
-  f042f2: 20 2e                    DC.W     $202e
-  f042f4: 00 10                    DC.W     $0010
-  f042f6: 22 2a                    DC.W     $222a
-  f042f8: 00 0c                    DC.W     $000c
-  f042fa: 66 04                    DC.W     $6604
-  f042fc: 22 2e                    DC.W     $222e
-  f042fe: 00 14                    DC.W     $0014
-  f04300: 08 2e                    DC.W     $082e
-  f04302: 00 07                    DC.W     $0007
-  f04304: 00 28                    DC.W     $0028
-  f04306: 66 0a                    DC.W     $660a
-  f04308: b2 ae                    DC.W     $b2ae
-  f0430a: 00 14                    DC.W     $0014
-  f0430c: 67 04                    DC.W     $6704
-  f0430e: 7e c6                    DC.W     $7ec6
-  f04310: 61 16                    DC.W     $6116
-  f04312: 48 ed                    DC.W     $48ed
-  f04314: 00 03                    DC.W     $0003
-  f04316: 00 54                    DC.W     $0054
-  f04318: 41 ed                    DC.W     $41ed
-  f0431a: 00 54                    DC.W     $0054
-  f0431c: 70 06                    DC.W     $7006
-  f0431e: 4e 40                    DC.W     $4e40
-  f04320: 60 08                    DC.W     $6008
-  f04322: 4e 71                    DC.W     $4e71
-  f04324: 7e 03                    DC.W     $7e03
-  f04326: 61 40                    DC.W     $6140
+  f042a6: 0c 29 00 ff 00 18        cmpi.b   #$ff, $18(a1)
+  f042ac: 66 04                    bne.b    $f042b2
+  f042ae: 7e 85                    moveq    #$85, d7
+  f042b0: 61 76                    bsr.b    $f04328
+
+loc_F042B2:
+  f042b2: 0c 29 00 80 00 18        cmpi.b   #$80, $18(a1)
+  f042b8: 65 08                    bcs.b    $f042c2
+  f042ba: 0c 29 00 8f 00 18        cmpi.b   #$8f, $18(a1)
+  f042c0: 63 08                    bls.b    $f042ca
+
+loc_F042C2:
+  f042c2: 61 00 00 86              bsr.w    $f0434a
+  f042c6: 66 00 fe 8c              bne.w    $f04154
+
+loc_F042CA:
+  f042ca: 2a 49                    movea.l  a1, a5
+  f042cc: 0c 2d 00 10 00 18        cmpi.b   #$10, $18(a5)
+  f042d2: 65 5a                    bcs.b    $f0432e
+  f042d4: 0c 2d 00 7f 00 18        cmpi.b   #$7f, $18(a5)
+  f042da: 63 10                    bls.b    $f042ec
+  f042dc: 0c 2d 00 80 00 18        cmpi.b   #$80, $18(a5)
+  f042e2: 65 4a                    bcs.b    $f0432e
+  f042e4: 0c 2d 00 8f 00 18        cmpi.b   #$8f, $18(a5)
+  f042ea: 62 42                    bhi.b    $f0432e
+
+loc_F042EC:
+  f042ec: 20 2a 00 08              move.l   $8(a2), d0
+  f042f0: 66 04                    bne.b    $f042f6
+  f042f2: 20 2e 00 10              move.l   $10(a6), d0
+
+loc_F042F6:
+  f042f6: 22 2a 00 0c              move.l   $c(a2), d1
+  f042fa: 66 04                    bne.b    $f04300
+  f042fc: 22 2e 00 14              move.l   $14(a6), d1
+
+loc_F04300:
+  f04300: 08 2e 00 07 00 28        btst.b   #$7, $28(a6)
+  f04306: 66 0a                    bne.b    $f04312
+  f04308: b2 ae 00 14              cmp.l    $14(a6), d1
+  f0430c: 67 04                    beq.b    $f04312
+  f0430e: 7e c6                    moveq    #$c6, d7
+  f04310: 61 16                    bsr.b    $f04328
+
+loc_F04312:
+  f04312: 48 ed 00 03 00 54        movem.l  d0-d1, $54(a5)
+  f04318: 41 ed 00 54              lea.l    $54(a5), a0
+  f0431c: 70 06                    moveq    #$6, d0
+  f0431e: 4e 40                    trap     #$0
+  f04320: 60 08                    bra.b    $f0432a
+  f04322: 4e 71                    nop      
+  f04324: 7e 03                    moveq    #$3, d7
+  f04326: 61 40                    bsr.b    $f04368
+
+loc_F04328:
   f04328: 60 3e                    bra.b    $f04368
-  f0432a: 2b 48                    DC.W     $2b48
-  f0432c: 00 50                    DC.W     $0050
-  f0432e: 41 f8                    DC.W     $41f8
-  f04330: 0c 8e                    DC.W     $0c8e
-  f04332: 61 00                    DC.W     $6100
-  f04334: c4 54                    DC.W     $c454
-  f04336: 20 6d                    DC.W     $206d
-  f04338: 00 1a                    DC.W     $001a
-  f0433a: d1 e8                    DC.W     $d1e8
-  f0433c: 00 04                    DC.W     $0004
-  f0433e: 2f 0e                    DC.W     $2f0e
-  f04340: 4e 90                    DC.W     $4e90
-  f04342: 2c 5f                    DC.W     $2c5f
-  f04344: 4a 40                    DC.W     $4a40
-  f04346: 67 3e                    DC.W     $673e
-  f04348: 61 2c                    DC.W     $612c
+
+loc_F0432A:
+  f0432a: 2b 48 00 50              move.l   a0, $50(a5)
+
+loc_F0432E:
+  f0432e: 41 f8 0c 8e              lea.l    $c8e.w, a0
+  f04332: 61 00 c4 54              bsr.w    $f00788
+  f04336: 20 6d 00 1a              movea.l  $1a(a5), a0
+  f0433a: d1 e8 00 04              adda.l   $4(a0), a0
+  f0433e: 2f 0e                    move.l   a6, -(a7)
+  f04340: 4e 90                    jsr      (a0)
+  f04342: 2c 5f                    movea.l  (a7)+, a6
+  f04344: 4a 40                    tst.w    d0
+  f04346: 67 3e                    beq.b    $f04386
+  f04348: 61 2c                    bsr.b    $f04376
+
+loc_F0434A:
   f0434a: 20 29 00 14              move.l   $14(a1), d0
   f0434e: 41 ee 00 44              lea.l    $44(a6), a0
 
@@ -7645,6 +7327,8 @@ loc_F04376:
 loc_F0437E:
   f0437e: 41 f8 0c 8e              lea.l    $c8e.w, a0
   f04382: 61 00 c4 04              bsr.w    $f00788
+
+loc_F04386:
   f04386: 42 80                    clr.l    d0
   f04388: 42 ae 01 00              clr.l    $100(a6)
 

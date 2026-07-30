@@ -3495,6 +3495,130 @@ with tempfile.TemporaryDirectory() as _tdq:
           all(struct.unpack('>H', _rq[b + 0x2C:b + 0x2E])[0] == 0x4000
               for b in (0x1E900, 0x1EB00, 0x1ED00, 0x1EF00, 0x1F100, 0x1F300)))
 
+    # --- $0C00: the allocatable-RAM region list ---------------------------
+    # Read only by TRAP #0 $04 (T0PAGAL, $F01240) and $05 ($F01496), which is
+    # what identifies it.  Records are 10 bytes, sign bit of +$00 terminates.
+    _reg = _lw(0x0C00)
+    check('$0C00 points just past a $1A-byte header at $1FE00',
+          _reg == 0x1FE1A)
+    _rf = struct.unpack('>H', _rq[_reg:_reg + 2])[0]
+    _rb, _rl = _lw(_reg + 2), _lw(_reg + 6)
+    check('its one record spans $1100-$1FE00 (126,208 bytes of allocatable RAM)',
+          _rf & 0x8000 == 0 and _rb == 0x1100 and _rl == 0x1FE00)
+    check('...and the next record at stride $0A is the $FFFF terminator',
+          struct.unpack('>H', _rq[_reg + 10:_reg + 12])[0] == 0xFFFF)
+    # The page heap carves DOWNWARD from the limit, so the boot high-water
+    # mark and the documented staging bound are one number, not two.
+    check('the boot heap bottom $1DD00 lies inside that region, below its limit',
+          _rb < 0x1DD00 < _rl)
+    check('...so the staging buffer $10000-$1DCFF is inside it too',
+          _rb <= 0x10000 and 0x1DCFF < _rl)
+
+    # --- TCB layout, against Motorola TCB.EQ ------------------------------
+    # +$138 is a POINTER to a 2-page per-task block; the 10-byte ASQ
+    # descriptors live at that block's base, not at TCB+$138 itself.
+    _tcbs = (0x1E900, 0x1EB00, 0x1ED00, 0x1EF00, 0x1F100, 0x1F300)
+    check('TCBSTATE (+$2C) is $40000000 in every TCB = TSKSBLCK, "task is blocked"',
+          all(struct.unpack('>I', _rq[b + 0x2C:b + 0x30])[0] == 0x40000000
+              for b in _tcbs))
+    check('TSK2NRDY (+$2D bit 4, "on ready list") is clear in every TCB',
+          all(_rq[b + 0x2D] & 0x10 == 0 for b in _tcbs))
+    _blocks = [_lw(b + 0x138) for b in _tcbs]
+    check('TCB+$138 points at per-task blocks tiling $1DD00-$1E8FF at stride $200',
+          _blocks == [0x1E700, 0x1E500, 0x1E300, 0x1E100, 0x1DF00, 0x1DD00])
+    check('...and the ASQ descriptors sit at those blocks\' bases, 2/2/2/2/1/0',
+          [sum(1 for k in range(3) if _rq[p + 10 * k:p + 10 * k + 4].strip(b'\0'))
+           for p in _blocks] == [2, 2, 2, 2, 1, 0])
+    check('XP1I\'s two descriptors are AXP1 and HXP1',
+          _rq[0x1E700:0x1E704] == b'AXP1' and _rq[0x1E70A:0x1E70E] == b'HXP1')
+    # --- $0C18: the CCB list, and why !CCB has no instance ----------------
+    # All three $0C18 sites sit in the handler at $F03D0C = directive $3C,
+    # CMR "REQUEST CHANNEL".  Nothing in this firmware issues it.
+    check('$0C18, the channel-control-block list head, is null',
+          _lw(0x0C18) == 0)
+    check('...which is why the !CCB marker has no instance in RAM',
+          _rq.count(b'!CCB') == 0)
+    check('the tagged markers present are !TCB x6, !TST x6 and six singletons',
+          [_rq.count(t) for t in (b'!TCB', b'!TST', b'!GST', b'!IDV',
+                                  b'!IOV', b'!PAT', b'!UDR', b'!UST')]
+          == [6, 6, 1, 1, 1, 1, 1, 1])
+    check('...and !CCB, !DLY, !ASQ and !VCT are all untagged/absent',
+          all(_rq.count(t) == 0
+              for t in (b'!CCB', b'!DLY', b'!ASQ', b'!VCT')))
+
+    # --- the extension-directive table ------------------------------------
+    _udr = _lw(0x0C28)
+    check('$0C28 heads the !UDR user-directive table at $1F600',
+          _udr == 0x1F600 and _rq[_udr:_udr + 4] == b'!UDR')
+    _udrn = struct.unpack('>H', _rq[_udr + 4:_udr + 6])[0]
+    check('!UDR has 25 slots and every handler is zero (the path is dead here)',
+          _udrn == 25 and all(struct.unpack('>I', _rq[_udr + 6 + 10 * k + 6:
+                                                      _udr + 6 + 10 * k + 10])[0] == 0
+                              for k in range(_udrn)))
+
+check('$0C00 is written once, at $F09D72',
+      insn(0xF09D72) == 'move.l a3, $c00.w')
+check('the page allocator reads it at $F01280',
+      insn(0xF01280) == 'movea.l $c00.w, a1')
+check('the region list is walked at stride $0A',
+      insn(0xF09D7C) == 'lea.l $a(a1), a1')
+check('...with the terminator test on the word at +$00',
+      insn(0xF09D80) == 'move.w (a1), d1')
+
+# --- the TRAP #1 table stride is FOUR, not two ---------------------------
+# An earlier pass here read it as 2, which gave a plausible 73 live slots and
+# survived name-checking (names come from the directive NUMBER via TR1.EQ, so
+# 13/13 known names still lined up).  Execution is what separates them.
+check('the TRAP #1 dispatcher scales the directive by 4',
+      insn(0xF0031A) == 'lsl.l #$2, d0')
+check('...bounds it at $130/4 = 76, i.e. 77 slots',
+      insn(0xF0031C) == 'cmpi.l #$130, d0')
+check('...and takes word0 of the slot as a self-relative offset',
+      insn(0xF0036A) == 'adda.w (a2), a2')
+check('a NEGATIVE directive goes to the extension path at $F00378',
+      insn(0xF00318) == 'bmi.b $f00378'
+      and insn(0xF00378) == 'movea.l $c28.w, a2')
+check('...which indexes 10-byte records',
+      insn(0xF0038A) == 'mulu.w #$a, d0')
+
+
+def _t1(n, stride=4):
+    a = 0xF003D8 + stride * n
+    return a + struct.unpack('>h', _rom[a - _B:a - _B + 2])[0]
+
+
+check('at stride 4 exactly 60 of 77 TRAP #1 slots are live',
+      sum(1 for n in range(77) if _t1(n) != _t1(0)) == 60)
+check('$4C resolves to $F02216, containing the documented handler $F0226A',
+      _t1(0x4C) == 0xF02216 and _t1(0x4C) != _t1(0))
+# The stride decision, made by execution rather than by plausibility.
+with tempfile.TemporaryDirectory() as _tdt:
+    subprocess.run([EMU, '-rom', ROM, '-cycles', '300000000',
+                    '-trace', f'{_tdt}/t'], capture_output=True, timeout=400)
+    _dpcs = collections.Counter(re.findall(r'[0-9A-F]{6}',
+                                           open(f'{_tdt}/t').read()))
+_KNOWN = {0x01, 0x0B, 0x0D, 0x0F, 0x10, 0x11, 0x12, 0x13,
+          0x29, 0x2A, 0x2B, 0x2D, 0x43, 0x4C}
+_hit4 = {n for n in range(77)
+         if _t1(n) != _t1(0) and f'{_t1(n):06X}' in _dpcs}
+_hit2 = {n for n in range(77)
+         if _t1(n, 2) != _t1(0, 2) and f'{_t1(n, 2):06X}' in _dpcs}
+check('every stride-4 handler that executes is a directive the firmware issues',
+      _hit4 and _hit4 <= _KNOWN)
+check('...while NO stride-2 handler that executes is one, which decides it',
+      _hit2 and not (_hit2 & _KNOWN))
+check('the $4C implementation $F0226A runs 6 times, once per task',
+      _dpcs['F0226A'] == 6)
+check('...and the directive error stub $F003D0 never runs at all',
+      _dpcs['F003D0'] == 0)
+
+# Regression: FPS3K_RAMWATCH used to strtoul() the whole string, so a
+# "<lo>-<hi>" range collapsed to a single longword and the rest of a
+# structure read as never-written.  Assert the range form actually widens.
+_rwn = lambda spec: run_err({'FPS3K_RAMWATCH': spec}, 400000000).count('[RAMWATCH]')
+check('FPS3K_RAMWATCH accepts a range, and the range sees more than one longword',
+      _rwn('1FE1A-1FE24') > _rwn('1FE1A'))
+
 # The enqueue/dequeue pair on TCB+$2D bit 4.
 check('the ready-queue insert guards with bset #$4,$2d(a0)',
       insn(0xF007C2) == 'bset.b #$4, $2d(a0)')

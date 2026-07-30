@@ -31,13 +31,15 @@ OUT_PATH = os.environ.get("FPS3K_DIS_OUT", "fps3k_kernel.asm")
 # both hold the error return, so there are 34 distinct entry points.
 TRAP0_TABLE, TRAP0_N = 0xF001D6, 35
 
-# The five directives this firmware actually issues, from TR1.EQ/STR.EQ.
+# TRAP #0 directive names, from Motorola STR.EQ (decimal numbering).
+# $05 T0PGFR independently confirms the page-deallocator reading of $F01496.
 DIRECTIVE_NAMES = {
-    0x04: "T0PAGAL",   # allocate physical pages -- the 256-byte page allocator
-    0x06: "T0GETTCB",
-    0x16: "T0WAKEUP",
-    0x18: "T0QEVNTI",
-    0x1F: "T0CRTCB",
+    0x01: "T0P", 0x02: "T0V", 0x03: "T0RYDLAY", 0x04: "T0PAGAL",
+    0x05: "T0PGFR", 0x06: "T0GETTCB", 0x07: "T0FNDSEG", 0x08: "T0LOGPHY",
+    0x09: "T0FNDGSG", 0x0B: "T0QEVNTN", 0x0C: "T0FNDSEM", 0x0D: "T0GTXTCB",
+    0x0E: "T0PAUSE", 0x15: "T0EXABRT", 0x16: "T0WAKEUP", 0x17: "T0QEVNTT",
+    0x18: "T0QEVNTI", 0x1A: "T0LOGPHO", 0x1C: "T0RDTIM", 0x1F: "T0CRTCB",
+    0x20: "T0KILLER", 0x22: "T0RQPA",
 }
 
 
@@ -45,14 +47,44 @@ DIRECTIVE_NAMES = {
 # number directives in DECIMAL -- the reason they went unmatched for so long.
 TRAP1_TABLE, TRAP1_N = 0xF003D8, 77
 TRAP1_NAMES = {
-    0x01: "GTSEG", 0x0B: "CRTCB", 0x0D: "START", 0x0F: "TERM", 0x10: "TERMT",
-    0x11: "SUSPND", 0x12: "RESUME", 0x13: "WAIT", 0x29: "ATSEM", 0x2A: "WTSEM",
-    0x2B: "SGSEM", 0x2D: "CRSEM", 0x43: "RSTATE", 0x4C: "CNCTIRQ",
+    0x4C: "CNCTIRQ",   # not in TR1.EQ (which stops at 75); handler $F02216
+    0x01: "GTSEG", 0x02: "DESEG", 0x03: "TRSEG", 0x04: "ATTSEG",
+    0x05: "SHRSEG", 0x06: "MOVELL", 0x07: "DCLSHR", 0x08: "SNPTRC",
+    0x09: "RCVSA", 0x0A: "GTTASKID", 0x0B: "CRTCB", 0x0C: "GTTASKNM",
+    0x0D: "START", 0x0E: "ABORT", 0x0F: "TERM", 0x10: "TERMT",
+    0x11: "SUSPND", 0x12: "RESUME", 0x13: "WAIT", 0x14: "WAKEUP",
+    0x15: "DELAY", 0x16: "RELINQ", 0x17: "TSKATTR", 0x18: "SETPRI",
+    0x19: "STOP", 0x1A: "EXPVCT", 0x1B: "TRPVCT", 0x1C: "TSKINFO",
+    0x1D: "RQSTPA", 0x1E: "DELAYW", 0x1F: "GTASQ", 0x20: "DEASQ",
+    0x21: "SETASQ", 0x22: "RDEVNT", 0x23: "QEVNT", 0x24: "WTEVNT",
+    0x25: "RTEVNT", 0x26: "GTEVNT", 0x29: "ATSEM", 0x2A: "WTSEM",
+    0x2B: "SGSEM", 0x2C: "DESEM", 0x2D: "CRSEM", 0x2E: "DESEMA",
+    0x33: "SERVER", 0x34: "DSERVE", 0x35: "DERQST", 0x36: "AKRQST",
+    0x3A: "CDIR", 0x3C: "CMR", 0x3D: "CISR", 0x3E: "SINT",
+    0x40: "EXMON", 0x41: "DEMON", 0x42: "EXMMSK", 0x43: "RSTATE",
+    0x44: "PSTATE", 0x45: "REXMON", 0x48: "MOVEPL", 0x49: "STDTIM",
+    0x4A: "GTDTIM", 0x4B: "FLUSHC",
 }
 
 
+# Regions that are KNOWN data and must never be decoded as instructions.  The
+# dispatch tables are the ones that actually bit: a table of small
+# self-relative offsets disassembles cleanly, so both the recursive descent
+# (via a stale seed) and the gap-recovery sweep will happily turn 14 bytes of
+# the TRAP #1 table into `ori.b`/`move.b`.  Guarding only the sweep was not
+# enough -- the descent reached $F003DA on its own.
+DATA_REGIONS = [
+    (TRAP0_TABLE, TRAP0_TABLE + 4 * TRAP0_N),   # $F001D6 + 140
+    (TRAP1_TABLE, TRAP1_TABLE + 4 * TRAP1_N),   # $F003D8 + 308
+]
+
+
+def is_data(a):
+    return any(lo <= a < hi for lo, hi in DATA_REGIONS)
+
+
 def valid(a):
-    return START <= a < END and (a & 1) == 0
+    return START <= a < END and (a & 1) == 0 and not is_data(a)
 
 
 def seed_set(rom):
@@ -121,6 +153,24 @@ def seed_set(rom):
             if valid(t):
                 seeds.add(t)
                 names.setdefault(t, f"VEC_{v:02X}_{t:06X}")
+
+    # FPS3K_DIS_TRACE=<pc trace> seeds from PCs the CPU actually executed.
+    #
+    # This is the strongest seed source available: an executed PC is an
+    # instruction boundary by construction, not by inference.  It cannot
+    # mistake data for code the way a linear sweep can.  It is of course only
+    # as complete as the run that produced it, so it supplements the static
+    # seeds rather than replacing them.
+    _tr = os.environ.get("FPS3K_DIS_TRACE")
+    if _tr:
+        try:
+            import re as _re
+            for _p in {int(x, 16) for x in
+                       _re.findall(r"[0-9A-F]{6}", open(_tr).read())}:
+                if valid(_p):
+                    seeds.add(_p)
+        except OSError:
+            pass
 
     # NOT a vector table.  The reset overlay aliases ROM at 0 only so the
     # 68000 can fetch SSP from +0 and PC from +4; measured, +4 = $F09C00 and
@@ -235,6 +285,64 @@ def decode(rom, seeds):
     return code, visited
 
 
+def recover_gaps(rom, code, visited, rounds=4):
+    """Linear-sweep recovery for code the recursive descent cannot reach.
+
+    Descent stops dead at an unconditional flow break (`bra`, `rts`, `jmp`),
+    so a block whose only entry is a computed jump or a fallthrough from an
+    undecoded neighbour stays dark -- $F01932 (`tst.l d5` / `beq`, 54 bytes
+    into GTSEG) is the type case.
+
+    Turning data into code is the failure mode to avoid, so a run is accepted
+    ONLY if it reconnects: every instruction must decode, and the sweep must
+    end either exactly on the first byte of already-known code or on a
+    terminator.  A run that decodes into the middle of a known instruction,
+    or that runs off the end, is rejected whole.
+    """
+    md = Cs(CS_ARCH_M68K, CS_MODE_M68K_000)
+    recovered = 0
+    for _ in range(rounds):
+        gained = 0
+        # Gap starts: an even, unvisited byte whose predecessor is visited or
+        # which begins the region.
+        starts = [a for a in range(START, END, 2)
+                  if not visited[a - START] and not is_data(a)
+                  and (a == START or visited[a - 1 - START])]
+        for g in starts:
+            run, a, ok = [], g, False
+            while valid(a) and not visited[a - START]:
+                if is_data(a):
+                    break            # ran into a known table: reject the run
+                try:
+                    ins = next(md.disasm(rom[a - BASE:a - BASE + 10], a, count=1))
+                except StopIteration:
+                    break
+                if ins.size == 0 or a + ins.size > END:
+                    break
+                if any(is_data(x) for x in range(a, a + ins.size)):
+                    break
+                run.append(ins)
+                a += ins.size
+                if ins.mnemonic.lower() in TERMINAL:
+                    ok = True
+                    break
+            else:
+                # Fell out because we reached visited bytes -- only valid if we
+                # landed on an instruction boundary, not inside one.
+                ok = valid(a) and a in code
+            if not ok or not run:
+                continue
+            for ins in run:
+                for i in range(ins.size):
+                    visited[ins.address - START + i] = 1
+                code[ins.address] = ins
+                gained += ins.size
+        recovered += gained
+        if not gained:
+            break
+    return recovered
+
+
 def main():
     rom = open(ROM_PATH, "rb").read()
     seeds, names = seed_set(rom)
@@ -243,6 +351,8 @@ def main():
     ptrs = scan_pointer_tables(rom)
     print(f"pointer-table seeds: {len(ptrs)}")
     code, visited = decode(rom, seeds | calls | ptrs)
+    rec = recover_gaps(rom, code, visited)
+    print(f"gap recovery : +{rec} bytes")
 
     # Any address that is branched to gets a label, so the listing is navigable.
     labels = dict(names)

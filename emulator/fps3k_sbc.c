@@ -429,8 +429,17 @@ static void bus_write8(uint32_t a, uint8_t v) {
     {
         const char *rw = getenv("FPS3K_RAMWATCH");
         if (rw) {
-            uint32_t w = (uint32_t)strtoul(rw, NULL, 16);
-            if (a >= w && a <= w + 3)
+            /* Accepts "<addr>" (one longword, the original form) or
+             * "<lo>-<hi>" (inclusive range).  It used to be strtoul() alone,
+             * which parsed "1FE00-1FE28" as $1FE00 and silently discarded the
+             * range -- so a sweep over a 40-byte structure reported writes to
+             * its first 4 bytes only, and the untouched remainder read as a
+             * finding rather than as the matcher being too narrow. */
+            char *end = NULL;
+            uint32_t w = (uint32_t)strtoul(rw, &end, 16);
+            uint32_t hi = (end && *end == '-')
+                          ? (uint32_t)strtoul(end + 1, NULL, 16) : w + 3;
+            if (a >= w && a <= hi)
                 fprintf(stderr, "[RAMWATCH] write %06X <- %02X from PC=%06X\n",
                         a, v, m68k_get_reg(NULL, M68K_REG_PPC));
         }
