@@ -15314,3 +15314,36 @@ loop runs correctly right up to the instruction that would hand off to it.
 
 **That also means the emulator is behaving correctly here.** A model that somehow drove past this
 gate would be wrong, not better.
+
+### Forcing the gate proves it is the only blocker — but the aftermath is not attributable
+
+Setting the gate with `FPS3K_POKE="0C34=8000,10AE=0001"` drives XP1I past it for the first time:
+
+| site | before | after |
+|---|---:|---:|
+| `$F08572` gate test | 218 | 1 |
+| `$F0857A` USER path | **0** | **1** |
+| `$F0858C` (`moveq #$43`) | 0 | **1** |
+| `$F08608` skip | 218 | 0 |
+
+and the trace ring records the directive itself:
+
+```
+d0=$43 RSTATE   caller PC=$F08592
+```
+
+**So the `$10AE` gate is the sole thing preventing the `USER` handoff** — nothing else in the path
+objects, and directive `$43` is issued with `'USER'` exactly as the static reading predicted.
+
+**The run then derails to final PC `$C382008`**, outside ROM and RAM. I am *not* claiming the
+firmware mishandles a missing `USER` task. `FPS3K_POKE` forces a location to *read* a constant,
+so `$10AE` never behaves like a real longword — anything the handler stores there is not read
+back. That is an inconsistent machine state of our making, and it is at least as likely a cause as
+any firmware behaviour. Separating the two needs a writable poke, which the hook does not provide.
+
+What is established: **the path is reachable, the gate is the only guard, and `$43 RSTATE` with
+`'USER'` is what lies beyond it.**
+
+Incidental find from the same trace: the SGSEM caller PC here is **`$F07E76`**, not the `$F07EAA`
+seen earlier — so **XP1I has at least two SGSEM call sites**, and the service loop this file
+described is one of several paths to the same directive.
