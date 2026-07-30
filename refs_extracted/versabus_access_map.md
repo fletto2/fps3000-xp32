@@ -13778,3 +13778,42 @@ So there are two independent ack dependencies and I conflated them: one on the i
 (real, but not binding, since the ISR re-enters freely) and one on the script pointer (binding).
 The correct target is the script advance — for instance advancing on ISR entry rather than on an
 observed bit that the firmware deliberately clears four instructions later.
+
+### Two more refuted hypotheses, and a diagnostic that describes the wrong path
+
+Having found that the interrupt line was not the limiter, I proposed the **script advance** was:
+`panel_resp_tick` samples `MODE0_RESP_ACK` as a level, and the panel issuer clears that bit at
+`$F056AC` four instructions before spinning, so the tick must catch a closing window.
+
+Implemented as `FPS3K_ACKLATCH` — latch the acknowledge on the *write* that sets bit 10, which
+the firmware's later clear cannot race. **Measured: no change at either level.**
+
+| | ops | ISR fires |
+|---|---:|---:|
+| level 6 / +ACKLATCH | 3/16 / 3/16 | 2 / 2 |
+| level 7 / +ACKLATCH | 7/16 / 7/16 | 224 / 224 |
+
+Reverted. That is two consecutive hypotheses — pulse the line, then latch the ack — both
+plausible, both derived from reading the mechanism, and both wrong.
+
+Measuring instead of proposing a third gives the useful result:
+
+```
+arm=yes:                  0
+response acknowledged:  219
+```
+
+**The `[PANEL] … arm=yes/no` diagnostic describes a path that is not delivering any codes.** It
+reports on the CHANNEL_SELECT arm route, gated on MODE1 bit 12, which logs 33,204 `arm=no` lines
+during the self-test beacon and never once arms. Actual delivery goes through the `FPS3K_XPIRQ`
+stamp route added later, which that diagnostic does not describe at all.
+
+So a reader watching the panel log to understand why codes stop being delivered is watching the
+wrong mechanism entirely — the same defect this file already records for "arm=yes" overstating
+its case, now in a sharper form: the message is not merely overstated, it is about a different
+code path than the one under investigation.
+
+**What is actually established:** 219 responses are acknowledged and 224 ISR entries occur, yet
+only 7 distinct operations dispatch. Delivery is plentiful; something downstream of the ISR is
+not re-latching new codes. That is the next thing to measure — and it should be measured, not
+guessed at, given the last two attempts.
