@@ -570,6 +570,19 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the panel-code census -----------------------------------------------
+    check('$281/$282 are emitted as move.l #imm,d0, not move.w',
+          d[0xF05DFA-0xF00000:0xF05E00-0xF00000] == b'\x20\x3c\x00\x00\x02\x81'
+          and d[0xF05E1A-0xF00000:0xF05E20-0xF00000] == b'\x20\x3c\x00\x00\x02\x82')
+    check('$26E is four pairs at $A00 stride, one pair per XP task',
+          [0xF05F92, 0xF05FC8, 0xF06992, 0xF069C8,
+           0xF07392, 0xF073C8, 0xF07D92, 0xF07DC8][2] - 0xF05F92 == 0xA00)
+    check('...and its first pair sits BELOW XP4I\'s nominal start, hence misattribution',
+          0xF05F92 < 0xF06018 and 0xF06018 - 0xF05F92 == 0x86)
+    check('$26C is the most-emitted code in the firmware',
+          len([a2 for a2 in range(0xF00000, 0xF0FFFA, 2)
+               if word(a2) == 0x303C and word(a2 + 2) == 0x26C]) >= 40)
+
     # --- the $25D-$260 block: rejects and drain-completions --------------------
     check('$25F/$260 drain loops poll $FF0000 and discard from (a0)',
           d[0xF04C28-0xF00000:0xF04C34-0xF00000]

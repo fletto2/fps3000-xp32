@@ -1563,6 +1563,46 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### A definitive panel-code census: 41 codes, 154 sites, 50 unused
+
+With the code map available, the panel codes can finally be counted rather than inferred.
+Scanning **only code addresses**, and both emission forms — `move.w #imm,d0` (`303C`) and
+`move.l #imm,d0` (`203C`):
+
+**41 distinct codes across 154 emission sites**, and 50 of the values in `$258`-`$2B2` are
+never emitted at all.
+
+The structural pattern is the useful part:
+
+| shape | codes |
+|---|---|
+| **1 per XP task** (4 sites at `$A00` stride) | `$262`, `$263`, `$264`, `$269`, `$270` |
+| **2 per XP task** (8 sites) | `$26E`, `$271` |
+| heavily replicated | `$26C` ×45, `$26A` ×20, `$26B` ×10 |
+| single site | 22 codes, including all nine `$29E`-`$2A6` exception reporters |
+
+`$26C` at **45 sites** is the most-emitted code in the firmware by a wide margin — consistent
+with its being `PCMD_RELEASE`, the `D2_FIN` finalize code every completed operation ends with.
+
+**Two methodological corrections came out of building this.**
+
+*A `move.w`-only scan misses three codes*, including `$281` and `$282` — the two host-protocol
+codes central to the byte handshake. They are emitted as `move.l #$281,d0` (`203C 0000 0281`),
+so a scan keyed on `303C` reports the host protocol as having no emission sites at all. I
+caught this only because I knew independently that `$281` had to exist; a code I had no prior
+reason to expect would have been silently absent. **Instruction-form assumptions are the same
+class of error as address-form assumptions**, and this session has now hit both.
+
+*Regional attribution near task boundaries is unreliable and should not be used.* My first
+census reported `$26E` in "IO1I ×2 + XP2I/3I/4I ×2" and `$271` in "XP1I ×2 + XP2I/3I/4I ×2",
+an apparent asymmetry contradicting the established finding that all four XP tasks emit an
+identical multiset. The site addresses settle it — `$26E` is at `$F05F92, $F05FC8, $F06992,
+$F069C8, $F07392, $F073C8, $F07D92, $F07DC8`: **four pairs at exactly `$A00` stride**, one per
+XP task. The first pair sits `$86` below XP4I's nominal body start and so falls in IO1I's
+range. Identical to the `$92`-byte misattribution already documented for the `$2D` directive
+sites. **Report structure (stride, pairing) rather than region membership**; the strides are
+exact and the boundaries are not.
+
 ### The `$25D`-`$260` block settled: rejects and drain-completions, and `$FF0000` is a count
 
 Following through on the previous entry rather than leaving the block half-corrected, every
