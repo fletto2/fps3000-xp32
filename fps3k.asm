@@ -481,7 +481,15 @@ loc_F04736:
 
 loc_F0473C:
   f0473c: 70 13                   moveq    #$13, d0
+;### *** THIS IS WHAT BLOCKS RDHC. *** Directive $13 is the BLOCKING WAIT, and
+;###   measured over a full boot $F0473C executes EXACTLY ONCE while $F04740
+;###   NEVER executes.  RDHC enters this wait and never leaves it, so the whole
+;###   5,888-byte region behind it -- the four-command host interface, CPLOAD,
+;###   the 42-operation table -- is unreachable.  Not a missing register value
+;###   and not a missing bit: one RTOS wait with no waker.
   f0473e: 4e 41                   trap     #$1
+;### After the wait, bit 7 of the latched MODE0 low byte picks the arm: SET goes
+;###   to $F048D8 (the command arm), CLEAR to the 4-bit sub-dispatch at $F0474C.
   f04740: 08 39 00 07 00 00 0e 87  btst.b   #$7, $e87.l
 ;>>>> [R1/DS] This branch instruction checks if bit 7 of the global status byte at $e87 is set, and if so, branches to loc_F048D8 to handle an error or special condition during the RDHC (Receive/Display/Handle Command) task's main loop, which processes XP-32 panel commands.
 ;>>>> [R1/BOTH] This instruction branches to loc_F048D8 if bit 7 of the global status byte at $e87.l is set, which is part of the TCBRDHC task's XP-32 panel command dispatch and error handling loop.
@@ -659,6 +667,12 @@ loc_F048D6:
 ; TCBRDHC_ErrorPath
 ; ============================================================
 TCBRDHC_ErrorPath:
+;### MISNOMER: the label TCBRDHC_ErrorPath is WRONG -- this is the bit-7 COMMAND
+;###   ARM, the most important arm in the task.  It tests $E86 & $1F:
+;###     $14 -> jsr $F052F8, fetch and execute a command record
+;###     $13 -> moveq #$12,d0 / lea $F0469E,a0 / trap #1  (RDHC directive $12)
+;###   So $14 is the chassis "a command record is waiting" code and the full
+;###   trigger byte is $94: bit 7 for the arm, $14 for the reason.
   f048d8: 30 39 00 00 0e 86       move.w   $e86.l, d0
 ;>>>> [R3/BOTH] Mask command opcode for XLTR channel configuration indexing.
   f048de: 02 40 00 1f             andi.w   #$1f, d0
@@ -1461,8 +1475,19 @@ loc_F050EC:
 ; ChannelConfigDispatch
 ; ============================================================
 ChannelConfigDispatch:
+;### MISNOMER: the label ChannelConfigDispatch is WRONG -- this is the ISR EXIT
+;###   STUB (movem / move #$C,ccr / trap #1), the same address as operation $F
+;###   in the 16-entry table.  So every handler's "bra.w ChannelConfigDispatch"
+;###   is a return-from-interrupt, and op $F is simply "return immediately".
 ;### code $F: return from interrupt - the only slot that unwinds the frame
   f050f8: 4c df ff ff             movem.l  (a7)+, d0-d7/a0-a7
+;### THE WAKER.  This trap #1 is what would release RDHC's directive-$13 wait.
+;###   Measured across every configuration tried (FPS3K_XPIRQ=6, FPS3K_RESP at
+;###   $0B/$07/$0E/$0F/$14/$94, with and without a command record): the ISR
+;###   $F04930 enters ONCE, dispatches ONCE via $F04A6E, and NEVER gets here.
+;###   The operation it selects fails validation, issues a panel command through
+;###   PanelIOConfigure, and that issuer ENDS IN bra . -- so RDHC is blocked by
+;###   the same self-programmed deadlock as TCBIO1I, one level further out.
 ;### ISR EXIT SEQUENCE, five of six tasks: move #$0C,ccr / trap #1 / moveq #$0F,d0
 ;###   / trap #1. RDHC is the exception -- it traps then jmp back into its own code.
 ;### ISR EXIT STUB (task descriptor +$10): move #$0C,ccr / trap #1. Identical in all 6
@@ -1770,6 +1795,10 @@ loc_F052F8:
   f0530c: 2a 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a5
   f05312: 3f 2d 02 10             move.w   $210(a5)  [XLTR_MODE2_PAGE], -(a7)
   f05316: 3b 7c 00 00 02 10       move.w   #$0, $210(a5)  [XLTR_MODE2_PAGE]
+;### RDHC READS ITS COMMAND RECORD FROM CHASSIS MEMORY, not SBC RAM: MODE2 is
+;###   saved and forced to page 0, a0 = $400000, then move.l (a0)+,d1.  So the
+;###   host writes command records into shared chassis memory rather than poking
+;###   SBC registers.  Emulator hook: FPS3K_CHASSIS_CMD=<hex longwords>.
   f0531c: 20 7c 00 40 00 00       movea.l  #$400000, a0
 ;### RDHC HOST COMMAND DISPATCHER.  The command number is the FIRST LONGWORD
 ;###   of the parameter block in a0 -- move.l (a0)+,d1 -- so each command is a

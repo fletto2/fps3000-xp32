@@ -85,6 +85,42 @@ static uint8_t  chassis_mem[CHASSIS_MEM_SIZE];
 static uint8_t  chassis_written[CHASSIS_MEM_SIZE];
 static FILE    *chassis_uninit_fp = NULL;
 static uint64_t chassis_mem_reads, chassis_mem_writes, chassis_mem_berrs;
+/* FPS3K_CHASSIS_CMD: place an RDHC command record in chassis memory.
+ *
+ * $F052F8 clears MODE2 to select page 0 and sets a0 = $400000, then
+ * $F05322 does move.l (a0)+,d1 -- so RDHC reads its command record out of the
+ * CHASSIS MEMORY WINDOW, not out of SBC RAM.  The record is a self-contained
+ * sequence of longwords whose first is the command number 1..4 (see
+ * refs_extracted/versabus_access_map.md, "RDHC's host interface is four
+ * commands").  With chassis_mem zero-filled the number reads 0, which
+ * $F05324's cmpi.l/ble rejects, so RDHC has never executed a single command in
+ * any emulator run.  This hook supplies one.
+ *
+ * Format: comma-separated 32-bit hex longwords, laid down from $400000.
+ *   FPS3K_CHASSIS_CMD=1,1              -> cmd 1, channel 1
+ *   FPS3K_CHASSIS_CMD=4,10,5330,...    -> cmd 4 (CPLOAD), count, 'S0', ... */
+static void chassis_cmd_preload(void) {
+    const char *spec = getenv("FPS3K_CHASSIS_CMD");
+    if (!spec) return;
+    uint32_t off = 0;
+    const char *p = spec;
+    while (*p && off + 4 <= CHASSIS_MEM_SIZE) {
+        char *end;
+        unsigned long v = strtoul(p, &end, 16);
+        if (end == p) break;
+        chassis_mem[off + 0] = (uint8_t)(v >> 24);
+        chassis_mem[off + 1] = (uint8_t)(v >> 16);
+        chassis_mem[off + 2] = (uint8_t)(v >> 8);
+        chassis_mem[off + 3] = (uint8_t)v;
+        chassis_written[off + 0] = chassis_written[off + 1] =
+        chassis_written[off + 2] = chassis_written[off + 3] = 1;
+        off += 4;
+        p = end;
+        while (*p == ',' || *p == ' ') p++;
+    }
+    fprintf(stderr, "[chassis-cmd] %u longwords placed at $400000\n", off / 4);
+}
+
 static uint8_t  rom[ROM_SIZE];
 
 static int      reset_overlay = 1;     /* ROM aliased at 0x000000 until first stack-pop */
@@ -647,6 +683,7 @@ int main(int argc, char **argv) {
     m68k_init();
     m68k_set_int_ack_callback(m68k_irq_callback);
     m68k_set_instr_hook_callback(instr_hook_callback);
+    chassis_cmd_preload();
     m68k_pulse_reset();
 
     fprintf(stderr, "[init] M68000 reset; PC=%06X SP=%06X\n",
@@ -811,7 +848,7 @@ int main(int argc, char **argv) {
             "FPS3K_RAMWATCH","FPS3K_VECWATCH","FPS3K_UNINIT",
             "FPS3K_CHASSIS_UNINIT","FPS3K_LOGCHASSIS","FPS3K_BUSPC",
             "FPS3K_BSTAT19_B5","FPS3K_PCLOG","FPS3K_REGLOG","FPS3K_APIF_LEGACY",
-            "FPS3K_RTOSDUMP",
+            "FPS3K_RTOSDUMP","FPS3K_CHASSIS_CMD",
         };
         int any = 0;
         fprintf(stderr, "[done] hooks active:");

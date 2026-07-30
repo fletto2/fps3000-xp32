@@ -1473,6 +1473,111 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### What blocks RDHC is one instruction: the directive-`$13` wait at `$F0473E`
+
+RDHC's main loop is four instructions long:
+
+```
+$F0473C  moveq   #$13,d0
+$F0473E  trap    #1              ; BLOCKING WAIT
+$F04740  btst.b  #$7,$e87        ; bit 7 of the latched MODE0 low byte
+$F04748  bne.w   $F048D8         ;   set   -> the command arm
+$F0474C  move.w  $e86,d0         ;   clear -> the 4-bit sub-dispatch
+$F04752  andi.w  #$f,d0
+```
+
+Measured over a full boot: **`$F0473C` executes exactly once and `$F04740` never
+executes at all.** RDHC enters its blocking wait and never leaves it. Everything
+this document has just decoded — the four-command host interface, `CPLOAD`, the
+42-operation table, the whole 5,888-byte region — sits behind that single `trap #1`.
+
+*That is the real reason RDHC's coverage has been stuck near zero through every
+configuration this project has tried. It is not a missing register value or a
+missing bit; it is one RTOS wait with no waker.*
+
+#### The command arm, and two labels that are wrong
+
+Bit 7 set takes RDHC to `$F048D8`, which tests `$E86 & $1F`:
+
+- **`$14` → `jsr $F052F8`**, which fetches and executes a command record
+- **`$13` → `moveq #$12,d0 / lea $F0469E,a0 / trap #1`**, RDHC's own directive `$12`
+
+So `$14` is the chassis's "a command record is waiting" code, and the full trigger
+byte is **`$94`** — bit 7 for the arm, `$14` for the reason.
+
+Two labels in the disassembly are misnomers and should be read with care:
+
+- **`TCBRDHC_ErrorPath` at `$F048D8` is not an error path.** It is the bit-7
+  command arm — the most important arm in the task.
+- **`ChannelConfigDispatch` at `$F050F8` is not a dispatcher.** It is the **ISR
+  exit stub**: `movem.l (a7)+,d0-d7/a0-a7 / move #$C,ccr / trap #1`. It is the same
+  address as operation `$F` in the 16-entry table, so every handler's `bra.w
+  ChannelConfigDispatch` is a return-from-interrupt, and operation `$F` is simply
+  "return immediately".
+
+#### RDHC reads its command record from chassis memory, not SBC RAM
+
+```
+$F052F8  clr.l    $0E5C
+$F05304  move.w   #$0,$0E74
+$F0530C  movea.l  #$FF0000,a5
+$F05312  move.w   $210(a5),-(a7)   ; save MODE2
+$F05316  move.w   #$0,$210(a5)     ; select page 0
+$F0531C  movea.l  #$400000,a0      ; the CHASSIS MEMORY WINDOW
+$F05322  move.l   (a0)+,d1         ; command number
+```
+
+The record lives in **chassis memory at `$400000`, page 0** — consistent with
+operation `$3`'s paged read, and it means the host writes command records into
+shared chassis memory rather than poking SBC registers. A new hook,
+`FPS3K_CHASSIS_CMD=<hex longwords>`, places a record there; it loads correctly and
+reports `[chassis-cmd] N longwords placed at $400000`, but nothing consumes it yet
+for the reason below.
+
+#### The waker is RDHC's own ISR exit, and it deadlocks before reaching it
+
+The `trap #1` at `$F050FC` inside the exit stub is what would release the `$13`
+wait. Measured across every configuration tried — `FPS3K_XPIRQ=6` (BIM0 ch0),
+`FPS3K_RESP` at `$0B`/`$07`/`$0E`/`$0F`/`$14`/`$94`, with and without a command
+record:
+
+| PC | meaning | executions |
+|---|---|---|
+| `$F04930` | RDHC's ISR entry | **1** |
+| `$F04A6E` | bit-7-clear dispatcher | **1** |
+| `$F0495C` | bit-7-set dispatcher | **0** |
+| `$F050F8` | ISR exit stub — the waker | **0** |
+| `$F04740` | first instruction after the wait | **0** |
+
+The ISR enters once, dispatches once, and never returns. The mechanism is the
+deadlock this document already recorded for TCBIO1I, now shown for RDHC: the
+operation it selects fails its validation, issues a panel command through
+`PanelIOConfigure`, and **that issuer ends in `bra .`** — one of the eight
+byte-identical copies, each followed by its own spin. Escaping needs the responder
+to rewrite the saved PC, but we are already *inside* the responder at level 6, so
+no further level-6 interrupt can preempt it.
+
+**So RDHC is blocked by the same self-programmed deadlock as TCBIO1I, one level
+further out.** The firmware writes both interrupt levels itself, so this is not a
+board-strap question.
+
+#### Two emulator gaps, now precisely located
+
+1. **`FPS3K_RESP` does not reach `$E86` on the BIM-interrupt path.** With
+   `FPS3K_RESP=0x94` the bit-7 dispatcher `$F0495C` still never runs, and no
+   response value makes `$F050F8` run. The response-injection path and the
+   BIM-interrupt path are not connected in the model — the arm at `versabus.c:628`
+   uses a hard-coded `0x14` while the `FPS3K_RESP` arm at `:929` sits behind a
+   different condition.
+2. **Nothing satisfies a directive-`$13` wait.** Even with a correct response, the
+   ISR must reach `$F050F8`; that needs an operation whose validation succeeds,
+   which needs `$E60` in `1..$105E`, which is set by command 1's body — which is
+   itself behind the wait. The cycle has to be broken from outside, either by
+   modelling the panel-issuer spin escape properly or by injecting the wake.
+
+*Both are concrete and testable, which is a better position than "the chassis is a
+black box". The gap has gone from a whole protocol to two named mechanisms.*
+
 ### RDHC's host interface is four commands, and command 4 is CPLOAD
 
 `$F05320` is RDHC's command dispatcher, and it is tiny:

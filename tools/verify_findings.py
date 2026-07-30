@@ -451,6 +451,40 @@ else:
           len({l for l in trk.split() if 'F07D00' <= l <= 'F086FF'}) > 200 and
           len({l for l in trn2.split() if 'F07D00' <= l <= 'F086FF'}) < 130)
 
+    # --- what blocks RDHC: the directive-$13 wait ---------------------------
+    check("RDHC's main loop is moveq #$13 / trap #1 / btst #7,$E87 / bne",
+          d[0xF0473C-0xF00000:0xF04740-0xF00000] == b'\x70\x13\x4e\x41'
+          and d[0xF04740-0xF00000:0xF0474C-0xF00000]
+              == b'\x08\x39\x00\x07\x00\x00\x0e\x87\x66\x00\x01\x8e')
+    tr, _ = run({}, 400_000_000)
+    pcs = tr.split('\n')
+    check('RDHC enters its $13 wait exactly once and NEVER returns from it',
+          pcs.count('F0473C') == 1 and pcs.count('F04740') == 0)
+    # The ISR needs its BIM raised to run at all; the default config never
+    # raises BIM0 ch0, so assert against the config where the ISR DOES enter.
+    tr6 = run({'FPS3K_XPIRQ': '6'}, 400_000_000)[0].split('\n')
+    check('...its ISR enters once and its exit stub $F050F8, the only waker, never runs',
+          tr6.count('F04930') == 1 and tr6.count('F04A6E') == 1
+          and tr6.count('F050F8') == 0 and tr6.count('F04740') == 0)
+    check('ChannelConfigDispatch IS $F050F8, an ISR exit stub, not a dispatcher',
+          d[0xF050F8-0xF00000:0xF05102-0xF00000]
+          == b'\x4c\xdf\xff\xff\x44\xfc\x00\x0c\x4e\x41')
+    check('the bit-7 arm $F048D8 tests $E86 & $1F for $14 (command) and $13 (dir $12)',
+          d[0xF048D8-0xF00000:0xF048E8-0xF00000]
+              == b'\x30\x39\x00\x00\x0e\x86\x02\x40\x00\x1f'
+                 b'\x0c\x40\x00\x14\x66\x0c'
+          and d[0xF048FE-0xF00000:0xF04902-0xF00000] == b'\x0c\x40\x00\x13')
+    check('RDHC fetches its command record from $400000 with MODE2 forced to page 0',
+          d[0xF05316-0xF00000:0xF05322-0xF00000]
+          == b'\x3b\x7c\x00\x00\x02\x10\x20\x7c\x00\x40\x00\x00')
+    err = run_err({'FPS3K_CHASSIS_CMD': '1,1'}, 400_000_000)
+    check('FPS3K_CHASSIS_CMD places the record and says so',
+          '[chassis-cmd] 2 longwords placed at $400000' in err)
+    check('GAP: no response value makes the bit-7 dispatcher $F0495C run',
+          all('F0495C' not in run({'FPS3K_RESP': r, 'FPS3K_XPIRQ': '6'},
+                                  400_000_000)[0].split('\n')
+              for r in ('0x94', '0x0B')))
+
     # --- RDHC's four-command host interface ---------------------------------
     check('RDHC dispatcher: cmd number is the FIRST LONGWORD of the block, 1..4',
           d[0xF05322-0xF00000:0xF05324-0xF00000] == b'\x22\x18'   # move.l (a0)+,d1
