@@ -1494,9 +1494,9 @@ table**, and the "42 codes → 4 handlers" characterisation applies to all five.
 Three things fall out.
 
 **The 5-copy shape matches the dominant replication pattern** already measured —
-one in RDHC and one in each XP task, exactly like the 192-, 176-, 130-, 106- and
-88-byte blocks. The table was simply large enough, and data-like enough, that the
-duplicate-block sweep did not surface it as code.
+one in RDHC and one in each XP task. In fact the table **is** one of those already-
+reported groups: the 192-byte 5-copy block at `$F05B92` contains it, starting 18
+bytes in. The sweep found it; nothing decoded it.
 
 **XP4I's copy independently confirms the `$18` shift.** XP2I and XP3I sit on the
 clean `$A00` grid; XP4I's is at `-$1E18`, `$18` past where the grid predicts —
@@ -3298,23 +3298,35 @@ Sweeping the FPS application region `$F04488-$F0A5FF` for duplicated blocks
 **9,182 of 24,952 bytes — 36% — are a byte-identical copy of an earlier
 block.**
 
-**That is a lower bound, not the figure.** Byte-identical matching cannot see
-copies that differ only in their pc-relative displacements, and the five 42-entry
-dispatch tables are exactly that case: `$F05BA4`, `$F065E4`, `$F06FFC`,
-`$F079FC`, `$F083FC` are the same 168-byte table five times, and this sweep
-matched none of them because every `jmp d16(pc)` entry carries a different
-displacement. Adding those four extra copies alone takes the floor to **~38%**,
-and there is no reason to think they are the only such case.
+**RETRACTED: an earlier revision called this a lower bound for the wrong
+reason.** It claimed byte-identical matching could not see the five 42-entry
+dispatch tables because their `jmp d16(pc)` displacements differ per copy, and
+put the corrected floor at ~38%.
 
-*An attempt to measure the real figure failed, and the failure is worth
-recording. Blanking the displacement word of every pc-relative form before
-comparing produced "264% duplication" — impossible on its face — with 3,000-byte
-groups claiming 9 copies inside 2,560-byte tasks. Two faults: the offsets were
-overlapping windows within one task counted as separate copies, and, more
-fundamentally, **the displacements are what distinguish the copies**, so blanking
-them made unrelated code compare equal. Normalising away the discriminating bytes
-does not generalise a measurement, it destroys it. The 36% figure stands as
-measured; the true value is above it by an amount this method cannot establish.*
+**The five tables are byte-identical.** Because each task is a template copy at a
+fixed stride, every handler sits at the same *relative* offset in every copy, so
+the pc-relative displacements coincide exactly — all five tables begin
+`4E754E714EFAFE684EFAFD044EFAFD00`. The sweep did not miss them.
+
+In fact it *reported* them: the 192-byte 5-copy group at `$F05B92`/`$F065D2`/
+`$F06FEA`/`$F079EA`/`$F083EA` **contains** the dispatch table, which starts 18
+bytes in. What was missing was never detection — it was interpretation. The sweep
+said "here is a 192-byte block replicated five times" and nobody decoded what was
+inside it.
+
+*Two attempts to improve on 36% both failed, in opposite directions. Blanking
+pc-relative displacements before comparing produced "264% duplication" —
+impossible on its face — because the displacements are what distinguish copies and
+because overlapping windows within one task were counted separately. Replacing
+each displacement with its target's offset *relative to the block base* is sound,
+and validates on the known case, but with a conservative overlap guard it finds
+only 15% — less sensitive, not more. So 36% stands as the measured figure, with no
+established reason to think it low.*
+
+**The transferable lesson is about interpretation, not measurement.** A structural
+sweep that says "this 192-byte block appears five times" has already found
+everything a better sweep would; the cost was in not asking what the block *was*
+for several iterations.
 
 The dominant shape is **five copies: one in RDHC and one in each of the four
 XP tasks**. Read the first address of each 5-copy group and it is always in
