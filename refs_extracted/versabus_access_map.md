@@ -16773,3 +16773,27 @@ constant, `$0000`. The `$F7` is in the low half, at `$F0A52C`, and this instruct
 **My extraction printed the longword at every source address regardless of the instruction's
 width**, so every `move.w` entry in a table built that way shows twice the data it uses. The mask
 finding stands; the table needed the width checked before any value in it was believed.
+
+### `$0C14` is a transient task-build list, not the self-test pointer it starts as
+
+Four references, and their execution counts tell the story:
+
+| site | what | executions |
+|---|---|---:|
+| `$F09E3C` | `move.l $f0a4f2(pc),$c14.w` — loads **`$00F08700`**, the self-test entry | 1 |
+| `$F0A062` | `clr.l $c14.w` | 1 |
+| `$F0A0BC` | `move.l $c14.w,$c(a5)` — old head into the new node's next-pointer | **6** |
+| `$F0A0C2` | `move.l a5,$c14.w` — the new node becomes the head | **6** |
+
+`+$0C` is the TCB queue next-pointer identified from the ready-queue insert, so `$F0A0BC`/`$F0A0C2`
+is textbook **LIFO list insertion**, executed **six times — once per task**. `$0C14` is the head of
+a list the TDTI builds while creating tasks.
+
+**The `$00F08700` it starts with is dead.** That value is the self-test entry, loaded once and
+cleared by `$F0A062` before the list is built — the slot is reused, not repurposed mid-life. A
+static reading of the initialisation table alone would have it as "a pointer to the self-test",
+which it never is by the time anything reads it.
+
+`$0C14` reads `$00000000` after boot, so the list is emptied once the six tasks are started. What
+clears it is not established — the bulk-clear routines at `$F0A1D2`/`$F0A33C` cover this range and
+are the obvious candidate, but I have not traced it and am not asserting it.
