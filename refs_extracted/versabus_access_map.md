@@ -1598,6 +1598,47 @@ The pattern across all of this is the session's recurring one, one level up: **t
 itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
 here changed what is known about the machine; it changed how much a passing suite is worth.
 
+### RETRACTION: there IS an Am2910 microprogram sequencer on the EXEC card
+
+Reading the left column of the EXEC card at full resolution finds **`AM2910ADC 8506GM`** —
+AMD's 12-bit **microprogram address sequencer**, the canonical bit-slice control part — at board
+position V/W, directly below the PAL bank.
+
+**That retracts a caution this project has carried as settled.** The record reads:
+
+> *"Note the terminology: this is a fixed-instruction-set 16-bit processor, **not** a
+> microprogram sequencer in the Am2910 / ADSP-1401 bit-slice sense. Calling it a 'sequencer'
+> implies a next-address generator driving a wide microword, which is the wrong mental model
+> for how the EU is controlled."*
+
+The first half is right and stands: an **Am29116 is not a sequencer**, and earlier revisions
+calling it one were wrong. **The second half does not follow, and is false.** A next-address
+generator driving a wide microword is not the wrong model — it is what the card contains. The
+EU is an ordinary microprogrammed bit-slice engine:
+
+| element | part | role |
+|---|---|---|
+| **sequencer** | **`AM2910ADC`** | generates the next microcode address |
+| **control store** | the `225-0071-00N` PROMs | the 80-bit microword |
+| **datapath** | **2 x `AM29116DCB`** | the 16-bit processors the microword drives |
+
+*The error is instructive.* Correcting a wrong label ("the Am29116 is a sequencer") produced an
+over-correction ("therefore the sequencer model is wrong"), and the over-correction was stated
+more confidently than the original mistake. **This is the same shape as the `ROMChecksumTest`
+case**, where renaming a misnamed routine led to concluding no such test existed anywhere — and
+one did, 200 bytes away. Twice now, fixing a name has discarded a true belief attached to it.
+
+**Also counted on this strip:** exactly **nine `29F52 SDC 8617 SINGAPORE`** PALs in the left
+column — the first hard count of that group — alongside a second column of white-labelled parts
+whose visible suffixes (`-024`, `-027`) do **not** match the `225-0071-00N` PROM series, so they
+are a third distinct group. Plus `74F245`, `MC74F244NDS`, `P8287-B`, a red **Grayhill DIP
+switch**, and `74F86`.
+
+*What this does for the EU PROM question:* it makes the count more tractable, not less. With an
+Am2910 sequencing them, the PROMs form one addressed store, and the two Am29116s are fed from
+it — so the "one instruction stream or two" question becomes "how wide is the word the Am2910
+addresses", which a full PROM count answers directly.
+
 ### EXEC card survey: the EU PROM count is partial, and that limitation is the finding
 
 CLAUDE.md carries a TBD directly on the EU: *"Bipolar PROMs on the EXEC card — these are the
