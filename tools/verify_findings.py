@@ -550,6 +550,24 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- FPS3K_RESPSEQ: alternating wake/$14 gains a second wake -------------
+    tseq = pcs({'FPS3K_RESPSEQ': '0x0B,0x94', 'FPS3K_XPIRQ': '6',
+                'FPS3K_CHASSIS_CMD': '1,14,1'}, CYC)
+    tcon = pcs({'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6',
+                'FPS3K_CHASSIS_CMD': '1,14,1'}, CYC)
+    check('alternating 0B,94 gives RDHC a second wake where $94 alone gives one',
+          tseq.count('F04740') == 2 and tcon.count('F04740') == 1)
+    check('...but only two, though $0B alone wakes it >300 times',
+          pcs({'FPS3K_RESP': '0x0B', 'FPS3K_XPIRQ': '6'}, CYC).count('F04740') > 300)
+    # op $7 masks BIM0 ch0 -- scheduling it silences the very channel it came on
+    t07 = pcs({'FPS3K_RESPSEQ': '0x07,0x94', 'FPS3K_XPIRQ': '6',
+               'FPS3K_CHASSIS_CMD': '1,14,1'}, CYC)
+    check('op $7 in a sequence destroys the sequence (it masks BIM0 ch0)',
+          t07.count('F05370') == 0 and t07.count('F0572C') == 0)
+    check('...which matches its decode: read $FF0230, bclr #4 (IRE), write back',
+          d[0xF04F3A-0xF00000:0xF04F46-0xF00000]
+          == b'\x32\x28\x02\x30\x08\x81\x00\x04\x31\x41\x02\x30')
+
     # --- $14 means "command waiting" to RDHC but "just return" to the ISR ----
     check('$F04976 tests d0 == $14 and branches straight to the ISR exit stub',
           d[0xF04976-0xF00000:0xF0497E-0xF00000]

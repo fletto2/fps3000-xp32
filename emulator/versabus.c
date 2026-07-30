@@ -1600,9 +1600,33 @@ void versabus_tick(uint32_t cycles) {
                      * always fell into a handler that spun.  Stamp the code
                      * first, the way the arm path does. */
                     if (k == 6) {
-                        const char *e = getenv("FPS3K_RESP");
-                        uint8_t code = (uint8_t)(e ? strtoul(e, NULL, 0) : 0x14)
-                                       & MODE0_RESP_MASK;
+                        /* FPS3K_RESPSEQ=<code>,<code>,... cycles a SEQUENCE of
+                         * response codes across successive raises, which
+                         * FPS3K_RESP cannot express because it presents one
+                         * constant forever.
+                         *
+                         * Needed because $14 means two different things: RDHC's
+                         * main loop reads it as "a command record is waiting",
+                         * but the ISR's bit-7 dispatcher at $F04976 reads it as
+                         * "acknowledge and return" and absorbs it.  So a stream
+                         * of $14s yields exactly one command.  Each command needs
+                         * RDHC re-woken by a NON-$14 code first -- $0B does it,
+                         * measured 1467 wakes -- hence sequences like 0B,94. */
+                        const char *sq = getenv("FPS3K_RESPSEQ");
+                        uint8_t code;
+                        if (sq) {
+                            static int step;
+                            int n = 1;
+                            for (const char *c = sq; (c = strchr(c, ',')); c++) n++;
+                            const char *q = sq;
+                            for (int j = 0; j < step % n; j++) q = strchr(q, ',') + 1;
+                            step++;
+                            code = (uint8_t)strtoul(q, NULL, 0) & MODE0_RESP_MASK;
+                        } else {
+                            const char *e = getenv("FPS3K_RESP");
+                            code = (uint8_t)(e ? strtoul(e, NULL, 0) : 0x14)
+                                   & MODE0_RESP_MASK;
+                        }
                         xltr.mode0 = (uint16_t)((xltr.mode0 & ~MODE0_RESP_MASK)
                                                 | code | MODE0_RESP_VALID);
                         xltr.raw[(XLTR_MODE0 - XLTR_BASE) / 2] = xltr.mode0;

@@ -1528,6 +1528,41 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Alternating wake/`$14` works, but buys 2 wakes not many — and op `$7` self-destructs
+
+Acting on the prediction: `FPS3K_RESPSEQ=<code>,<code>,…` cycles a **sequence** of
+response codes across successive BIM0-ch0 raises, which `FPS3K_RESP` cannot express.
+
+| configuration | RDHC | wakes | cmd 1 | `$F0572C` |
+|---|---|---|---|---|
+| `RESP=$94` constant | 19.4% | **1** | 1 | 2 |
+| `RESPSEQ=0B,94` | 22.0% | **2** | 1 | 2 |
+| `RESPSEQ=0B,94,0B,14` | **23.3%** | 2 | 1 | 2 |
+| `RESPSEQ=07,94` | **4.5%** | 1 | 0 | 0 |
+
+**The prediction was directionally right and quantitatively wrong.** Alternating a
+non-`$14` code with `$14` does produce another wake — 1 → 2 — and RDHC gains four
+points, 19.4% → 23.3%. But two wakes, not many: `$0B` alone produces **1467** wakes,
+yet interleaved with `$94` it produces two. So the `$14`-absorption mechanism was real
+and is not the whole limit; something further along stops RDHC being wakeable after the
+second time. *Recording the shortfall rather than the headline: a +4-point gain on a
+hypothesis that predicted an order of magnitude more is weak confirmation at best.*
+
+#### Op `$7` in a response sequence destroys the sequence
+
+`RESPSEQ=07,94` collapses to **4.5%** — worse than doing nothing — and reaches neither
+command 1 nor `$F0572C`. That is exactly right and self-consistent: **operation `$7` is
+the BIM mask** (`$F04F3A`: read `$FF0230`, `bclr #4` — the IRE bit — write back). Using
+it in a sequence disarms BIM0 ch0, which is the interrupt *delivering* the sequence, so
+the second code never arrives.
+
+An operation that switches off the channel it was delivered on is a nice independent
+confirmation of what op `$7` does — the functional decode said "mask BIM0 ch0 (clear
+IRE)", and the observable consequence of scheduling it is precisely that everything
+afterwards goes silent. *It also makes op `$7` a hazard worth flagging for anyone
+scripting chassis conversations: it is the one operation that cannot appear anywhere
+except last.*
+
 ### Why only one RDHC command executes per boot: `$14` means two different things
 
 With the descriptor layout known, a fully-populated command record was worth trying:

@@ -516,6 +516,16 @@ loc_F0473C:
 ;###   the 42-operation table -- is unreachable.  Not a missing register value
 ;###   and not a missing bit: one RTOS wait with no waker.
   f0473e: 4e 41                   trap     #$1
+;### ALTERNATING WAKE/$14 WORKS BUT BUYS LITTLE.  FPS3K_RESPSEQ cycles response
+;###   codes across successive raises, which the single-value FPS3K_RESP cannot.
+;###     RESP=$94 constant     RDHC 19.4%   wakes 1
+;###     RESPSEQ=0B,94         RDHC 22.0%   wakes 2
+;###     RESPSEQ=0B,94,0B,14   RDHC 23.3%   wakes 2
+;###   So the prediction was directionally right and quantitatively wrong: a
+;###   non-$14 code does enable another wake, but TWO, not many -- $0B alone
+;###   wakes RDHC 1467 times, yet interleaved with $94 it wakes twice.  The
+;###   $14-absorption mechanism is real and is NOT the whole limit; something
+;###   further along stops RDHC being wakeable after the second time.
 ;### After the wait, bit 7 of the latched MODE0 low byte picks the arm: SET goes
 ;###   to $F048D8 (the command arm), CLEAR to the 4-bit sub-dispatch at $F0474C.
   f04740: 08 39 00 07 00 00 0e 87  btst.b   #$7, $e87.l
@@ -1390,6 +1400,15 @@ loc_F04F2C:
   f04f2c: 60 00 01 ca             bra.w    ChannelConfigDispatch
   f04f30: 22 79 00 00 0e 58       movea.l  $e58.l, a1
   f04f36: 60 00 ff 68             bra.w    loc_F04EA0
+;### HAZARD: OP $7 DESTROYS ANY RESPONSE SEQUENCE IT APPEARS IN.  It reads
+;###   $FF0230, bclr #4 (the IRE bit) and writes back -- masking BIM0 ch0, which
+;###   is the interrupt DELIVERING the sequence.  Measured: FPS3K_RESPSEQ=07,94
+;###   collapses RDHC coverage to 4.5%, worse than doing nothing, and reaches
+;###   neither command 1 nor $F0572C, because the second code never arrives.
+;###   An operation that switches off the channel it was delivered on is an
+;###   independent confirmation of the functional decode "mask BIM0 ch0".  It is
+;###   also the one operation that cannot appear anywhere except LAST in a
+;###   scripted chassis conversation.
 ;### THIS PROVES THE BIM CRs ARE NOT WRITE-ONLY -- a read-modify-write on
 ;###   $FF0230.  A static basic-block sweep reported ZERO reads of every BIM CR
 ;###   because its 80-instruction attribution window cannot reach the ISR

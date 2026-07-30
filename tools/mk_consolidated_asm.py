@@ -80,6 +80,26 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- alternating wake/$14, and op $7 self-destructs ----
+ (0xF04F3A,'HAZARD: OP $7 DESTROYS ANY RESPONSE SEQUENCE IT APPEARS IN.  It reads'),
+ (0xF04F3A,'  $FF0230, bclr #4 (the IRE bit) and writes back -- masking BIM0 ch0, which'),
+ (0xF04F3A,'  is the interrupt DELIVERING the sequence.  Measured: FPS3K_RESPSEQ=07,94'),
+ (0xF04F3A,'  collapses RDHC coverage to 4.5%, worse than doing nothing, and reaches'),
+ (0xF04F3A,'  neither command 1 nor $F0572C, because the second code never arrives.'),
+ (0xF04F3A,'  An operation that switches off the channel it was delivered on is an'),
+ (0xF04F3A,'  independent confirmation of the functional decode "mask BIM0 ch0".  It is'),
+ (0xF04F3A,'  also the one operation that cannot appear anywhere except LAST in a'),
+ (0xF04F3A,'  scripted chassis conversation.'),
+ (0xF04740,'ALTERNATING WAKE/$14 WORKS BUT BUYS LITTLE.  FPS3K_RESPSEQ cycles response'),
+ (0xF04740,'  codes across successive raises, which the single-value FPS3K_RESP cannot.'),
+ (0xF04740,'    RESP=$94 constant     RDHC 19.4%   wakes 1'),
+ (0xF04740,'    RESPSEQ=0B,94         RDHC 22.0%   wakes 2'),
+ (0xF04740,'    RESPSEQ=0B,94,0B,14   RDHC 23.3%   wakes 2'),
+ (0xF04740,'  So the prediction was directionally right and quantitatively wrong: a'),
+ (0xF04740,'  non-$14 code does enable another wake, but TWO, not many -- $0B alone'),
+ (0xF04740,'  wakes RDHC 1467 times, yet interleaved with $94 it wakes twice.  The'),
+ (0xF04740,'  $14-absorption mechanism is real and is NOT the whole limit; something'),
+ (0xF04740,'  further along stops RDHC being wakeable after the second time.'),
  # ---- $14 means two different things ----
  (0xF04976,'*** $14 HAS TWO DIFFERENT MEANINGS, AND THIS IS WHY ONLY ONE RDHC COMMAND'),
  (0xF04976,'  EXECUTES PER BOOT. ***  To RDHC\'s main loop at $F048D8, $E86 & $1F == $14'),
