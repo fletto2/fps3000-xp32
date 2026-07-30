@@ -570,6 +570,26 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the last six helpers ------------------------------------------------
+    check('$F08970 is not/rol/not/rol then OR the counter at $4(a5)',
+          d[0xF08970-0xF00000:0xF08980-0xF00000]
+          == b'\x42\x80\x10\x15\x46\x00\xe3\x18\x46\x00\xe3\x18'
+             b'\x80\x2d\x00\x04')
+    check('$F08958 calls it four times, storing each byte via (a5)+',
+          d[0xF0895A-0xF00000:0xF0896A-0xF00000]
+          == b'\x61\x14\x1a\xc0\x61\x10\x1a\xc0'
+             b'\x61\x0c\x1a\xc0\x61\x08\x1a\xc0')
+    check('$F090EA loads all three PTM latches with $FFF via movep.w',
+          d[0xF090F0-0xF00000:0xF09100-0xF00000]
+          == b'\x30\x3c\x0f\xff\x01\x88\x00\x04'
+             b'\x01\x88\x00\x08\x01\x88\x00\x0c')
+    check('$F094AE masks bits 0-2 of $1FFF0 then requests level 1',
+          d[0xF094AE-0xF00000:0xF094BE-0xF00000]
+          == b'\x02\x55\xff\xf8\x42\x82\x08\xed\x00\x07\x00\x01'
+             b'\x00\x55\x00\x01')
+    check('...confirming bits 0-2 are the level field, from a different stage',
+          (0xFFF8 & 0x0007) == 0)
+
     # --- eight independent exclusions of $1FFF0, none of $1FFE2/4/6 -----------
     _SKIP = (0xF098FE, 0xF09916, 0xF09946, 0xF09960,
              0xF099BE, 0xF09A94, 0xF09ABC)

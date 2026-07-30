@@ -1528,6 +1528,41 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The last six helpers — the self-test is now documented end to end (42/42)
+
+| routine | calls | what it is |
+|---|---|---|
+| `$F08970` | 4 | **byte-pattern generator** — `not/rol/not/rol` on `(a5)`, OR the counter at `$4(a5)`, increment it |
+| `$F08958` | 1 | calls the generator four times, storing via `move.b d0,(a5)+` — a **4-byte pattern** |
+| `$F089EE` | 3 | chassis handshake probe — clears VMOD bit 6, `XLTR_MODE1 <- $1000`, tests board-status bit 4 |
+| `$F090EA` | 2 | **PTM configuration** — `movep.w #$fff` into all three timer latches, then `CR2 <- 0`, `CR1 <- $C2` |
+| `$F094AE` | 3 | interrupt-level request — `andi.w #$fff8,(a5)`, `bset #7`, `ori.w #$1,(a5)` |
+| `$F09A7E` | 1 | final DRAM sub-test prologue |
+
+Two of these close open questions.
+
+**`$F08970` explains `$1FFF4`.** The generator reads a byte, applies `not.b / rol.b #1 /
+not.b / rol.b #1`, ORs in a counter held at `$4(a5)` and increments it. With `a5 = $1FFF0`
+that counter is **`$1FFF4`** — the location flagged earlier as "read and incremented, unlike
+its write-only neighbours". It is the pattern generator's sequence counter: **ordinary RAM,
+exactly as its treatment by the address-line walker implied.** The one address whose
+behaviour did not fit the register hypothesis turns out to have a mundane and complete
+explanation, which is the outcome that should have been expected once the walker evidence
+came in.
+
+**`$F094AE` independently corroborates the interrupt-level field.** Its first instruction is
+`andi.w #$fff8,(a5)` — masking off exactly **bits 0-2** of the word at `$1FFF0` — followed by
+`ori.w #$1,(a5)` to request level 1. That is the canonical "clear the level, then set one"
+idiom, and it was reached from a different stage (`$1400`) than the walk that established the
+field (`$1300`). *Two stages, written independently, agree that bits 0-2 are a 3-bit level
+field* — which is a stronger form of confirmation than the exhaustive 1..7 walk alone,
+because it shows the rest of the firmware treating the field the same way.
+
+**Self-test documentation is now complete**: all **42** subroutines called from
+`$F08700-$F09C00` are accounted for, against **3** when this thread began. Every stage of
+every sequence has a decoded purpose, and each is tied to the board or device it exercises —
+which was the request that started this work.
+
 ### Generalising the discriminator: every address the memory tests refuse to touch
 
 The `$1FFF0` skip is not a one-off. Scanning the whole ROM for `cmpa.l #imm,aN` followed by a
