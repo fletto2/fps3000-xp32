@@ -14692,3 +14692,43 @@ the directives with **no internal callers**, so they never needed a `bsr` entry.
 Incidentally the kernel's busiest subroutine is **directive `$08`** at `$F0175E`, with 31 internal
 call sites — unnamed in `TR1.EQ`'s list and never issued by the FPS application, yet the single
 most-used routine in the RMS68K kernel.
+
+## Directive `$08` identified: the kernel's address-range validator
+
+The busiest routine in the kernel — 31 internal call sites, unnamed in `TR1.EQ`, never issued by
+the FPS application — is a **memory-range check**:
+
+```
+F0175C  move.w  sr,-(a7)        ; the bsr entry
+F0175E  bclr.b  #$0,d6          ; TRAP entry starts here
+F01762  andi.l  #$ffffff,d6     ; d6 = an address, 24 bits
+F0176A  move.l  d6,d3
+F0176C  lsr.l   #$8,d6          ; -> 256-byte PAGE number
+F0176E  move.l  d5,d4           ; d5 = size
+F01770  ble.b   $f017b6         ; size <= 0 -> reject
+F01772  add.l   d3,d4
+F01774  subq.l  #$1,d4
+F01776  lsr.l   #$8,d4          ; -> end page
+F0177A  move.w  $6(a0),d5       ; table index
+F0177E  tst.b   $7(a0,d5.w)     ; entry in use?
+F01784  cmp.w   (a0,d5.w),d6    ; page   vs record low bound
+F0178A  cmp.w   $2(a0,d5.w),d6  ; page   vs record high bound
+F01790  cmp.w   $2(a0,d5.w),d4  ; end pg vs record high bound
+```
+
+It takes **address in `d6`, size in `d5`**, converts both to page numbers, and walks a table of
+`{low, high}` page-bound records looking for one that contains the whole range. That is
+**"is this user buffer inside a segment this task owns?"** — the check every directive taking a
+caller-supplied address must perform, which is exactly why it has 31 callers and is the most-used
+routine in the kernel.
+
+Two corroborations that this is the right reading:
+
+- **The shift is `lsr.l #$8` — 256-byte pages**, the same granularity as `T0PAGAL`, the allocator
+  that hands out memory in 256-byte pages and is why every RTOS structure sits on a `$1Fx00`
+  boundary. Validator and allocator agree on page size, as they must.
+- The record layout — bounds at `+0`/`+2`, an in-use byte at `+7`, indexed via `$6(a0)` — is a
+  segment table, and segment allocation (`$01` GTSEG) is directive 1.
+
+Named from behaviour rather than from a vendor list, and flagged as such: `TR1.EQ` does not name
+directive `$08`, so this is an inference from what the code does, not a lookup.
