@@ -13747,3 +13747,34 @@ That is a concrete, testable change: make the scripted chassis release the BIM b
 instead of holding it until acknowledged. If the `bra .` spins then unwind on their own, the
 "self-programmed deadlock" recorded throughout this file was our handshake all along, not the
 firmware's design.
+
+### REFUTED: the pulse hypothesis. The limiter is the script, not the interrupt line
+
+The previous section predicted that a real chassis must **pulse** a fresh interrupt per response,
+and that our level-held, ack-gated request was what stalled the `bra .` spins. That was
+implemented (release the BIM on an earlier tick than the assert, so the CPU observes the drop)
+and **measured to change nothing**:
+
+| | ops dispatched | `$F04930` fires | final |
+|---|---:|---:|---|
+| level 6 | 3/16 | 2 | `$F056B8` `SR=$2600` |
+| level 6 + pulse | 3/16 | 2 | `$F056B8` `SR=$2600` |
+| level 7 | 7/16 | **224** | `$F056B8` `SR=$2700` |
+| level 7 + pulse | 7/16 | **224** | `$F056B8` `SR=$2700` |
+
+Byte-identical outcomes. The hook was reverted rather than left in as an unused option.
+
+**The 224 figure is what refutes it.** The ISR was already re-entering 224 times at level 7, so
+edges were never scarce — the interrupt line was not the constraint, and the "no fresh edge"
+reasoning, though correct about the model's mechanics, was not describing the actual limiter.
+
+What limits delivery is the **script advance**, which is a separate ack gate:
+`panel_resp_tick` advances `FPS3K_SEQ` only when it observes `MODE0_RESP_ACK` set. And the panel
+issuer **clears that very bit** at `$F056AC` (`bclr #$a,d1` on MODE0) immediately before it
+spins. So the ISR sets bit 10, the issuer clears it, and the script advances only if the tick
+samples the window in between — 224 interrupt entries yield 7 script advances.
+
+So there are two independent ack dependencies and I conflated them: one on the interrupt line
+(real, but not binding, since the ISR re-enters freely) and one on the script pointer (binding).
+The correct target is the script advance — for instance advancing on ISR entry rather than on an
+observed bit that the firmware deliberately clears four instructions later.
