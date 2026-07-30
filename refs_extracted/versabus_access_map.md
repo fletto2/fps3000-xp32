@@ -1563,6 +1563,52 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The reply is a SEPARATE COMMAND: bit 7 collects, bit 7 clear operates
+
+The previous entry said one reply per run was firmware structure and predicted that **spacing
+the commands would give each an acknowledge cycle**. That prediction was tested and **failed** —
+`FPS3K_SEQGAP=20000000` produced exactly the same single reply. Following the failure gives the
+real mechanism, which is better than the guess.
+
+The trace shows RDHC wakes **twice** (`$F04740` x2) but the finish dispatch `$F048B4` runs
+**once**. So the limit is not wakes and not spacing. RDHC's loop is:
+
+```
+moveq #$13,d0  /  trap #1        ; wait
+btst  #$7,$e87  /  bne <arm>     ; bit 7 of the command byte
+```
+
+**Bit 7 selects whether the command is an operation or a collection.** My sequence sent `$01`
+and `$26` — both bit-7 clear — so both went to the bit-7=0 dispatcher (`$F04A6E`), ran their
+handlers, stored results in `$0E74`, and exited via `ChannelConfigDispatch` **without ever
+reaching the reply path**. The single acknowledge+reply came from `FPS3K_RESP=0x94`, whose
+**bit 7 is set**, arriving through the other route entirely.
+
+So the protocol is **two-phase**:
+
+| phase | command | effect |
+|---|---|---|
+| **operate** | bit 7 **clear** — the 16 ops `$0`-`$F` | handler runs, result stored in `$0E74`, exits silently |
+| **collect** | bit 7 **set** | acknowledge (clear MODE0 bit 10) and ship `$0E74` to CHANNEL_SELECT |
+
+That explains every observation cleanly: ops never reply because replying is not what ops do;
+one reply per run because one bit-7 command was issued; spacing irrelevant because the ops were
+never routed to the reply path at all. It also explains why the shipped value was `$0000` — the
+`$94` collect arrived *before* op `$26` stored its `2`, and a collect ships whatever `$0E74`
+holds at that instant.
+
+**And it means the earlier "half-duplex" framing was too harsh on the model.** The emulated
+chassis does have a way to collect results — `FPS3K_RESP` with bit 7 set — and it works. What is
+missing is only that nothing *consumes* the value once shipped, which is a smaller gap than "the
+return path is not wired". *A driving sequence that interleaves ops with bit-7 collects would
+exercise the full conversation today*, with no model changes.
+
+*On the failed prediction:* it was worth making precisely because it was cheap and falsifiable.
+The claim "acknowledge is per-command-cycle" fit every observation I had, and only a test that
+could contradict it revealed that acknowledge is per-*collect-command*. **An explanation
+consistent with all current evidence is not thereby correct** — it has to forbid something, and
+then that something has to be checked.
+
 ### RESOLVED: the reply is shipped by the acknowledge path, not by op handlers
 
 I left "which ops ship a reply?" as an open question needing a per-op census. Doing it answers

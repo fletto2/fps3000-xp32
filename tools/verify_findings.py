@@ -570,6 +570,16 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- bit 7 collects; bit 7 clear operates ---------------------------------
+    check('RDHC dispatches on bit 7 of the command byte after its wait',
+          d[0xF04740-0xF00000:0xF0474A-0xF00000]
+          == b'\x08\x39\x00\x07\x00\x00\x0e\x87\x66\x00')
+    check('the finish dispatch routes op $F and op $8 straight to the reply',
+          d[0xF048B4-0xF00000:0xF048C0-0xF00000]
+          == b'\x0c\x40\x00\x0f\x67\x1c\x0c\x40\x00\x08\x66\x08')
+    check('FPS3K_RESP=0x94 has bit 7 set -- it is a COLLECT, not an operation',
+          0x94 & 0x80 and not (0x01 & 0x80) and not (0x26 & 0x80))
+
     # --- acknowledge and reply are the same act -------------------------------
     check('$F048C8 clears MODE0 bit 10 then branches to the reply write',
           d[0xF048C8-0xF00000:0xF048D8-0xF00000]
