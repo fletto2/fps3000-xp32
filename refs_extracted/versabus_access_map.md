@@ -14886,3 +14886,31 @@ that gating exists to avoid.
 **New diagnostic channel:** `FPS3K_POKE="0C34=8000"` gives a per-task, per-directive system-call
 log with parameter-block pointers, straight out of a RAM dump, with no tracing infrastructure of
 our own.
+
+### Enabling all eight hooks is safe but adds almost nothing
+
+| `$0C34` | final PC | distinct kernel PCs | % of the 4,351 decoded |
+|---|---|---:|---:|
+| `$0000` (stock) | `$F00FCC` | 620 | 14.2% |
+| `$8000` (trace only) | `$F00FCC` | 669 | 15.4% |
+| `$FF00` (all eight) | `$F00FC8` | 672 | 15.4% |
+
+Both instrumented runs boot cleanly to the RTOS idle loop, so **the full mask is safe to enable**.
+But bit 15 accounts for essentially the whole gain: the other seven hooks add **3 PCs**. Their
+gated paths are diagnostic code for events — faults, aborts, abnormal traps — that a healthy boot
+never produces, so switching them on gives nothing to log.
+
+**Two coverage numbers that must not be confused**, and this project has only ever tracked the
+first:
+
+- **Decode coverage**: 81.5% of the kernel's bytes are disassembled.
+- **Execution coverage**: **14.2%** of decoded kernel instructions ever run in a default boot.
+
+The gap is not a decoding failure. It is a kernel that implements 60 directives of which this
+firmware issues five, eight instrumentation hooks of which zero are enabled, and diagnostic paths
+for faults that never occur. **Most of the RMS68K kernel is not dormant by accident — it is
+generic Motorola code serving an application that uses a small slice of it.**
+
+That also bounds what any future emulator work can achieve here: driving the chassis harder moves
+the *application* regions, but the kernel's unexecuted 85% is mostly unreachable without faults,
+unused directives, or instrumentation the build ships disabled.
