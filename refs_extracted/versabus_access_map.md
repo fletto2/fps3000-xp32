@@ -1528,6 +1528,78 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### `!PAT` is the Periodic Activation Table, and the task prologue is a Segment PB
+
+Two more structures named from the VERSAdos source, both matching decodes made here
+empirically.
+
+#### `!PAT` — entry length `$1E` computed from the field list
+
+`SR10/U9995/PAT.EQ`:
+
+```
++$00  PAT       '!PAT' eye-catcher
++$04  PATFHDR   ADDRESS OF 1ST ENTRY IN FREE LIST
++$08  PATHDR    address of 1st entry in list
++$0C  PATTSIZ   size of Periodic Activation table in bytes
+      PATNEXT   pointer to next entry   4        PATOPT   options          2
+      PATTCB    TCB to be activated     4        PATARID  request ID       4
+      PATDELTA  time since previous     4        PATCNT   activation count 2
+      PATINTV   activation interval     4        PATILVL  interrupt level  2
+      PATASR    ASR address             4
+```
+
+`4+4+4+4+4+2+4+2+2 = 30 = $1E` — **exactly the stride measured** for the free list at
+`$1F700`, and `PATFHDR` at `+$04` is exactly the "first-record pointer, a third header
+shape" this document recorded. So:
+
+- **`!PAT` = Periodic Activation Table**
+- entries chained through `PATNEXT` at each entry's `+$00` ✓ as measured
+- the `$FFFFFFFF` this document noted at each entry's `+$04` is **`PATTCB`** — "no task",
+  i.e. the free marker ✓
+- and it is empty because the firmware never issues `RQSTPA` (29) or `T0RQPA` (34).
+  A wholly free Periodic Activation Table in a system that requests no periodic
+  activations is not a mystery, which is how this document had been treating it.
+
+#### The directive-`$01` block is a Segment Parameter Block
+
+`SEG.EQ` defines `SGPB`, and RDHC's block at `$F046B0` lays over it exactly:
+
+| offset | field | value |
+|---|---|---|
+| `+$00` | `SGPBTASK` target task name | `'RDHC'` |
+| `+$04` | `SGPBSESS` session code | 0 |
+| `+$08` | `SGPBOPT` directive options | **`$2000`** |
+| `+$0A` | `SGPBATTR` segment attributes | 0 |
+| `+$0C` | `SGPBNAME` **segment name** | `'STCK'` |
+| `+$10` | `SGPBLA` logical address | 0 |
+| `+$14` | `SGPBSL` **segment length in bytes** | **`$190`** = 400 |
+
+So the thing this document calls "the directive `$01` parameter block: name, STCK tag,
+`$190` stack" is a **request to allocate a segment named `STCK` of 400 bytes**. `STCK`
+was never a tag — it is `SGPBNAME`, a *segment name*, which is why it looks like the
+`!xxx` markers and is not one.
+
+**`SGPBOPT = $2000` is bit 13 = `SGPBOPAD`, "EXEC SUPPLIES LOGICAL ADDRESS (= PHYS
+ADDR)".** That is exactly right for a machine with no address translation, and it
+explains why `SGPBLA` is zero: the caller declines to name an address and the exec
+returns a physical one.
+
+#### The whole allocation chain, now end to end in Motorola's own terms
+
+```
+GTSEG ($01)  with SGPBNAME='STCK', SGPBSL=$190, SGPBOPT=SGPBOPAD
+   -> T0PAGAL ($04) "ALLOCATE PHYSICAL PAGES", rounding 400 up to 2 pages of 256
+   -> a $200-byte segment, which is the per-task stride measured here
+   -> its address lands in TCBA6 (+$138), semaphore descriptors at the base,
+      stack growing down from the top
+```
+
+Every step of that was derived here from arithmetic and RAM dumps before any of the
+names were known, and the names confirm each one. *The 400-to-512 rounding in
+particular was inferred from `$190` becoming `$200`; `T0PAGAL` and `SGPBSL` together say
+why in so many words.*
+
 ### The TCB layout from Motorola's source, and `TCBASQ = 0` clinches the semaphores
 
 `~/src/claude/versados/SR10/U9995/TCB.EQ` names every offset this project has been

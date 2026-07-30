@@ -420,6 +420,26 @@ loc_F046A6:
   f046ae: 00 00                   DC.W     0x0000
 
 loc_F046B0:
+;### THIS IS A SEGMENT PARAMETER BLOCK (SGPB), per versados SR10/U9995/SEG.EQ:
+;###     +$00 SGPBTASK  target task name        = 'RDHC'
+;###     +$04 SGPBSESS  session code            = 0
+;###     +$08 SGPBOPT   directive options       = $2000
+;###     +$0A SGPBATTR  segment attributes      = 0
+;###     +$0C SGPBNAME  SEGMENT NAME            = 'STCK'
+;###     +$10 SGPBLA    logical address         = 0
+;###     +$14 SGPBSL    SEGMENT LENGTH IN BYTES = $190 = 400
+;###   So 'STCK' was NEVER A TAG -- it is SGPBNAME, a SEGMENT NAME, which is why
+;###   it looks like the !xxx markers and is not one.  And SGPBOPT = $2000 is
+;###   bit 13 = SGPBOPAD, "EXEC SUPPLIES LOGICAL ADDRESS (= PHYS ADDR)" -- exactly
+;###   right for a machine with no address translation, and why SGPBLA is zero.
+;###   THE WHOLE ALLOCATION CHAIN, in Motorola's own terms:
+;###     GTSEG ($01) name=STCK len=$190 opt=SGPBOPAD
+;###       -> T0PAGAL ($04) "ALLOCATE PHYSICAL PAGES", 400 rounded to 2x256
+;###       -> a $200 segment, the per-task stride measured here
+;###       -> address lands in TCBA6 (+$138); semaphore descriptors at its base,
+;###          stack growing down from its top
+;###   Every step was derived here from arithmetic and RAM dumps before any name
+;###   was known, and the names confirm each one.
 ;### RDHC's directive-$01 block (NOT base+$14 as the other five tasks use).
   f046b0: 52 44                   addq.w   #$1, d4
   f046b2: 48 43                   swap     d3
@@ -10779,6 +10799,14 @@ loc_F09F90:
   f09f9c: 67 44                   beq.b    loc_F09FE2
   f09f9e: 20 42                   movea.l  d2, a0
   f09fa0: 70 04                   moveq    #$4, d0
+;### !PAT = PERIODIC ACTIVATION TABLE, per SR10/U9995/PAT.EQ.  Its entry fields
+;###   sum to 4+4+4+4+4+2+4+2+2 = 30 = $1E, EXACTLY the free-list stride measured
+;###   here; PATFHDR at +$04 is exactly the "first-record pointer, a third header
+;###   shape" recorded; entries chain through PATNEXT at each entry +$00 as
+;###   measured; and the $FFFFFFFF at each entry +$04 is PATTCB -- "no task", the
+;###   free marker.  It is wholly free because the firmware never issues RQSTPA
+;###   (29) or T0RQPA (34).  An empty Periodic Activation Table in a system that
+;###   requests no periodic activations is not a mystery.
 ;### !PAT is a FREE-LIST, not a table: +$04 is a first-record pointer (a third
 ;###   header shape), records chained through their first longword at stride
 ;###   $1E with $FFFFFFFF at +$04.  $1F714 -> ... -> $1F7E6 -> NULL, 8 records,

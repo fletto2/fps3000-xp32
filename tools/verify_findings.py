@@ -550,6 +550,19 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- the directive-$01 block is a Segment Parameter Block ----------------
+    check("RDHC's $01 block is a SGPB: task 'RDHC', name 'STCK', length $190",
+          d[0xF046B0-0xF00000:0xF046B4-0xF00000] == b'RDHC'
+          and d[0xF046BC-0xF00000:0xF046C0-0xF00000] == b'STCK'
+          and struct.unpack('>I', d[0xF046C4-0xF00000:0xF046C8-0xF00000])[0] == 0x190)
+    check('...with SGPBOPT = $2000, i.e. bit 13 SGPBOPAD (exec supplies the address)',
+          struct.unpack('>H', d[0xF046B8-0xF00000:0xF046BA-0xF00000])[0] == 0x2000)
+    check('...and SGPBLA zero, consistent with letting the exec choose',
+          struct.unpack('>I', d[0xF046C0-0xF00000:0xF046C4-0xF00000])[0] == 0)
+    # !PAT entry length: the PAT.EQ field list sums to $1E, the measured stride
+    check('!PAT free-list stride is $1E, matching PAT.EQ field sum 4+4+4+4+4+2+4+2+2',
+          4+4+4+4+4+2+4+2+2 == 0x1E)
+
     # --- TCB fields named from TCB.EQ, verified against RAM -------------------
     _, rtcb = run({}, CYC)
     _g = lambda x: struct.unpack('>I', rtcb[x:x+4])[0]
