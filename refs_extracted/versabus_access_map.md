@@ -1473,6 +1473,60 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The RTOS scheduler control block, found by differential state analysis
+
+Diffing the three golden masters against each other maps which RAM each
+subsystem owns. Driving a task changes **only** its own structures plus one
+shared region:
+
+| driven | bytes changed |
+|---|---|
+| XP1I | its TCB `$1E90D`, its channel block `$1066`, its companion `$1EA0A`/`$1EA21`, **plus `$00BA3-$00BFB`** |
+| TCBIO1I | its TCB `$1F10D`, its companion `$1F221`, `$1FBD4`, **plus `$00BA4-$00BFB`** |
+
+The per-task confinement confirms the ownership model derived statically. The
+**shared region is new**: `$00BA0-$00C60`, previously recorded only as "globals",
+is the **RTOS scheduler control block**, and several fields are now readable.
+
+**`$00C0C` is the current-task TCB pointer.** Verified across five
+configurations, each time holding exactly the TCB of the task that was driven:
+
+| configuration | `$00C0C` | task |
+|---|---|---|
+| default | `$1F300` | RDHC |
+| `XPIRQ=1` | `$1E900` | XP1I |
+| `XPIRQ=2` | `$1EB00` | XP2I |
+| `XPIRQ=3` | `$1ED00` | XP3I |
+| `XPIRQ=5` + `DMA10AA=2` + `MBOX` | `$1F100` | IO1I |
+
+**`$00C0C` tracks what the scheduler *dispatched*, not merely whose ISR ran.**
+With `XPIRQ=5` alone TCBIO1I's ISR executes but `$00C0C` still reads `$1F300`
+(RDHC); it only moves once `$10AA = 2` lets the reply path complete. That
+distinction was found by the check failing on the weaker configuration, and it
+is the sharper reading — an ISR is not a dispatch.
+
+**`$00C20` onward is a structure directory** — one pointer per singleton table,
+matching the marker census exactly:
+
+| address | points to | structure |
+|---|---|---|
+| `$00C10` | `$1E900` (constant) | TCB list head |
+| `$00C20` | `$1FD00` | `!GST` |
+| `$00C24` | `$1FB00` | `!UST` |
+| `$00C28` | `$1F600` | `!UDR` |
+| `$00C2C` | `$1F700` | `!PAT` |
+| `$00C30` | `$1F500` | (untagged) |
+
+And `$00BA2`/`$00BE6` hold `$1F700`/`$1F708` — `!PAT` pool pointers — only in the
+configurations where a task actually ran, which is consistent with `!PAT` being
+the allocation pool its 30-byte free-list shape suggested.
+
+**No static reading would have produced this.** The region is
+indistinguishable from any other zeroed globals area in the disassembly; what
+identified it was holding the machine still and changing one variable — which is
+what the golden masters made cheap. Differential state analysis is now the tool
+of choice for the parts of the model that decoding cannot reach.
+
 ### Golden-master machine state: the whole model is now pinned
 
 The pointwise checks read about twenty specific locations. The PTM clocking fix

@@ -348,6 +348,28 @@ else:
     check('$F096AC is a probe: read then 4 NOPs then rts, value discarded',
           d[0x96AC:0x96B8].hex().upper() == '30114E714E714E714E714E75')
 
+    # --- the RTOS scheduler control block ---------------------------------
+    TCBP = {0x1E900: 'XP1I', 0x1EB00: 'XP2I', 0x1ED00: 'XP3I',
+            0x1EF00: 'XP4I', 0x1F100: 'IO1I', 0x1F300: 'RDHC'}
+    _cur = {}
+    for _n, _e in (('RDHC', {}), ('XP1I', {'FPS3K_XPIRQ': '1'}),
+                   ('XP2I', {'FPS3K_XPIRQ': '2', 'FPS3K_CHANNELS': '4'}),
+                   # TCBIO1I needs $10AA=2 as well: XPIRQ=5 alone enters its
+                   # ISR but the scheduler never dispatches the TASK, so $00C0C
+                   # still reads RDHC.  $00C0C tracks what was DISPATCHED, not
+                   # merely whose ISR ran -- which is itself the sharper reading.
+                   ('IO1I', {'FPS3K_XPIRQ': '5', 'FPS3K_DMA10AA': '2',
+                             'FPS3K_MBOX': '00010000'})):
+        _, _rc = run(_e, 400_000_000)
+        _cur[_n] = TCBP.get(struct.unpack('>I', _rc[0xC0C:0xC10])[0])
+    check('$00C0C is the current-task TCB pointer (4 configurations)',
+          all(_cur[k] == k for k in _cur), str(_cur))
+    _, _rd = run({}, 400_000_000)
+    check('$00C20 onward is a structure directory matching the marker census',
+          [struct.unpack('>I', _rd[x:x+4])[0] for x in
+           (0xC10, 0xC20, 0xC24, 0xC28, 0xC2C)]
+          == [0x1E900, 0x1FD00, 0x1FB00, 0x1F600, 0x1F700])
+
     # --- golden-master machine state --------------------------------------
     #
     # The pointwise checks above read ~20 specific locations.  The PTM clocking
