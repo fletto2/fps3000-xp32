@@ -1598,6 +1598,52 @@ The pattern across all of this is the session's recurring one, one level up: **t
 itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
 here changed what is known about the machine; it changed how much a passing suite is worth.
 
+### UNIV FMT carries ALUs and shifters — it is a FORMAT converter, not a width converter
+
+The UNIV FMT card's role is recorded as unestablished: *"Whether it also does 16-to-32-bit width
+conversion, WCS write-port fan-out, or DEC F-floating to IEEE-754 for a DEC host is still
+unestablished."* One tile of `03_UNIV_FMT.JPG` narrows it sharply.
+
+| part | count seen | function |
+|---|---|---|
+| **`74S181N`** | **2** | **4-bit ALU / function generator** |
+| **`74F350`** | 4+ | **4-bit shifter** |
+| `MC74F153N` | 6+ | 4-to-1 multiplexer |
+| `74F257`, `74F157` | 3+ | 2-to-1 multiplexers |
+| `SN74S251N` | 1 | 8-to-1 multiplexer |
+| `SN74LS240/244` | many | buffers |
+| FPS PROMs `225-1000-013/-014` | 2 | white-labelled control store |
+
+**The ALUs are the discriminator.** Width conversion needs multiplexers and latches; WCS
+fan-out needs buffers. **Neither needs arithmetic.** A card carrying two 4-bit ALUs *and* an
+array of 4-bit shifters is doing something that requires adding and shifting — which for a card
+named "UNIV FMT 32 BIT IEEE" means **floating-point format conversion**:
+
+- **shifters** → mantissa alignment and normalisation
+- **ALUs** → **exponent arithmetic**, i.e. bias adjustment
+- **multiplexers** → field extraction and reassembly
+
+That is the entire recipe for converting between two float formats, and it is not the recipe for
+anything else on the candidate list.
+
+**It also fits the specific hypothesis.** DEC F-floating and IEEE-754 single differ in exponent
+bias (128 vs 127) and in mantissa/hidden-bit convention — a bias add and a one-bit shift, which
+is exactly what an ALU plus a shifter provides. The card's own FPS description names IEEE as one
+side; a DEC host would supply the other.
+
+**Stated with its limits.** This identifies the *class* of operation from the parts, not the
+specific conversion. Two 4-bit ALUs give 8 bits of arithmetic width — enough for an 8-bit IEEE
+exponent, which is suggestive but not proof. Confirming the format pair needs the schematic or a
+data trace across the card, neither of which exists. What can be said is that **"width
+conversion" and "fan-out" are now the weakest of the three candidates, and the arithmetic
+hardware is the reason.**
+
+*This complements rather than contradicts the `$1900` finding.* That phase demonstrated a
+**16-to-32-bit width mux** with `$FF0214` as the low-half latch — but noted explicitly that the
+SBC sees only the XLTR's registers and "whether the mux sits on the XLTR or further down the
+path is not observable from here". The width mux and the format converter can both exist; the
+photograph says the FMT card is doing arithmetic, which the width mux does not require.
+
 ### The vector-table overrun was a TWO-BIM artefact — correcting the count removed it
 
 Verifying the three-BIM change turned up a behavioural difference worth more than the change
