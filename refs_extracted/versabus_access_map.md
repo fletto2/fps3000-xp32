@@ -1528,6 +1528,52 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The chassis-memory test covers 16 KB, not "131k addresses"
+
+Phase `$29xx` is a march test with the extent written into the code:
+
+```
+$F09B30  lea     $400000,a2         ; start
+$F09B36  lea     $404000,a1         ; end  -> 16 KB
+$F09B3C  lea     $F09BB6,a3         ; pattern table
+$F09B42  move.l  (a3)+,d0 / move.l (a3)+,d1
+$F09B48  move.l  d0,(a0) / lea (a0,d2.w),a0 / cmpa.l a1,a0 / bne     ; fill
+$F09B58  cmp.l   (a0),d0            ; verify pattern 1
+$F09B70  move.l  d1,(a0) / cmp.l (a0),d1                             ; overwrite, verify
+$F09B84  lea     (a0,d2.w),a0       ; stride in d2
+```
+
+Measured against the width-aware access log:
+
+| quantity | value |
+|---|---|
+| distinct addresses touched | **4,098** |
+| range | `$400000`-`$404000` — **16 KB** |
+| accesses at true width | **65,581**, of which 65,570 are **32-bit** |
+| reads / writes | 32,789 / 32,792 — balanced write-then-verify |
+| stride | **4** (longword; the eleven stride-2 gaps are phase `$19xx`'s word probes) |
+| patterns at `$F09BB6` | `$00000000`, `$FFFFFFFF`, `$55555555`, `$AAAAAAAA` |
+
+**Two corrections to a recorded figure.** This document says phase `$29` "walks 131k
+chassis addresses". It walks **4,098** addresses. And `131,148` was never an address
+count — it was the **byte-decomposed** access count from the old bus log; at true CPU
+width the figure is **65,581 accesses**. A number produced by the decomposing logger
+was written down as a property of the firmware, and it was wrong by 32× as an address
+count and by 2× as an access count.
+
+*That is the third recorded fact traceable to the decomposed log — after the phantom
+register at `$FF0212` and the "hottest register" claim. The lesson is narrow and
+worth stating plainly: any count taken from a log that splits wide accesses is a
+count of bus cycles in the model, not of anything in the machine.*
+
+**And the extent is a hardware expectation worth having.** The firmware validates
+exactly 16 KB of the chassis window — not the 1 MB the emulator allocates, whose
+comment says "the test only touches the first few words". It touches 16 KB, three
+orders of magnitude more than that, and the allocation is right for a reason the
+comment gets wrong. Whether 16 KB is the window's page size or merely as much as the
+self-test bothers with is not settled here; op `$3`'s `page = addr >> 20` arithmetic
+implies 1 MB pages, which does not match, so the two facts are not yet reconciled.
+
 ### Phase `$19xx`: bit 4 is the 16-bit-access enable — and why `data_hi == 0` worked
 
 The chassis-memory data-path group specifies **bit 4** (`$10`) of `$FF0216`, in four

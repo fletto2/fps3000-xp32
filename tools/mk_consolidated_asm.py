@@ -80,6 +80,25 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- phase $29xx covers 16 KB, not "131k addresses" ----
+ (0xF09B30,'PHASE $29xx IS A MARCH TEST WITH ITS EXTENT WRITTEN INTO THE CODE:'),
+ (0xF09B30,'  $400000 to $404000 = EXACTLY 16 KB, stride in d2, patterns from the'),
+ (0xF09B30,'  table at $F09BB6 ($00000000, $FFFFFFFF, $55555555, $AAAAAAAA).'),
+ (0xF09B30,'  Measured at TRUE CPU width: 4,098 distinct addresses, 65,581 accesses of'),
+ (0xF09B30,'  which 65,570 are 32-bit, 32,789 reads against 32,792 writes.'),
+ (0xF09B30,'  TWO CORRECTIONS TO A RECORDED FIGURE.  This project says phase $29 "walks'),
+ (0xF09B30,'  131k chassis addresses".  It walks 4,098.  And 131,148 was never an'),
+ (0xF09B30,'  address count -- it was the BYTE-DECOMPOSED access count from the old bus'),
+ (0xF09B30,'  log; at true width the figure is 65,581 accesses.  Wrong by 32x as an'),
+ (0xF09B30,'  address count and by 2x as an access count.'),
+ (0xF09B30,'  That is the THIRD recorded fact traceable to the decomposed log, after'),
+ (0xF09B30,'  the phantom register at $FF0212 and the "hottest register" claim.  Any'),
+ (0xF09B30,'  count from a log that splits wide accesses is a count of bus cycles in'),
+ (0xF09B30,'  the MODEL, not of anything in the machine.'),
+ (0xF09B30,'  The 16 KB extent is a hardware expectation worth keeping: the firmware'),
+ (0xF09B30,'  validates 16 KB of the window, not the 1 MB the emulator allocates.'),
+ (0xF09B30,'  Unreconciled: op $3 computes page = addr >> 20, implying 1 MB pages,'),
+ (0xF09B30,'  which does not match a 16 KB test extent.'),
  # ---- phase $19xx: bit 4 is the 16-bit-access enable ----
  (0xF09806,'PHASE $19xx SPECIFIES BIT 4 OF $FF0216 AS THE 16-BIT-ACCESS ENABLE.'),
  (0xF09806,'  This comparator writes a longword then a WORD over its high half:'),

@@ -10137,6 +10137,24 @@ loc_F09B20:
   f09b28: 42 87                   clr.l    d7
   f09b2a: 42 06                   clr.b    d6
   f09b2c: 34 3c 00 04             move.w   #$4, d2
+;### PHASE $29xx IS A MARCH TEST WITH ITS EXTENT WRITTEN INTO THE CODE:
+;###   $400000 to $404000 = EXACTLY 16 KB, stride in d2, patterns from the
+;###   table at $F09BB6 ($00000000, $FFFFFFFF, $55555555, $AAAAAAAA).
+;###   Measured at TRUE CPU width: 4,098 distinct addresses, 65,581 accesses of
+;###   which 65,570 are 32-bit, 32,789 reads against 32,792 writes.
+;###   TWO CORRECTIONS TO A RECORDED FIGURE.  This project says phase $29 "walks
+;###   131k chassis addresses".  It walks 4,098.  And 131,148 was never an
+;###   address count -- it was the BYTE-DECOMPOSED access count from the old bus
+;###   log; at true width the figure is 65,581 accesses.  Wrong by 32x as an
+;###   address count and by 2x as an access count.
+;###   That is the THIRD recorded fact traceable to the decomposed log, after
+;###   the phantom register at $FF0212 and the "hottest register" claim.  Any
+;###   count from a log that splits wide accesses is a count of bus cycles in
+;###   the MODEL, not of anything in the machine.
+;###   The 16 KB extent is a hardware expectation worth keeping: the firmware
+;###   validates 16 KB of the window, not the 1 MB the emulator allocates.
+;###   Unreconciled: op $3 computes page = addr >> 20, implying 1 MB pages,
+;###   which does not match a 16 KB test extent.
   f09b30: 45 f9 00 40 00 00       lea.l    $400000.l, a2
 ;>>>> [R1/BOTH] This loads address 0x404000 into a1 as a destination pointer, used in a memory initialization loop (likely zeroing or copying data) for the XP-32 microcode staging buffer or a kernel data structure, part of the RTOSKernelInit or Phase2Init sequence.
 ;>>>> [R1/BOTH] Sets a1 to 0x404000 as a destination pointer for initializing memory during the RTOS kernel setup (likely a typo; intended address may be 0x000400 for RAM-based tables like GST/UST).

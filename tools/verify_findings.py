@@ -550,6 +550,31 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- phase $29xx covers 16 KB of chassis memory, not "131k addresses" ----
+    check('phase $29xx walks $400000 to $404000 -- 16 KB',
+          d[0xF09B30-0xF00000:0xF09B3C-0xF00000]
+          == b'\x45\xf9\x00\x40\x00\x00\x43\xf9\x00\x40\x40\x00')
+    check('...with the stride in d2 and patterns from the table at $F09BB6',
+          d[0xF09B3C-0xF00000:0xF09B46-0xF00000]
+              == b'\x47\xf9\x00\xf0\x9b\xb6\x20\x1b\x22\x1b'
+          and d[0xF09B84-0xF00000:0xF09B88-0xF00000] == b'\x41\xf0\x20\x00')
+    check('the four patterns are $00000000/$FFFFFFFF/$55555555/$AAAAAAAA',
+          [struct.unpack('>I', d[0xF09BB6-0xF00000+4*i:0xF09BB6-0xF00000+4*i+4])[0]
+           for i in range(4)] == [0x00000000, 0xFFFFFFFF, 0x55555555, 0xAAAAAAAA])
+    # measured at TRUE width, not from the byte-decomposing bus log
+    import tempfile as _tf2
+    _al2 = _tf2.mktemp()
+    run_err({'FPS3K_ACCESSLOG': _al2}, CYC)
+    _cw = [l.split() for l in open(_al2) if l[:1] in 'RW']
+    _win = [l for l in _cw if 0x400000 <= int(l[2], 16) < 0x500000]
+    _addrs = {int(l[2], 16) for l in _win}
+    check('measured: 4,098 distinct chassis addresses spanning exactly 16 KB',
+          len(_addrs) == 4098
+          and min(_addrs) == 0x400000 and max(_addrs) == 0x404000)
+    check('...and the accesses are overwhelmingly 32-bit (not 131k byte cycles)',
+          sum(1 for l in _win if l[1] == '4') > 0.99 * len(_win)
+          and 60000 < len(_win) < 70000)
+
     # --- phase $19xx: bit 4 is the 16-bit-access enable ----------------------
     check('$F09806 writes a longword then a WORD over its high half',
           d[0xF09806-0xF00000:0xF0980C-0xF00000]

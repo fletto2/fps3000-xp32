@@ -77,8 +77,11 @@ uint8_t *host_sim_get_ram_ptr(void) { return ram; }
  * XLTR_DATA_HI selects an active page (e.g. 0, 0x40), reads and
  * writes round-trip to this buffer.  Phase 0x1900 (F09776) writes
  * a long pattern and reads it back; later phases use it for the
- * panel-bus DMA path.  Sized small (1 MB) since the test only
- * touches the first few words. */
+ * panel-bus DMA path.  Sized 1 MB, which is ample: self-test phase $29xx
+ * walks $400000-$403FFF -- exactly 16 KB, 4,098 addresses, stride 4, in
+ * 65,581 accesses of which 65,570 are 32-bit.  An earlier version of this
+ * comment said "the test only touches the first few words", which understated
+ * it by three orders of magnitude. */
 #define CHASSIS_MEM_BASE  0x400000
 #define CHASSIS_MEM_SIZE  (1u << 20)        /* 1 MB */
 static uint8_t  chassis_mem[CHASSIS_MEM_SIZE];
