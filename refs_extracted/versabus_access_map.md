@@ -15781,3 +15781,39 @@ For emulation this is the list of state that actually matters. A model that repr
 `!IDV`, `!VCT` and `!PAT` reproduces everything the six tasks read; the other four can be
 allocated and left empty without any observable difference, which is exactly what the firmware
 itself does.
+
+## `!UST` decoded: the nine semaphores, with their owners
+
+`!UST` at `$1FB00` is self-describing — its header carries the geometry:
+
+```
++00  '!UST'
++0C  $0016 = 22    record size
++0E  $0009 =  9    record count
++10  $0001FB14     first record
+```
+
+Reading the nine 22-byte records:
+
+| # | owner | semaphore | | # | owner | semaphore |
+|---:|---|---|---|---:|---|---|
+| 0 | XP1I | `AXP1` | | 5 | XP3I | `HXP3` |
+| 1 | XP1I | `HXP1` | | 6 | XP4I | `AXP4` |
+| 2 | XP2I | `AXP2` | | 7 | XP4I | `HXP4` |
+| 3 | XP2I | `HXP2` | | 8 | **IO1I** | **`HIO1`** |
+| 4 | XP3I | `AXP3` | | | | |
+
+**Exactly the documented declaration counts — 2/2/2/2/1/0** — with RDHC owning none. Every record
+carries identical trailing state (`0001 0002 0000000000 00`), so all nine are in the same
+condition after boot.
+
+Record layout: `{owner task name (4), longword, semaphore name (4), state (10)}` = 22 bytes.
+
+**This closes the `HXP0` question.** The ROM contains only the literal `HXP0` — `$F053B6` loads it
+and adds the channel number — and here are the resulting `HXP1`-`HXP4` as live registry entries.
+Names that exist nowhere in the image exist in RAM, exactly as the runtime-construction finding
+predicted, and the registry is where they land.
+
+For emulation: `!UST` is the single most populated RTOS structure (101 nonzero bytes) and is
+entirely derivable — nine records, fixed layout, names constructed from a template plus a channel
+number, all owners known from the TDTI table.
