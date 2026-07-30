@@ -1473,6 +1473,55 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### RESOLVED: the 42-slot table's "different caller" is the channel ISR
+
+CLAUDE.md has carried this as an open item since the dispatch table was decoded:
+
+> `F0572C` (the `PanelStatusDispatchTable` site) is **never reached** from F04930
+> on any of 42 swept response values. That 42-slot table is correctly decoded but
+> belongs to a different caller.
+
+**The different caller is the XP channel ISR's post-transfer dispatch at
+`$F07F84`** — in each task's own copy of the table.
+
+Decoding what the replication sweep had already found settles it. Taking the
+offset between RDHC's table and XP1I's, `$2858`, and applying it to RDHC's four
+documented handlers lands on XP1I's four exactly:
+
+| RDHC handler | `+$2858` | XP1I | difference |
+|---|---|---|---|
+| `D2_FIN` `$F05738` | → | `$F07F90` | 2 of 64 bytes |
+| `D1_SEND` `$F058B2` | → | `$F0810A` | 2 of 64 bytes |
+| `POLL` `$F05A12` | → | `$F0826A` | **byte-identical** |
+| `BLK_XFR` `$F05B0E` | → | `$F08366` | **byte-identical** |
+
+So the **entire `PanelStatusDispatch` subsystem is replicated once per task** —
+the 42-entry table, `PanelErrorMaskTable`, and all four handlers — with only
+two-byte constant patches in two of them, the same template-patch pattern
+measured across the task bodies.
+
+Three consequences.
+
+**The subsystem is not RDHC-specific.** It has been documented as RDHC's, and it
+is shared library code that every task carries.
+
+**The handler names transfer.** The handler executing most in XP1I, `$F0810A`, is
+the `D1_SEND` position — "push `d1` as a longword in two halves, then
+REQUEST-TRANSFER". That matches what the channel ISR was independently measured
+doing: write the data pair, write `$8004`. The two readings were of the same code
+and neither knew about the other.
+
+**And RDHC's copy is the dead one.** `$F0572C` is unreached in every
+configuration, while the XP copies dispatch on every completed transfer. The
+subsystem was named after, and attributed to, the one instance that never runs —
+which is the same error as the five-tables case, and for the same reason: it was
+found in RDHC first because RDHC is where the disassembly starts.
+
+*Method note: this came from decoding groups the original duplicate-block sweep
+reported months of iterations ago, immediately after the previous section
+concluded that interpretation, not detection, was the gap. Two of five groups
+mapped straight onto documented handlers; the offset arithmetic did the rest.*
+
 ### `PanelStatusDispatchTable` is not one table — there are five
 
 The 42-entry table is not a twin of RDHC's; it is a **copy of it**. Searching the

@@ -348,6 +348,13 @@ else:
     check('$F096AC is a probe: read then 4 NOPs then rts, value discarded',
           d[0x96AC:0x96B8].hex().upper() == '30114E714E714E714E714E75')
 
+    check("RDHC's four dispatch handlers map onto XP1I's at +$2858",
+          all(d[a2-0xF00000:a2-0xF00000+64] == d[a2+0x2858-0xF00000:a2+0x2858-0xF00000+64]
+              for a2 in (0xF05A12, 0xF05B0E)) and
+          all(sum(1 for i in range(64)
+                  if d[a2-0xF00000+i] != d[a2+0x2858-0xF00000+i]) == 2
+              for a2 in (0xF05738, 0xF058B2)))
+
     check('the five dispatch tables are byte-identical, not just same-shaped',
           len({bytes(d[a2-0xF00000:a2-0xF00000+168]) for a2 in
                (0xF05BA4, 0xF065E4, 0xF06FFC, 0xF079FC, 0xF083FC)}) == 1)
