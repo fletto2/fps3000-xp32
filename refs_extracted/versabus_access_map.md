@@ -15751,3 +15751,33 @@ So "final PC `$F00FCC`, the RTOS idle loop" — the sentence that ends nearly ev
 this project — means specifically: *the machine is scanning an empty pending-work list on a tick
 deadline, forever*. The 30-byte pool at `+4` is allocated and never used, in the same way the
 nine-record trace ring is allocated and never written.
+
+## RTOS structure liveness: four populated, four header-only
+
+Counting nonzero bytes in the first 256 of each allocated structure after a clean boot:
+
+| structure | base | nonzero | state |
+|---|---|---:|---|
+| **`!UST`** | `$1FB00` | **101** | live — the semaphore registry |
+| **`!IDV`** | `$1F800` | **61** | live — the six `{vector, TCB, ISR entry, ISR exit}` records |
+| **`!PAT`** | `$1F700` | **61** | header + record pool; **active list empty** |
+| **`!VCT`** | `$1FA00` | **40** | live — `byte[vector] = owning task` |
+| `!GST` | `$1FD00` | 10 | header only |
+| `!IOV` | `$1F900` | 7 | header only |
+| trace ring | `$1F500` | 6 | header only |
+| `!UDR` | `$1F600` | 5 | header only |
+
+**I over-generalised last entry.** "Allocate everything, enable nothing" is wrong: half these
+structures are genuinely populated, and they are precisely the ones the six tasks need —
+semaphores (`!UST`), interrupt wiring (`!IDV`), vector ownership (`!VCT`), and the timer scan list
+(`!PAT`). The header-only four correspond to facilities this build does not use: global segments,
+I/O vectors, user data records, and the disabled trace ring.
+
+So the correct statement is narrower and more useful: **the RTOS allocates eight structures and
+populates the four its workload requires.** That is ordinary behaviour for a generic kernel hosting
+a specific application, not a quirk.
+
+For emulation this is the list of state that actually matters. A model that reproduces `!UST`,
+`!IDV`, `!VCT` and `!PAT` reproduces everything the six tasks read; the other four can be
+allocated and left empty without any observable difference, which is exactly what the firmware
+itself does.
