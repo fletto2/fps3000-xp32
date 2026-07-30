@@ -15164,3 +15164,43 @@ changes that.
 Worth noting 1468 is the same count this file records elsewhere for the `$10AA` arm path — it
 appears to be a saturation figure for the raise-every-200k-cycles hook rather than anything about
 the firmware.
+
+## The XP task service loop, observed: `WAIT` → `SGSEM` → `WAIT`
+
+Driving XP1I's channel with kernel tracing on (`FPS3K_POKE="0C34=8000" FPS3K_XPIRQ=1`) fills the
+nine-record ring with one repeating cycle:
+
+```
+XP1I  $13 WAIT
+XP1I  $13 WAIT
+XP1I  $2B SGSEM      <- signal semaphore
+XP1I  $13 WAIT
+XP1I  $2B SGSEM
+XP1I  $13 WAIT
+XP1I  $2B SGSEM
+XP1I  $13 WAIT
+XP1I  $2B SGSEM
+```
+
+Every record comes from hook `$15`, the supervisor TRAP #1 route, as expected.
+
+**So each channel interrupt makes the task signal a semaphore and block again.** That is the XP
+channel service loop, and it is the first time this project has observed one of these tasks doing
+its job rather than inferred it from coverage percentages.
+
+**The contrast with RDHC is the useful part.** Under the same instrumentation RDHC produces one
+extra `WAIT` and nothing else — no `SGSEM`, no `RESUME`. So:
+
+| task | driven behaviour |
+|---|---|
+| **XP1I** | wakes, **signals a semaphore**, re-waits — a working cycle, repeating indefinitely |
+| **RDHC** | wakes, re-waits — no semaphore traffic at all |
+
+The XP tasks are functioning correctly in the model; **RDHC is the one that is stuck**, and it is
+stuck before reaching any of its dispatcher work. That sharpens a distinction this project has
+been carrying as "RDHC 3%, XP tasks 5-6%" — coverage numbers that made all five look equally
+blocked when they are not.
+
+`SGSEM` is `$2B`, one of the four semaphore directives, and the XP tasks each declare two
+semaphores (`AXP`n and `HXP`n). Which of them is being signalled is not established here — the
+trace records the directive and the TCB, not the parameter block contents.
