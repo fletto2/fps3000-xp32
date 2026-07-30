@@ -13923,3 +13923,43 @@ decoded logic (`tst.l d1 / bne` after the sweep) and prove nothing about runtime
 "`$600` EXITS on a fault ... PASS" as evidence that a fault occurred is exactly the mistake
 that produced the wrong attribution. The runtime evidence had to be measured separately, and it
 happens to agree.
+
+## Why RDHC sits at 3%: 42 one-way calls to a routine that never returns
+
+RDHC is the largest region (1,451 decoded instructions, `$F04600`-`$F05CFF` from the ROM's own
+TDTI entry) and the least executed. Its internal call graph explains that completely — and it is
+remarkably small:
+
+| target | call sites | |
+|---|---:|---|
+| **`$F05688`** | **42** | the panel-command issuer |
+| `$F05150` | 4 | |
+| `$F051A2` | 3 | S-record data handler |
+| `$F056BA` | 3 | `PanelSendAndWait` |
+| `$F05652`, `$F055A2` | 2 each | ASQ post; S1 record handler |
+| five others | 1 each | |
+
+**Eleven distinct call targets in 1,451 instructions, and 42 of the call sites go to one
+routine.** Nothing outside RDHC calls into it; it is self-contained.
+
+`$F05688` does not return:
+
+```
+F05688  move.w   d0,$e6e          ; stash the command
+F05694  move.w   d0,$e(a0)        ; -> $FF000E
+F05698…  MODE1 / MODE0 / CHANNEL_SELECT setup
+F056B8  bra.b    $F056B8          ; spin -- and there is no rts in the routine
+```
+
+The `rts` at `$F05682` belongs to the preceding routine. So every one of those 42 `jsr`s is a
+**one-way transfer**: control returns only if the chassis-response ISR rewrites the stacked PC.
+
+That is RDHC's architecture, not a defect — it is a state machine in which each command issue
+parks the task until the chassis answers. And it fixes the meaning of RDHC's coverage number:
+**RDHC's execution is bounded by how many chassis responses the model can deliver, not by
+anything about its code.** Measured, delivery reaches 7 operations before stalling, which is why
+1,399 of its 1,451 instructions never run.
+
+So "RDHC is 3% covered" and "RDHC is poorly understood" are different claims, and only the first
+is true. The region decodes cleanly, its call graph is fully mapped, and the single reason it
+does not execute is a chassis conversation we cannot yet sustain past seven exchanges.
