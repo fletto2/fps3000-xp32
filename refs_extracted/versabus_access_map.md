@@ -16292,3 +16292,31 @@ Two details this explains:
 - **The `subq.w #$2` implies the collected array is not uniform.** Entries below code `$10` are
   four bytes apart and the run above starts two bytes earlier than `code * 4` would place it,
   which is the signature of a longword array preceded by a word-sized field.
+
+### The `$14` absorption, measured
+
+Driving the bit-7 collect path with four codes:
+
+| response | code | validator `$F0495C` | handler `$F04992` | `$E74` writes |
+|---|---|---:|---:|---:|
+| `$80` | `$00` | 219 | **219** | 487 |
+| `$8B` | `$0B` | 219 | **219** | 487 |
+| `$93` | `$13` | 219 | **219** | 487 |
+| **`$94`** | **`$14`** | 219 | **0** | **51** |
+
+All four reach the validator equally — delivery is identical — but **code `$14` alone never
+reaches the handler**, and the result register is touched 51 times instead of 487.
+
+That is `$F0497A`'s `beq.w $f050f8` executing: the dispatcher recognises `$14` and branches
+straight to the ISR exit stub. This project records the consequence — *"a stream of `$14`s yields
+exactly one command"* — and here is the mechanism running, with the counts to distinguish it from
+the other twenty codes.
+
+`$E74` is written roughly twice per handler invocation (487 ≈ 219 × 2 + boot writes), consistent
+with the handler assembling a 32-bit result from two halves under bit 6, the same way the
+operation path does.
+
+Note `FPS3K_RESP=0x94` is the value this project uses throughout for driving RDHC — and it is the
+one code in the collect range that the dispatcher throws away. That is not a contradiction: `$94`
+was chosen because it wakes RDHC via the ISR entry, and the absorption is precisely why it
+produces one wake rather than a stream.
