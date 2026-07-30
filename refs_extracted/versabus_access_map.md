@@ -14067,3 +14067,46 @@ rescue instruction to trigger.**
 Method note, since this is the second time today: the claim was reasonable, widely repeated, and
 never checked against a search for the operand form that would implement it. `a7`-relative writes
 are a small, enumerable class — the check took one query.
+
+## How a `bra .` spin is actually escaped: the frame is DISCARDED, not patched
+
+With the PC-rewrite story retracted, the real mechanism is visible, and it was hiding behind the
+same supervisor/user split that governs TRAP #0.
+
+**TRAP #1 dispatches on the caller's mode.** At `$F002C6` the handler copies the stacked SR,
+masks it with `$7F`, and `bne`s to **`$F0093A`** when the system byte is non-zero — i.e. when the
+trap came from supervisor state. A `trap #1` issued from a task reaches the 77-entry directive
+table; the *same instruction* issued from an ISR reaches a completely different routine. One
+opcode, two interfaces, selected by privilege.
+
+The ISR exit stub `$F050F8` ends `movem.l (a7)+,d0-d7/a0-a7` / `move #$0C,ccr` / `trap #1`, so it
+arrives at `$F0093A`:
+
+```
+F0093A  btst.b   #$d,(a7)          ; check the stacked SR's S bit
+F00942  addq.l   #$6,a7            ; DISCARD the exception frame -- SR and PC both
+F00944  movea.l  (a7)+,a6          ; pop a TCB pointer
+F00948  cmpi.l   #$21544342,d4     ; verify it really is a '!TCB'
+F00954  tst.w    d0                ; 0 -> plain exit
+F0095A  cmpi.w   #$1,d0
+F00962  bsr.w    $f02c6c           ; 1 -> T0WAKEUP on that TCB
+F0096A  cmpi.w   #$2,d0            ; 2 -> $F01600
+```
+
+**`addq.l #$6,a7` is the whole answer.** The ISR does not return to the code it interrupted — it
+throws away the saved SR and PC and re-enters the kernel. A task spinning at `bra .` is not
+rescued, redirected, or patched; **its context is simply abandoned** and the scheduler chooses
+what runs next. `d0 = 1` additionally wakes the TCB whose pointer the handler left on the stack,
+via `$F02C6C` — the routine the TRAP #0 table independently named **T0WAKEUP**, reached here
+through its `bsr` entry point two bytes below the directive entry.
+
+Three consequences:
+
+- The asm annotation calling this `trap #1` **"THE WAKER"** is correct, and now has a mechanism
+  rather than a label.
+- **Every experiment this session that tried to free a spin by delivering interrupts harder was
+  aimed at the wrong thing.** There is no rescue instruction; there is a kernel exit that
+  discards the frame. What the interrupt must accomplish is reaching `$F050F8`, not returning.
+- It explains the dual-entry convention from the other direction: `$F02C6C` needs a `bsr`-callable
+  entry precisely because the kernel calls it internally from *this* path, while directive `$16`
+  enters two bytes later.
