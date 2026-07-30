@@ -13594,3 +13594,39 @@ The spin is gone. `$F04AF8` still does not run and the staging buffer stays empt
 incrementing pattern the S-record front end at `$F04B8A` is comparing against `$5330` = `"S0"`
 and correctly rejecting what it is given. That is the firmware behaving properly, not a
 remaining defect — feeding `DATAIN` to an S-record parser was never going to parse.
+
+## The scripted chassis advances one blocker at a time; there are three in series
+
+Delivery is acknowledgement-driven, so the script advances only as far as the next unbroken
+spin. Chasing op `$3` through the sequence mechanism mapped the chain:
+
+| # | blocker | mechanism | status |
+|---|---|---|---|
+| 1 | `$F04B22` ready poll | `$FF0004` bit 0 never asserted | **fixed** — flag now tracks the source |
+| 2 | `$F04C28` drain loop | `cmpi.w #$0,$0(a1)` on `$FF0000`; exits only on end-of-stream | needs a **finite** source |
+| 3 | `$F056B8` `PanelSendAndWait` | level-6 responder cannot preempt | **open**, long documented |
+
+Blocker 2 is not a defect on either side. The loop drains the port until the chassis clears
+`$FF0000` to say "nothing more" — the same end-of-stream convention already recorded for the
+`$F05218` drain. With `FPS3K_DATAIN` the source is *endless*, so the firmware is correct to
+drain forever: measured 1,040,513 iterations of the four-instruction loop. **`FPS3K_DATAIN` is
+therefore unusable for driving any path that ends in a drain**, and `FPS3K_SREC` — which sets
+`srec_exhausted` and returns 0 — is the source to use.
+
+With a finite source the run clears blockers 1 and 2 and stops at 3:
+
+```
+FPS3K_XPIRQ=6 FPS3K_RESP=0x00 FPS3K_SREC=<file> FPS3K_SEQ="01:...,03:BEEF,..."
+  -> ISR fires 3x, ops $0 x2 / $1 x1 / $F x2, final PC $F056B8
+```
+
+Op `$3` is still never dispatched, so **its write path remains statically decoded and unmeasured**.
+The reason is now precise rather than mysterious: delivery stalls at blocker 3 before the code
+carrying op `$3` is handed over. Clearing `$F056B8` is the single thing standing between this
+project and a measured confirmation of the SBC's write port into chassis memory.
+
+One further observation from these runs: with `FPS3K_RESP` and `FPS3K_SEQ` both set, the **first**
+code delivered is `FPS3K_RESP`'s, not the script's. A run with a sequence containing no op `$0`
+still dispatched op `$0` once. That is consistent with the warning already in `versabus.c` about
+the two hooks interacting, and it means a sequence's first entry is effectively the *second*
+code the SBC sees.
