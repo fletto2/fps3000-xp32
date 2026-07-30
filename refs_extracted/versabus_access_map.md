@@ -1563,6 +1563,49 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### ANSWERED: RDHC spends 90% of the run in a `bra .` spin at `$F056B8`
+
+Measuring where RDHC actually executes settles the question the previous entry left open, and
+it is not subtle:
+
+| PC | executions | share |
+|---|---|---|
+| **`$F056B8`** | **182,124** | **90% of all RDHC execution** |
+| `$F04930`-`$F04958` | 966 each | the panel-status ISR |
+| `$F050F8`/`$F050FC` | 966 each | the ISR exit and its wake |
+| everything else in RDHC | — | 117 distinct PCs, 201,534 total |
+
+`$F056B8` is `60 fe` — **`bra.b` to itself**. It is the tail of `PanelIOConfigure_25A`:
+
+```
+$F056A0:  bset.b #$c,d1          ; set MODE1 bit 12
+$F056A4:  move.w d1,$202(a0)
+$F056A8:  move.w $200(a0),d1     ; read MODE0
+$F056AC:  bclr.b #$a,d1          ; clear bit 10 -- release the acknowledge
+$F056B0:  move.w d1,$200(a0)
+$F056B4:  move.w d0,$204(a0)     ; issue the command on CHANNEL_SELECT
+$F056B8:  bra.b  $F056B8         ; SPIN, waiting for the chassis
+```
+
+**So RDHC is not waiting for work — it is stuck having asked for some.** It wakes, dispatches,
+the handler issues a panel command through this routine, and the routine parks forever. That is
+why the directive-`$13` wait is entered only twice: RDHC never gets back to it.
+
+**And the ISR fires 966 times *during* that spin without releasing it.** This file documents the
+escape mechanism — *"the only escape is the panel-status responder `$F04930` rewriting the saved
+PC"* — and the measurement shows the responder running while the spin continues. So the ISR is
+entered and does not rewrite the PC out of `$F056B8`.
+
+**That is the single concrete thing blocking RDHC**, stated in a form a model can act on: the
+chassis must respond to a panel command in a way that causes `$F04930` to rewrite the spinning
+return address. Everything else in this thread — delivery timing, push versus pull, the two
+acknowledges, wake rates — was downstream of a task that never leaves its first command.
+
+*The same self-programmed deadlock is already documented for TCBIO1I* (`$F05E86`), and this file
+notes RDHC as "the same, one level further out". That was inferred; this measures it, names the
+spin, and quantifies it at 182,124 iterations against 966 ISR entries — a responder running
+188 times per spin without effect.
+
 ### The wake fires 966 times; RDHC's wait is entered TWICE
 
 Following the narrowed question — what wakes RDHC and how often — measures out sharply, and

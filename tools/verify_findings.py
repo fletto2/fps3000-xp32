@@ -570,6 +570,16 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- RDHC spins at $F056B8, the tail of PanelIOConfigure_25A --------------
+    check('$F056B8 is bra.b to itself -- an unconditional spin',
+          d[0xF056B8-0xF00000:0xF056BA-0xF00000] == b'\x60\xfe')
+    check('...reached after issuing the command on CHANNEL_SELECT',
+          d[0xF056B4-0xF00000:0xF056B8-0xF00000] == b'\x31\x40\x02\x04')
+    check('...having set MODE1 bit 12 and cleared MODE0 bit 10 first',
+          d[0xF056A0-0xF00000:0xF056B4-0xF00000]
+          == b'\x08\xc1\x00\x0c\x31\x41\x02\x02'
+             b'\x32\x28\x02\x00\x08\x81\x00\x0a\x31\x41\x02\x00')
+
     # --- RDHC's wait is entered twice while the waker fires constantly --------
     check('the ISR exit stub is the trap #1 that wakes RDHC',
           d[0xF050FC-0xF00000:0xF05102-0xF00000] == b'\x44\xfc\x00\x0c\x4e\x41')
