@@ -451,6 +451,39 @@ else:
           len({l for l in trk.split() if 'F07D00' <= l <= 'F086FF'}) > 200 and
           len({l for l in trn2.split() if 'F07D00' <= l <= 'F086FF'}) < 130)
 
+    # --- RDHC's 42-slot table executes; corrected census --------------------
+    def slot(i):
+        a2 = 0xF05BA4 + 4 * i - 0xF00000
+        if struct.unpack('>H', d[a2:a2+2])[0] != 0x4EFA:
+            return 'rts' if d[a2:a2+2] == b'\x4e\x75' else '?'
+        return {0xF05738: 'D2_FIN', 0xF058B2: 'D1_SEND', 0xF05A12: 'POLL',
+                0xF05B0E: 'BLK_XFR'}.get(
+                    0xF05BA4 + 4*i + 2 + struct.unpack('>h', d[a2+2:a2+4])[0], '?')
+    census = {}
+    for i in range(42):
+        census[slot(i)] = census.get(slot(i), 0) + 1
+    check('42-slot census is POLL 9, D1_SEND 10, BLK_XFR 9, D2_FIN 1, rts 13',
+          census == {'POLL': 9, 'D1_SEND': 10, 'BLK_XFR': 9, 'D2_FIN': 1, 'rts': 13})
+    check('...D2_FIN is the single finalize code and it is index $14',
+          slot(0x14) == 'D2_FIN')
+    check('...operation $14 selects index $0F, which is D1_SEND', slot(0x0F) == 'D1_SEND')
+    t14 = run({'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6',
+               'FPS3K_CHASSIS_CMD': '1,14,1'}, 400_000_000)[0].split('\n')
+    check("RDHC's $F0572C EXECUTES (it was recorded as never reached)",
+          t14.count('F0572C') >= 1 and t14.count('F05370') >= 1)
+    check('...and D1_SEND, POLL and D2_FIN all fire from one command',
+          all(t14.count(h2) >= 1 for h2 in ('F058B2', 'F05A12', 'F05738')))
+    check('cmd 1 posts to the target task ASQ by name: $48585030 + channel',
+          d[0xF053B6-0xF00000:0xF053BE-0xF00000]
+          == b'\x22\x3c\x48\x58\x50\x30\xd2\x04')
+    # addq.l #1,d3 / lsl.l #5,d3 / addi.l #$FF000E,d3 / movea.l d3,a0
+    # ... lea $0(a0),a0 / movea.l a0,a1 / subq.l #6,a1
+    check('cmd 1 derives the channel port as (ch+1)<<5 + $FF000E',
+          d[0xF053EA-0xF00000:0xF053F4-0xF00000]
+          == b'\x52\x83\xeb\x8b\x06\x83\x00\xff\x00\x0e')
+    check('...and the channel DATA pair as that port minus 6',
+          d[0xF053FA-0xF00000:0xF053FE-0xF00000] == b'\x22\x48\x5d\x89')
+
     # --- END TO END: CPLOAD stages microcode with no bypass -----------------
     # Chassis presents response $94 + IRQ -> RDHC wakes from its $13 wait ->
     # bit-7 command arm -> fetch record from $400000 -> command 4 (CPLOAD) ->

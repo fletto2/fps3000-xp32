@@ -1878,6 +1878,10 @@ loc_F053A2:
   f053ae: 08 29 00 01 10 a1       btst.b   #$1, $10a1(a1)
   f053b4: 67 0e                   beq.b    loc_F053C4
 ;>>>> [R3/BOTH] This instruction loads the immediate value 0x48585030 ("HXP0" ASCII) into d1, which is used as a marker or identifier for the XP-32 channel being configured, likely for diagnostic or status reporting during microcode upload or channel initialization.
+;### CMD 1 ALSO POSTS TO THE TARGET TASK ASQ BY NAME: #$48585030 = 'HXP0',
+;###   plus the channel number gives HXP1..HXP4, then jsr $F05652.  So this is
+;###   the inter-task path from RDHC to the XP controllers, using the H+name
+;###   host-side convention already seen in the !UST ASQ registry.
 ;### move.l #'HXP0',d1 then add.b d4,d1 -> HXP1..HXP4. RDHC BUILDS the queue name.
 ;###     builds the ASQ name from $48585030 = "HXP0" + channel
   f053b6: 22 3c 48 58 50 30       move.l   #$48585030, d1
@@ -1886,6 +1890,14 @@ loc_F053A2:
 
 loc_F053C4:
 ;>>>> [R10/BOTH] This `cmpi.l #$14, (a6)` at 0xf053c4 compares the value at a6 to 0x14 (20 decimal), checking for a specific channel configuration marker or data structure size during per-channel TCB initialization in SRecordFinalize_andHelpers.
+;### CMD 1 PARAMETER BLOCK is {command, operation, channel}: +$00 command
+;###   number, +$04 the OPERATION CODE tested here, +$08 the channel (read at
+;###   $F05372 as $4(a6), defaulting to $E62).  Operation $14 is the path into
+;###   PanelSendAndWait, and FPS3K_CHASSIS_CMD=1,14,1 makes $F0572C EXECUTE --
+;###   RETRACTION: this project recorded "RDHC's is the only one of the five
+;###   dispatch copies that never executes, because $F0572C is unreached."
+;###   It is reached, by RDHC's own command 1.  D1_SEND, POLL and D2_FIN all
+;###   fire from one command, and RDHC coverage goes 4% -> 19%.
   f053c4: 0c 96 00 00 00 14       cmpi.l   #$14, (a6)
   f053ca: 66 1c                   bne.b    loc_F053E8
   f053cc: 20 04                   move.l   d4, d0
@@ -1899,6 +1911,11 @@ loc_F053C4:
   f053e2: 33 7c 00 02 10 a0       move.w   #$2, $10a0(a1)
 
 loc_F053E8:
+;### THE FIRMWARE DERIVES ITS OWN CHANNEL-WINDOW FORMULA: (ch+1)<<5 + $FF000E
+;###   is the channel COMMAND port and that minus 6 is the DATA pair.  ch=1
+;###   gives $FF004E and $FF0048; ch=2 gives $FF006E and $FF0068.  This is
+;###   independent confirmation of the corrected per-channel table -- +$0E
+;###   command, +$08 data -- which had to be reconstructed from usage patterns.
   f053e8: 26 04                   move.l   d4, d3
   f053ea: 52 83                   addq.l   #$1, d3
 ;>>>> [R4/BOTH] This instruction shifts d3 left by 5 bits (multiply by 32) to compute an offset into a per-channel data structure, then adds $ff000e  [APIF_PANEL_CMD] to form an absolute address in the XLTR register region — used to calculate the base address for a specific XP-32 channel's command/status register during channel configuration.
@@ -2820,6 +2837,17 @@ loc_F05B82:
 ; PanelStatusDispatch
 ; ============================================================
 PanelStatusDispatch:
+;### CORRECTED CENSUS of the 42 slots (entries are 4EFA jmp d16(pc) pairs):
+;###     POLL    $F05A12   9 slots  (this project recorded 12 -- WRONG)
+;###     D1_SEND $F058B2  10 slots
+;###     BLK_XFR $F05B0E   9 slots  (recorded as 11 -- WRONG)
+;###     D2_FIN  $F05738   1 slot   at index $14, the only finalize code
+;###     rts     4E75     13 slots  <-- A FIFTH CASE NEVER LISTED
+;###   9+10+9+1+13 = 42 exactly.  The old counts summed to 34 of 42 and left
+;###   eight unexplained.  13 operation codes are unimplemented no-ops,
+;###   including index $00 -- so this is a SPARSE table, 29 live operations and
+;###   13 reserved slots: a table sized for a family of machines, of which this
+;###   configuration implements two thirds.
 ;### 42-slot dispatch table. FIVE identical copies exist, one per task region;
   f05ba4: 4e 75                   rts      
   f05ba6: 4e 71                   DC.W     0x4e71  ; 'Nq'

@@ -1473,6 +1473,96 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### RDHC's 42-slot table executes, and 13 of its slots are `rts`
+
+Command 1's parameter block is `{command, operation, channel}`:
+
+```
+$F05322  move.l  (a0)+,d1      ; +$00 command number 1..4
+$F05370  movea.l a0,a6         ; a6 now points at +$04
+$F05372  move.l  $4(a6),d4     ; +$08 channel, defaulting to $E62 if zero
+$F053C4  cmpi.l  #$14,(a6)     ; +$04 OPERATION CODE -- $14 is the interesting one
+```
+
+With `FPS3K_CHASSIS_CMD=1,14,1` — command 1, operation `$14`, channel 1 — RDHC
+reaches `PanelSendAndWait` and **`$F0572C` executes.** Three of the four primitives
+fire in one command: `D1_SEND` (`$F058B2`), `POLL` (`$F05A12`), `D2_FIN`
+(`$F05738`).
+
+**This retracts a claim in this document.** It said of the five copies of the
+dispatch subsystem: *"RDHC's is the only one that never executes, because `$F0572C`
+is unreached."* It is reached, by RDHC's own command 1, and the reason it looked
+unreachable is the chain of blockers now cleared — the `$13` wait, the missing
+MODE0 code, and the absent command record.
+
+#### Corrected census of the 42 slots
+
+The entries are `4EFA` `jmp d16(pc)` pairs, not addresses. Decoding all 42:
+
+| handler | slots | indices |
+|---|---|---|
+| `POLL` `$F05A12` | **9** | `$01 $0A $16 $17 $19 $1B $1F $22 $24` |
+| `D1_SEND` `$F058B2` | **10** | `$02`-`$07`, `$0D`-`$10` |
+| `BLK_XFR` `$F05B0E` | **9** | `$08 $09 $18 $1A $1C $1D $1E $23 $25` |
+| `D2_FIN` `$F05738` | **1** | `$14` |
+| **`rts` — no-op** | **13** | `$00 $0B $0C $11 $12 $13 $15 $20 $21 $26 $27 $28 $29` |
+
+**Two corrections and one omission.** This document has recorded "POLL (12 codes)"
+and "BLK_XFR (11 codes)" — both wrong; they are 9 and 9. And it said "only 4
+distinct handlers exist" while its own counts summed to 34 of 42, leaving 8
+unexplained. There is a **fifth case**: `4E75`, a bare `rts`. **13 of the 42
+operation codes are unimplemented no-ops**, including index `$00`. `9+10+9+1+13 =
+42` exactly.
+
+*That changes how the table should be read. It is not a dense 42-operation
+instruction set; it is a sparse one with 29 live operations and 13 reserved slots
+that return immediately — the shape of a table sized for a family of machines, of
+which this configuration implements two thirds.*
+
+Operation `$14` selects index `$0F`, which is `D1_SEND` — and the trace shows
+`POLL` and `D2_FIN` running too, because `$F05468`'s caller walks successive
+descriptors at `$14(a6)` stride. So one command drives a *sequence* of operations
+ending in the single finalize code `$14`.
+
+#### Command 1 also posts to the target task's ASQ
+
+```
+$F053AE  btst.b  #$1,$10A1(a1)      ; per-channel flag, (ch-1)*2
+$F053B4  beq     -> skip
+$F053B6  move.l  #$48585030,d1      ; 'HXP0'
+$F053BC  add.b   d4,d1              ;   -> 'HXP1'..'HXP4'
+$F053BE  jsr     $F05652            ; post by name
+```
+
+So command 1 optionally hands the work to the target XP task's **host-side queue**,
+by name. That is the inter-task path between RDHC and the XP controllers, and it
+uses exactly the `H`+name convention already recorded for the ASQ registry.
+
+#### The firmware derives its own channel-window formula
+
+```
+$F053E8  d3 = (ch + 1) << 5
+$F053EE  d3 += $FF000E        ; a0 = the channel COMMAND port
+$F053FC  a1 = a0 - 6          ; a1 = the channel DATA pair
+```
+
+`ch = 1` gives `$FF004E` and `$FF0048`; `ch = 2` gives `$FF006E` and `$FF0068`.
+**That is the `$FF0040 + $20*N` window computed by the firmware itself**, and it
+independently confirms the corrected per-channel table — `+$0E` is the command
+port, `+$08` the data pair — which this project had to reconstruct from usage
+patterns. `a3` comes from the `$F046E0` BIM CR table plus `$FF0000`, the register
+`PanelSendAndWait` mutes with `$4F` and restores with `$5F`.
+
+#### Coverage
+
+| configuration | RDHC instructions | decoded bytes |
+|---|---|---|
+| `RESP=$94` alone | 67 / 1653 (4%) | 286 (5%) |
+| **+ command 1, operation `$14`** | **314 / 1653 (19%)** | **1070 (18%)** |
+
+One command record more than quadruples RDHC's coverage — more than every other
+configuration combined.
+
 ### END TO END: `CPLOAD` stages microcode through the firmware, no bypass
 
 With RDHC awake and command 4 reachable, the whole reason this ROM exists now runs:
