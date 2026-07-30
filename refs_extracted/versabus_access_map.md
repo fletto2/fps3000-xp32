@@ -1569,8 +1569,18 @@ With the code map available, the panel codes can finally be counted rather than 
 Scanning **only code addresses**, and both emission forms — `move.w #imm,d0` (`303C`) and
 `move.l #imm,d0` (`203C`):
 
-**41 distinct codes across 154 emission sites**, and 50 of the values in `$258`-`$2B2` are
-never emitted at all.
+**41 distinct codes across 158 emission sites**, and 50 of the values in `$258`-`$2B2` are
+never emitted at all. Three instruction forms produce them:
+
+| form | sites |
+|---|---|
+| `move.w #imm,d0` | 151 |
+| `addi.w #imm,d1` | **4** — all `$264`, one per XP task, with `d1` holding the channel |
+| `move.l #imm,d0` | **3** — `$281`, `$282` and one other |
+
+`$264` is the only code produced by **two different forms**, which is exactly what the
+existing note describes: *"`$264` — two per task, one of them `addi.w #$264,d1` with `d1` =
+the channel"*. The census recovers that independently.
 
 The structural pattern is the useful part:
 
@@ -1586,12 +1596,21 @@ with its being `PCMD_RELEASE`, the `D2_FIN` finalize code every completed operat
 
 **Two methodological corrections came out of building this.**
 
-*A `move.w`-only scan misses three codes*, including `$281` and `$282` — the two host-protocol
-codes central to the byte handshake. They are emitted as `move.l #$281,d0` (`203C 0000 0281`),
+*A `move.w`-only scan misses seven sites across three forms*, including `$281` and `$282` —
+the two host-protocol codes central to the byte handshake. They are emitted as `move.l #$281,d0` (`203C 0000 0281`),
 so a scan keyed on `303C` reports the host protocol as having no emission sites at all. I
 caught this only because I knew independently that `$281` had to exist; a code I had no prior
 reason to expect would have been silently absent. **Instruction-form assumptions are the same
 class of error as address-form assumptions**, and this session has now hit both.
+
+**And the scan written to catch form-assumptions contained one.** My first attempt at the
+all-forms sweep pre-filtered on `the word at a+2 is in range` before dispatching on the
+opcode — which excludes `move.l #imm,d0` entirely, because for `203C 0000 0281` the word at
+`a+2` is `$0000`. The scan built specifically to find instruction-form blind spots was blind
+to the very form that motivated it, and reported 156 sites where the answer is 158. *Fifth
+instance this session of a filter encoding the assumption it was meant to test.* The pattern
+is specific enough now to state as a rule: **a pre-filter must not read the operand until the
+opcode has told it where the operand is.**
 
 *Regional attribution near task boundaries is unreliable and should not be used.* My first
 census reported `$26E` in "IO1I ×2 + XP2I/3I/4I ×2" and `$271` in "XP1I ×2 + XP2I/3I/4I ×2",

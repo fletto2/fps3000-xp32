@@ -570,6 +570,14 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- three emission forms, and $264 uses two of them ----------------------
+    check('$264 is emitted by addi.w #imm,d1 as well as move.w #imm,d0',
+          any(word(a2) == 0x0641 and word(a2 + 2) == 0x264
+              for a2 in range(0xF04488, 0xF0FFF8, 2)))
+    check('...four such addi sites, one per XP task',
+          len([a2 for a2 in range(0xF04488, 0xF0FFF8, 2)
+               if word(a2) == 0x0641 and word(a2 + 2) == 0x264]) == 4)
+
     # --- the panel-code census -----------------------------------------------
     check('$281/$282 are emitted as move.l #imm,d0, not move.w',
           d[0xF05DFA-0xF00000:0xF05E00-0xF00000] == b'\x20\x3c\x00\x00\x02\x81'
