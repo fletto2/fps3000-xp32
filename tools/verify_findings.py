@@ -570,6 +570,18 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the sentinel path walks !IDV with a 14-byte stride -------------------
+    check('the sentinel path rewinds the return PC by 6 -- ccr(4) + trap(2)',
+          d[0xF00280-0xF00000:0xF00284-0xF00000] == b'\x58\x8f\x5d\x97')
+    check('...loads the !IDV directory slot $0C6E',
+          d[0xF00288-0xF00000:0xF0028E-0xF00000] == b'\x2a\x79\x00\x00\x0c\x6e')
+    check('...and walks records with adda.l #$E -- 14 bytes',
+          d[0xF0029E-0xF00000:0xF002A4-0xF00000] == b'\xdb\xfc\x00\x00\x00\x0e')
+    check('...matching field +$A, the ISR-exit address',
+          d[0xF0029A-0xF00000:0xF0029E-0xF00000] == b'\xb9\xed\x00\x0a')
+    check('14 = vector(2) + TCB(4) + entry(4) + exit(4)',
+          2 + 4 + 4 + 4 == 0x0E)
+
     # --- the kernel TRAP #1 handler tests for the sentinel --------------------
     check('the TRAP #1 handler duplicates the stacked SR and masks it with $0C',
           d[0xF00262-0xF00000:0xF0026A-0xF00000]

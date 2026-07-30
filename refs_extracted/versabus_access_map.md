@@ -1563,6 +1563,53 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The sentinel path walks `!IDV` with a 14-byte stride — and rewinds the PC by 6
+
+Following the sentinel branch decodes cleanly and confirms `!IDV`'s record layout from the
+code that consumes it.
+
+```
+$F00280:  addq.l  #4,a7             ; discard the SR copy and the SR -> (a7) is the PC
+$F00282:  subq.l  #6,(a7)           ; REWIND the return PC by 6
+$F00284:  movem.l d0-d7/a0-a6,-(a7)
+$F00288:  movea.l $0c6e.l,a5        ; the !IDV directory slot
+$F0028E:  movea.l $4(a5),a6         ; the table END pointer
+$F00292:  lea     $8(a5),a5         ; first record, past the tag and bounds
+$F00296:  movea.l $3c(a7),a4        ; the value to match
+$F0029A:  cmpa.l  $a(a5),a4         ; compare against field +$A
+$F0029E:  adda.l  #$e,a5            ; STRIDE 14
+$F002A4:  beq     $F002AA
+$F002A6:  cmpa.l  a5,a6  ;  bcc $F0029A    ; loop while inside the table
+```
+
+**`$0C6E` holds `$1F800`, whose first longword is `!IDV` — verified in post-boot RAM.** So this
+is the interrupt-descriptor table, and the walk settles its geometry:
+
+| | |
+|---|---|
+| stride | **`$E` = 14 bytes**, straight from `adda.l #$e,a5` |
+| record | `{vector, TCB, ISR entry, ISR exit}` = 2 + 4 + 4 + 4 = **14** ✓ |
+| six records | 6 x 14 = **84 bytes** |
+| match field | **`+$A`** — the fourth field, the **ISR exit** address |
+| bounds | header at `+$0`/`+$4`; records start at `+$8`; end pointer `$1F8FF` |
+
+The documented record shape was inferred from the structure's contents; here the kernel's own
+traversal confirms it, and adds which field the lookup keys on. **The ISR-exit handler
+identifies which ISR is exiting by matching the return address against each record's ISR-exit
+field.** That is why six tasks can share one exit convention: the sentinel says "this is an ISR
+exit", and `!IDV` says *whose*.
+
+**And the PC rewind is real, just not an escape.** `subq.l #6,(a7)` moves the return address
+back **6 bytes** — exactly the length of `move.w #$c,ccr` (4) plus `trap #1` (2). So the kernel
+rewinds the task to re-execute its own ISR-exit sequence. *This is the "rewriting the saved PC"
+mechanism this project attributed to the panel-status responder* — it exists, it is in the
+kernel, and it rewinds rather than advances. It cannot release a `bra .` spin; it makes the exit
+stub re-runnable.
+
+So the RDHC question stands where the last entry left it, but one candidate is now eliminated
+rather than merely unlocated: **the kernel's PC manipulation is not the escape.** It moves the
+PC backwards by a fixed 6 and depends on nothing external.
+
 ### CONFIRMED IN THE KERNEL: the TRAP #1 handler tests for the Z|N sentinel
 
 The sentinel reading was inferred from `$0C` being an arithmetically impossible flag pair. The
