@@ -6974,22 +6974,27 @@ loc_F083DA:
 
 loc_F083FC:
 ;>>>> [R6/BOTH] Returns from XLTR_IRQ_MASK manipulation subroutine in TCBXP1I channel task.
-;### 16 x 4-byte DISPATCH TABLE, twin of RDHC's $F05102. Indexed by d0 -- which
+;### 42 x 4-byte DISPATCH TABLE, $F083FC-$F084A3 -- the exact twin of RDHC's
+;###   PanelStatusDispatchTable at $F05BA4-$F05C4B: same 42 entries, same 4-byte
+;###   stubs, same d0<<2 index, same 4 handlers. Indexed by d0 -- which
 ;###   on the acknowledged path is the RETURN VALUE of the trap #1 at $F07F0E
 ;###   (directive $0F), NOT a channel command word: all three d0 writes between
 ;###   there and here sit on the timeout or error paths. Sixteen indices
   f083fc: 4e 75                   rts      
   f083fe: 4e 71                   DC.W     0x4e71  ; 'Nq'
-;###   onto three handlers: idx 2-7,13-15 -> $F0810A; idx 8,9 -> $F08366;
+;###   onto 4 handlers: $F0810A x10, $F0826A x9, $F08366 x9, $F07F90 x1, and
   f08400: 4e fa                   DC.W     0x4efa
   f08402: fe 68                   DC.W     0xfe68
-;###   idx 1,10 -> $F0826A (never yet reached); idx 0,11,12 are rts, no handler.
+;###   13 rts entries with no handler. Measured d0 = $0E and $10, so only two
   f08404: 4e fa                   DC.W     0x4efa
   f08406: fd 04                   DC.W     0xfd04
+;###   of the 42 indices are exercised. An earlier note said 16 entries and 3
   f08408: 4e fa                   DC.W     0x4efa
   f0840a: fd 00                   DC.W     0xfd00
+;###   handlers -- that read only the first 16 and assumed the size from the
   f0840c: 4e fa                   DC.W     0x4efa
   f0840e: fc fc                   DC.W     0xfcfc
+;###   WRONG table ($F05102 is the 16-entry one).
   f08410: 4e fa                   DC.W     0x4efa
   f08412: fc f8                   DC.W     0xfcf8
   f08414: 4e fa                   DC.W     0x4efa

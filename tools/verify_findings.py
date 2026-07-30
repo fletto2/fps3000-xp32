@@ -349,6 +349,17 @@ else:
           d[0x96AC:0x96B8].hex().upper() == '30114E714E714E714E714E75')
 
     # --- the XP channel command dispatch table ----------------------------
+    def _tbl42(base):
+        out = []
+        for i in range(42):
+            x = base + i*4
+            w1 = struct.unpack('>H', d[x:x+2])[0]
+            if w1 == 0x4E75: out.append('rts'); continue
+            if w1 != 0x4EFA: break
+            w2 = struct.unpack('>H', d[x+2:x+4])[0]
+            out.append(x + 2 + (w2 - 0x10000 if w2 >= 0x8000 else w2) + 0xF00000)
+        return out
+
     def _tbl(base):
         out = []
         for i in range(16):
@@ -358,11 +369,16 @@ else:
             w2 = struct.unpack('>H', d[x+2:x+4])[0]
             out.append(x + 2 + (w2 - 0x10000 if w2 >= 0x8000 else w2) + 0xF00000)
         return out
-    check('$F083FC is a 16-entry channel dispatch table with 3 handlers',
-          _tbl(0x83FC) ==
-          [None, 0xF0826A, 0xF0810A, 0xF0810A, 0xF0810A, 0xF0810A, 0xF0810A,
-           0xF0810A, 0xF08366, 0xF08366, 0xF0826A, None, None,
-           0xF0810A, 0xF0810A, 0xF0810A])
+    # 42 entries, not 16: the table runs $F083FC-$F084A3 and ends where the
+    # 0005 0403 data begins.  Same length, entry size, indexing and handler
+    # count as RDHC's PanelStatusDispatchTable at $F05BA4-$F05C4B.
+    _t42 = _tbl42(0x83FC)
+    check('$F083FC is a 42-entry dispatch table with 4 handlers',
+          len(_t42) == 42 and
+          sorted(collections.Counter(_t42).values(), reverse=True)
+          == [13, 10, 9, 9, 1])
+    check('it is the same shape as PanelStatusDispatchTable at $F05BA4',
+          (0xF05C4C - 0xF05BA4) // 4 == 42)
     check('the ISR reaches it via lsl.w #2,d0 / jmp (a4,d0.w)',
           d[0x7F84:0x7F8E].hex().upper() == 'E54849F900F083FC4EF4')
 

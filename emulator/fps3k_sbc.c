@@ -499,8 +499,13 @@ void instr_hook_callback(unsigned int pc) {
     total_instr++;
         { const char *rl = getenv("FPS3K_REGLOG");
       if (rl && pc == (unsigned)strtoul(rl, NULL, 16))
-          fprintf(stderr, "[REG] pc=%06X a1=%08X d2=%08X d4=%08X d5=%08X\n",
-                  pc, m68k_get_reg(NULL,M68K_REG_A1), m68k_get_reg(NULL,M68K_REG_D2),
+          /* d0 and d1 added 2026-07-29: the XP channel dispatch at $F07F84
+           * indexes on d0, and the hook logged a1/d2/d4/d5 only -- so the one
+           * register the dispatch depends on was the one it could not show. */
+          fprintf(stderr, "[REG] pc=%06X d0=%08X d1=%08X a1=%08X d2=%08X "
+                          "d4=%08X d5=%08X\n",
+                  pc, m68k_get_reg(NULL,M68K_REG_D0), m68k_get_reg(NULL,M68K_REG_D1),
+                  m68k_get_reg(NULL,M68K_REG_A1), m68k_get_reg(NULL,M68K_REG_D2),
                   m68k_get_reg(NULL,M68K_REG_D4), m68k_get_reg(NULL,M68K_REG_D5)); }
     if (trace_fp) {
         /* compact: just hex PC */

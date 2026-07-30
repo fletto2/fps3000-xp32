@@ -1473,7 +1473,7 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
-### The XP channel command dispatch table at `$F083FC` — 16 entries, 3 handlers
+### XP1I has a 42-entry dispatch table — the twin of `PanelStatusDispatchTable`
 
 Making the transaction complete exposed 124 new XP1I instructions, and the
 structure at the centre of them was undocumented. After the poll succeeds the
@@ -1488,20 +1488,38 @@ $F07F86  lea   $F083FC,a4
 $F07F8C  jmp   (a4,d0.w)    ; 16-entry dispatch
 ```
 
-`$F083FC` is a **16 × 4-byte table** of inline stubs — `jmp d16(pc)` where a
-handler exists, `rts` where none does — and sixteen index values collapse onto
-**three** handlers:
+`$F083FC` is a **42 × 4-byte table** of inline stubs — `jmp d16(pc)` where a
+handler exists, `rts` where none does — running `$F083FC-$F084A3` and ending
+exactly where the `0005 0403` data begins. Forty-two indices collapse onto
+**four** handlers:
 
-| index | target | ran |
-|---|---|---|
-| 0, 11, 12 | `rts` — no handler | — |
-| 2-7, 13-15 | **`$F0810A`** | ✓ |
-| 8, 9 | **`$F08366`** | ✓ |
-| 1, 10 | `$F0826A` | not yet |
+| target | entries |
+|---|---|
+| `rts` — no handler | 13 |
+| **`$F0810A`** | 10 |
+| **`$F0826A`** | 9 |
+| **`$F08366`** | 9 |
+| `$F07F90` | 1 |
 
-**It is structurally the twin of RDHC's `$F05102`** — both 16 × 4 bytes, both
-indexed by a value shifted left 2, both collapsing an index space onto a handful
-of handlers. This project had documented only the RDHC one; the channel's
+**It was first recorded here as "16 entries, 3 handlers", and that was wrong.** I
+read only the first sixteen and assumed the size from the wrong analogy —
+RDHC's *other* table at `$F05102` is 16 entries. Measuring the dispatch index
+settled it: `FPS3K_REGLOG` at `$F07F84` shows `d0 = $FFFF0010` and `$FFFF000E`,
+and since `lsl.w #2` and `(a4,d0.w)` use only the low word those are indices
+**16** and 14 — index 16 being one past the assumed end, and a perfectly valid
+`jmp` entry.
+
+**It is the twin of RDHC's `PanelStatusDispatchTable` at `$F05BA4`**, and the
+correspondence is exact:
+
+| | entries | size | index | handlers |
+|---|---|---|---|---|
+| RDHC `$F05BA4-$F05C4B` | **42** | 4 B | `d0 << 2` | **4** |
+| XP1I `$F083FC-$F084A3` | **42** | 4 B | `d0 << 2` | **4** |
+
+Same length, same entry size, same indexing, same handler count. The documented
+one is reached from `$F0572C` and has never executed in any configuration; this
+one executes. This project had documented only the RDHC one; the channel's
 existence was invisible while every transaction timed out before reaching it.
 
 **But it does NOT dispatch on a channel command word — that was wrong.** Tracing
@@ -1519,8 +1537,10 @@ at indices 1 and 10, is gated by the kernel returning 1 or 10 from directive
 kernel-side reason, and looking for a chassis stimulus would have been wasted
 effort.
 
-Two of the three handlers execute. `$F0826A` does not, and per the paragraph
-above the reason is now specific: it needs directive `$0F` to return 1 or 10.
+Measured, `d0` takes the values `$0E` and `$10` — so two of the 42 indices are
+exercised, both landing on `$F0810A`. The other three handlers are unreached, and
+because the index is an RTOS result rather than a chassis value, reaching them is
+a kernel-side question.
 
 **This is what the acknowledge bought beyond the coverage number.** A structure of
 this size does not appear in a static reading as anything but data: the table is
