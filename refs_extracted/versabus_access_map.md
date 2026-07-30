@@ -1614,12 +1614,39 @@ So the inference is that **the VERSAmodule register block extends at least from 
 records. `$1FFE2` taking a vector *number* derived by `lsr #2` is the strongest single case,
 since a stored vector number has no use unless hardware consumes it during IACK.
 
-**Stated with the hedge it needs.** Write-only is *consistent* with a register but does not
-prove one — the same pattern is produced by vestigial code, and a power-on self-test is
-exactly the kind of software that accumulates dead stores across revisions. Two things would
-settle it and neither is available here: the M68KVM02 manual's register map for
-`$1FFE0-$1FFFF`, or a bus trace showing whether these addresses are decoded off-board. Until
-then this belongs in the map as **inferred, not established**.
+**Corroboration: the DRAM test explicitly protects `$1FFE0-$1FFFF`.** Sequence C calls the
+memory-test helper `$F08992` with `a0 = $10000, a1 = $20000` — the whole upper 64 KB. The
+helper opens with:
+
+```
+cmpa.l #$1fff0,a1
+blt    .normal
+lea    -$20(a1),a1        ; back the END of the range off by 32 bytes
+```
+
+`$20000 >= $1FFF0`, so the range end becomes **`$1FFE0`**. The destructive test stops there,
+leaving `$1FFE0-$1FFFF` untouched — and that 32-byte block contains **every one of the
+write-only locations above**, plus `VMOD_CTRL` itself:
+
+| | |
+|---|---|
+| `$1FFE2` | vector-number register (`$700`) |
+| `$1FFE4`, `$1FFE6`, `$1FFF2` | write-only |
+| `$1FFF0`-`$1FFF1` | `VMOD_CTRL` |
+
+**Firmware does not carve a hole in its own memory test to protect dead stores.** That moves
+the inference well past "consistent with a register": the code treats this exact range as
+something a write-pattern sweep must not touch, which is what you do for hardware and not
+for scratch. It also independently confirms `VMOD_CTRL` is not ordinary RAM — a fact known
+from the manual, here visible in the firmware's own behaviour.
+
+**The honest caveat.** The block is protected *as a unit*, so the argument applies to
+`$1FFE0-$1FFFF` collectively, not address by address. `$1FFF4` — the one location shown
+above to be genuine read-and-increment scratch — is inside the protected range too, which is
+exactly what a 32-byte granularity would produce and also exactly what a mixed
+register/scratch block would produce. So: **the block is established as special; the role of
+each individual word within it remains inferred.** The M68KVM02 register map for
+`$1FFE0-$1FFFF` would still settle the details.
 
 **Emulator consequence, currently benign.** The model treats all of `$1FFE0-$1FFFF` except
 `$1FFF0-$1FFF1` as plain RAM, so these four writes land in memory and nothing reads them —

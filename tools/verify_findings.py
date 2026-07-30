@@ -570,6 +570,17 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the DRAM test carves out $1FFE0-$1FFFF -------------------------------
+    check('the memory-test helper backs the range end off by $20 below $1FFF0',
+          d[0xF089A4-0xF00000:0xF089B0-0xF00000]
+          == b'\xb3\xfc\x00\x01\xff\xf0\x6d\x20\x43\xe9\xff\xe0')
+    check('...and sequence C hands it a1 = $20000, so the test stops at $1FFE0',
+          d[0xF088AE-0xF00000:0xF088B4-0xF00000] == b'\x22\x7c\x00\x02\x00\x00'
+          and 0x20000 - 0x20 == 0x1FFE0)
+    check('every write-only candidate lies inside the protected 32 bytes',
+          all(0x1FFE0 <= a <= 0x1FFFF
+              for a in (0x1FFE2, 0x1FFE4, 0x1FFE6, 0x1FFF0, 0x1FFF2)))
+
     # --- four write-only neighbours of VMOD_CTRL ------------------------------
     check('$1FFE2/$1FFE4/$1FFE6/$1FFF2 are all move.w writes through a5',
           d[0xF08F8C-0xF00000:0xF08F90-0xF00000] == b'\x3b\x40\xff\xf2'
