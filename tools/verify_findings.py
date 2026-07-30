@@ -550,6 +550,25 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- $1100 writable-bit test; PTM walking ones over movep -----------------
+    check('$1100 loads d0=4 as the bit index and clears $1FFF1 bit 7 first',
+          d[0xF0919C-0xF00000:0xF091A6-0xF00000]
+          == b'\x70\x04\x72\x01\x08\xad\x00\x07\x00\x01')
+    check('$F091C6 is bset-then-verify-SET on $1(a5)',
+          d[0xF091C6-0xF00000:0xF091D0-0xF00000]
+          == b'\x01\xed\x00\x01\x01\x2d\x00\x01\x66\x06')
+    check('$F091FE is the exact mirror: bclr-then-verify-CLEAR',
+          d[0xF091FE-0xF00000:0xF09208-0xF00000]
+          == b'\x01\xad\x00\x01\x01\x2d\x00\x01\x67\x06')
+    check('$F09154 walks ones through a PTM latch with movep.w both ways',
+          d[0xF09154-0xF00000:0xF09160-0xF00000]
+          == b'\x70\x01\x01\x89\x00\x00\x03\x09\x00\x00\xb2\x40')
+    check('...asl.w #1 from 1 until zero is exactly 16 iterations',
+          d[0xF0916C-0xF00000:0xF09170-0xF00000] == b'\xe3\x40\x66\xe6')
+    check('the PTM is held in internal reset (CR2<-$01, CR1<-$01) during the walk',
+          d[0xF0917E-0xF00000:0xF09182-0xF00000] == b'\x10\xbc\x00\x01'
+          and d[0xF09184-0xF00000:0xF09188-0xF00000] == b'\x10\xbc\x00\x01')
+
     # --- the hidden-register sweep: candidates were lea, not accesses ---------
     check('$FF010A/$FF0114/$FF0116 candidates are lea (4fe8), not memory accesses',
           all(d[a-0xF00000:a-0xF00000+2] == b'\x4f\xe8'

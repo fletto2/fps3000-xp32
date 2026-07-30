@@ -1528,6 +1528,61 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Phase `$1100` is a writable-bit test; the PTM test is 16-bit walking ones over `movep`
+
+Two more sequence-B stages decode cleanly, and both put hard constraints on the models.
+
+**`$1100` (`$F0918C`) tests one VMOD_CTRL bit for writability.** It loads `d0 = 4` as the
+bit index and calls a mirror pair:
+
+```
+$F091C6:  bset.b d0,$1(a5)  ;  btst d0,$1(a5)  ;  bne ok   ; must read SET
+$F091FE:  bclr.b d0,$1(a5)  ;  btst d0,$1(a5)  ;  beq ok   ; must read CLEAR
+```
+
+driven set → clear → set. So **`$1FFF1` bit 4 must be a genuine read/write flip-flop**, not
+a strobe and not read-only. That is the same bit the phase-`$1100`/`$1200` equation refers
+to as "NOT bit 4 of `$1FFF1`", and it explains why the equation can treat it as state: the
+firmware has just verified it holds a value.
+
+Note the operand-size trap again: the disassembly renders the read-back as `btst.l`, but
+`btst` against a memory operand is **always byte-sized** on a 68000. Taken literally it
+would suggest a longword access to a control register that has none.
+
+**`F09154` is a 16-bit walking-ones test on a PTM timer latch, and it is why `movep`
+matters:**
+
+```
+d0 = 1
+loop:  movep.w d0,$0(a1)      ; write the pattern
+       movep.w $0(a1),d1      ; read it back
+       cmp.w   d0,d1  /  bne FAIL
+       asl.w   #1,d0
+       bne     loop            ; 16 iterations -- every bit
+```
+
+`movep` is the 68000's instruction for byte-interleaved peripherals, moving alternate bytes
+— exactly the odd-byte MC6840 layout at `$F70001`-`$F7000F`. The routine is called **three
+times** (`$F0909A`, `$F090A8`, `$F090B6`) — once per timer — which fully accounts for the
+walking pattern seen across T1/T2/T3 in the PTM write log, and confirms those writes are a
+register test rather than operational programming.
+
+**The read-back is only well-defined because the timers are held in reset.** Immediately
+before, `$F0917E` writes `CR2 <- $01` (selecting CR1 at register 0) and `$F09184` writes
+`CR1 <- $01`, whose bit 0 is the PTM's internal reset — all three timers stop. A running
+counter would decrement between the write and the read and the comparison would be a race.
+
+That retro-justifies a modelling choice the emulator made from the datasheet alone: its
+comment says "counter is always loaded from latch on this write (timer is in preset state
+during init)". **This test requires exactly that** — on a real 6840 a read of registers 2-7
+returns the *counter*, not the latch, so write-then-read-back can only match if the write
+loads the counter and nothing then decrements it. The model is right, and now has a
+firmware-derived reason rather than only a datasheet reading.
+
+**Emulator constraints from these two stages**, both checkable: `$1FFF1` bit 4 must store
+and return a written value; and all three PTM timer latches must return, through `movep.w`,
+each of the sixteen walking-ones patterns while CR1 bit 0 holds the timers.
+
 ### Sweeping for hidden registers: a negative result, and two ways the sweep lies
 
 Prompted by the `$1FFF0` miss, I re-ran every "never accessed" claim over **base-register**
