@@ -13848,3 +13848,45 @@ that **nothing re-stamps MODE0 once the SBC stops acknowledging.**
 
 That also makes the fix concrete for the first time: the chassis model must stamp a fresh code on
 every raise, independent of acknowledgement — not pulse the line, and not latch the ack bit.
+
+### CORRECTION: the repeated `$14` is our own default stamp, not the SBC's echo
+
+The previous section concluded that the 218 repetitions of `$14` were the SBC's own stale MODE0
+being read back by the ISR. **That is wrong.** Reading the raise path settles it:
+
+```c
+const char *e = getenv("FPS3K_RESP");
+code = (uint8_t)(e ? strtoul(e, NULL, 0) : 0x14) & MODE0_RESP_MASK;
+xltr.mode0 = (xltr.mode0 & ~MODE0_RESP_MASK) | code | MODE0_RESP_VALID;
+```
+
+**`$14` is the emulator's hard-coded default**, stamped fresh on every raise because that run
+did not set `FPS3K_RESP`. The ISR was reading exactly what the chassis model presented — no echo,
+no staleness. The observation (218 × `$14`, each script code once) was correct; the explanation
+attached to it was not, and it was reached by inference from the trace rather than by reading the
+twelve lines that produce the value.
+
+Everything else in that section stands: the script delivers each code once and stops after six,
+and the ISR's remaining entries dispatch on the default rather than on new instructions.
+
+### `FPS3K_RESPSEQ` already is the "stamp a fresh code per raise" mechanism
+
+The fix proposed there — stamp independent of acknowledgement — **already exists**. `FPS3K_RESPSEQ`
+cycles a list of codes across successive raises, precisely because `FPS3K_RESP` "presents one
+constant forever".
+
+But it cannot be used as a blunt sweep. Cycling all sixteen operations:
+
+```
+FPS3K_RESPSEQ=0x00,0x01,…,0x0F   ->  final PC $2602700, SR=$2708, only 2/16 ops dispatched
+```
+
+`$2602700` is outside ROM and RAM — the machine is destroyed, not stalled. The reason is that
+**these operations take parameters**: op `$6` writes SBC RAM at the address in `$E58`, and
+without a preceding op `$1` to set it that is a write to arbitrary low memory, including the
+vector table. Op `$E` clears busy, op `$8` resets a channel.
+
+So the operations must be driven as *(code, argument)* pairs with their parameters established
+first — which is exactly what `FPS3K_SEQ`'s `code:chsel` form provides, and why the two hooks
+exist separately. The practical driving recipe remains `FPS3K_SEQ` for parameterised sequences,
+with `FPS3K_RESPSEQ` reserved for codes that need no setup.
