@@ -14732,3 +14732,58 @@ Two corroborations that this is the right reading:
 
 Named from behaviour rather than from a vendor list, and flagged as such: `TR1.EQ` does not name
 directive `$08`, so this is an inference from what the code does, not a lookup.
+
+## The kernel's two core primitives are TRAP #0 directives `$02` and `$03`
+
+The second and third most-called routines in the kernel, after the address validator.
+
+### `$02` at `$F0078A` — atomic counter increment under a `tas` lock (16 callers)
+
+```
+F0078A  ori.w   #$700,sr    ; critical section at level 7
+F0078E  tas.b   (a0)        ; the 68000's atomic test-and-set
+F00790  bmi.b   $f0078e     ; spin until the lock bit is won
+F00792  move.w  (a0),d0
+F00794  lsl.w   #$1,d0
+F00796  asr.w   #$1,d0      ; strip the TAS bit
+F00798  addq.w  #$1,d0      ; increment the count
+F0079A  ble.b   $f007a0
+F0079C  move.w  d0,(a0)     ; store back — also releases the lock
+F0079E  rte
+```
+
+`tas.b` is the only atomic read-modify-write the 68000 has, so this is the kernel's **semaphore
+signal**: acquire the lock byte, bump the count, release. It is the counterpart on the TRAP #0
+side to the `ATSEM`/`WTSEM`/`SGSEM`/`CRSEM` family on the TRAP #1 side.
+
+### `$03` at `$F007C2` — priority-ordered ready-queue insertion (7 callers)
+
+```
+F007C2  bset.b  #$4,$2d(a0)   ; "already queued" guard
+F007C8  bne.b   $f007fa       ; set already -> nothing to do
+F007CE  lea.l   $c08.w,a1     ; the queue head
+F007D2  ori.w   #$700,sr
+F007D6  move.b  $26(a0),d0    ; this task's PRIORITY
+F007DC  movea.l $c(a2),a1     ; walk via the next pointer
+F007E8  cmp.b   $26(a1),d0    ; compare priorities
+F007EC  bls.b   $f007da       ; keep walking while <=
+F007EE  move.l  a1,$c(a0)     ; link in
+```
+
+**Four structures named from one routine:**
+
+| | |
+|---|---|
+| `TCB+$26` | **task priority** (byte, the ordering key) |
+| `TCB+$0C` | **queue next-pointer** |
+| `TCB+$2D` bit 4 | **already-queued flag**, a `bset`/`bne` double-insert guard |
+| `$0C08` | **the ready-queue head** |
+
+Both fields appear in the usage-derived map with matching profiles — `+$026` with 6 accesses all
+`move`, consistent with a value read for comparison, and `+$02D` with 14 `bclr`/`bset`/`btst`,
+consistent with a flag byte.
+
+So the kernel's three busiest routines are, in order: **validate a user address range**, **signal
+a semaphore**, and **insert a task into the ready queue by priority** — which is a reasonable
+summary of what an RTOS kernel spends its time doing, and all three are directives reached through
+their `bsr` entry.
