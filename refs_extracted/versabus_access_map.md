@@ -13630,3 +13630,39 @@ code delivered is `FPS3K_RESP`'s, not the script's. A run with a sequence contai
 still dispatched op `$0` once. That is consistent with the warning already in `versabus.c` about
 the two hooks interacting, and it means a sequence's first entry is effectively the *second*
 code the SBC sees.
+
+## Blocker 3 measured: the spin runs at IPL 6 and its rescuer is level 6
+
+`$F056B8` is `bra.b` to itself — one of the eight panel-issuer spins. Escaping it requires the
+panel-status responder `$F04930` to rewrite the saved PC. Three measurements, in the
+configuration that clears blockers 1 and 2:
+
+- **BIM0 ch0 is enabled.** The last write to `$FF0230` is `$5E` — level 6, IRE **set**. The
+  rescuer is armed, not masked.
+- **The `$4F` masking write never runs.** `$F056BA`, `PanelSendAndWait`'s entry and one of the
+  five `move.w #$4f,(a3)` sites, executes **zero** times here. So the "firmware suppresses its
+  own rescue interrupt" explanation does not apply to this spin.
+- **The CPU is at `SR=$2600`.** Supervisor, **IPL = 6**.
+
+On a 68000 an interrupt is taken only when its level is **greater** than the mask (level 7
+excepted). A level-6 request against an IPL-6 mask is **never** delivered. The rescuer and the
+spin sit at exactly the same level, so `$F04930` cannot preempt no matter how often the BIM is
+raised — measured, it fires 3 times early and then never again while the spin runs.
+
+**This refines the existing account.** This file already recorded that BIM0 ch0 at level 6
+cannot preempt a *channel ISR* at level 7. The new measurement is that it cannot preempt this
+spin either, because **the spin is itself running in interrupt context at IPL 6** — the chassis-op
+handlers are reached from `$F04930` and end at the ISR exit stub `$F050F8`, so an operation that
+issues a panel command spins inside the very ISR whose re-entry would release it.
+
+The deadlock is therefore structural rather than a level-ordering accident: **the ISR waits for
+an event only its own interrupt can deliver.** Escape needs one of
+
+- the chassis response arriving at **level 7**, or
+- the issuer lowering its mask before spinning — no SR-modifying instruction exists in that path, or
+- the response being delivered by a mechanism that is not this BIM.
+
+That third option is the one worth testing next, and it is the same shape as the conclusion
+already reached for TCBIO1I: the `$281` arm is not the normal path. Here too, the economical
+reading is that a real chassis does not answer a panel command through the level-6 responder
+while the SBC sits at IPL 6.
