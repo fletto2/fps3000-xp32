@@ -482,6 +482,29 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- the XP3I "outlier" is the $105E presence gate ----------------------
+    def rpct(env, lo, hi):
+        ex = set()
+        for ln in run(env, 400_000_000)[0].split('\n'):
+            try:
+                ex.add(int(ln, 16))
+            except ValueError:
+                pass
+        dd = {a2: n for a2, n in ASM_STARTS.items() if lo <= a2 < hi}
+        return 100.0 * sum(dd[a2] for a2 in dd if a2 in ex) / max(1, sum(dd.values()))
+    XP3, XP1 = (0xF0694A, 0xF0734A), (0xF07D4A, 0xF0874A)
+    check('XP3I roughly triples with a 4-channel chassis (the $105E gate)',
+          rpct({'FPS3K_XPIRQ': '3'}, *XP3) < 20
+          and rpct({'FPS3K_XPIRQ': '3', 'FPS3K_CHANNELS': '4'}, *XP3) > 30)
+    check('...while XP1I is unaffected by the channel count',
+          abs(rpct({'FPS3K_XPIRQ': '1'}, *XP1)
+              - rpct({'FPS3K_XPIRQ': '1', 'FPS3K_CHANNELS': '4'}, *XP1)) < 1.0)
+    _, r4 = run({'FPS3K_CHANNELS': '4'}, 400_000_000)
+    _, r2 = run({'FPS3K_CHANNELS': '2'}, 400_000_000)
+    check('$105E tracks FPS3K_CHANNELS: 4 and 2 respectively',
+          struct.unpack('>H', r4[0x105E:0x1060])[0] == 4
+          and struct.unpack('>H', r2[0x105E:0x1060])[0] == 2)
+
     # --- the 0% pre-task region is kernel-panic and kernel-hook code --------
     check('panel issuer copy 1 $F04500 is called from the kernel panic stub $F001A4',
           struct.unpack('>I', d[0xF001A6-0xF00000:0xF001AA-0xF00000])[0] == 0xF04500)

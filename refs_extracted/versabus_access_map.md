@@ -1473,6 +1473,57 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The "XP3I outlier" was the `$105E` presence gate; all four tasks are symmetric
+
+XP3I sitting at 12-13% while XP1I reached 40% was recorded here as unexplained. It
+is entirely the channel-presence gate. `versabus.c` defaults to `FPS3K_CHANNELS=2`
+— the real 2-AC machine — so `$105E` reads 2, and each XP task's
+`cmpi.w #<own channel>,$105E / blt` **gates tasks 3 and 4 off before they touch
+their bodies**.
+
+| task | `CHANNELS=2` | `CHANNELS=4` |
+|---|---|---|
+| XP1I | 36.7% | 36.7% |
+| XP2I | 34.1% | 34.1% |
+| XP3I | **13.0%** | **33.8%** |
+| XP4I | **13.7%** | **36.5%** |
+
+XP1I and XP2I are untouched; XP3I and XP4I roughly triple. **All four tasks reach
+34-37% once their channel is present and their interrupt is raised** — the 12-to-40%
+spread was never a property of the code, and XP4I is not the poor relation its
+`$18`-shifted layout might suggest.
+
+*Two things follow, and they pull in opposite directions.* For fidelity to Lovett's
+machine `FPS3K_CHANNELS=2` is correct and XP3I/XP4I **should** be dormant — the
+chassis has only AC1 and AC2 populated, and the presence gate working is a feature.
+For *coverage*, `CHANNELS=4` exercises code the real box never runs. So the
+4-channel figure is a tool for reading the disassembly, not a model of the machine,
+and the two must not be conflated in a coverage claim.
+
+The `13%` floor is worth naming for what it is: the cost of a task that starts,
+runs its prologue, connects its vector, checks `$105E`, and parks. That is the
+**self-gated baseline**, and it is the right expectation for AC3/AC4 on this
+chassis.
+
+#### Coverage with all four channels present
+
+| region | instruction bytes | union |
+|---|---|---|
+| pre-task | 120 | 0% (kernel-panic path, by design) |
+| RDHC | 5484 | 36% |
+| IO1I | 422 | 46% |
+| XP1I | 2358 | 40% |
+| XP2I | 2310 | 34% |
+| XP3I | 2300 | 34% |
+| XP4I | 2342 | 37% |
+| self-test | 5292 | 85% |
+| RTOS init | 2352 | 76% |
+| **total** | **22980** | **51%** |
+
+**51% of instruction bytes**, union over 16 configurations — from the 25% recorded
+at the start of this session, though note ~4 points of that gain is the denominator
+correction rather than new execution.
+
 ### Correction: my coverage denominators counted `DC.W` data as code
 
 Every coverage percentage produced in this session's measurements used a

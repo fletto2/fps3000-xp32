@@ -7384,6 +7384,22 @@ loc_F08608:
   f08614: 4e 75                   rts      
 
 loc_F08616:
+;### THE "XP3I OUTLIER" WAS THE $105E PRESENCE GATE, nothing about the code.
+;###   With the emulator default FPS3K_CHANNELS=2 (the real 2-AC machine),
+;###   $105E reads 2 and each task's cmpi.w #<own channel>,$105E / blt gates
+;###   tasks 3 and 4 off before they touch their bodies.  Measured:
+;###                 CHANNELS=2   CHANNELS=4
+;###       XP1I         36.7%        36.7%
+;###       XP2I         34.1%        34.1%
+;###       XP3I         13.0%        33.8%
+;###       XP4I         13.7%        36.5%
+;###   All four reach 34-37% once their channel is present -- the 12-to-40%
+;###   spread was never a property of the code, and XP4I is not the poor
+;###   relation its $18-shifted layout suggests.  The 13% floor is the
+;###   SELF-GATED BASELINE: prologue, connect vector, check $105E, park.
+;###   CAUTION: for fidelity to this machine CHANNELS=2 is correct and
+;###   XP3I/XP4I SHOULD be dormant; CHANNELS=4 exercises code the real box
+;###   never runs, so it is a tool for reading the disassembly, not a model.
 ;### CHANNEL SCAN: move.w $4E(a2,d4.l),d2 / btst #15 / btst #14 / add $20 to d4 /
   f08616: 42 84                   clr.l    d4
   f08618: 18 39 00 00 10 7e       move.b   $107e.l, d4

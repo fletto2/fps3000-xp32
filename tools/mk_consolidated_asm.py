@@ -80,6 +80,23 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- the XP3I outlier resolved ----
+ (0xF08616,'THE "XP3I OUTLIER" WAS THE $105E PRESENCE GATE, nothing about the code.'),
+ (0xF08616,'  With the emulator default FPS3K_CHANNELS=2 (the real 2-AC machine),'),
+ (0xF08616,'  $105E reads 2 and each task\'s cmpi.w #<own channel>,$105E / blt gates'),
+ (0xF08616,'  tasks 3 and 4 off before they touch their bodies.  Measured:'),
+ (0xF08616,'                CHANNELS=2   CHANNELS=4'),
+ (0xF08616,'      XP1I         36.7%        36.7%'),
+ (0xF08616,'      XP2I         34.1%        34.1%'),
+ (0xF08616,'      XP3I         13.0%        33.8%'),
+ (0xF08616,'      XP4I         13.7%        36.5%'),
+ (0xF08616,'  All four reach 34-37% once their channel is present -- the 12-to-40%'),
+ (0xF08616,'  spread was never a property of the code, and XP4I is not the poor'),
+ (0xF08616,'  relation its $18-shifted layout suggests.  The 13% floor is the'),
+ (0xF08616,'  SELF-GATED BASELINE: prologue, connect vector, check $105E, park.'),
+ (0xF08616,'  CAUTION: for fidelity to this machine CHANNELS=2 is correct and'),
+ (0xF08616,'  XP3I/XP4I SHOULD be dormant; CHANNELS=4 exercises code the real box'),
+ (0xF08616,'  never runs, so it is a tool for reading the disassembly, not a model.'),
  # ---- the 0% pre-task region resolved ----
  (0xF04500,'PANEL ISSUER COPY 1 IS CORRECTLY DEAD.  It is called from $F001A4 and'),
  (0xF04500,'  its address is stored at $F001A6 -- the hand-placed FPS stub at $F001A0'),
