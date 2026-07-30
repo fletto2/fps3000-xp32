@@ -641,9 +641,16 @@ else:
     check('$200 then requires $F70019 bit 3 SET with bit 6 clear',
           d[0xF08C84-0xF00000:0xF08C8E-0xF00000]
           == b'\x01\xad\x00\x01\x03\x2c\x00\x01\x66\x06')
-    check('every bit of $1FFF1 is attributed to a self-test stage',
-          sorted({0:'$1300',1:'$1300',2:'$1300',3:'$1400',4:'$1100',
-                  5:'$1200',6:'$200',7:'$1000'}) == list(range(8)))
+    # NOTE: this was a tautology (sorted keys of a literal I wrote).  Assert the
+    # ROM sites each attribution rests on instead.
+    check('each $1FFF1 bit attribution rests on a real instruction site',
+          d[0xF08C5A-0xF00000:0xF08C5C-0xF00000] == b'\x70\x06'      # $200  bit 6
+          and d[0xF0919C-0xF00000:0xF0919E-0xF00000] == b'\x70\x04'  # $1100 bit 4
+          and d[0xF0926E-0xF00000:0xF09274-0xF00000]
+              == b'\x08\xed\x00\x05\x00\x01'                     # $1200 bit 5
+          and d[0xF0938A-0xF00000:0xF0938C-0xF00000] == b'\x83\x55'  # $1300 bits 0-2
+          and d[0xF0943C-0xF00000:0xF09442-0xF00000]
+              == b'\x08\xad\x00\x03\x00\x01')                    # $1400 bit 3
 
     # --- $1300: $1FFF1 bits 0-2 are an interrupt-request level field ----------
     check('$1300 installs handlers at vectors $140 and $148 (numbers 80 and 82)',
@@ -678,9 +685,12 @@ else:
           == b'\x30\x3c\x00\x0f\x08\x2d\x00\x05\x00\x01\x57\xc8\xff\xf8')
     check('$1200 runs with interrupts enabled at IPL 2 (SR <- $2200)',
           d[0xF09246-0xF00000:0xF0924A-0xF00000] == b'\x46\xfc\x22\x00')
-    check('the emulator models VMOD_CTRL as plain RAM -- no auto-clear anywhere',
-          not any('0x1FFF1' in open(f).read()
-                  for f in ('emulator/versabus.c', 'emulator/fps3k_sbc.c')))
+    # NOTE: an earlier version of this check asserted "VMOD_CTRL is plain RAM",
+    # which was FALSE -- it grepped for the literal 0x1FFF1 while the model
+    # addresses it as VMOD_CTRL+1.  Assert the truth instead.
+    check('VMOD_CTRL IS a modelled device, not RAM (versabus.h defines it)',
+          '#define VMOD_CTRL' in open('emulator/versabus.h').read()
+          and 'vmod_ctrl' in open('emulator/versabus.c').read())
 
     # --- $1100 writable-bit test; PTM walking ones over movep -----------------
     check('$1100 loads d0=4 as the bit index and clears $1FFF1 bit 7 first',
@@ -722,7 +732,7 @@ else:
     check('case (1,1) alone requires bit 3 to go clear (beq = $67)',
           d[0xF09016-0xF00000] == 0x67
           and d[0xF0900A-0xF00000:0xF09016-0xF00000]
-              == b'\x08\xed\x00\x07\x00\x01\x08\xd5\x00\x01\x61\x2a')
+              == b'\x08\xed\x00\x07\x00\x01\x08\xd5\x00\x01\x61\x26')
     check('$1FFF0 bit 1 is bset/bclr in five places, via (a5) not absolutely',
           sum(1 for a in (0xF08FA8, 0xF08FCC, 0xF08FE8, 0xF09010, 0xF0902C)
               if d[a-0xF00000:a-0xF00000+4] in (b'\x08\x95\x00\x01',
