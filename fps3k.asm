@@ -6485,6 +6485,7 @@ loc_F07F3E:
   f07f50: 4e b9 00 f0 86 c0       jsr      loc_F086C0.l
 
 loc_F07F56:
+;### post-poll: btst #$D,d4 -- bit 13 = transfer ERROR -> $269 abort + spin.
   f07f56: 08 04 00 0d             btst.b   #$d, d4
   f07f5a: 67 28                   beq.b    loc_F07F84
   f07f5c: 30 3c 02 69             move.w   #$269, d0
@@ -6503,6 +6504,7 @@ loc_F07F56:
   f07f82: 4e 75                   rts      
 
 loc_F07F84:
+;### CHANNEL COMMAND DISPATCH: lsl.w #2,d0 / lea $F083FC,a4 / jmp (a4,d0.w).
   f07f84: e5 48                   lsl.w    #$2, d0
   f07f86: 49 f9 00 f0 83 fc       lea.l    loc_F083FC.l, a4
   f07f8c: 4e f4 00 00             jmp      (a4, d0.w)
@@ -6651,6 +6653,7 @@ loc_F080E2:
   f08100: 36 bc 00 5f             move.w   #$5f, (a3)
   f08104: 30 bc 80 05             move.w   #$8005, (a0)
   f08108: 4e 75                   rts      
+;### channel dispatch handler A -- 9 of the 16 codes land here.
   f0810a: 48 41                   swap     d1
   f0810c: 32 81                   move.w   d1, (a1)
   f0810e: 48 41                   swap     d1
@@ -6784,6 +6787,7 @@ loc_F08248:
 loc_F08260:
   f08260: 49 f9 00 f0 84 50       lea.l    loc_F08450.l, a4
   f08266: 4e f4 00 00             jmp      (a4, d0.w)
+;### channel dispatch handler C -- codes 1 and 10; NOT yet executed.
   f0826a: 48 40                   swap     d0
   f0826c: 28 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a4
   f08272: 4b ec 00 08             lea.l    $8(a4), a5
@@ -6892,6 +6896,7 @@ loc_F08348:
   f0835c: 39 40 02 1a             move.w   d0, $21a(a4)  [XLTR_IRQ_MASK]
   f08360: 36 bc 00 5f             move.w   #$5f, (a3)
   f08364: 4e 75                   rts      
+;### channel dispatch handler B -- codes 8 and 9.
   f08366: 48 40                   swap     d0
 ;>>>> [R6/BOTH] This instruction at `f08368` loads address register a4 with the XLTR base address `0xFF0000`, setting up the pointer for subsequent access to the XP-32 interface registers (offset `$4` for status polling and `$8` for channel data) in the TCBXP1I task.
   f08368: 28 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a4
@@ -6968,10 +6973,13 @@ loc_F083DA:
 
 loc_F083FC:
 ;>>>> [R6/BOTH] Returns from XLTR_IRQ_MASK manipulation subroutine in TCBXP1I channel task.
+;### 16 x 4-byte CHANNEL DISPATCH TABLE, twin of RDHC's $F05102. Sixteen codes
   f083fc: 4e 75                   rts      
   f083fe: 4e 71                   DC.W     0x4e71  ; 'Nq'
+;###   onto three handlers: idx 2-7,13-15 -> $F0810A; idx 8,9 -> $F08366;
   f08400: 4e fa                   DC.W     0x4efa
   f08402: fe 68                   DC.W     0xfe68
+;###   idx 1,10 -> $F0826A (never yet reached); idx 0,11,12 are rts, no handler.
   f08404: 4e fa                   DC.W     0x4efa
   f08406: fd 04                   DC.W     0xfd04
   f08408: 4e fa                   DC.W     0x4efa

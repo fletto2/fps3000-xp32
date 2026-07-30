@@ -348,6 +348,24 @@ else:
     check('$F096AC is a probe: read then 4 NOPs then rts, value discarded',
           d[0x96AC:0x96B8].hex().upper() == '30114E714E714E714E714E75')
 
+    # --- the XP channel command dispatch table ----------------------------
+    def _tbl(base):
+        out = []
+        for i in range(16):
+            x = base + i*4
+            w1 = struct.unpack('>H', d[x:x+2])[0]
+            if w1 == 0x4E75: out.append(None); continue
+            w2 = struct.unpack('>H', d[x+2:x+4])[0]
+            out.append(x + 2 + (w2 - 0x10000 if w2 >= 0x8000 else w2) + 0xF00000)
+        return out
+    check('$F083FC is a 16-entry channel dispatch table with 3 handlers',
+          _tbl(0x83FC) ==
+          [None, 0xF0826A, 0xF0810A, 0xF0810A, 0xF0810A, 0xF0810A, 0xF0810A,
+           0xF0810A, 0xF08366, 0xF08366, 0xF0826A, None, None,
+           0xF0810A, 0xF0810A, 0xF0810A])
+    check('the ISR reaches it via lsl.w #2,d0 / jmp (a4,d0.w)',
+          d[0x7F84:0x7F8E].hex().upper() == 'E54849F900F083FC4EF4')
+
     # --- the channel transaction completes instead of timing out -----------
     trk, _ = run({'FPS3K_XPIRQ': '1'}, 400_000_000)
     trn2, _ = run({'FPS3K_XPIRQ': '1', 'FPS3K_NOACK': '1'}, 400_000_000)

@@ -1473,6 +1473,48 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The XP channel command dispatch table at `$F083FC` — 16 entries, 3 handlers
+
+Making the transaction complete exposed 124 new XP1I instructions, and the
+structure at the centre of them was undocumented. After the poll succeeds the
+ISR does:
+
+```
+$F07F56  btst #$D,d4        ; bit 13 = error
+$F07F5A  beq  -> $F07F84    ; no error -> dispatch
+$F07F5C  move.w #$0269,d0   ; ...else PCMD_ERROR_ABORT and spin
+$F07F84  lsl.w #2,d0
+$F07F86  lea   $F083FC,a4
+$F07F8C  jmp   (a4,d0.w)    ; 16-entry dispatch
+```
+
+`$F083FC` is a **16 × 4-byte table** of inline stubs — `jmp d16(pc)` where a
+handler exists, `rts` where none does — and sixteen command codes collapse onto
+**three** handlers:
+
+| index | target | ran |
+|---|---|---|
+| 0, 11, 12 | `rts` — no handler | — |
+| 2-7, 13-15 | **`$F0810A`** | ✓ |
+| 8, 9 | **`$F08366`** | ✓ |
+| 1, 10 | `$F0826A` | not yet |
+
+**It is the channel-side twin of RDHC's `$F05102`.** Both are 16 × 4 bytes, both
+indexed by `(code & $F) << 2`, and both collapse a code space onto a handful of
+handlers — `$F05102` for the codes the *chassis* returns, `$F083FC` for the codes
+a *channel* returns. This project had documented only the RDHC one; the channel's
+existence was invisible while every transaction timed out before reaching it.
+
+Two of the three handlers execute. `$F0826A`, reached by codes 1 and 10, does not
+yet — so there are two channel command values whose behaviour is still dark, and
+they are now identifiable rather than merely absent.
+
+**This is what the acknowledge bought beyond the coverage number.** A structure of
+this size does not appear in a static reading as anything but data: the table is
+16 longwords of `4EFA xxxx` that a disassembler renders as instructions with no
+indication they are a table, and the `lsl.w #2` / `jmp (a4,d0.w)` that identifies
+it is 90 bytes away in code that never ran.
+
 ### Coverage after the acknowledge: 19% → 25%, XP tasks quadrupled
 
 Re-measuring the union across nine configurations, against the 19%/5-config
