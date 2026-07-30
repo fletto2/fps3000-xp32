@@ -13284,3 +13284,62 @@ Independent classification of the bytes `fps3k.asm` renders as `DC.W`, done with
 disassembler: **94.7% zero, 2.8% printable ASCII, 2.5% other**. So the "data" in this image is
 overwhelmingly emptiness, and the genuinely unexplained non-code content across the whole
 application region is on the order of one kilobyte.
+
+## The TDTI table carries authoritative task bounds, and they settle the $26E question
+
+The `!TCB` definition entries at `$F0A600` are `$60` bytes each. Field map, from diffing the six:
+
+| offset | content |
+|---|---|
+| `+00` | `!TCB` marker |
+| `+04` | 4-char task name |
+| `+1C` | **task entry point** (longword) |
+| `+20`, `+22` | **high words of the task's code region**, start and end |
+| `+40` | segment name `PROG` |
+
+| task | entry | region |
+|---|---|---|
+| RDHC | `$F046F0` | `$F04600`-`$F05CFF` |
+| IO1I | `$F05D36` | `$F05D00`-`$F05EFF` |
+| XP4I | `$F05F4A` | `$F05F00`-`$F068FF` |
+| XP3I | `$F0694A` | `$F06900`-`$F072FF` |
+| XP2I | `$F0734A` | `$F07300`-`$F07CFF` |
+| XP1I | `$F07D4A` | `$F07D00`-`$F086FF` |
+
+**The six regions tile contiguously with no gaps or overlaps, and every entry point lies inside
+its own region.** Six independent consistency checks passing at once is what makes the field
+identification safe.
+
+### This resolves the `$26E` attribution, and the code was right
+
+This file has carried an open item: *"`0x26E` at `$F05F92` sits in code our enclosing-function
+heuristic attributes to TCBXP4I. Either the CH1 label is wrong or the function attribution is.
+Unresolved — do not rely on the channel numbers in this block."*
+
+`$F05F92` falls inside `$F05F00`-`$F068FF` — **XP4I**, by the ROM's own table. So the
+*attribution was correct* and the *`CH1` label was wrong*, which is exactly what the later
+finding concluded independently when it showed `$26D`-`$271` index the failed RTOS directive
+rather than a channel. Two routes, same answer.
+
+It also bounds the pre-task code precisely: the application region starts at `$F04488` but
+RDHC's region starts at `$F04600`, so **`$F04488`-`$F045FF` is RTOS-init code owned by no
+task** — 376 bytes, matching the separately-noted init block.
+
+### `HXP1`-`HXP4` do not exist in the ROM; RDHC computes them
+
+```
+F053B6  move.l  #$48585030,d1    ; 'HXP0'
+F053BC  add.b   d4,d1            ; + channel number -> 'HXP1'..'HXP4'
+F053BE  jsr     $f05652
+```
+
+The same construction appears at `$F05476`. Only the literal `HXP0` is in the image; the four
+real queue names are built at runtime by adding the channel to the ASCII digit.
+
+Consequence for a documented claim: this file describes `$F05652` as **"RDHC's ASQ post to
+`HXP1`"**. It is not `HXP1`-specific — it is the generic per-channel poster, and which queue it
+addresses depends on `d4`. The `AXP*` names are *not* computed this way; each task declares its
+own literally.
+
+Segment names also recovered from the string scan: **`PROG`** in every TDTI entry, **`STCK`**
+declared once per task (the stack segment), and **`UPGM`** once at `$F046D4` in RDHC's region.
