@@ -1528,6 +1528,66 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### `$1FA00` is the **VTU**, not `!VCT` — and `!VCT` is ROM-resident
+
+Searching the ROM for every eye-catcher, rather than only RAM, moves several markers.
+
+#### `$1FA00` is the "Vector Table for Users"
+
+`INIT.SA`'s `BLDVTU` block is line-for-line the code decoded here at `$F09F0E`:
+
+```
+BLDVTU   MOVE.L #1,A0        SIZE IS ALWAYS ONE PAGE
+         MOVE.L #T0PAGAL,D0
+         TRAP   #0
+         BSR    KILLER
+BLDVTU01 MOVE.L VCTUBGN,A4   RESTORE ADDRESS OF COMINT ROUTINE
+BLDVTU02 CMP.L  (A2)+,A4     IS VECTOR POINTING AT COMINT ROUTINE?
+         BEQ.S  BLDVTU04     BRANCH IF YES - DO NOT SET 'USED' FLAG
+         MOVE.B D2,(A0)      SET 'USED' FLAG
+BLDVTU04 LEA    1(A0),A0     INCREMENT TABLE ADDRESS
+```
+
+So the untagged one-page allocation at `$1FA00` (slot `$0C66`) is the **VTU — Vector
+Table for Users**, one byte per exception vector. The register this document called "a
+reference handler in `a4`" is **`VCTUBGN`, the address of the COMINT (common interrupt)
+routine**, and the `$FF` byte is a **'used' flag**: set for every vector that does *not*
+point at the common handler, i.e. every vector somebody has claimed.
+
+That is a better account than the one published here, which described the same code
+correctly but read the flag as "differs from the reference handler". It also explains why
+the table carries no eye-catcher — `BLDVTU` writes none.
+
+The later fill still holds: `$F0226A` overwrites each connected vector's byte with the
+**owning task number**, which is how `$41`→6, `$45`→1 … `$4A`→5 arise. So the VTU's life
+is: used-flags at init, task numbers as vectors are connected.
+
+#### The real `!VCT` is in ROM at `$F0011A`, and it is searched for
+
+`VECTINIT` searches from `ESTART` for the `'!VCT'` eye-catcher within `$200` bytes,
+stepping **two** bytes at a time, and `BSR KILLER` if it is not found. The ROM has
+`'!VCT'` at **`$F0011A`**, preceded by the longword `$00F00186` — an address, not an
+opcode — so that is the linked-in table, part of the kernel image rather than an
+allocation.
+
+**This document states that `!CCB`, `!DLY` and `!VCT` "have kernel code but no tagged
+instance". For `!VCT` that is wrong** — it has a ROM-resident instance, invisible to a
+RAM-only search. `!CCB` at `$F03EF0` and `!DLY` at `$F02D9A` are each preceded by a
+store opcode (`move.l #tag,(a1)`, `move.l #tag,d16(a2)`), so those eye-catchers are
+*written at runtime*: their instances are dynamic and simply never created in this
+configuration. Same for `!ASQ` at `$F023B6`.
+
+#### And two smaller confirmations
+
+`VECTSRCH`'s shape — compare an eye-catcher, step 2 bytes, bounded search, `BSR KILLER`
+on failure — is **exactly** the `!TCB` search decoded here at `$F0A074`, which confirms
+that **`$F0A306` is `KILLER`** (`T0KILLER`, "crash system — error detected"). The
+inference that a failed table search crashes the machine was right.
+
+*The lesson for the marker census: "no instance" meant "no instance in RAM". Three of the
+twelve markers live in ROM or are created dynamically, and a census built from RAM dumps
+cannot distinguish "absent" from "elsewhere".*
+
 ### `INIT.SA` is the source of the allocation sequence — and `+$0C` is *max entries*
 
 `text/verdos10/M68XXX/INIT.SA` is the RTOS-init source, and its `BLDGST`/`BLDUST`

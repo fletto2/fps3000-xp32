@@ -10735,6 +10735,22 @@ loc_F09F06:
   f09f16: 20 c2                   move.l   d2, (a0)+
   f09f18: 20 c2                   move.l   d2, (a0)+
   f09f1a: 30 c2                   move.w   d2, (a0)+
+;### CORRECTION: THIS BUILDS THE **VTU**, NOT !VCT.  INIT.SA's BLDVTU block is
+;###   line-for-line this code:
+;###     BLDVTU   MOVE.L #1,A0       SIZE IS ALWAYS ONE PAGE
+;###     BLDVTU01 MOVE.L VCTUBGN,A4  RESTORE ADDRESS OF COMINT ROUTINE
+;###     BLDVTU02 CMP.L  (A2)+,A4    IS VECTOR POINTING AT COMINT ROUTINE?
+;###              BEQ.S  BLDVTU04    BRANCH IF YES - DO NOT SET 'USED' FLAG
+;###              MOVE.B D2,(A0)     SET 'USED' FLAG
+;###   So $1FA00 (slot $0C66) is the VTU -- VECTOR TABLE FOR USERS -- one byte
+;###   per exception vector.  The register described here as "a reference handler
+;###   in a4" is VCTUBGN, the address of the COMINT (common interrupt) routine,
+;###   and the $FF byte is a USED FLAG: set for every vector NOT pointing at the
+;###   common handler, i.e. every vector somebody has claimed.  Which also
+;###   explains why the table carries no eye-catcher -- BLDVTU writes none.
+;###   The later fill still holds: $F0226A overwrites each connected vector's
+;###   byte with the OWNING TASK NUMBER.  So the VTU's life is used-flags at
+;###   init, task numbers as vectors are connected.
 ;### !VCT BUILD.  a2 = $28 (the exception vector table); the loop writes ONE
 ;###   BYTE PER VECTOR up to $400, and the 10 bytes of $FF written just above
 ;###   cover vectors 0-9.  So byte k of the block at $1FA00 IS vector number k.

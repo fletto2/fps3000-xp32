@@ -550,6 +550,19 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- $1FA00 is the VTU; !VCT is ROM-resident -----------------------------
+    check("'!VCT' is present in ROM at $F0011A, preceded by an address not an opcode",
+          d[0xF0011A-0xF00000:0xF0011E-0xF00000] == b'!VCT'
+          and struct.unpack('>I', d[0xF00116-0xF00000:0xF0011A-0xF00000])[0] == 0xF00186)
+    check("...and at $F09C9C as VECTINIT's comparison immediate (move.l #'!VCT',d0)",
+          d[0xF09C9A-0xF00000:0xF09CA0-0xF00000] == b'\x20\x3c!VCT')
+    check('!CCB and !DLY eye-catchers are WRITTEN by kernel code, not linked tables',
+          d[0xF03EEE-0xF00000:0xF03EF0-0xF00000] == b'\x22\xbc'
+          and d[0xF02D98-0xF00000:0xF02D9A-0xF00000] == b'\x25\x7c')
+    check('the VTU build writes a per-vector USED flag, one byte at a time',
+          d[0xF09F22-0xF00000:0xF09F2C-0xF00000]
+          == b'\xb9\xda\x67\x02\x10\x82\x41\xe8\x00\x01')
+
     # --- !UST header fields per UST.EQ; +$0C is MENT, not the record size ----
     _, ru2 = run({}, CYC)
     _h16 = lambda x: struct.unpack('>H', ru2[x:x+2])[0]
