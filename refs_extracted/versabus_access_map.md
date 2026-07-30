@@ -1528,6 +1528,56 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### `$E58` is a longword INDEX, and the window's size is still not pinned
+
+Reconciling the 16 KB self-test extent with op `$3`'s `page = addr >> 20`. Reading the
+bounds check properly settles the arithmetic:
+
+```
+$F04D72  lsr.l   #$14,d1         ; page  = index >> 20        -> MODE2
+$F04D7E  andi.l  #$fffff,d1      ; offset = index & $FFFFF     (in LONGWORDS)
+$F04D84  lsl.l   #$2,d1          ;        -> byte offset, max $3FFFFC
+$F04D86  exg.l   d1,a1
+$F04D88  cmpa.l  #$400000,a1
+$F04D8E  bge     -> $F04DA0      ; offset >= 4 MB: read (a1) as an ABSOLUTE address
+$F04D96  move.l  (a1,d1.l),$e70  ; else read $400000 + offset
+```
+
+**`$E58` holds a longword index, not a byte address.** Bits 0-19 index within a page,
+bits 20 and up are the page number written to MODE2, and the offset is scaled by 4 to
+become a byte displacement. That is why `page = addr >> 20` looked incompatible with a
+16 KB extent: a page is 1M **longwords**, and the self-test's 16 KB is the first 4,096
+longwords of page 0 — not a page.
+
+#### An over-read, caught before publishing
+
+The natural next step was "so the window spans `$400000`-`$7FFFFC`, 4 MB, and the
+emulator's 1 MB is wrong by 4×". I enlarged it, and all three golden digests still
+matched. Then a range check for accesses above 1 MB returned hits at **`$70001C` — the
+mailbox**, which sits *inside* `$400000 + 4 MB`.
+
+So the inference was wrong. **`cmpa.l #$400000` bounds the computed offset; it does not
+assert that the hardware answers across that whole range.** A 4 MB window would
+swallow the mailbox, which puts a hard ceiling of **under 3 MB** on the extent — and
+nothing in the firmware pins it below that, because phase `$29xx` only ever walks
+16 KB. Reverted to 1 MB, now with a comment saying it is an unforced choice rather than
+a derived one.
+
+*The digests matching is what makes this instructive: the change was invisible to every
+existing guard, so "all tests pass" would have shipped a wrong 4× window size. What
+caught it was a range check written for a different purpose returning an address I
+recognised. The guards protect against regressions, not against plausible
+over-readings.*
+
+What is now established, and what is not:
+
+| | |
+|---|---|
+| the address arithmetic | **known exactly** — longword index, page in MODE2, offset ×4 |
+| offsets are windowed up to | **4 MB** (beyond that, treated as an absolute address) |
+| the window's actual extent | **unknown**, ≤ 3 MB by the mailbox collision; the self-test only ever needs 16 KB |
+| page size in bytes | 4 MB of window address space per page — *if* the window is that wide, which is not established |
+
 ### The chassis-memory test covers 16 KB, not "131k addresses"
 
 Phase `$29xx` is a march test with the extent written into the code:

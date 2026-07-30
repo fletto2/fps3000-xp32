@@ -550,6 +550,19 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- op $3: $E58 is a longword INDEX, offsets windowed up to 4 MB --------
+    check('op $3 takes page = index >> 20 and offset = (index & $FFFFF) << 2',
+          d[0xF04D70-0xF00000:0xF04D78-0xF00000]
+              == b'\x74\x14\xe4\xa9\x31\x41\x02\x10'
+          and d[0xF04D7E-0xF00000:0xF04D86-0xF00000]
+              == b'\x02\x81\x00\x0f\xff\xff\xe5\x89')
+    check('...and bounds the OFFSET at 4 MB, not the window',
+          d[0xF04D88-0xF00000:0xF04D90-0xF00000]
+          == b'\xb3\xfc\x00\x40\x00\x00\x6c\x10')
+    check('the emulator window stays 1 MB, recorded as an unforced choice',
+          '(1u << 20)' in open('emulator/fps3k_sbc.c').read()
+          and 'not derived' in open('emulator/fps3k_sbc.c').read())
+
     # --- phase $29xx covers 16 KB of chassis memory, not "131k addresses" ----
     check('phase $29xx walks $400000 to $404000 -- 16 KB',
           d[0xF09B30-0xF00000:0xF09B3C-0xF00000]

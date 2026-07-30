@@ -83,7 +83,24 @@ uint8_t *host_sim_get_ram_ptr(void) { return ram; }
  * comment said "the test only touches the first few words", which understated
  * it by three orders of magnitude. */
 #define CHASSIS_MEM_BASE  0x400000
-#define CHASSIS_MEM_SIZE  (1u << 20)        /* 1 MB */
+/* Op $3's address arithmetic, which is now known exactly:
+ *
+ *   $F04D72  lsr.l  #$14,d1        ; page  = index >> 20      -> MODE2
+ *   $F04D7E  andi.l #$fffff,d1     ; offset = index & $FFFFF   (LONGWORDS)
+ *   $F04D84  lsl.l  #$2,d1         ;        -> byte offset, up to $3FFFFC
+ *   $F04D88  cmpa.l #$400000,a1    ; offsets at or beyond 4 MB are NOT windowed
+ *   $F04D96  move.l (a1,d1.l),...  ; else read $400000 + offset
+ *
+ * So $E58 holds a LONGWORD INDEX, not a byte address: bits 0-19 index within a
+ * page and bits 20+ select the page written to MODE2.
+ *
+ * That bound does NOT establish a 4 MB window.  It bounds the computed OFFSET;
+ * whether the hardware answers across the whole range is a separate question, and
+ * a 4 MB window at $400000 would swallow the mailbox at $70001C -- so the extent
+ * is at most 3 MB and this 1 MB is an unforced choice, not a derived one.
+ * Self-test phase $29xx only ever walks 16 KB (the first 4,096 longwords of page
+ * 0), so nothing in the firmware pins the size either. */
+#define CHASSIS_MEM_SIZE  (1u << 20)        /* 1 MB -- see above, not derived */
 static uint8_t  chassis_mem[CHASSIS_MEM_SIZE];
 static uint8_t  chassis_written[CHASSIS_MEM_SIZE];
 static FILE    *chassis_uninit_fp = NULL;

@@ -80,6 +80,24 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- $E58 is a longword INDEX; the window size is NOT pinned ----
+ (0xF04D7E,'$E58 HOLDS A LONGWORD INDEX, NOT A BYTE ADDRESS.  Bits 0-19 index within a'),
+ (0xF04D7E,'  page, bits 20+ are the page number written to MODE2, and the offset is'),
+ (0xF04D7E,'  scaled by 4 to become a byte displacement.  That is why page = addr >> 20'),
+ (0xF04D7E,'  looked incompatible with phase $29xx\'s 16 KB extent: a page is 1M'),
+ (0xF04D7E,'  LONGWORDS, and 16 KB is the first 4,096 longwords of page 0, not a page.'),
+ (0xF04D88,'THIS BOUNDS THE OFFSET, NOT THE WINDOW.  Tempting to conclude the window'),
+ (0xF04D88,'  spans $400000-$7FFFFC (4 MB) and the emulator\'s 1 MB is wrong by 4x.  It'),
+ (0xF04D88,'  was tried: all three golden digests still matched.  Then a range check'),
+ (0xF04D88,'  for accesses above 1 MB returned hits at $70001C -- THE MAILBOX -- which'),
+ (0xF04D88,'  sits inside $400000 + 4 MB.  So a 4 MB window would swallow the mailbox,'),
+ (0xF04D88,'  putting a hard ceiling UNDER 3 MB on the extent, and nothing in the'),
+ (0xF04D88,'  firmware pins it below that because the self-test only needs 16 KB.'),
+ (0xF04D88,'  The digests matching is what makes this instructive: the change was'),
+ (0xF04D88,'  INVISIBLE to every existing guard, so "all tests pass" would have shipped'),
+ (0xF04D88,'  a wrong window size.  What caught it was a range check written for a'),
+ (0xF04D88,'  different purpose returning an address I recognised.  Guards protect'),
+ (0xF04D88,'  against regressions, not against plausible over-readings.'),
  # ---- phase $29xx covers 16 KB, not "131k addresses" ----
  (0xF09B30,'PHASE $29xx IS A MARCH TEST WITH ITS EXTENT WRITTEN INTO THE CODE:'),
  (0xF09B30,'  $400000 to $404000 = EXACTLY 16 KB, stride in d2, patterns from the'),

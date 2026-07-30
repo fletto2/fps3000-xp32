@@ -1171,9 +1171,26 @@ loc_F04D42:
   f04d74: 31 41 02 10             move.w   d1, $210(a0)  [XLTR_MODE2_PAGE]
   f04d78: 22 39 00 00 0e 58       move.l   $e58.l, d1
 ;>>>> [R2/BOTH] This instruction masks d1 with 0x000FFFFF (20-bit mask) to extract the lower 20 bits of the address from global variable $e58.l, which is then shifted left by 2 and used as an offset into the XP-32 microcode staging buffer at 0x400000 — part of the address calculation for the WCS upload routine.
+;### $E58 HOLDS A LONGWORD INDEX, NOT A BYTE ADDRESS.  Bits 0-19 index within a
+;###   page, bits 20+ are the page number written to MODE2, and the offset is
+;###   scaled by 4 to become a byte displacement.  That is why page = addr >> 20
+;###   looked incompatible with phase $29xx's 16 KB extent: a page is 1M
+;###   LONGWORDS, and 16 KB is the first 4,096 longwords of page 0, not a page.
   f04d7e: 02 81 00 0f ff ff       andi.l   #$fffff, d1
   f04d84: e5 89                   lsl.l    #$2, d1
   f04d86: c3 89                   exg.l    d1, a1
+;### THIS BOUNDS THE OFFSET, NOT THE WINDOW.  Tempting to conclude the window
+;###   spans $400000-$7FFFFC (4 MB) and the emulator's 1 MB is wrong by 4x.  It
+;###   was tried: all three golden digests still matched.  Then a range check
+;###   for accesses above 1 MB returned hits at $70001C -- THE MAILBOX -- which
+;###   sits inside $400000 + 4 MB.  So a 4 MB window would swallow the mailbox,
+;###   putting a hard ceiling UNDER 3 MB on the extent, and nothing in the
+;###   firmware pins it below that because the self-test only needs 16 KB.
+;###   The digests matching is what makes this instructive: the change was
+;###   INVISIBLE to every existing guard, so "all tests pass" would have shipped
+;###   a wrong window size.  What caught it was a range check written for a
+;###   different purpose returning an address I recognised.  Guards protect
+;###   against regressions, not against plausible over-readings.
   f04d88: b3 fc 00 40 00 00       cmpa.l   #$400000, a1
   f04d8e: 6c 10                   bge.b    loc_F04DA0
 ;>>>> [R1/BOTH] Microcode buffer upper bound enforcement (RAM 0x10000-0x1FFFF address clamp)
