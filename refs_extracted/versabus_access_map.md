@@ -16223,3 +16223,29 @@ The rule that fixes it: **instrument after the branch, not before.** A site both
 distinguish them, and a null result from such a site is evidence about the probe rather than about
 the firmware. That is the third distinct form this session of the same underlying error — measuring
 something that cannot answer the question asked, then reading the answer as informative.
+
+## Auditing the harness for checks that cannot fail
+
+Three classes of unfalsifiable check surfaced today: three softened with `or True`, one arithmetic
+identity standing in for behaviour (`(0x26 & 0x0F) == 0x6`), and the `$600` byte-pattern
+assertions I misread as runtime evidence. That warranted an audit rather than more spot fixes.
+
+Scanning all **714** checks for conditions containing **no identifiers** — pure literal arithmetic,
+which is exactly the shape of the `$26` identity — finds **two**, and both are
+`except FileNotFoundError: check(..., False)`: deliberate failure paths for a missing file, not
+tautologies.
+
+**So no always-true check of that form remains.** The three `or True` cases were repaired this
+morning and the identity was replaced with an executed test this afternoon.
+
+Two limits on what the audit proves, worth stating so it is not over-trusted:
+
+- It catches only **literal-only** conditions. Something like `len(x) >= 0` has identifiers and
+  passes the scan while still being unfalsifiable.
+- It says nothing about checks that *can* fail but do not test what their message claims — the
+  `$600` case. Those assert real bytes; the defect is that the message describes runtime behaviour
+  the assertion never touches. No automated scan finds that; it needs the message read against
+  the condition.
+
+Reusable form: `grep -n "or True" tools/verify_findings.py` should match only comments, and the
+literal-only scan above should return only the `FileNotFoundError` guards.
