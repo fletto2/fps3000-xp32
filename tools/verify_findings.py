@@ -550,6 +550,20 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- four write-only neighbours of VMOD_CTRL ------------------------------
+    check('$1FFE2/$1FFE4/$1FFE6/$1FFF2 are all move.w writes through a5',
+          d[0xF08F8C-0xF00000:0xF08F90-0xF00000] == b'\x3b\x40\xff\xf2'
+          and d[0xF09354-0xF00000:0xF09358-0xF00000] == b'\x3b\x40\xff\xf4'
+          and d[0xF093F0-0xF00000:0xF093F4-0xF00000] == b'\x3b\x41\xff\xf4'
+          and d[0xF0925C-0xF00000:0xF09260-0xF00000] == b'\x3b\x40\xff\xf6'
+          and d[0xF093FA-0xF00000:0xF093FE-0xF00000] == b'\x3b\x41\x00\x02')
+    check('$1FFF4 is the control case: read (or.b) then read-modify-write (addq.b)',
+          d[0xF0897C-0xF00000:0xF08984-0xF00000]
+          == b'\x80\x2d\x00\x04\x52\x2d\x00\x04')
+    check('the displacements resolve to $1FFE2/$1FFE4/$1FFE6/$1FFF2/$1FFF4',
+          [0x1FFF0 + o for o in (-0xE, -0xC, -0xA, 2, 4)]
+          == [0x1FFE2, 0x1FFE4, 0x1FFE6, 0x1FFF2, 0x1FFF4])
+
     # --- $1FFE2 is a vector-number register; vectors 80-82 -------------------
     check('$700 derives a vector number by lsr #2 and writes it to $1FFE2',
           d[0xF08F86-0xF00000:0xF08F96-0xF00000]

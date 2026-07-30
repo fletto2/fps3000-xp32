@@ -1528,6 +1528,48 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The VERSAmodule block is larger than two bytes — four write-only neighbours
+
+Sweeping everything reached through `a5 = $1FFF0` (excluding `lea`, which accesses nothing)
+turns up six locations beside the documented `VMOD_CTRL` pair, and they split cleanly by
+access pattern:
+
+| address | sites | access | value |
+|---|---|---|---|
+| `$1FFE2` | `$F08F8C` | **write only** | `$51` — vector number 81 (`$700`) |
+| `$1FFE4` | `$F09354`, `$F093F0` | **write only** | `$148` (`$1300`), then `d1` (`$1400`) |
+| `$1FFE6` | `$F0925C` | **write only** | `d0` (`$1200`) |
+| `$1FFF2` | `$F093FA` | **write only** | `d1` (`$1400`) |
+| `$1FFF4` | `$F0897C`, `$F08980` | `or.b` **read**, then `addq.b` RMW | a counter |
+
+**Four locations are written and never read — anywhere in the ROM.** That asymmetry is the
+useful discriminator. A scratch variable exists to be read back; a value written once and
+never consumed by the firmware is either a hardware register whose consumer is the board, or
+it is dead. `$1FFF4` is the control case sitting right beside them: it *is* read (`or.b
+$4(a5),d0`) and incremented, exactly what a real scratch counter looks like.
+
+So the inference is that **the VERSAmodule register block extends at least from `$1FFE2` to
+`$1FFF2`**, not merely the two bytes at `$1FFF0-$1FFF1` that every map in this project
+records. `$1FFE2` taking a vector *number* derived by `lsr #2` is the strongest single case,
+since a stored vector number has no use unless hardware consumes it during IACK.
+
+**Stated with the hedge it needs.** Write-only is *consistent* with a register but does not
+prove one — the same pattern is produced by vestigial code, and a power-on self-test is
+exactly the kind of software that accumulates dead stores across revisions. Two things would
+settle it and neither is available here: the M68KVM02 manual's register map for
+`$1FFE0-$1FFFF`, or a bus trace showing whether these addresses are decoded off-board. Until
+then this belongs in the map as **inferred, not established**.
+
+**Emulator consequence, currently benign.** The model treats all of `$1FFE0-$1FFFF` except
+`$1FFF0-$1FFF1` as plain RAM, so these four writes land in memory and nothing reads them —
+which produces correct behaviour whichever hypothesis is true, because the firmware never
+reads them either. The divergence would only appear on hardware, where a real vector
+register would change what the board supplies during IACK.
+
+*Two sweep results discarded:* `$2001C` and `$20026` (from `$F0A0B2`/`$F0A0E2`) lie beyond
+the 128 KB RAM top and come from a stale `a5` in the RTOS-init region, the same
+base-tracking failure documented above. They are not accesses to anything.
+
 ### `$1FFE2` is a vector-number register, and the VMOD interrupter owns vectors 80-82
 
 Phase `$700` (`$F08F70`) shows how the board's own interrupter is programmed:
