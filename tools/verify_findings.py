@@ -739,8 +739,10 @@ else:
     check('...asl.w #1 from 1 until zero is exactly 16 iterations',
           d[0xF0916C-0xF00000:0xF09170-0xF00000] == b'\xe3\x40\x66\xe6')
     check('the PTM is held in internal reset (CR2<-$01, CR1<-$01) during the walk',
-          d[0xF0917E-0xF00000:0xF09182-0xF00000] == b'\x10\xbc\x00\x01'
-          and d[0xF09184-0xF00000:0xF09188-0xF00000] == b'\x10\xbc\x00\x01')
+          d[0xF0917E-0xF00000:0xF09184-0xF00000]      # move.b #$1,$2(a0) -> CR2
+          == b'\x11\x7c\x00\x01\x00\x02'
+          and d[0xF09184-0xF00000:0xF09188-0xF00000]  # move.b #$1,(a0)   -> CR1
+          == b'\x10\xbc\x00\x01')
 
     # --- the hidden-register sweep: candidates were lea, not accesses ---------
     check('$FF010A/$FF0114/$FF0116 candidates are lea (4fe8), not memory accesses',
@@ -775,7 +777,7 @@ else:
 
     # --- $1900: bit 4 muxes the low half; $FF0214 is the latch ----------------
     check('$1900 writes $55555555 to $400000 and reads it back as a longword',
-          d[0xF0978E-0xF00000:0xF0979C-0xF00000]
+          d[0xF0978E-0xF00000:0xF0979E-0xF00000]
           == b'\x20\x3c\x55\x55\x55\x55\x32\x3c\xaa\xaa'
              b'\x20\x80\xb0\x90\x67\x06')
     check('$F09806 writes a word to the window itself',
@@ -1016,17 +1018,43 @@ else:
             if (pw & 0xFF00) == 0x7000:
                 out.add(pw & 0xFF)
         return out
+    # A 2-byte lookback finds only the moveq form and recovers 5 of 14 -- the
+    # documented figure (71 sites, 65 resolvable, 14 directives) needs a wider
+    # search that also catches move.w #imm,d0.  Same narrow-matcher failure as
+    # the absolute-address sweeps documented in the access map.
+    def _dirs_wide(op, lo=0xF04488, hi=0xF10000, span=34):
+        out = {}
+        for a2 in range(lo, hi, 2):
+            if word(a2) != op:
+                continue
+            for back in range(2, span, 2):
+                pw = word(a2 - back)
+                if (pw & 0xFF00) == 0x7000:
+                    out.setdefault(pw & 0xFF, []).append(a2); break
+                if pw == 0x303C:
+                    out.setdefault(word(a2 - back + 2) & 0xFF, []).append(a2); break
+        return out
+    _t1 = _dirs_wide(0x4E41)
     check('the firmware TRAP #1 directive set is exactly the 14 now named',
-          _dirs(0x4E41) <= set(TRAP1) and len(_dirs(0x4E41)) >= 12)
+          set(_t1) == set(TRAP1), f'{len(_t1)} found')
+    check('...across 71 sites of which 65 resolve, matching the documented count',
+          sum(len(v) for v in _t1.values()) == 65
+          and len([a2 for a2 in range(0xF04488, 0xF10000, 2)
+                   if word(a2) == 0x4E41]) == 71)
     check('the firmware TRAP #0 directive set is exactly the five now named',
           _dirs(0x4E40) <= set(TRAP0) | {0x04})
-    check('$2D (CRSEM, create semaphore) appears twice per XP task, never in RDHC',
-          len([a2 for a2 in range(0xF07D4A, 0xF0874A, 2)
-               if struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0] == 0x4E41
-               and struct.unpack('>H', d[a2-0xF00000-2:a2-0xF00000])[0] == 0x702D]) == 2
-          and not [a2 for a2 in range(0xF04600, 0xF05D00, 2)
-                   if struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0] == 0x4E41
-                   and struct.unpack('>H', d[a2-0xF00000-2:a2-0xF00000])[0] == 0x702D])
+    # The old window ($F07D4A-$F0874A) missed every $2D site: the pairs sit ~$92
+    # bytes BELOW each nominal XP body start, so region bounds misattribute them
+    # to the preceding task -- the hazard CLAUDE.md already warns about.  Assert
+    # the STRUCTURE instead, which is bound-independent.
+    _2d = sorted(_t1.get(0x2D, []))
+    check('$2D (CRSEM) forms four pairs at the $A00 XP stride, plus one singleton',
+          len(_2d) == 9
+          and [_2d[i+1] - _2d[i] for i in (1, 3, 5, 7)] == [0x36] * 4
+          and [_2d[i+2] - _2d[i] for i in (1, 3, 5)] == [0xA00] * 3,
+          ' '.join('$%06X' % a2 for a2 in _2d))
+    check('...and none of them is in RDHC',
+          not [a2 for a2 in _2d if 0xF04600 <= a2 < 0xF05D00])
     check('$29/$2A at $F05652 are ATSEM then WTSEM, not queue lookup and post',
           d[0xF05662-0xF00000:0xF05666-0xF00000] == b'\x70\x29\x4e\x41'
           and d[0xF0566C-0xF00000:0xF05670-0xF00000] == b'\x70\x2a\x4e\x41')
