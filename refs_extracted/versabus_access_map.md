@@ -1473,6 +1473,45 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The PTM was clocked from the CPU, not from E — and the "prescaler" was the fudge
+
+The MC6840 model contained a contradiction. Its own comment says the prescaler is
+**CR3 bit 0, for T3** — which matches the datasheet — while the code applied a
+`/8` on **bit 1, to all three timers**. Bit 1 is the **clock source** (1 =
+internal E, 0 = external), not a prescaler.
+
+It looked like a plain bug, and it matters for the RTOS: the RTOS writes
+**`CR1 = $C6`** at `$F0A2D8` — bit 1 set — so the model divided the tick rate
+by 8.
+
+**Applying the datasheet reading broke task initialisation.** With `/8` removed
+and the real CR3-bit-0 prescaler in its place, `!UST` stops at **7 of 9 entries**
+and stays there at 400M, 800M and 1,600M cycles: TCBIO1I never finishes
+registering `HIO1`.
+
+That failure identifies what the `/8` was really standing in for. **The PTM is
+clocked by E, and on a 68000 E = CPU/10**, but `mc6840_tick` is handed *CPU*
+cycles. The old `/8` was an undeclared approximation of the E divider — the
+comment's "very rough prescale" admits as much — so removing it left the tick
+**10× fast** and starved the RTOS.
+
+The model now divides by **10 unconditionally** for the E clock, and applies the
+datasheet's real prescaler — CR3 bit 0, T3 only — on top. All nine `!UST` entries
+populate and the harness passes 144/144.
+
+| model | `!UST` entries | harness |
+|---|---|---|
+| legacy: `/8` on bit 1, all timers | 9/9 | 144/144 |
+| "datasheet", no divider | **7/9** | fails |
+| **E clock `/10` + CR3 b0 on T3** | 9/9 | 144/144 |
+
+*And a methodological note. The first comparison of legacy against strict looked
+at self-test PC counts and the final PC, found them identical, and concluded the
+change was free. It was not: 78 RAM bytes differed, including two `!UST` entries.
+Equal PC counts with unequal RAM is exactly the case a coverage metric cannot
+see, and the harness caught it only because a check happened to read that
+directory.*
+
 ### Auditing the harness: three checks could not fail
 
 The harness has grown from 21 checks to 144, and its own falsifiability test was
@@ -2056,12 +2095,21 @@ Each entry is the **same 10-byte shape the task header carries at `+$2C`/`+$36`*
 bytes per queue.
 
 **And a `!UST` directory at `$1FB00`** — the User Segment Table — holding nine
-14-byte `(task, queue)` pairs:
+**22-byte** `(task, queue)` entries starting at `$1FB14`:
 
 ```
 XP1I/AXP1  XP1I/HXP1  XP2I/AXP2  XP2I/HXP2  XP3I/AXP3
 XP3I/HXP3  XP4I/AXP4  XP4I/HXP4  IO1I/HIO1
 ```
+
+`$1FB14 + 22*n` for n = 0..8, ending exactly on the `IO1I`/`HIO1` entry at
+`$1FBC4`.
+
+**The stride corrects an earlier claim and explains a loose end.** This document
+first said "nine 14-byte pairs"; the stride is **22** = `$16`, and `$16` is
+exactly the step in the per-task ASQ blocks' 16-bit values (`$14 + index*$16`).
+Those values are **offsets into this table** — the loose end noted earlier as
+"something downstream is 22 bytes per queue" is this directory.
 
 So the attachments are recorded twice: once per task, once globally. `$2D` is
 therefore an **ASQ attach that registers a name**, and the absence of an

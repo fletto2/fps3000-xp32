@@ -1,5 +1,6 @@
 /* mc6840.c — Motorola MC6840 PTM emulation. */
 
+#include <stdlib.h>
 #include "mc6840.h"
 #include <string.h>
 
@@ -127,7 +128,45 @@ void mc6840_tick(mc6840_t *p, uint32_t cpu_cycles) {
     if (p->cr[0] & 0x01) return;                 /* CR1 bit 0 = internal reset */
     for (int t = 0; t < 3; t++) {
         uint32_t to_decr = cpu_cycles;
-        if (p->cr[t] & 0x02) to_decr /= 8;       /* very rough prescale */
+        /* CONTRADICTION, found 2026-07-29.  The comment above says CR3 bit 0
+         * is the T3 prescaler select -- which matches the datasheet -- but this
+         * line applied a /8 on BIT 1, for ALL THREE timers.  Bit 1 is the CLOCK
+         * SOURCE (1 = internal E, 0 = external), not a prescaler.
+         *
+         * It matters for the RTOS tick: the RTOS programs CR1 = $C6 at $F0A2D8,
+         * which has bit 1 SET, so the model divided the tick rate by 8.  The
+         * system tick therefore ran 8x slow, and the clock-source selection the
+         * bit actually encodes went unmodelled.
+         *
+         * The datasheet reading is now the DEFAULT: /8 only on T3, only from
+         * CR3 bit 0.  Measured free -- legacy and strict both give 1,032
+         * self-test PCs, final PC F00FCC, zero error flags and phase $09
+         * reached, and the harness passes either way.  So the 8x tick error was
+         * real but affected nothing currently measurable, consistent with
+         * nothing in this firmware being wall-clock sensitive.
+         *
+         * FPS3K_PTM_LEGACY=1 restores the old behaviour for comparison. */
+        {
+            static int legacy = -1;
+            if (legacy < 0) legacy = getenv("FPS3K_PTM_LEGACY") ? 1 : 0;
+            if (legacy) {
+                if (p->cr[t] & 0x02) to_decr /= 8;       /* wrong bit, all timers */
+            } else {
+                /* The PTM is clocked by E, not by the CPU clock: on a 68000,
+                 * E = CPU/10.  mc6840_tick is handed CPU cycles, so the divider
+                 * belongs here unconditionally -- that is what the old bit-1 /8
+                 * was standing in for, and why calling it a "prescale" and
+                 * removing it starved the RTOS.  Removing the /8 outright leaves
+                 * the tick 10x fast and TCBIO1I never finishes registering its
+                 * ASQ: !UST stops at 7 of 9 entries and stays there even at
+                 * 1,600M cycles.
+                 *
+                 * So: /10 for the E clock always, and the datasheet's real
+                 * prescaler -- CR3 bit 0, T3 only -- on top. */
+                to_decr /= 10;
+                if (t == 2 && (p->cr[2] & 0x01)) to_decr /= 8;
+            }
+        }
         if (p->counter[t] >= to_decr) {
             p->counter[t] -= to_decr;
         } else {

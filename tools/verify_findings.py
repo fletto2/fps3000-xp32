@@ -197,10 +197,16 @@ else:
           [(b'AXP1', b'HXP1'), (b'AXP2', b'HXP2'),
            (b'AXP3', b'HXP3'), (b'AXP4', b'HXP4')] and
           _r[0x1DF00:0x1DF04] == b'HIO1')
-    check('$1FB00 is a !UST directory of nine (task, queue) pairs',
+    # Stride is 22 ($16), not 14: $1FB14 + 22*8 = $1FBC4, the ninth entry.
+    # $16 is also the step in the ASQ blocks' 16-bit values, which are offsets
+    # into this table.
+    check('$1FB00 is a !UST directory of nine 22-byte (task, queue) entries',
           _r[0x1FB00:0x1FB04] == b'!UST' and
-          _r[0x1FB14:0x1FB18] == b'XP1I' and _r[0x1FB1C:0x1FB20] == b'AXP1' and
-          _r[0x1FBC4:0x1FBC8] == b'IO1I' and _r[0x1FBCC:0x1FBD0] == b'HIO1')
+          [(_r[0x1FB14+22*i:0x1FB18+22*i], _r[0x1FB1C+22*i:0x1FB20+22*i])
+           for i in range(9)] ==
+          [(b'XP1I', b'AXP1'), (b'XP1I', b'HXP1'), (b'XP2I', b'AXP2'),
+           (b'XP2I', b'HXP2'), (b'XP3I', b'AXP3'), (b'XP3I', b'HXP3'),
+           (b'XP4I', b'AXP4'), (b'XP4I', b'HXP4'), (b'IO1I', b'HIO1')])
 
     check('RTOS creates only !TCB x6 and !TST x6, no !ASQ/!CCB/!DLY',
           [sum(1 for x in range(0, 0x20000) if _r[x:x+4] == tg)
