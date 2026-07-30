@@ -550,6 +550,22 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- $0C30 is TRACEBEG, $0C34 trace flags, $0C9A TIAT --------------------
+    check('$F0A04E writes $01010000 to $0C9A -- TIAT, "TRAP 0 and 1 used by exec"',
+          d[0xF0A04E-0xF00000:0xF0A056-0xF00000]
+          == b'\x21\xfc\x01\x01\x00\x00\x0c\x9a')
+    check('the FPS kernel hook tests bit 14 of the trace flags at $0C34',
+          d[0xF044A2-0xF00000:0xF044AA-0xF00000]
+          == b'\x08\x38\x00\x0e\x0c\x34\x67\x0a')
+    check('...and only then calls the trace enqueue at $F01688',
+          0xF044AE + struct.unpack('>h', d[0xF044AE-0xF00000:0xF044B0-0xF00000])[0]
+          == 0xF01688)
+    _, rtr = run({}, CYC)
+    check('the trace buffer at $1F500 is registered in slot $0C30 (TRACEBEG)',
+          struct.unpack('>I', rtr[0x0C30:0x0C34])[0] == 0x1F500)
+    check('...and carries no eye-catcher, because BLDTRAC writes none',
+          rtr[0x1F500:0x1F504] != b'!TRC' and rtr[0x1F500] != 0x21)
+
     # --- $1FA00 is the VTU; !VCT is ROM-resident -----------------------------
     check("'!VCT' is present in ROM at $F0011A, preceded by an address not an opcode",
           d[0xF0011A-0xF00000:0xF0011E-0xF00000] == b'!VCT'

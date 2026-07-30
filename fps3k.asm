@@ -112,6 +112,10 @@ loc_F0449C:
 loc_F044A0:
 ;>>>> [R5/BOTH] Returns from subroutine in TCBIO1I host I/O channel task entry.
   f044a0: 4e 75                   rts      
+;### THE FPS KERNEL HOOK IS A TRACE POINT.  bit 14 of $0C34 is a TRACE FLAG
+;###   (TRCFTRP1 = 15 and TRCFDSPT = 10 are neighbours), and if set it calls
+;###   $F01688 -- the trace enqueue -- before walking the driver chain.  So this
+;###   insertion is a TRACED dispatch chain, which is why it references $0C34.
 ;### RTOS HOOK, not a called routine: this address is stored as a FUNCTION
 ;###   POINTER at $F03FDC and $F040EC.  It tests bit 14 of $0C34, optionally
 ;###   saves SR and calls $F01688, then falls into the chain walk below.
@@ -10807,6 +10811,18 @@ loc_F09F62:
   f09f6a: 67 24                   beq.b    loc_F09F90
   f09f6c: 20 42                   movea.l  d2, a0
   f09f6e: 70 04                   moveq    #$4, d0
+;### THE STRUCTURE INVENTORY IS CLOSED.  Seven of the ROM's eight allocations are
+;###   standard RMS68K, in INIT.SA's own order: GST $0C20, UST $0C24, VTU $0C66,
+;###   IOV $0C6A, PAT $0C2C, UDR $0C28, TRACE $0C30.  **!IDV ($0C6E) IS THE ONLY
+;###   NON-STANDARD STRUCTURE IN THE MACHINE**, inserted after IOV -- and IDV
+;###   appears NOWHERE in 44 MB of VERSAdos source, exactly like directive
+;###   $4C = 76.  Two independent absences pointing at one feature: !IDV holds
+;###   {vector, TCB, ISR entry, ISR exit}, precisely what a connect-interrupt-
+;###   vector directive records, and $4C is that directive.  So the
+;###   connect-interrupt-vector facility and its table are absent from every
+;###   available RMS68K release -- later branch, or FPS addition.  The slot
+;###   grouping agrees: $0C66/$0C6A/$0C6E is a contiguous interrupt-and-vector
+;###   pointer group and !IDV sits at its end.
 ;### !IDV is the INTERRUPT-DEVICE TABLE and it is the whole IRQ wiring of the
 ;###   machine in 84 bytes: six 14-byte records from +$08, each
 ;###   {vector word, TCB pointer, ISR entry, ISR exit}.  Measured:
@@ -10922,6 +10938,12 @@ loc_F0A012:
   f0a01c: 20 42                   movea.l  d2, a0
 ;>>>> [R8/BOTH] Initializes UDR (User Driver) tag size via trap with d0=4.
   f0a01e: 70 04                   moveq    #$4, d0
+;### THE UNTAGGED RING AT $1F500 (slot $0C30) IS THE **TRACE BUFFER**.  INIT.SA
+;###   has a seventh build block, BLDTRAC, allocating it with T0PAGAL and storing
+;###   the address in TRACEBEG.  This project GUESSED "a masked-interrupt ring
+;###   filled by a driver hook is the shape of a trace or deferred-event log" and
+;###   flagged it as inference; BLDTRAC confirms it by name.  No eye-catcher
+;###   because BLDTRAC writes none, exactly as observed.
 ;### ALLOCATOR SITE 8/8 -> slot $0C30, NO tag stamped, observed $1F500
   f0a020: 4e 40                   trap     #$0
   f0a022: 60 04                   bra.b    loc_F0A028
@@ -10955,6 +10977,10 @@ loc_F0A028:
 ; RTOSKernelInit
 ; ============================================================
 RTOSKernelInit:
+;### $0C9A = TIAT, and $01010000 means "SET TRAP 0 AND 1 USED BY EXEC" (INIT.SA
+;###   BLDTIAT).  Recorded here with no meaning attached; this is why the firmware
+;###   uses only TRAP 0 and TRAP 1 and the other fourteen TRAP vectors are free --
+;###   the fact the monitor relies on, now with its mechanism.
   f0a04e: 21 fc 01 01 00 00 0c 9a  move.l   #$1010000, $c9a.w
   f0a056: 61 00 03 f2             bsr.w    loc_F0A44A
   f0a05a: 4a b8 0c 10             tst.l    $c10.w

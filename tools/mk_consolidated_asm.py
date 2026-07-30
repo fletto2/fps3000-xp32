@@ -80,6 +80,33 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- the ring queue is the TRACE BUFFER; !IDV is the only extra ----
+ (0xF0A020,'THE UNTAGGED RING AT $1F500 (slot $0C30) IS THE **TRACE BUFFER**.  INIT.SA'),
+ (0xF0A020,'  has a seventh build block, BLDTRAC, allocating it with T0PAGAL and storing'),
+ (0xF0A020,'  the address in TRACEBEG.  This project GUESSED "a masked-interrupt ring'),
+ (0xF0A020,'  filled by a driver hook is the shape of a trace or deferred-event log" and'),
+ (0xF0A020,'  flagged it as inference; BLDTRAC confirms it by name.  No eye-catcher'),
+ (0xF0A020,'  because BLDTRAC writes none, exactly as observed.'),
+ (0xF0A04E,'$0C9A = TIAT, and $01010000 means "SET TRAP 0 AND 1 USED BY EXEC" (INIT.SA'),
+ (0xF0A04E,'  BLDTIAT).  Recorded here with no meaning attached; this is why the firmware'),
+ (0xF0A04E,'  uses only TRAP 0 and TRAP 1 and the other fourteen TRAP vectors are free --'),
+ (0xF0A04E,'  the fact the monitor relies on, now with its mechanism.'),
+ (0xF044A2,'THE FPS KERNEL HOOK IS A TRACE POINT.  bit 14 of $0C34 is a TRACE FLAG'),
+ (0xF044A2,'  (TRCFTRP1 = 15 and TRCFDSPT = 10 are neighbours), and if set it calls'),
+ (0xF044A2,'  $F01688 -- the trace enqueue -- before walking the driver chain.  So this'),
+ (0xF044A2,'  insertion is a TRACED dispatch chain, which is why it references $0C34.'),
+ (0xF09F70,'THE STRUCTURE INVENTORY IS CLOSED.  Seven of the ROM\'s eight allocations are'),
+ (0xF09F70,'  standard RMS68K, in INIT.SA\'s own order: GST $0C20, UST $0C24, VTU $0C66,'),
+ (0xF09F70,'  IOV $0C6A, PAT $0C2C, UDR $0C28, TRACE $0C30.  **!IDV ($0C6E) IS THE ONLY'),
+ (0xF09F70,'  NON-STANDARD STRUCTURE IN THE MACHINE**, inserted after IOV -- and IDV'),
+ (0xF09F70,'  appears NOWHERE in 44 MB of VERSAdos source, exactly like directive'),
+ (0xF09F70,'  $4C = 76.  Two independent absences pointing at one feature: !IDV holds'),
+ (0xF09F70,'  {vector, TCB, ISR entry, ISR exit}, precisely what a connect-interrupt-'),
+ (0xF09F70,'  vector directive records, and $4C is that directive.  So the'),
+ (0xF09F70,'  connect-interrupt-vector facility and its table are absent from every'),
+ (0xF09F70,'  available RMS68K release -- later branch, or FPS addition.  The slot'),
+ (0xF09F70,'  grouping agrees: $0C66/$0C6A/$0C6E is a contiguous interrupt-and-vector'),
+ (0xF09F70,'  pointer group and !IDV sits at its end.'),
  # ---- $1FA00 is the VTU, not !VCT ----
  (0xF09F1C,'CORRECTION: THIS BUILDS THE **VTU**, NOT !VCT.  INIT.SA\'s BLDVTU block is'),
  (0xF09F1C,'  line-for-line this code:'),

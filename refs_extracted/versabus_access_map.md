@@ -1528,6 +1528,67 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The ring queue is the TRACE BUFFER, and `!IDV` is the only non-standard structure
+
+`INIT.SA` has a **seventh** build block after `BLDUDR`:
+
+```
+BLDTRAC  CLR.L  TRACEBEG      CLEAR SYSPAR ADDRESS IN CASE TRACE NOT NEEDED
+         MOVE.L #T0PAGAL,D0
+BLDTRC01 MOVE.L A0,TRACEBEG   SAVE ADDRESS FOR EXEC
+BLDTIAT  MOVE.L #$01010000,TIAT   SET TRAP 0 AND 1 'USED BY EXEC'
+```
+
+**So the untagged ring at `$1F500` (slot `$0C30`) is the TRACE BUFFER.** This document
+guessed, from the shape of `$F01688` — a masked-interrupt ring enqueue — that "a
+masked-interrupt ring buffer filled by a driver hook is the shape of a trace or deferred-
+event log", and flagged it as inference. `BLDTRAC` and `TRACEBEG` confirm it by name. It
+carries no eye-catcher because `BLDTRAC` writes none, exactly as observed.
+
+Two more globals fall out of the same four lines:
+
+| address | name | evidence |
+|---|---|---|
+| `$0C30` | **`TRACEBEG`** | the trace buffer pointer, 7th allocation |
+| `$0C34` | **trace flags** | `$F044A2` does `btst.b #$0E,$0C34`; `TRCFTRP1` = 15 and `TRCFDSPT` = 10 are neighbouring flags |
+| `$0C9A` | **`TIAT`** | `$F0A04E` writes `$01010000` — *"set TRAP 0 and 1 'used by exec'"* |
+
+`$0C9A` and its constant were recorded here with no meaning attached. `BLDTIAT` supplies
+both: `$01010000` marks **TRAP 0 and TRAP 1 as claimed by the exec**, which is why this
+firmware uses only those two and the other fourteen TRAP vectors are free — the fact the
+monitor relies on, now with its mechanism.
+
+**And the FPS kernel hook is a trace point.** `$F044A2` — the routine installed into
+`+$4C` of a structure by two kernel sites — tests **bit 14 of the trace flags** and, if
+set, calls `$F01688` to enqueue a trace record, *then* walks the driver chain. So the
+insertion this document described as "a device-driver dispatch chain" is a **traced**
+dispatch chain, and the trace half explains why it references `$0C34` at all.
+
+#### The structure inventory is now closed
+
+| ROM allocation | slot | `INIT.SA` block |
+|---|---|---|
+| `!GST` | `$0C20` | `BLDGST` |
+| `!UST` | `$0C24` | `BLDUST` |
+| VTU | `$0C66` | `BLDVTU` |
+| `!IOV` | `$0C6A` | `BLDIOV` |
+| **`!IDV`** | `$0C6E` | **none** |
+| `!PAT` | `$0C2C` | `BLDPAT` |
+| `!UDR` | `$0C28` | `BLDUDR` |
+| trace buffer | `$0C30` | `BLDTRAC` |
+
+Seven of the eight are standard RMS68K, **in `INIT.SA`'s own order**, with `!IDV` inserted
+after `IOV`. So **`!IDV` is the single non-standard structure in the machine** — and
+`IDV` appears nowhere in 44 MB of VERSAdos source, exactly like directive `$4C` = 76.
+
+*Two independent absences pointing at one feature.* `!IDV` holds `{vector, TCB, ISR entry,
+ISR exit}` — precisely what a connect-interrupt-vector directive would record — and `$4C`
+is that directive. So they are one addition: **the connect-interrupt-vector facility and
+its connection table are not in any RMS68K release available here**, whether because this
+build is a later branch or because FPS added them. The slot grouping supports it too:
+`$0C66`/`$0C6A`/`$0C6E` are a contiguous interrupt-and-vector pointer group, and `!IDV`'s
+slot sits at its end.
+
 ### `$1FA00` is the **VTU**, not `!VCT` — and `!VCT` is ROM-resident
 
 Searching the ROM for every eye-catcher, rather than only RAM, moves several markers.
