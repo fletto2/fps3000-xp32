@@ -348,6 +348,35 @@ else:
     check('$F096AC is a probe: read then 4 NOPs then rts, value discarded',
           d[0x96AC:0x96B8].hex().upper() == '30114E714E714E714E714E75')
 
+    # --- golden-master machine state --------------------------------------
+    #
+    # The pointwise checks above read ~20 specific locations.  The PTM clocking
+    # fix showed that is not enough: two models gave IDENTICAL PC counts and
+    # final PC while 78 RAM bytes differed, including two !UST entries, and the
+    # difference was caught only because one check happened to read that
+    # directory.  Post-boot RAM is deterministic (three identical runs give the
+    # same digest), so the whole state can be pinned at once.
+    #
+    # A FAILURE HERE IS NOT NECESSARILY A BUG -- it means machine state changed.
+    # If the change is intended, update the digest AND record what moved and why.
+    # Do not update it without looking at the diff; that is the whole point.
+    GOLDEN = {
+        'default (2-AC, no hooks)':
+            ({}, '698be0397ed132d519d56cd629236238'),
+        'XP1I driven to the $8000 path':
+            ({'FPS3K_XPIRQ': '1', 'FPS3K_CHCMD': 'C801'},
+             'a3f9384e3052d8e3cda8c9eb25664a6d'),
+        'TCBIO1I reply path':
+            ({'FPS3K_XPIRQ': '5', 'FPS3K_DMA10AA': '2',
+              'FPS3K_MBOX': '00010000'},
+             '1eabc593413b4261a6b8bdf71f394813'),
+    }
+    for _name, (_env, _want) in GOLDEN.items():
+        _, _ram = run(_env, 400_000_000)
+        check('machine-state digest: %s' % _name,
+              hashlib.md5(_ram).hexdigest() == _want,
+              'got ' + hashlib.md5(_ram).hexdigest())
+
     # --- the model defaults to the real 2-AC machine ----------------------
     _, rdef = run({}, 400_000_000)
     check('default configuration reports $105E = 2 (AC1+AC2 populated)',

@@ -1473,6 +1473,41 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### Golden-master machine state: the whole model is now pinned
+
+The pointwise checks read about twenty specific locations. The PTM clocking fix
+showed that is not enough: two models gave **identical PC counts and identical
+final PC** while **78 RAM bytes differed**, and the difference surfaced only
+because one check happened to read the `!UST` directory. A coverage metric cannot
+see state.
+
+Post-boot RAM is **deterministic** — three identical runs give the same digest —
+so the whole 128 KB can be pinned at once. Three configurations are now
+golden-mastered:
+
+| configuration | digest |
+|---|---|
+| default (2-AC, no hooks) | `698be039…` |
+| XP1I driven to the `$8000` path | `a3f9384e…` |
+| TCBIO1I reply path | `1eabc593…` |
+
+Verified to bite: running with `FPS3K_PTM_LEGACY=1` gives `283e4d92…`, so the
+state change the previous section describes would now be caught immediately
+rather than by luck.
+
+**A failure here is not necessarily a bug** — it means machine state changed. If
+the change is intended, the digest gets updated *and* what moved is recorded. The
+check is written to make that explicit, because a golden master updated without
+looking at the diff is worse than no golden master: it converts a loud signal
+into a ritual.
+
+This is the counterweight to the session's other lesson. Absence checks fail
+open — "nothing happened" reads as "nothing bad happened" — while a state digest
+fails **closed**: it cannot pass by accident, cannot pass because the machine did
+nothing, and cannot pass because an instrument was silently disabled. For a
+whole-machine emulator built on 26 hooks, that is the one check whose meaning
+does not depend on the hooks being right.
+
 ### The PTM was clocked from the CPU, not from E — and the "prescaler" was the fudge
 
 The MC6840 model contained a contradiction. Its own comment says the prescaler is
