@@ -15204,3 +15204,33 @@ blocked when they are not.
 `SGSEM` is `$2B`, one of the four semaphore directives, and the XP tasks each declare two
 semaphores (`AXP`n and `HXP`n). Which of them is being signalled is not established here — the
 trace records the directive and the TCB, not the parameter block contents.
+
+### What triggers the signal: channel status bit 14 set, bit 11 clear
+
+The trace's `+$04` field turns out to be the **caller's PC**, not a parameter block — every SGSEM
+record carries `$00F07EAA`, a ROM address inside XP1I. That localises the call site exactly:
+
+```
+F07E86  btst.b #$e,$1066    ; channel status bit 14
+F07E8E  beq.b  $f07ed8      ; clear -> no signal
+F07E90  btst.b #$b,$1066    ; bit 11
+F07E98  bne.b  $f07eb6      ; set   -> no signal
+F07E9A  move.w #$1,d0
+F07E9E  jsr    $f08550
+F07EA4  moveq  #$2b,d0      ; SGSEM
+F07EA6  lea.l  (a6),a0      ; parameter block = a6 = the TCB itself
+F07EA8  trap   #$1          ; <- the traced call
+F07EAA  beq.b  $f07eb6      ; the return address the trace recorded
+```
+
+So the service loop's condition is **bit 14 set AND bit 11 clear** in `$1066`, the per-channel
+status record the ISR fills from `+$0E` of the channel window. This project already records that
+the ISR-read word "is then bit-tested for bits 15/14/11" — the trace and the code together now
+say what those tests *do*: bits 14 and 11 decide whether the task signals its semaphore.
+
+The parameter block is `a6`, the TCB itself, consistent with each task's semaphore descriptor
+living inside its own TCB at `+$138`.
+
+**The caller-PC field makes the trace far more useful than expected.** It is not just "which task
+issued which directive" but "from which instruction" — enough to walk straight to the call site and
+read its guard conditions, which is how this entry was written.
