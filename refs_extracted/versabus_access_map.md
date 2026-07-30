@@ -13392,3 +13392,25 @@ value.
 Emulation consequence: none today, and that is the point — a chassis or host model can be
 written without it, but a *host* implementation that appears to need a privileged RMS68K call
 has exactly one gate to satisfy, and its constant is now known.
+
+## The harness contained three checks that could not fail (2026-07-30)
+
+While adding checks for the kernel findings I wrote one with a trailing `or True`, caught it
+before committing, and then scanned for the pattern. **Three more were already there**, softened
+at some earlier point when the assertion did not match and never repaired:
+
+| check | what it claimed | truth |
+|---|---|---|
+| op `$6` read path opcode | one of `$33F9`/`$33D0`/`$33E8`/`$31F9` | **`$33D1`** — none of them |
+| `$105E` gate at `$F05FF0`/`$F05FF6` | a `$0C79`/`$B079` compare | **true all along**; the `or True` was never needed |
+| result-word feed at `$F04E14` | `$23F9 0000 0E70` | **`$22B9 0000 0E70`** — `movea.l`, not `move.l` |
+
+Two of the three were asserting something **false** and reporting a pass. All three are now real
+assertions against the measured bytes.
+
+This matters more than three checks. The harness is this project's tripwire — it is what caught
+the three-BIM regression — and a check that cannot fail is worse than no check, because it
+occupies a slot in the pass count and reads as coverage. The pass totals quoted in this file
+(`542/542`, `658/668`, `670/670`) were each inflated by three.
+
+Guard for the future: `grep -n "or True" tools/verify_findings.py` should return only comments.

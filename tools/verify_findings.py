@@ -840,17 +840,17 @@ else:
           and d[0xF050C6-0xF00000:0xF050CA-0xF00000] == b'\x60\x00\x00\x30')
 
     # --- op $6 direction bit, measured in both states -------------------------
+    # Was softened to `or True` when the opcode list did not match.  The real
+    # instruction is $33D1 = move.w (a1),abs.l -- asserted rather than excused.
     check('op $6 read path stores the fetched word into the result register',
-          d[0xF04EB8-0xF00000:0xF04EC0-0xF00000][:2] in (b'\x33\xf9', b'\x33\xd0',
-                                                         b'\x33\xe8', b'\x31\xf9')
-          or True)   # shape varies; the measurement is the evidence, see access map
+          d[0xF04EB8-0xF00000:0xF04EBA-0xF00000] == b'\x33\xd1')
     check('bit 5 of the command byte is tested by the op $6 handler',
           any(word(a2) == 0x0839 and word(a2 + 2) == 5
               and long_(a2 + 4) & 0xFFFFFF == 0x0E87
               for a2 in range(0xF04E00, 0xF04F00, 2)))
     check('$105E is the channel-present count the XP tasks gate on',
           any(word(a2) == 0x0C79 or word(a2) == 0xB079
-              for a2 in (0xF05FF0, 0xF05FF6)) or True)
+              for a2 in (0xF05FF0, 0xF05FF6)))
 
     # --- the emulated chassis never consumes the SBC's reply ------------------
     _vb = open('emulator/versabus.c').read()
@@ -872,7 +872,7 @@ else:
           d[0xF04DA6-0xF00000:0xF04DB0-0xF00000]
           == b'\x33\xf9\x00\x00\x0e\x70\x00\x00\x0e\x74'
           and d[0xF04E14-0xF00000:0xF04E1A-0xF00000]
-              == b'\x23\xf9\x00\x00\x0e\x70'[:6] or True)
+              == b'\x22\xb9\x00\x00\x0e\x70')
     check('$E7A is bounds-checked against 0 and $C before use',
           d[0xF04FBA-0xF00000:0xF04FC0-0xF00000] == b'\x0c\xb9\x00\x00\x00\x00'
           and d[0xF04FC6-0xF00000:0xF04FCC-0xF00000] == b'\x0c\xb9\x00\x00\x00\x0c')
@@ -3105,6 +3105,89 @@ else:
           ram[0x10010:0x10020].hex().upper() == 'DEADBEEFCAFEBABE0102030405060708')
     check('S-record load: exits via F05254 (success), not F05224 (reject)',
           tr.count('F05254\n') == 2 and tr.count('F05224\n') == 0)
+
+# ---------------------------------------------------------------------------
+# The kernel's two trap tables, the TDTI field map, and the blank ROM tail.
+# All added 2026-07-30 with the kernel disassembly.
+# ---------------------------------------------------------------------------
+_rom = open(ROM, 'rb').read()
+_B = 0xF00000
+
+
+def _w(a):
+    return struct.unpack('>H', _rom[a - _B:a - _B + 2])[0]
+
+
+def _sw(a):
+    return struct.unpack('>h', _rom[a - _B:a - _B + 2])[0]
+
+
+def _l(a):
+    return struct.unpack('>I', _rom[a - _B:a - _B + 4])[0]
+
+
+# --- TRAP #0: 35 slots, and the user-mode silent ignore --------------------
+check('TRAP #0 jump table is $F001D6-$F00262 = 35 longword slots',
+      (0xF00262 - 0xF001D6) // 4 == 35)
+check('TRAP #0 handler masks the stacked SR system byte and rte on user mode',
+      _rom[0xF001AC - _B:0xF001B8 - _B]
+      == b'\x3f\x17\x02\x17\x00\x7f\x54\x8f\x66\x02\x4e\x73')
+
+# --- TRAP #1: 77 slots, self-relative, all landing in the kernel -----------
+check('TRAP #1 dispatcher range-checks with BGT #$130, admitting $4C = 76',
+      _rom[0xF0031C - _B:0xF00326 - _B]
+      == b'\x0c\x80\x00\x00\x01\x30\x6e\x00\x00\xa2')
+check('...and the handler is entry+w0, a SELF-RELATIVE signed offset',
+      _rom[0xF0036A - _B:0xF0036C - _B] == b'\xd4\xd2')   # adda.w (a2),a2
+check('all 77 TRAP #1 handlers land inside the kernel region',
+      all(0xF00000 <= (0xF003D8 + 4 * i) + _sw(0xF003D8 + 4 * i) < 0xF04488
+          for i in range(77)))
+check('$F003D0 is the unimplemented stub and 17 of 77 slots route to it',
+      sum(1 for i in range(77)
+          if (0xF003D8 + 4 * i) + _sw(0xF003D8 + 4 * i) == 0xF003D0) == 17)
+# SUSPND/RESUME and WAIT/WAKEUP are inverse pairs on TCB+$2C -- the check that
+# confirms the vendor directive names from behaviour rather than by number.
+check('SUSPND sets and RESUME clears bit 9 of TCB+$2C',
+      _rom[0xF02CAC - _B:0xF02CB2 - _B] == b'\x08\xee\x00\x09\x00\x2c'
+      and _rom[0xF02CB4 - _B:0xF02CBA - _B] == b'\x08\xa8\x00\x09\x00\x2c')
+check('WAIT sets bit 14 of TCB+$2C',
+      _rom[0xF02C3E - _B:0xF02C44 - _B] == b'\x08\xee\x00\x0e\x00\x2c')
+check('WAKEUP clears bit 14 of TCB+$2C at $F02C74',
+      _rom[0xF02C74 - _B:0xF02C7A - _B] == b'\x08\xa8\x00\x0e\x00\x2c')
+
+# --- the dual-entry calling convention ------------------------------------
+_t0 = sorted({_l(0xF001D6 + 4 * i) & 0xFFFFFF for i in range(35)} - {0xF00182})
+check('29 of the 33 TRAP #0 handlers are preceded by move.w sr,-(a7)',
+      sum(1 for a in _t0 if _w(a - 2) == 0x40E7) == 29)
+
+# --- directive $3B is gated by a magic key the ROM does not contain --------
+check('directive $3B compares a parameter against the magic $4BAA7BFB',
+      _l(0xF039CE) == 0x4BAA7BFB)
+check('...that constant occurs exactly once in the whole ROM',
+      _rom.count(struct.pack('>I', 0x4BAA7BFB)) == 1)
+check('...and no site anywhere loads $3B as a directive number',
+      not any(_w(a) == 0x703B or (_w(a) == 0x303C and _w(a + 2) == 0x003B)
+              for a in range(0xF00000, 0xF0FFFC, 2)))
+
+# --- TDTI: entry point at +$1C, region bounds at +$20/+$22 ----------------
+_tdti = [(0xF0A600 + 0x60 * i) for i in range(6)]
+check('the six TDTI entry points all lie inside their own +$20/+$22 region',
+      all((_w(e + 0x20) << 8) <= (_l(e + 0x1C) & 0xFFFFFF) <= ((_w(e + 0x22) << 8) | 0xFF)
+          for e in _tdti))
+check('the six TDTI task regions tile contiguously with no gaps',
+      all(_w(b + 0x20) - _w(a + 0x22) == 1 for a, b in zip(_tdti, _tdti[1:])))
+check('$F05F92 (the $26E site) is inside XP4I\'s region, not CH1\'s',
+      (_w(_tdti[2] + 0x20) << 8) <= 0xF05F92 <= ((_w(_tdti[2] + 0x22) << 8) | 0xFF))
+
+# --- HXP1..HXP4 are built at runtime, not stored -------------------------
+check("RDHC builds the queue name from 'HXP0' plus the channel number",
+      _rom[0xF053B6 - _B:0xF053BE - _B] == b'\x22\x3c\x48\x58\x50\x30\xd2\x04')
+check("...and no literal 'HXP0' handler name exists per channel",
+      _rom.count(b'HXP0') == 2 and _rom.count(b'HXP1') == 1)
+
+# --- the blank tail every coverage figure has been dividing by ------------
+check('$F0A825-$F0FFFD is 22,489 bytes of nothing but zero',
+      _rom[0xF0A825 - _B:0xF0FFFE - _B] == b'\x00' * 22489)
 
 print(f'\n{checks - len(fails)}/{checks} passed')
 sys.exit(1 if fails else 0)
