@@ -1534,7 +1534,7 @@ that rule gets without hardware.*
 |---|---|---|
 | `$F08970` | 4 | **byte-pattern generator** — `not/rol/not/rol` on `(a5)`, OR the counter at `$4(a5)`, increment it |
 | `$F08958` | 1 | calls the generator four times, storing via `move.b d0,(a5)+` — a **4-byte pattern** |
-| `$F089EE` | 3 | chassis handshake probe — clears VMOD bit 6, `XLTR_MODE1 <- $1000`, tests board-status bit 4 |
+| `$F089EE` | 3 | **error-gated longword access test** — see below; "chassis handshake probe" was wrong |
 | `$F090EA` | 2 | **PTM configuration** — `movep.w #$fff` into all three timer latches, then `CR2 <- 0`, `CR1 <- $C2` |
 | `$F094AE` | 3 | interrupt-level request — `andi.w #$fff8,(a5)`, `bset #7`, `ori.w #$1,(a5)` |
 | `$F09A7E` | 1 | final DRAM sub-test prologue |
@@ -1562,6 +1562,64 @@ because it shows the rest of the firmware treating the field the same way.
 `$F08700-$F09C00` are accounted for, against **3** when this thread began. Every stage of
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
+
+### What `$F089EE` actually probes — correcting a vague label
+
+I first described `$F089EE` as a "chassis handshake probe". That was wrong enough to be
+misleading. What it does, exactly:
+
+```
+lea    $1fff0,a5  ;  lea $f70018,a4
+bclr.b #$6,$1(a5)              ; clear VMOD bit 6
+move.w #$1000,$202(a6)         ; XLTR_MODE1 <- bit 12 set
+
+move.w (a4),d2                 ; read the board-status WORD
+btst   #$4,d2  ;  beq  .do_it  ; bit 4 clear -> proceed
+btst   #$5,d2  ;  bne  .abort  ; bit 4 set AND bit 5 set -> abort
+
+.do_it:
+move.l d0,(a0)                 ; WRITE a longword
+cmp.l  (a0),d0                 ; READ IT BACK and compare
+beq    .recheck
+move.l #$F0F0F0F0,d7           ; mismatch -> FAIL
+move.w d1,$202(a6)             ; restore MODE1
+bclr.b #$6,$1(a5)
+
+.recheck:
+move.w (a4),d2                 ; read board status AGAIN
+btst   #$4,d2  ;  beq  ...
+btst   #$5,d2  ;  bne  .abort
+```
+
+**It is a longword write/read-back test whose access is bracketed by a status check** — the
+same two bits examined immediately before and immediately after the memory access. That
+bracketing is the signature of an **error-status check**: perform the access, then ask the
+hardware whether it faulted.
+
+Precisely, it probes: *does a longword written to `(a0)` read back identically, with the
+board reporting ready-and-no-error both before and after?*
+
+Three details worth being exact about:
+
+- **The bits are `$F70019` bits 4 and 5, not `$F70018`.** `move.w (a4),d2` loads `$F70018`
+  into d2's bits 8-15 and `$F70019` into bits 0-7, so `btst #4,d2` and `btst #5,d2` reach
+  the **low** byte. Those are the documented busy/ready bit and the `$D0`-checkpoint bit.
+- **The gate is asymmetric.** Bit 4 clear proceeds immediately; only bit 4 **and** bit 5 set
+  aborts. So bit 4 alone is not a stop condition — it is "busy", qualified by bit 5.
+- **`XLTR_MODE1 <- $1000`** (bit 12) is set before the access and restored from `d1` on the
+  failure path, so the XLTR is put into a specific mode *for the duration of the access* —
+  which is why this helper exists rather than the test doing the `move.l` inline.
+
+**Where it is called from matters**: `$F099D8` (the DRAM path) and `$F09B62` / `$F09B7C`
+(both inside the SCM pattern test). In two of three call sites `(a0)` is **chassis memory
+behind the `$400000` window**, which makes the bracketing check a *chassis access-error
+status* rather than a local-bus one — the firmware verifying that a write which crossed the
+XLTR actually landed, and that the far side reported no error either side of it.
+
+*The correction matters beyond the label:* "handshake probe" suggests a protocol exchange with
+no data, when this is a data-integrity test with an error-status gate. Anyone modelling
+`$F70019` bits 4/5 from the wrong description would have modelled a handshake sequence instead
+of an error indication.
 
 ### Generalising the discriminator: every address the memory tests refuse to touch
 

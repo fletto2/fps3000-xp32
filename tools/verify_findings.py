@@ -570,6 +570,21 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- $F089EE brackets a longword access with a status check ---------------
+    check('$F089EE arms XLTR_MODE1 bit 12 and clears VMOD bit 6 first',
+          d[0xF089FE-0xF00000:0xF08A0A-0xF00000]
+          == b'\x08\xad\x00\x06\x00\x01\x3d\x7c\x10\x00\x02\x02')
+    check('...checks board-status bits 4 and 5 BEFORE the access',
+          d[0xF08A0A-0xF00000:0xF08A18-0xF00000]
+          == b'\x34\x14\x08\x02\x00\x04\x67\x06'
+             b'\x08\x02\x00\x05\x66\x2e')
+    check('...performs a longword write and read-back compare',
+          d[0xF08A18-0xF00000:0xF08A1E-0xF00000] == b'\x20\x80\xb0\x90\x67\x10')
+    check('...and re-checks the SAME two bits AFTER it',
+          d[0xF08A2E-0xF00000:0xF08A3C-0xF00000]
+          == b'\x34\x14\x08\x02\x00\x04\x67\x06'
+             b'\x08\x02\x00\x05\x66\x0a')
+
     # --- the last six helpers ------------------------------------------------
     check('$F08970 is not/rol/not/rol then OR the counter at $4(a5)',
           d[0xF08970-0xF00000:0xF08980-0xF00000]
@@ -621,9 +636,8 @@ else:
           (0x1FFF2 & ~3) == 0x1FFF0)
 
     # --- the address-line walker DOES cover $1FFE0-$1FFFF ---------------------
-    check('$F098FC writes each address its own value (address-line idiom)',
-          d[0xF098FC-0xF00000:0xF09900-0xF00000][:2] in (b'\x20\x88', b'\x21\x88',
-                                                         b'\x20\xc0', b'\x2f\x08'))
+    check('$F098FC writes each address its own value (move.l a0,(a0)+)',
+          d[0xF098FC-0xF00000:0xF098FE-0xF00000] == b'\x20\xc8')
     check('the pattern test excludes $1FFE0+ while the walker does not -- both exist',
           d[0xF089A4-0xF00000:0xF089AC-0xF00000]
           == b'\xb3\xfc\x00\x01\xff\xf0\x6d\x20')
