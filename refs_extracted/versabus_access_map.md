@@ -1563,6 +1563,46 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The command byte `$0E87`: 22 references, every one a bit test, and never written
+
+Enumerating the latch with the validated tool gives a complete account of the chassis command
+word:
+
+| location | references | shape |
+|---|---|---|
+| `$0E86` (the word) | 8 | **7 reads, 1 write** — `$F04942 move.w d0,$e86.l`, the ISR latching it |
+| `$0E87` (the low byte) | **22** | **every single one a `btst`** — never written, never read as a value |
+
+The bit distribution confirms the documented command-byte decode independently, by usage:
+
+| bit | `btst` sites | documented meaning |
+|---|---|---|
+| **7** | 2 | selects the other dispatcher (`$F0495C`) |
+| **6** | **9** | half-select of a 32-bit parameter |
+| **5** | 6 | direction — 0 = write/store, 1 = read/return |
+| **4** | 4 | auto-increment the index `$E7A` |
+| 0-3 | **0** | the operation — extracted by masking, not bit-testing |
+
+Two things this settles.
+
+**Bits 0-3 are never `btst`'d, and that is exactly right.** They carry the 4-bit operation
+that indexes the 16-entry jump table, and the dispatcher extracts them with `(code & $F) << 2`
+rather than testing them individually. A bit census that found *no* references to the
+operation field would look like a gap; here it is positive evidence that the field is used as
+a **number**, not as flags — and the two access styles cleanly partition the byte.
+
+**The frequencies match the semantics.** Bit 6 (half-select) is tested **nine** times, the most
+of any bit — which follows from `$1`, `$2` and `$9` all taking 32-bit parameters that arrive
+one half per command, plus the `$3` and `$6` memory ops. Bit 4 (auto-increment) is tested
+four times, once per op that walks an array. Bit 7 twice: once in RDHC's main loop
+(`$F04740`, the documented `btst #7,$E87 / bne` wait) and once in the ISR at `$F04950`.
+
+**And the whole latch is written exactly once**, at `$F04942`, by the ISR that received it.
+Nothing else in the firmware modifies the command word — it is captured on arrival and then
+only interrogated, which is what one wants of a value that must stay stable across a
+dispatcher, a handler and a reply. Combined with the reply path above, the chassis protocol is
+now closed on both sides: **one write in, one write out, everything between is inspection.**
+
 ### `$0E74` is the chassis-op RETURN VALUE, and CHANNEL_SELECT is the reply register
 
 The read-out site the validated enumerator surfaced — `$F04924 [R] move.w $e74.l,$204(a5)` —

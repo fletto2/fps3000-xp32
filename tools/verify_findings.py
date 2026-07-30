@@ -570,6 +570,28 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the command byte is bit-tested only, never written -------------------
+    check('$0E86 is written exactly once, by the ISR at $F04942',
+          d[0xF04942-0xF00000:0xF04948-0xF00000] == b'\x33\xc0\x00\x00\x0e\x86'
+          and len([a2 for a2 in range(0xF04488, 0xF0FFF0, 2)
+                   if word(a2) == 0x33C0 and long_(a2 + 2) & 0xFFFFFF == 0x0E86]) == 1)
+    check('RDHC\'s main loop tests bit 7 of the command byte',
+          d[0xF04740-0xF00000:0xF04748-0xF00000]
+          == b'\x08\x39\x00\x07\x00\x00\x0e\x87')
+    check('every $0E87 reference is a btst -- the byte is never written',
+          not [a2 for a2 in range(0xF04488, 0xF0FFF0, 2)
+               if word(a2) in (0x13FC, 0x11FC)
+               and long_(a2 + 4) & 0xFFFFFF == 0x0E87])
+    check('bits 4,5,6,7 are all tested; bits 0-3 never are (they are masked)',
+          all(any(word(a2) == 0x0839 and word(a2 + 2) == b_
+                  and long_(a2 + 4) & 0xFFFFFF == 0x0E87
+                  for a2 in range(0xF04488, 0xF0FFF0, 2))
+              for b_ in (4, 5, 6, 7))
+          and not [b_ for b_ in (0, 1, 2, 3)
+                   if [a2 for a2 in range(0xF04488, 0xF0FFF0, 2)
+                       if word(a2) == 0x0839 and word(a2 + 2) == b_
+                       and long_(a2 + 4) & 0xFFFFFF == 0x0E87]])
+
     # --- the chassis reply sequence -------------------------------------------
     check('the reply path acknowledges by clearing MODE0 bit 10',
           d[0xF04910-0xF00000:0xF0491E-0xF00000]
