@@ -1528,6 +1528,60 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### RETRACTION: the firmware DOES verify the ROM checksum — phase `$300`
+
+`$F08D1A` is a **whole-ROM XOR checksum test**, and it runs as the second stage of the
+power-on self-test:
+
+```
+move.w  #$ffff,d0
+movea.l #$f00000,a0  ;  movea.l #$f10000,a1
+loop:  move.w (a0)+,d1
+       eor.w  d1,d0              ; XOR-accumulate every word
+       cmpa.l a0,a1  ;  bne loop ; across the entire 64 KB
+cmpi.w  #$ffff,d0  ;  beq ok     ; the accumulator must still be $FFFF
+move.l  #$F0F0F0F0,d7            ; else FAIL
+```
+
+Seeding with `$FFFF` and requiring `$FFFF` back is exactly "the XOR of all 32,768 ROM words
+must be zero". Measured on the stock image: **XOR = `$0000`, so the test passes**, with the
+final word `$F0FFFE = $C12D` acting as the correction term.
+
+**This retracts two statements carried in `CLAUDE.md`.** The first is explicit: the ROM
+"does carry a checksum ... **Nothing in the firmware checks it** — an EPROM programmer, a
+factory tool or the VM02 monitor might." It is checked, by the firmware, at `$F08D1A`.
+
+The second is subtler and more instructive. When the routine at `$F08DF8` was correctly
+renamed from `ROMChecksumTest` to `BoardStatusPoll_3F11`, the note added: *"The old name had
+people hypothesising that patching the ROM would fail a self-test; **it cannot, because no
+such test exists**."* The rename was right — `$F08DF8` really does just poll `$F70018` — but
+the conclusion drawn from it was an overreach. **A true belief was discarded along with the
+wrong label.** The checksum test exists; it simply lives at `$F08D1A`, two hundred bytes
+earlier, and nobody looked there once the name was gone.
+
+**Consequences for real hardware, which are concrete.**
+
+*Any ROM image whose words do not XOR to zero fails phase `$300`.* And failure here is not
+graceful: the stage ends `bsr PollBoardStatus / tst.l d7 / bne` back to the top of the same
+probe, so a bad checksum means **the machine retries forever and never boots**.
+
+*That gives a diagnosable signature.* The phase counter is broadcast to `CHANNEL_SELECT`
+(`$FF0204`) before each stage, so a board hung with `$0300` as the last value written there
+is reporting a checksum failure specifically. On a machine with no serial output, that is a
+readable beacon.
+
+*It makes `monitor/patch_rom.py`'s checksum recomputation necessary rather than prudent.*
+Every monitor image this project produced before 2026-07-29 broke the XOR — including the
+one burned for the first hardware attempt. Any such image that boots the stock path would
+hang at `$300`.
+
+*Stated carefully:* this does **not** by itself explain the FAIL + HALTED outcome of that
+burn. That image was built with `--reset`, so the monitor takes the reset vector and
+`$F08D1A` never executes — the diagnosed SIO byte-lane and missing-vector-table defects
+remain the explanation. But the **panic-only** image, described as "behaviourally identical
+to stock", does run the self-test, and a broken checksum would stop it at phase `$300`. That
+is a hazard on the documented bring-up path and it was not previously known.
+
 ### The self-test decomposes the board-status equations TERM BY TERM — and that yields a complete VMOD_CTRL bit map
 
 Phase `$200` (`$F08C4A`) is the very first test the machine runs, and it is the simplest

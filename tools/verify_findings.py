@@ -550,6 +550,19 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- phase $300 IS a whole-ROM XOR checksum test --------------------------
+    check('$300 sweeps $F00000-$F10000 XOR-accumulating into d0',
+          d[0xF08D32-0xF00000:0xF08D44-0xF00000]
+          == b'\x30\x3c\xff\xff\x20\x7c\x00\xf0\x00\x00'
+             b'\x32\x18\xb3\x40\xb3\xc8\x66\xf8')
+    check('...and requires the accumulator to still be $FFFF',
+          d[0xF08D44-0xF00000:0xF08D4A-0xF00000] == b'\x0c\x40\xff\xff\x67\x06')
+    check('the stock image satisfies it: all 32768 words XOR to zero',
+          __import__('functools').reduce(
+              lambda a, i: a ^ ((d[i] << 8) | d[i+1]), range(0, len(d), 2), 0) == 0)
+    check('...with $C12D at $F0FFFE as the correction word',
+          d[-2:] == b'\xc1\x2d')
+
     # --- $200 tests the bit-6 term; $1000 tests the AND term -----------------
     check('$200 loads d0=6 (VMOD bit) and d1=3 (board-status bit)',
           d[0xF08C5A-0xF00000:0xF08C5E-0xF00000] == b'\x70\x06\x72\x03')
