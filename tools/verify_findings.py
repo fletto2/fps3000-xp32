@@ -550,6 +550,28 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- $F00760's "80" is a parameter-block length limit, not a directive max -
+    check('$F00760 bounds a LENGTH derived from $0C08 minus a stack pointer',
+          d[0xF00756-0xF00000:0xF00760-0xF00000]
+              == b'\x20\x38\x0c\x08\x4b\xef\x00\x10\x90\x8d'
+          and d[0xF00760-0xF00000:0xF00768-0xF00000]
+              == b'\x0c\x80\x00\x00\x00\x50\x6f\x04')
+    check('...and stores that length at TCB+$72 before a word copy loop',
+          d[0xF00778-0xF00000:0xF00780-0xF00000]
+          == b'\x1d\x47\x00\x72\x38\xdd\x55\x40')
+    # A real assertion rather than a label: the largest stack-built parameter block
+    # in the firmware is the 10-byte semaphore descriptor, well under the 80-byte cap.
+    check('no firmware parameter block approaches the 80-byte cap',
+          d[0xF05670-0xF00000:0xF05674-0xF00000] == b'\x4f\xef\x00\x0a'   # lea $A(a7),a7
+          # SIGNED displacements: negative ones are stack ALLOCATIONS (the -$60
+          # scratch area at $F0857A), positive ones are block discards -- i.e. the
+          # parameter-block sizes.  Only the positive ones bear on the 80-byte cap.
+          and max([v for v in
+                   (struct.unpack('>h', d[a2-0xF00000+2:a2-0xF00000+4])[0]
+                    for a2 in range(0xF04488, 0xF0A800, 2)
+                    if struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0] == 0x4FEF)
+                   if v > 0]) <= 0x50)
+
     # --- RMS68K directive names, from the VERSAdos source --------------------
     # TR1.EQ / STR.EQ number directives in DECIMAL; the firmware loads hex.
     TRAP1 = {0x01: 'GTSEG', 0x0B: 'CRTCB', 0x0D: 'START', 0x0F: 'TERM',

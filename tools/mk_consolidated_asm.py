@@ -80,6 +80,29 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- the TRAP #1 parameter-block copier ----
+ (0xF00756,'THE TRAP #1 PARAMETER-BLOCK COPIER.  d0 = $0C08 minus (a7+$10) gives a'),
+ (0xF00756,'  LENGTH; it is bounded at 80 bytes ($50) at $F00760, the length byte is'),
+ (0xF00756,'  stored at TCB+$72, and the block is copied word-by-word into the TCB.'),
+ (0xF00756,'  So the a0-pointed parameter block reaches the kernel by being COPIED into'),
+ (0xF00756,'  a save area in the TCB, capped at 80 bytes.  Firmware blocks are far'),
+ (0xF00756,'  smaller: the positive lea d16(a7),a7 displacements -- the block discards'),
+ (0xF00756,'  -- are only 6, 8, 10 and 12 bytes.'),
+ (0xF00756,'  CAUTION: this "80" is NOT a directive maximum.  It looked like one, since'),
+ (0xF00756,'  SR10 TR1.EQ stops at 75 and directive $4C is 76, and that reading was'),
+ (0xF00756,'  wrong -- the surrounding arithmetic makes it a length.  Two of three'),
+ (0xF00756,'  attempts to date this RMS68K build failed the same way: finding a numeric'),
+ (0xF00756,'  bound and assuming it counts the thing being looked for.'),
+ (0xF0226A,'DIRECTIVE $4C = 76 IS IN NO AVAILABLE RMS68K RELEASE.  The 44 MB VERSAdos'),
+ (0xF0226A,'  tree holds exactly one TR1.EQ (SR10/U9995), its table ends at 75'),
+ (0xF0226A,'  (FLUSHC), and a grep for EQU 76 across every .EQ and .SA in all 25+'),
+ (0xF0226A,'  release trees returns nothing.  CISR ("connect to interrupt service'),
+ (0xF0226A,'  routine") is 61 = $3D, so $4C is not that either.  So $4C -- traced'),
+ (0xF0226A,'  directly as connect-interrupt-vector and implemented HERE, the writer of'),
+ (0xF0226A,'  the !VCT ownership byte -- is either a later RMS68K revision or an FPS'),
+ (0xF0226A,'  addition.  Evidence leans to a later revision: the FPS-insertion sweep'),
+ (0xF0226A,'  found only four pointers and two calls into the kernel, no wholesale'),
+ (0xF0226A,'  patch, and this routine reads as ordinary kernel code.'),
  # ---- alternating wake/$14, and op $7 self-destructs ----
  (0xF04F3A,'HAZARD: OP $7 DESTROYS ANY RESPONSE SEQUENCE IT APPEARS IN.  It reads'),
  (0xF04F3A,'  $FF0230, bclr #4 (the IRE bit) and writes back -- masking BIM0 ch0, which'),

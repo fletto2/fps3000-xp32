@@ -1528,6 +1528,53 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### `$4C` is in no available RMS68K release, and the "80" is a parameter-block limit
+
+Two results on directive `$4C` = 76, one exhaustive negative and one self-caught
+misreading.
+
+**The negative is now complete.** The 44 MB VERSAdos tree contains exactly **one**
+`TR1.EQ` (SR10/U9995), its table ends at 75 (`FLUSHC`), and a grep for `EQU 76` across
+every `.EQ` and `.SA` file in all 25+ release trees returns **nothing**. `CISR`
+("connect to interrupt service routine") is 61 = `$3D`, so `$4C` is not that either. So
+`$4C` — traced here directly as the connect-interrupt-vector directive, implemented at
+`$F0226A` and the writer of the `!VCT` ownership byte — is **either a later RMS68K
+revision than anything in this tree, or an FPS addition**. The evidence leans to a later
+revision: the FPS-insertion sweep found only four pointers and two calls into the
+kernel, no sign of a wholesale patch, and `$F0226A` reads as ordinary kernel code.
+
+**The misreading, caught before publishing.** Searching the kernel for a bound that
+might date the build turned up one candidate, `cmpi.l #$50,d0` at `$F00760` — a maximum
+of 80 where SR10 stops at 75, which looked like a later revision with five directives
+added. Decoding the surrounding code kills that reading:
+
+```
+$F00756  move.l  $0C08.w,d0
+$F0075A  lea     $10(a7),a5
+$F0075E  sub.l   a5,d0          ; d0 = a LENGTH, not a directive number
+$F00760  cmpi.l  #$50,d0
+$F00766  ble     +4
+$F00768  bsr.w   $F00186        ;   too long -> error
+$F0076E  andi.l  #$ff,d7
+$F00778  move.b  d7,$72(a6)     ; store the length in the TCB
+$F0077C  move.w  (a5)+,(a4)+    ; copy loop
+$F0077E  subq.w  #$2,d0 / bgt
+```
+
+It is the **TRAP #1 parameter-block copier**: the length is computed from a saved
+pointer at `$0C08`, bounded at **80 bytes**, stored at `TCB+$72`, and the block is copied
+word-by-word into the TCB. Nothing to do with directive numbering.
+
+*Which is still worth having.* It names the mechanism by which the `a0`-pointed
+parameter block reaches the kernel — **copied into a save area in the TCB, maximum 80
+bytes, length byte at `TCB+$72`** — and that bound is a hard constraint on any parameter
+block this firmware builds. The largest one seen so far is the 10-byte semaphore
+descriptor, so nothing is close to the limit.
+
+*Two of my last three attempts to date this RMS68K build have been wrong in the same
+way: finding a numeric bound and assuming it counts the thing I was looking for. A
+bound only means what the surrounding arithmetic says it means.*
+
 ### RESOLVED: every RMS68K directive named — and the "ASQ" naming was wrong
 
 *From `~/src/claude/versados/SR10/U9995/TR1.EQ` and `STR.EQ`, at the user's
