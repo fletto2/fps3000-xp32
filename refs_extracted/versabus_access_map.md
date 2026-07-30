@@ -14397,3 +14397,31 @@ That the common case is 0 (60 of 77) fits: most directives return through the sa
 seven-plus-seven-plus-two-plus-one tail is the set that needs special unwinding — `SUSPND` and
 `WAIT` both carry `$0001`, and `START` and `TERMT` both carry `$0A82`, which is exactly the
 pairing their semantics predict.
+
+### All seven computed dispatches accounted for — and none yields a static entry point
+
+| site | form | source of the target |
+|---|---|---|
+| `$F00376` | `jmp (a2)` | TRAP #1 table, `entry + w0` — **already seeded** |
+| `$F003C2` | `jmp (a0,d0.w)` | the 5-entry exit table at `$F00650` — **now decoded** |
+| `$F001D0` | `move.l (a0),-(a7)` / `rts` | TRAP #0 table — **already seeded** |
+| `$F00D52` | `move.l $c36.w,-(a7)` / `rts` | **dormant**, points at zero fill, 0 executions |
+| `$F013D0` | `jmp (a1)` | register, set elsewhere |
+| `$F03A08` | `jsr (a5)` | `movea.l d6,a5` after `movem.l $100(a6),d0-d7/a0-a4` |
+| `$F04340` | `jsr (a0)` | `movea.l $1a(a5),a0` then `adda.l $4(a0),a0` |
+| `$F04004`, `$F04086` | `jsr`/`jmp (an)` | inside undecoded regions themselves |
+
+Every dispatch mechanism in the kernel is now identified, and the conclusion is uniform: the
+three that draw from **static tables are all exploited**, and the rest take their targets from
+**runtime structures** — a TCB field, a two-level pointer chain, a register loaded from data.
+
+**So the kernel's orphaned 18.5% is unreachable by static analysis in principle, not by
+oversight.** It is entered through pointers that only exist once the machine is running, which
+means the only route to it is execution on a configuration that populates those structures. That
+retires the entry-point question rather than leaving it open.
+
+One structural observation worth keeping, flagged as tentative: `$F03A02` does
+`movem.l $100(a6),d0-d7/a0-a4` — thirteen registers, 52 bytes — immediately before `jsr (a5)`.
+If `a6` is a TCB there, **`TCB+$100` is a saved register image** and this is a context restore.
+Against that, the TRAP #1 path writes `$100(a6)` and `$102(a6)` as *word* status fields, so
+either `a6` differs between the two paths or the offset is reused. Not resolved, and not assumed.
