@@ -3336,5 +3336,49 @@ check('the RSTATE result is filed with no status check',
       and 'cmpi' not in (insn(0xF08596) or '')
       and 'tst' not in (insn(0xF08596) or ''))
 
+# --- RTOS structures, decoded 2026-07-30 ----------------------------------
+with tempfile.TemporaryDirectory() as _tds:
+    subprocess.run([EMU, '-rom', ROM, '-cycles', '150000000',
+                    '-dump-ram', f'{_tds}/r'], capture_output=True, timeout=400)
+    _rs = open(f'{_tds}/r', 'rb').read()
+
+    def _w16(a):
+        return struct.unpack('>H', _rs[a:a + 2])[0]
+
+    def _w32(a):
+        return struct.unpack('>I', _rs[a:a + 4])[0]
+
+    # !UST is self-describing: 22-byte records, nine of them.
+    check('!UST header declares 22-byte records',       _w16(0x1FB0C) == 0x16)
+    check('!UST header declares nine of them',          _w16(0x1FB0E) == 0x0009)
+    check('...and the nine owners are 2/2/2/2/1/0 by task', [
+        _rs[0x1FB14 + 22 * i:0x1FB14 + 22 * i + 4].decode('latin1')
+        for i in range(9)] == ['XP1I', 'XP1I', 'XP2I', 'XP2I', 'XP3I',
+                               'XP3I', 'XP4I', 'XP4I', 'IO1I'])
+    check('...with HXP1-HXP4 present, though only HXP0 exists in the ROM', [
+        _rs[0x1FB14 + 22 * i + 8:0x1FB14 + 22 * i + 12].decode('latin1')
+        for i in (1, 3, 5, 7)] == ['HXP1', 'HXP2', 'HXP3', 'HXP4'])
+    check('!GST declares 13-byte records and a count of ZERO',
+          _w16(0x1FD0C) == 0x000D and _w16(0x1FD0E) == 0x0000)
+
+    # !PAT: the resting loop reads +8, and it is null.
+    check('!PAT\'s active list head at +8 is null -- the rest state',
+          _w32(0x1F708) == 0)
+    check('...while its record pool at +4 is populated',
+          (_w32(0x1F704) & 0xFFFFFF) == 0x1F714)
+
+    # The trace pool is the only markerless allocation.
+    check('the $1F500 trace pool carries first/last, not a marker',
+          _w32(0x1F500) == 0x0001F508 and _w32(0x1F504) == 0x0001F5F2)
+
+    # Liveness: four structures populated, four header-only.
+    def _nz(b):
+        return sum(1 for x in _rs[b:b + 256] if x)
+    check('four RTOS structures are populated and four are header-only',
+          all(_nz(b) > 35 for b in (0x1FB00, 0x1F800, 0x1F700, 0x1FA00))
+          and all(_nz(b) < 15 for b in (0x1FD00, 0x1F900, 0x1F500, 0x1F600)))
+    check('!CCB and !DLY have no RAM instance at all',
+          _rs.count(b'!CCB') == 0 and _rs.count(b'!DLY') == 0)
+
 print(f'\n{checks - len(fails)}/{checks} passed')
 sys.exit(1 if fails else 0)
