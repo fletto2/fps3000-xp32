@@ -15591,3 +15591,36 @@ directive. It is `$0000` in the shipped build like the rest.
 list from 22 (kernel) or 2 (application) to 5, and of those only `$10AA` and `$0880` survive as
 one-sided. The technique is sound; the region limits were not, and every intermediate number this
 sweep produced before being run whole-ROM was wrong.
+
+### Final: exactly two one-sided RAM locations in the entire ROM
+
+`$0880`'s single "read" at `$F004FC` is **not an instruction**. The seeded kernel disassembly
+renders `$F004F0`-`$F004F8` as `DC.W`; the surrounding linear decode produces `dc.w $fee0`,
+`ori.b #$dc,d0`, `dc.w $fecc` — the signature of data walked as code. That is a **fifth artifact
+class: data decoded as code**, which is precisely what `code_map.json` exists to prevent and which
+my sweep bypassed by decoding linearly.
+
+So the complete, verified answer:
+
+| location | direction | evidence |
+|---|---|---|
+| **`$10AA`** | read-only — **the chassis supplies it** | 1 read at `$F05E12`; no CPU write anywhere in the image |
+| **`$1062`** | write-only — **the SBC publishes it** | 4 plain `move.w #imm`, one per XP task; no read anywhere |
+
+**Two locations out of 86 RAM globals.** Everything else that looked one-sided was one of five
+artifact classes:
+
+1. byte within a word (`$0E87` under `$0E86`)
+2. read-modify-write with two operands (`$1064`)
+3. word read as half of a longword (`$106A` under `$1068`, `$0C40` under `$0C3E`)
+4. cross-region writes (the eight RTOS directory slots)
+5. data decoded as code (`$0880`)
+
+The intermediate counts this sweep produced were 27/2, then 22 read-only, then 5, then 2. Each
+correction came from checking a specific candidate rather than trusting the aggregate — and the
+final number is small enough to state with confidence precisely because every survivor was
+examined individually.
+
+For the communications map this settles a question that could otherwise stay open indefinitely:
+**there are no undiscovered RAM-mediated channels between the SBC and the chassis.** `$10AA` in,
+`$1062` out, and nothing else.
