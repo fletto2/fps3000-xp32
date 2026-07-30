@@ -16740,3 +16740,36 @@ with its `push`/`rts` dispatch site executing zero times — "a dispatch vector 
 placeholder and never taken". The placeholder's origin is now located: a ROM constant at
 `$F0A542`, installed during RTOS init. It is not residue from a failed initialisation; the ROM
 ships that value deliberately.
+
+## The kernel-global initialisation table
+
+Sweeping `$F09C06`-`$F0A200` for writes into `$0C00`-`$0DFF` gives **27 initialisation sites** —
+the state an emulator must reproduce to start the RTOS correctly:
+
+| site | global | source |
+|---|---|---|
+| `$F09C2E` | `$0C08` | `a7` — the ready-queue head |
+| `$F09C32`, `$F09E48` | `$0C36` | `$00F000BC` from `$F0A542` — the placeholder dispatch pointer |
+| `$F09C5A` | `$0C3A` | `#$800` — the register-save area |
+| `$F09E1E`-`$F09E30` | `$0C72` `$0C73` `$0C74` `$0C76` | byte constants from `$F0A53C`-`$F0A540` |
+| `$F09E3C` | `$0C14` | **`$00F08700`** — the self-test entry |
+| `$F09E4E` | `$0C54` | `$00020000` — the top of RAM |
+| `$F09E80`-`$F0A028` | `$0C20` `$0C24` `$0C66` `$0C6A` `$0C6E` `$0C2C` `$0C28` `$0C30` | the eight **directory slots**, each from the allocator |
+| **`$F0A048`** | **`$0C34`** | **`$0000`** — the instrumentation mask |
+| `$F0A04E` | `$0C9A` | `#$1010000` |
+
+The eight directory-slot writes are the allocator handing back pages, matching the eight structures
+this file documents, in allocation order.
+
+### A caveat on reading such a table
+
+`$F0A048` looked alarming: my extraction reported `$0C34 <- $000000F7`, which would mean the
+instrumentation mask ships **partly enabled**, contradicting the measured `$0000` and the finding
+that all ten hooks are off.
+
+The instruction is **`move.w $f0a52a(pc),$c34.w`** — a *word* move. It takes the high word of that
+constant, `$0000`. The `$F7` is in the low half, at `$F0A52C`, and this instruction never reads it.
+
+**My extraction printed the longword at every source address regardless of the instruction's
+width**, so every `move.w` entry in a table built that way shows twice the data it uses. The mask
+finding stands; the table needed the width checked before any value in it was believed.
