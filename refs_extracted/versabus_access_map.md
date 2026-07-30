@@ -1528,6 +1528,67 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Sequence B is an outward walk, and its last stage is an AP I/F data-line test
+
+Resolving the eleven sequence-B stages against their base registers (`a6 = $FF0000`,
+`a5 = $1FFF0`, `a4 = $F70018`) gives a per-stage device map. It is not an arbitrary
+ordering — **the tests walk outward from the SBC's own registers to the chassis**:
+
+| phase | addr | touches | what it is |
+|---|---|---|---|
+| `$1000`-`$1400` | `$F08FE2`-`$F093CE` | `$F70001`, `BOARD_STATUS`, `VMOD_CTRL` (absolute) | local board + PTM |
+| `$1500` | `$F094F0` | `CHANNEL_SELECT` R/W only, 40 bytes | CHANNEL_SELECT readback |
+| `$1600` | `$F09518` | MODE0, MODE1, CHANNEL_SELECT, COUNTER, MODE2, STATUS_IRQ, IRQ_MASK | **the XLTR register-file test** |
+| `$1700` | `$F09602` | CHANNEL_SELECT, MODE2 R, `$216` R/W ×4 | window/page machinery |
+| `$1800` | `$F096C4` | *identical shape to `$1700`* | its pair — second half |
+| `$1900` | `$F09776` | CHANNEL_SELECT ×5, **MODE2 W**, **DATA W**, `$216` ×4 | the data path into chassis memory |
+| `$1A00` | `$F09832` | **`APIF_CMD_STATUS` ×2 W**, CHANNEL_SELECT ×4, `$216`, STATUS_IRQ | **the AP I/F itself** |
+
+`$1600` is the stage behind the emulator's "33 distinct XLTR registers" boot statistic, and
+`$1A00` is the *only* sequence-B stage that touches `$FF000E`. So the self-test's own
+ordering is a statement about the SBC's reach: own registers, then the window hardware,
+then data into the chassis, then the chassis command port.
+
+**Phase `$1A00` in detail — two findings.**
+
+*It is bus-error-tolerant by construction.* `$F09836` saves the existing bus-error vector
+and installs its own at `$F098E0`:
+
+```
+movea.l $8.w,a0                  ; save the old vector
+move.l  #loc_F098E0,$8.w         ; install a private handler
+```
+
+So this stage **probes for presence** and expects that some accesses may not be answered —
+which is exactly the right shape for a test of an interface whose far side may be absent.
+Any emulator that BERRs here without a matching handler model diverges.
+
+*It is an all-16-data-lines test on `$FF000E`.*
+
+```
+move.w  #$aaaa,$e(a6)            ; write
+cmpi.w  #$aaaa,$e(a6)            ; read back and compare
+beq     ok
+move.l  #$F0F0F0F0,d7            ; else the failure marker
+```
+
+`$AAAA` is `1010101010101010` — the classic alternating pattern that exercises every data
+line and catches shorts between adjacent bits. **The register reads back what was written.**
+
+That is worth stating carefully against what this file says elsewhere. `+$0E` is documented
+as *bidirectional — command on write, status on read*, and that stands for the channel
+windows in service. But here, on the **base window** during self-test, it behaves as a plain
+latch. Two readings fit and the ROM cannot separate them: the port genuinely latches when
+no command is in flight, or the chassis is simply not answering during power-on so the
+write survives to be read back. **Either way the emulator must return `$AAAA` from
+`$FF000E` after a `$AAAA` write in this phase, or the self-test fails** — a hard,
+checkable constraint on the chassis model that no previous note captured.
+
+*Naming conflict noted, unresolved:* the consolidated asm labels `$216` as `XLTR_DATA_HI`
+while the register table in `CLAUDE.md` calls it a mode/page register. The `$214`/`$216`
+pairing as a 32-bit data register is the better-evidenced reading; the table entry predates
+it and should be treated as suspect rather than authoritative.
+
 ### The self-test is THREE sequences separated by `$D0` checkpoint handshakes
 
 The spine is `$F08764-$F088D0`, and it settles what the phase beacons mean. `d6` is the

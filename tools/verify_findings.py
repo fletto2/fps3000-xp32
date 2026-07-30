@@ -550,6 +550,21 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- phase $1A00 is a bus-error-tolerant AP I/F data-line test -------------
+    check('$1A00 saves the bus-error vector and installs its own at $F098E0',
+          d[0xF09836-0xF00000:0xF09842-0xF00000]
+          == b'\x20\x78\x00\x08\x21\xfc\x00\xf0\x98\xe0\x00\x08')
+    check('$1A00 writes $AAAA to $FF000E and reads it back for equality',
+          d[0xF0987C-0xF00000:0xF09888-0xF00000]
+          == b'\x3d\x7c\xaa\xaa\x00\x0e\x0c\x6e\xaa\xaa\x00\x0e')
+    check('...with $F0F0F0F0 as the failure marker on mismatch',
+          d[0xF0988A-0xF00000:0xF09890-0xF00000] == b'\x2e\x3c\xf0\xf0\xf0\xf0')
+    check('$1500 is a CHANNEL_SELECT-only stage, 40 bytes',
+          0xF09518 - 0xF094F0 == 40)
+    check('$1700 and $1800 are a matched pair on the window machinery',
+          d[0xF09602-0xF00000:0xF09606-0xF00000][:2]
+          == d[0xF096C4-0xF00000:0xF096C8-0xF00000][:2])
+
     # --- the self-test spine: three sequences, $D0 checkpoints -----------------
     check('sequence A bases d6 at $200 ($F08764)',
           d[0xF08764-0xF00000:0xF0876A-0xF00000] == b'\x2c\x3c\x00\x00\x02\x00')
