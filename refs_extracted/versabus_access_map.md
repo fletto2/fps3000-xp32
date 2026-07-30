@@ -14290,3 +14290,35 @@ number should know they are all occupied.
 
 Also visible in the same dump: **`$F0A27A` serves 182 vectors** (the panic catch-all, matching
 the documented count) and **`$F00896` serves 37**.
+
+## The kernel's remaining 18.5% is unreached code, not data
+
+Seeding `disasm_kernel.py` from the **runtime** vector table (`FPS3K_DIS_RAM=<dump>`) adds 20
+entry points and lifts coverage **80.3% → 81.5%** (+218 bytes, +65 instructions). A modest gain:
+most vector targets were already reachable by other routes.
+
+That leaves 3,244 bytes in 83 gaps. Two of the largest are correctly *not* code:
+`$F001D6`-`$F00261` is the TRAP #0 jump table (35 × 4 = 140 bytes exactly) and `$F003E8`-`$F0050B`
+the tail of the TRAP #1 table. But sampling the rest shows **clean 68000 code**:
+
+```
+F01932  tst.l d5 / beq / move.w $a(a4),d0 / andi.w #$27ff,d1 / btst #$8,d1
+F028C4  clr.l d0 / move.b $c73.w,d0 / swap d0 / movea.l d0,a0 / bsr.w $f0123e
+F01C6E  move.l a1,d5 / move.l $10(a2),d6 / btst #$e,$8(a2) / bne
+F031F0  bset #$7,$29(a6) / move.l d0,$120(a6) / move.l $10(a6),(a1,d3.w)
+```
+
+So the residue is **unreached code whose callers are themselves unreached** — orphaned
+subgraphs. Either they are entered through a computed dispatch this tool does not model, or they
+are dead in this build. Distinguishing those needs another entry-point source, not a better
+decoder, which is the same conclusion the application-region control produced.
+
+### The dual-entry convention, caught in use
+
+`$F028D2` is `bsr.w $f0123e`. `$F01240` is **T0PAGAL**, the TRAP #0 directive-`$04` handler, and
+`$F0123E` is two bytes earlier — measured, it contains **`$40E7` = `move.w sr,-(a7)`**.
+
+That is the convention documented from the 29-of-33 census, now observed being *used*: an
+internal caller enters at the `bsr` entry and pushes SR itself, while the directive path enters
+two bytes later because the trap already stacked it. The census established the pattern from the
+table side; this is the call side, in code the census never examined.

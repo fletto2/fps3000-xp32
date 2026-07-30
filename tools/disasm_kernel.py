@@ -102,6 +102,26 @@ def seed_set(rom):
             nm = TRAP1_NAMES.get(i)
             names.setdefault(h, f"TRAP1_{nm}" if nm else f"TRAP1_dir_{i:02X}")
 
+    # FPS3K_DIS_RAM=<dump> seeds from the RUNTIME vector table.
+    #
+    # The ROM has no vector table (see below), but RMS68K builds one in RAM at
+    # boot, and it points at handlers no ROM scan can reach -- including the
+    # 14-entry bsr fan-in ladder at $F00A78 that services TRAP #2-#15, which
+    # this project had recorded as "free vectors".
+    _ram = os.environ.get("FPS3K_DIS_RAM")
+    if _ram:
+        try:
+            rd = open(_ram, "rb").read()
+        except OSError:
+            rd = b""
+        for v in range(256):
+            if 4 * v + 4 > len(rd):
+                break
+            t = struct.unpack(">I", rd[4 * v:4 * v + 4])[0] & 0xFFFFFF
+            if valid(t):
+                seeds.add(t)
+                names.setdefault(t, f"VEC_{v:02X}_{t:06X}")
+
     # NOT a vector table.  The reset overlay aliases ROM at 0 only so the
     # 68000 can fetch SSP from +0 and PC from +4; measured, +4 = $F09C00 and
     # offsets $08-$3FF are zero.  RMS68K builds the whole vector table in RAM
