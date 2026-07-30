@@ -14526,3 +14526,36 @@ Two honest limits on the claim:
   level 7.
 
 `$0018` (bits 3 and 4) is the state RDHC lands in; those bits are not yet identified.
+
+## The task state word `TCB+$2C`: flag bits enumerated, low byte unresolved
+
+A full census of bit operations on `+$2C` across the ROM — every `bset`/`bclr`/`btst` with a
+`$2C` displacement — finds **13 sites on exactly five bits**:
+
+| bit | sites | operations | first |
+|---:|---:|---|---|
+| 9 | 2 | `bset` + `bclr` | `$F02CAC` (SUSPND / RESUME) |
+| 10 | 2 | `bset` + `btst` | `$F00D9A` |
+| 12 | 2 | `bset` + `bclr` | `$F0285E` |
+| 13 | 2 | `bset` + `bclr` | `$F00718` |
+| 14 | 5 | 2 `bset`, 3 `bclr` | `$F02C3E` (WAIT / WAKEUP) |
+
+Every one is a matched set/clear pair — a clean flag-word design. Bits 9 and 14 are already
+identified (suspended, waiting); 10, 12 and 13 are unnamed but structurally the same kind of flag.
+
+**Bits 3 and 4 are never touched by any bit operation**, so the `$0018` RDHC lands in after being
+woken is not a pair of flags. The whole ROM contains only **four** writes into `+$2C`:
+
+```
+$F00866, $F0087C   move.w d6,$2c(a0)
+$F02966            move.b #$80,$2c(a5)
+$F0A0B2            move.w d2,$2c(a5)     -- immediately after T0CRTCB, so task creation
+```
+
+`$F0A0AE` loads that value from `$14(a3)` and `$F0A0B6` immediately tests bit 4 of it, which
+looked like the origin. **It is not the TDTI entry**: the word at `+$14` of all six `!TCB`
+definitions reads `$0000`, so `a3` at that point is some other structure.
+
+So the low byte of the state word is a **value field, not flags**, written from a runtime source
+this pass did not identify. Bounded, and left there rather than guessed at — the flag-bit census
+is the durable result, and it is complete.
