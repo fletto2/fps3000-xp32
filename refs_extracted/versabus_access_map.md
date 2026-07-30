@@ -1565,15 +1565,44 @@ follows is `tst.w d2 / bne`, and on failure `d7` takes `$F0F0F0F0` and the code 
 not fail gracefully — *it retries forever*. That is a meaningful difference from the bit-5
 poll in `$1200`, which tolerates a timeout: here delivery is mandatory.
 
-**Consequence for the emulator, and an open question.** VMOD_CTRL is plain RAM in the model
-with no interrupt generation, so `or.w d1,(a5)` should set no interrupt, `d2` should stay
-zero, and `$1300` should spin. Yet phases `$1000`-`$1A00` and `$2000` are all observed
-reached. Those two facts cannot both be right, and I have not run the experiment that
-settles it. **Either the emulator delivers these interrupts by some path I have not traced,
-or the phase beacon advances without `$1300` completing** — and which it is matters, because
-the second case means the "runs the full self-test suite" claim covers a stage that never
-passes. The check is cheap: instrument `$F093A8` (the post-success increment) and see
-whether it executes.
+**MEASURED: `$1300` passes, and the manual corroborates the finding.** I flagged this as an
+open question on the assumption that VMOD_CTRL was unmodelled. It is not, and the trace
+settles it:
+
+| PC | count | |
+|---|---|---|
+| `$F0938A` | **7** | the `or.w d1,(a5)` trigger |
+| `$F09396` | **7** | the assertion |
+| `$F0939A` | **0** | the failure path — never taken |
+| `$F093A8` | **7** | the success path |
+| `$F093BE` | **7** | handler at vector `$140` (number 80) |
+| `$F093C8` | **0** | handler at vector `$148` (number 82) — never fires |
+
+All seven levels deliver. Only **one** of the two installed vectors is ever used; vector 82
+is installed and never exercised, which is worth noting since it means the ROM prepares for
+a second interrupt source this stage does not reach.
+
+**Independent corroboration from the M68KVM02 manual**, quoted in the emulator at
+`versabus.c:1117`: VMOD_CTRL is *"Control Register image only — register not directly
+accessible. Writes go through chassis-mediated VERSAbus **interrupter logic**."* That is
+Motorola describing exactly the mechanism derived here from the ROM — a write to `$1FFF0`
+driving interrupt generation. The ROM-side derivation (a 3-bit field walked 1..7 against
+mandatory delivery) and the manual's wording were reached independently and agree.
+
+**Two corrections to the `$1200` entry above.** I wrote there that "`$1FFF0`/`$1FFF1` appear
+nowhere in the emulator's C — VMOD_CTRL is plain RAM". **Both halves are wrong.**
+`versabus.h:105` defines `VMOD_CTRL 0x01FFF0`; the model keeps `vmod_ctrl` state, splits it
+big-endian, drives the board-status equations from it, and `versabus.c:95` carries a
+purpose-built IRQ source labelled for phase `$1300`. My grep searched for the literal
+`0x1FFF1`, which appears nowhere because the model addresses it as `VMOD_CTRL+1`.
+Consequently the claim that `$1200`'s bit-5 handshake is "vestigial in emulation" is
+**unsupported** and withdrawn — whether the model auto-clears bit 5 needs checking on its
+own terms, not inferring from an absence I never established.
+
+*That is the third false negative this session from grepping for a literal address form* —
+after `$FF0048` (absolute-only scan) and `$1FFF0` bit-manipulation (same). The lesson has
+now cost three corrections: **when checking whether something is handled, search for the
+symbol and the concept, not one spelling of the number.**
 
 `$1400` completes the sequence with the third board-status equation: it drives `$1FFF1` bit
 3 both ways against bit 1 of a value read into `d2`, matching the documented
