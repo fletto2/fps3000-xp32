@@ -1563,6 +1563,52 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### Where documentation actually stands: 59% covered, and the frontier is RDHC + RTOS init
+
+Counting in-place annotations alone gives 33% of instruction bytes, which understates things
+in two specific ways. Correcting both:
+
+**1. Template copies.** 6,928 undocumented bytes lie in the four XP task regions, and
+**5,808 of them (83%) have an annotated sibling** at ±`$A00`/`$1400`/`$1E00`. That is the
+*same code*, already understood, simply not annotated on every copy. It is 38% of all
+undocumented bytes.
+
+**2. Zero padding**, removed above: 392 bytes that were never instructions.
+
+With both accounted for:
+
+| region | bytes | covered | frontier |
+|---|---|---|---|
+| RDHC | 5,292 | 48% | **2,706** |
+| IO1I | 580 | 28% | 416 |
+| XP4I / XP3I / XP2I / XP1I | ~2,300 each | **86-89%** | 250-320 each |
+| self-test | 5,036 | 30% | **3,486** |
+| RTOS init | 2,280 | 39% | 1,382 |
+| pre-task | 120 | 35% | 78 |
+| **total** | **22,588** | **59%** | **9,188** |
+
+**The self-test's 3,486-byte "frontier" is misleading and worth being explicit about.** All
+42 of its subroutines are decoded — that work is in *this file*, not as `;###` notes in
+`fps3k.asm`. The same is partly true of RDHC. So a large share of what this table calls
+frontier is **analysis that exists but has not been propagated into the disassembly**.
+
+That splits the remaining work cleanly, which is the useful part:
+
+- **Mechanical (no new analysis):** propagate this file's findings into `fps3k.asm` as `;###`
+  notes, and replicate XP annotations across the three sibling copies. That alone would take
+  in-place coverage from 59% toward ~85%.
+- **Genuinely unexplored:** RDHC's 2,706 bytes and RTOS init's 1,382 — about **4,100 bytes,
+  18% of the ROM's real instructions**. RDHC being the largest is consistent with everything
+  else known about it: it is the master task, the least executed (1% before this project
+  unblocked it, 47% after), and the one whose behaviour depends on a chassis conversation.
+
+The XP tasks at 86-89% are the best-covered region by a wide margin — which follows from
+their being template copies of one another, so every finding applies four times.
+
+*The 33% figure was not wrong, it answered a different question:* "how much of the asm carries
+a note?" rather than "how much of the machine do we understand?" Both are worth knowing, and
+conflating them would have pointed the next session at the wrong 9,000 bytes.
+
 ### Zero padding in the instruction count, and what the largest run proves
 
 Looking for the biggest undocumented stretches of code, the top hit was 214 bytes in RDHC at
