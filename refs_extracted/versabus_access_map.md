@@ -1598,6 +1598,52 @@ The pattern across all of this is the session's recurring one, one level up: **t
 itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
 here changed what is known about the machine; it changed how much a passing suite is worth.
 
+### TRAP #0 decoded: a 35-entry jump table, and user-mode calls are silently ignored
+
+The TRAP #0 handler at `$F001AC` (vector 32) decodes completely in a dozen instructions, and
+gives two results.
+
+```
+$F001AC:  move.w (a7),-(a7)          ; duplicate the stacked SR
+$F001AE:  andi.b #$7f,(a7)           ; mask the system byte, clearing T
+$F001B2:  addq.l #2,a7
+$F001B4:  bne    $F001B8
+$F001B6:  rte                        ; <-- masked byte ZERO: return immediately
+$F001B8:  lsl.l  #2,d0               ; d0 * 4 -- the index
+$F001BA:  bmi    $F00182             ; negative -> error
+$F001BE:  addi.l #$f001d6,d0         ; + TABLE BASE
+$F001C4:  cmpi.l #$f00262,d0         ; vs TABLE END
+$F001CA:  bge    $F00182             ; out of range -> error
+$F001CE:  exg    d0,a0
+$F001D0:  move.l (a0),-(a7)          ; push the handler address
+$F001D2:  exg    d0,a0
+$F001D4:  rts                        ; "return" into it -- the dispatch
+```
+
+**1. There are 35 directives, not 37.** The table runs `$F001D6`-`$F00262` = `$8C` bytes = **35
+longword entries**, and the range check `cmpi.l #$F00262 / bge` admits exactly `d0 < 35`. This
+project records *"TRAP #0 with directive in D0 (37 internal directives)"* — a number presumably
+taken from Motorola's documentation for some RMS68K revision. **This build has 35.** Entry 0 is
+`$F00182`, the same address the error paths branch to, so directive 0 is invalid and the usable
+range is 1..34.
+
+**2. TRAP #0 from user mode is silently ignored.** The handler masks the stacked SR's system byte
+with `$7F` — clearing the trace bit — and **`rte`s immediately if the result is zero**. A zero
+system byte means S=0 and IPL=0: user mode, no interrupt mask. So a user task issuing TRAP #0
+gets no error, no directive, and no indication — just a return.
+
+*That is the mechanism behind an observation this project made from counting.* The record notes
+TRAP #0 *"has 12 sites, all in the kernel, RTOS-init or pre-task code and **never in a task**"*,
+which was a statistical fact about where the instruction appears. **The handler enforces it**: a
+task could issue TRAP #0 and it would do nothing. The executive interface is supervisor-only by
+construction, and TRAP #1 — with its 71 sites all inside task regions — is the user interface.
+
+The dispatch idiom is worth noting too: `move.l (a0),-(a7)` then `rts`, using the return-stack as
+an indirect jump. That is a 68000 pattern with no `jmp (a0)` involved, and a disassembler
+following control flow linearly will lose the thread at the `rts` — which is one reason the
+kernel region resists automatic analysis and has stayed 26% of the image with no per-routine
+documentation.
+
 ### ARITH card: three FP units confirmed, but the packages are UNMARKED
 
 The AU card yields a clear architectural picture and one firm negative.
