@@ -3238,5 +3238,56 @@ with tempfile.TemporaryDirectory() as _tdv:
                    (struct.unpack('>I', x[10:14])[0]) - _B + 4]
               == b'\x44\xfc\x00\x0c' for x in _recs))
 
+# ---------------------------------------------------------------------------
+# Kernel structure and the $0C34 instrumentation mask, 2026-07-30.
+# One assertion per check: two of the ISR-exit checks failed earlier today only
+# because a correct half was and-ed with a hand-encoded half that was wrong.
+# ---------------------------------------------------------------------------
+check('$0C34 is read by eight btst sites, one per bit of its high byte',
+      len({struct.unpack('>H', _rom[a - _B + 2:a - _B + 4])[0]
+           for a in range(0xF00000, 0xF04488, 2)
+           if _rom[a - _B:a - _B + 2] == b'\x08\x39'
+           and struct.unpack('>I', _rom[a - _B + 4:a - _B + 8])[0] == 0xC34}) == 8)
+check('directive $02 uses TAS.B -- the 68000 atomic read-modify-write',
+      _rom[0xF0078E - _B:0xF00790 - _B] == b'\x4a\xd0')
+check('...guarded by a level-7 mask',
+      _rom[0xF0078A - _B:0xF0078E - _B] == b'\x00\x7c\x07\x00')
+check('directive $03 orders the ready queue on the byte at TCB+$26',
+      _rom[0xF007D6 - _B:0xF007DA - _B] == b'\x10\x28\x00\x26')
+check('...and guards against double insertion with bset #4 on TCB+$2D',
+      _rom[0xF007C2 - _B:0xF007C8 - _B] == b'\x08\xe8\x00\x04\x00\x2d')
+check('directive $08 converts an address to 256-byte pages with lsr.l #$8',
+      _rom[0xF0176C - _B:0xF0176E - _B] == b'\xe0\x8e')
+check('the trace ring writer advances by the $1A record stride',
+      _rom[0xF016A2 - _B:0xF016A6 - _B] == b'\x49\xed\x00\x1a')
+check('the ring geometry closes: $1F500 + 8 + 9*$1A == $1F5F2',
+      0x1F500 + 8 + 9 * 0x1A == 0x1F5F2)
+
+with tempfile.TemporaryDirectory() as _tdk:
+    subprocess.run([EMU, '-rom', ROM, '-cycles', '150000000',
+                    '-dump-ram', f'{_tdk}/r'], capture_output=True, timeout=400)
+    _rk = open(f'{_tdk}/r', 'rb').read()
+    check('$0C34 reads $0000 after boot -- every kernel hook ships disabled',
+          struct.unpack('>H', _rk[0xC34:0xC36])[0] == 0x0000)
+    check('the trace ring is allocated at $1F500 via slot $0C30',
+          (struct.unpack('>I', _rk[0xC30:0xC34])[0] & 0xFFFFFF) == 0x1F500)
+    check('...with its header limit at $1F5F2, matching the 9-record geometry',
+          struct.unpack('>I', _rk[0x1F504:0x1F508])[0] == 0x1F5F2)
+    check('every task parks WAITING (TCB+$2C bit 14) after a default boot',
+          all(struct.unpack('>H', _rk[b + 0x2C:b + 0x2E])[0] == 0x4000
+              for b in (0x1E900, 0x1EB00, 0x1ED00, 0x1EF00, 0x1F100, 0x1F300)))
+    check('RDHC\'s saved PC (TCB+$0FC) is $F04740, where it parks',
+          (struct.unpack('>I', _rk[0x1F300 + 0xFC:0x1F300 + 0x100])[0]
+           & 0xFFFFFF) == 0xF04740)
+
+# The trace facility actually switches on.
+with tempfile.TemporaryDirectory() as _tdt:
+    subprocess.run([EMU, '-rom', ROM, '-cycles', '150000000',
+                    '-trace', f'{_tdt}/t'], capture_output=True, timeout=400,
+                   env={**os.environ, 'FPS3K_POKE': '0C34=8000'})
+    _tt = open(f'{_tdt}/t').read()
+    check('setting $0C34 bit 15 makes the trace-ring writer run',
+          _tt.count('F01688\n') > 0)
+
 print(f'\n{checks - len(fails)}/{checks} passed')
 sys.exit(1 if fails else 0)
