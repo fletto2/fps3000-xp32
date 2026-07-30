@@ -10620,6 +10620,13 @@ loc_F09E58:
   f09e74: 20 42                   movea.l  d2, a0
   f09e76: 70 04                   moveq    #$4, d0
 ;>>>> [R8/BOTH] Executes trap #0 (d0=4) to register VCT during Phase2Init_VCTscan.
+;### INIT.SA (text/verdos10/M68XXX) IS THE SOURCE OF THIS SEQUENCE.  BLDGST is
+;###   line-for-line what was decoded here: CLR the directory slot, load the size
+;###   pc-relative, BEQ if zero, T0PAGAL, BSR KILLER on error, store the address,
+;###   BSR TBLCLR, write the eye-catcher, then LSL #8 / SUB header / DIVU entry
+;###   length to compute MENT.  The error bsr is KILLER, and STR.EQ gives
+;###   T0KILLER EQU 32 "CRASH SYSTEM -- ERROR DETECTED": a failed allocation
+;###   crashes the machine deliberately.
 ;### !GST uses the same rich header with $D-byte records and ZERO in use.
 ;### ALLOCATOR SITE 1/8 -- TRAP #0 directive $04 is the RTOS PAGE ALLOCATOR.
 ;###   Size (in 256-byte pages) goes in via a0; the block comes back in a0.
@@ -10657,6 +10664,26 @@ loc_F09EB0:
   f09eb8: 67 3c                   beq.b    loc_F09EF6
   f09eba: 20 42                   movea.l  d2, a0
   f09ebc: 70 04                   moveq    #$4, d0
+;### !GST/!UST HEADER FIELDS, per versados GST.EQ and UST.EQ:
+;###     +$00 eye-catcher   +$0C xxxMENT  MAXIMUM NUMBER OF ENTRIES
+;###     +$04 xxxNEXT       +$0E xxxCENT  current number of entries
+;###     +$08 xxxNSEG       +$10 xxxFENT  address of first entry
+;###     +$0A xxxNPAGE      +$14         first entry
+;###   CORRECTION: +$0C is MENT, MAX ENTRY COUNT -- not the record size.  The
+;###   capacity figure published here was CIRCULAR: $16 at +$0C was read as a
+;###   22-byte record size and then used as the divisor to compute "capacity
+;###   22" -- dividing by the very field being misnamed, and landing on the right
+;###   number because MENT IS 22.  Verified: (2*256 - $14) / $16 = 22 = USTMENT.
+;###   The record size is separately $16 because USTEL happens to be 22 in this
+;###   build -- two quantities that coincide, which is what hid the error.
+;###   UST ENTRY: +$00 USTTNAME, +$04 USTSESSN, +$08 USTSNAME "SEMAPHORE NAME",
+;###   +$0C USTUCNT (=1), +$0E USTXCNT, +$0F USTTYPE (=2 of 1/2/3), +$10 USTSEM.
+;###   USTSNAME holding AXP1/HXP1/AXP2 is a FOURTH confirmation of the semaphore
+;###   reading, after the CRSEM counts, the !UST expansion and the null TCBASQ.
+;###   REVISION TENSION: SR10 USTEL sums to 28 (it has USTSPTR + pad); this ROM
+;###   uses 22, omitting both -- an EARLIER UST.  Yet directive $4C = 76 is
+;###   BEYOND SR10's table, pointing LATER.  So this build is a different branch
+;###   or mixed sources, not simply "SR10 or newer".
 ;### !UST is the ASQ NAME REGISTRY.  Rich header: +$0A pages, +$0C record size,
 ;###   +$0E records in use, +$10 first record at base+$14.  Nine $16-byte
 ;###   (task name, ASQ name) pairs: XP1I/AXP1 XP1I/HXP1 XP2I/AXP2 XP2I/HXP2

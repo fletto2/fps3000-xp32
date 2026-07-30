@@ -1528,6 +1528,85 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### `INIT.SA` is the source of the allocation sequence — and `+$0C` is *max entries*
+
+`text/verdos10/M68XXX/INIT.SA` is the RTOS-init source, and its `BLDGST`/`BLDUST`
+blocks are line-for-line what this document decoded at `$F09E78`-`$F09EFE`:
+
+```
+BLDGST   CLR.L  GSTBEG              ; clr.l $0C20         -- the directory slot
+         MOVE.L GSTSIZ(PC),D2       ; move.l d16(pc),d2   -- the size
+         BEQ.S  BLDUST              ; beq                 -- zero size, skip
+         MOVE.L D2,A0
+         MOVE.L #T0PAGAL,D0         ; moveq #$04,d0
+         TRAP   #0
+         BSR    KILLER              ; the bsr on the error path
+         MOVE.L A0,GSTBEG           ; move.l a0,$0C20
+         BSR    TBLCLR              ; clear to zeroes
+         MOVE.L #'!GST',(A0)        ; the eye-catcher
+         MOVE.W #1,GSTNSEG(A0)
+         MOVE.W D2,GSTNPAGE(A0)
+         LSL.L  #8,D2               ; pages -> bytes
+         SUB.L  #GSTENTRY,D2        ; less the header
+         DIVU   #GSTEL,D2           ; / entry length
+         MOVE.W D2,GSTMENT(A0)      ; MAXIMUM NUMBER OF ENTRIES
+         LEA    GSTENTRY(A0),A2
+         MOVE.L A2,GSTFENT(A0)
+```
+
+Every element this document derived is there: the zero-size guard, the page allocator,
+the eye-catcher, and the "capacity" arithmetic. The error `bsr` is **`KILLER`**, and
+`STR.EQ` gives `T0KILLER EQU 32 "CRASH SYSTEM -- ERROR DETECTED"` — so the branch after
+each failed allocation crashes the machine deliberately.
+
+#### Correction: `+$0C` is `MENT`, maximum entries — not the record size
+
+`GST.EQ` and `UST.EQ` name the header:
+
+| offset | field | meaning | this document said |
+|---|---|---|---|
+| `+$00` | `UST`/`GST` | eye-catcher | ✓ |
+| `+$04` | `xxxNEXT` | link to next table segment | — |
+| `+$08` | `xxxNSEG` | number of segments in table | "`+$08` = 1, ?" |
+| `+$0A` | `xxxNPAGE` | number of pages | ✓ pages |
+| `+$0C` | **`xxxMENT`** | **maximum number of entries** | **"record size" ✗** |
+| `+$0E` | `xxxCENT` | current number of entries | ✓ in use |
+| `+$10` | `xxxFENT` | address of first entry | ✓ |
+
+**The capacity figure published here was circular.** `!UST` holds `$16` at `+$0C`, which
+this document read as a 22-byte record size and then used as the divisor to compute
+"capacity 22" — dividing by the very field it was misnaming, and landing on the right
+number because `MENT` *is* 22. Verified properly: `(NPAGE × 256 − $14) ÷ $16 =
+(512 − 20) ÷ 22 = 22`, and the ROM holds `USTMENT = 22`. The record size is separately
+`$16` because `USTEL` happens to be 22 in this build — two different quantities that
+coincide, which is exactly what made the error invisible.
+
+#### The UST entry, and a fourth confirmation of the semaphores
+
+```
++$00 USTTNAME  originator's task name    XP1I      XP1I      XP2I
++$04 USTSESSN  originator's session      0         0         0
++$08 USTSNAME  SEMAPHORE NAME            AXP1      HXP1      AXP2
++$0C USTUCNT   # users of semaphore      1         1         1
++$0E USTXCNT   initial count             0         0         0
++$0F USTTYPE   SEMAPHORE TYPE (1,2 or 3) 2         2         2
++$10 USTSEM    the semaphore itself      0         0         0
+```
+
+**`USTSNAME` is "SEMAPHORE NAME"** and it holds `AXP1`/`HXP1`/`AXP2` — a fourth
+independent confirmation, after the `CRSEM` counts, the `!UST` expansion and the null
+`TCBASQ`. Each has one user and is **type 2** of the three the source allows.
+
+#### A revision tension worth recording
+
+SR10's `USTEL` sums to **28** bytes (`USTTNAME` 4, `USTSESSN` 4, `USTSNAME` 4, `USTUCNT`
+2, `USTXCNT` 1, `USTTYPE` 1, `USTSEM` 6, **`USTSPTR` 4, pad 2**). This ROM's entry is
+**22** — it omits `USTSPTR` and the pad, so its UST is an **earlier** revision than SR10.
+Yet directive `$4C` = 76 is **beyond** SR10's directive table, which points *later*. So
+this RMS68K build is not simply "SR10 or newer": it is a different branch, or FPS built
+from mixed sources. *Two facts pulling opposite ways is worth leaving visible rather
+than picking whichever supports a tidier story.*
+
 ### `!PAT` is the Periodic Activation Table, and the task prologue is a Segment PB
 
 Two more structures named from the VERSAdos source, both matching decodes made here

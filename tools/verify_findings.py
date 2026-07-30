@@ -550,6 +550,22 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- !UST header fields per UST.EQ; +$0C is MENT, not the record size ----
+    _, ru2 = run({}, CYC)
+    _h16 = lambda x: struct.unpack('>H', ru2[x:x+2])[0]
+    check('!UST header: NSEG=1, NPAGE=2, MENT=22, CENT=9, FENT=$1FB14',
+          (_h16(0x1FB08), _h16(0x1FB0A), _h16(0x1FB0C), _h16(0x1FB0E),
+           struct.unpack('>I', ru2[0x1FB10:0x1FB14])[0])
+          == (1, 2, 22, 9, 0x1FB14))
+    check('...and MENT is the ENTRY COUNT: (NPAGE*256 - $14) // $16 == MENT',
+          (_h16(0x1FB0A) * 256 - 0x14) // 0x16 == _h16(0x1FB0C))
+    check('USTSNAME (+$08 of each entry) holds the semaphore names AXP1/HXP1/AXP2',
+          [ru2[0x1FB14 + 0x16*i + 8:0x1FB14 + 0x16*i + 12] for i in range(3)]
+          == [b'AXP1', b'HXP1', b'AXP2'])
+    check('...each with USTUCNT=1 and USTTYPE=2',
+          all(_h16(0x1FB14 + 0x16*i + 0x0C) == 1
+              and ru2[0x1FB14 + 0x16*i + 0x0F] == 2 for i in range(9)))
+
     # --- the directive-$01 block is a Segment Parameter Block ----------------
     check("RDHC's $01 block is a SGPB: task 'RDHC', name 'STCK', length $190",
           d[0xF046B0-0xF00000:0xF046B4-0xF00000] == b'RDHC'
