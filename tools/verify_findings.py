@@ -583,6 +583,12 @@ else:
     check('...and inside the $200 allocation stride, so they are FPS extension',
           all(0xFC <= o < 0x200 for o in (0x100, 0x102, 0x138, 0x160)))
 
+    # --- FPS3K_POKE forces reads permanently, unlike a one-time event ---------
+    check('FPS3K_POKE is documented as overriding RAM READS, not writing once',
+          'makes reads of those RAM' in open('emulator/fps3k_sbc.c').read())
+    check('...and is gated on boot completion for the diagnostics\' sake',
+          'Gate on boot completion' in open('emulator/fps3k_sbc.c').read())
+
     # --- $F056BA is the instruction after the spin ----------------------------
     check('the instruction after the spin is move.w #$4f,(a3)',
           d[0xF056BA-0xF00000:0xF056BE-0xF00000] == b'\x36\xbc\x00\x4f')

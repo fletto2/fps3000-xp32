@@ -1563,6 +1563,45 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The intervention works — RDHC leaves the spin — but a read-override is the wrong tool
+
+Forcing RDHC's saved PC with the existing hook,
+`FPS3K_POKE="1F3FC=00F0,1F3FE=56BA"` (the two words of `$00F056BA`, the instruction after the
+spin):
+
+| PC | driven run | with the override |
+|---|---|---|
+| `$F056B8` — the spin | **182,124** | **20** |
+| `$F056BA` — after it | 0 | **3** |
+| `$F056BE` — further in | 0 | **3** |
+| `$F00FCC` — RTOS idle | ~3,661 | **8** |
+
+**RDHC leaves the spin.** Three escapes, and execution continues into the routine following it —
+a 9,000-fold reduction in spin iterations. That confirms the whole chain end to end: `+$FC` is
+the resume address, and changing it releases a task parked at `bra .`.
+
+**But the machine collapses.** The RTOS idle loop runs 8 times against ~3,661 normally, so
+almost nothing else executes. The reason is in the hook's nature: `FPS3K_POKE` overrides
+**every read** of those addresses, permanently. The kernel therefore cannot save a *new* PC for
+RDHC — every context switch reads back `$F056BA` regardless of where the task actually got to —
+so RDHC is repeatedly restarted at the same instruction and the scheduler's bookkeeping is
+destroyed.
+
+*So the experiment is positive on the mechanism and negative on the method.* What a real
+release does is a **one-time write** at the moment the chassis responds; what this hook does is
+pin the field forever. Those differ in exactly the way that matters. **A hook that forces a
+value is not a model of an event that sets one.**
+
+That is a useful distinction for the emulator generally: `FPS3K_POKE`, `FPS3K_CHSEL_RD` and
+`FPS3K_MBOX` all force reads to a constant, and this file already records one case where that
+"returns a constant, which no real mailbox does" invalidated a conclusion. The same limitation
+applies here, and it now has a measured demonstration rather than a caveat.
+
+**What is established:** the escape target is `$1F300 + $FC`, writing `$F056BA` there does
+release RDHC, and a usable experiment needs a *write-once* facility the emulator does not
+currently have. That is a smaller and better-specified gap than "something must rewrite the
+saved PC", which is where this thread started.
+
 ### CONFIRMED: TCB+`$FC` holds the spin address — and the escape is now a single write
 
 The `+$FC` = saved-PC identification is confirmed by the strongest available test: the field
