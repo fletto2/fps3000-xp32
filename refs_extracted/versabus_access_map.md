@@ -1598,6 +1598,49 @@ The pattern across all of this is the session's recurring one, one level up: **t
 itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
 here changed what is known about the machine; it changed how much a passing suite is worth.
 
+### The differential host link is on the AP I/F card: MC3487 drivers, MC3486 receivers
+
+The SIO is genuinely untouched by the firmware — but that is not the only serial-class interface
+on the machine. Examining the AP I/F card photograph (`refs/FPS-3000/cards/04_APIF.JPG`,
+6000x4000, tiled 4x3 to stay under the vision cap) finds the differential hardware:
+
+| part | function |
+|---|---|
+| **MC3487P** | Motorola **quad differential line DRIVER** (RS-422/423) — the AM26LS31 equivalent |
+| **MC3486P** | Motorola **quad differential line RECEIVER** (RS-422) — the AM26LS32 equivalent |
+
+**At least two of each**, and their placement is the confirming detail: they sit immediately
+above the **`PA`** and **`PB`** edge connectors — one driver/receiver pair per connector — with
+termination resistor packs (`R8`, `R9`, `R29`, `R30`-`R35`) alongside. That is exactly the
+layout of a differential interface terminated at the board edge.
+
+**This is the host link.** The card description already records that the AP I/F "drives two
+large ribbon cables that went to a counterpart card in the host chassis"; `PA` and `PB` are
+those two connectors, and the signalling across them is **RS-422 differential**, not
+single-ended TTL. That answers how a 32-bit-wide interface ran reliably over metres of ribbon
+to another chassis — differential pairs at RS-422 rates, which single-ended TTL could not do.
+
+Other parts identified on the same card, none previously recorded:
+
+- **`AM29705DCB`** — the 16x4 dual-port SRAM the card's 32-bit width is built from (this
+  project documents eight of them; one is directly visible)
+- **`P8287-B`** — an octal bus transceiver
+- white-labelled **FPS PROMs** with hand-written part numbers (`225-0057-001`, `225-0041-002`,
+  `225-0041-003`, `225-0041-004`)
+- a **hand-wired green-wire modification** near a 74S02 — a factory or field rework
+- part number **`612-4448-401`**, matching the card list
+
+**Why the firmware cannot show any of this.** Every device the ROM touches is now mapped, and
+there is no unaccounted block — so the differential layer is *below* the AP I/F register
+interface, not beside it. The SBC writes `$FF0008`/`$FF000E` and the card converts that to
+differential signalling on `PA`/`PB` without the firmware knowing. **The two host paths are
+therefore not comparable**: the SIO is a serial port the firmware never uses, while the AP I/F
+*is* the host link and its differential nature is invisible from the bus side.
+
+*This is the class of finding the ROM structurally cannot produce* — the same class as the
+EU↔AU interface, UNIV FMT and MEM CTL internals. Photographs are the only source, and in this
+case they were decisive.
+
 ### VERIFIED: the firmware never touches the SIO — checked three ways, including the near-miss
 
 "The FPS firmware never initialises or accesses the µPD7201" is load-bearing: the monitor
