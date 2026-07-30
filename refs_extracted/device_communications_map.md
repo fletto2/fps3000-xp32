@@ -176,3 +176,58 @@ and its four immediate neighbours, and **not answerable from this ROM** for the 
 internals. Those need the EU PROM dumped or a bus trace on the EXEC/ARITH card pair —
 the two artefacts this project has recorded as blocked on hardware from the start.
 
+
+---
+
+## Update 2026-07-30: static∪runtime = 68 addresses, and the window is bidirectional
+
+This document was built from runtime access logs over four driving configurations. Sweeping the
+**disassembly** statically with base-register tracking gives an independent list, and the two
+together close the map:
+
+| | count |
+|---|---:|
+| static (application + kernel listings) | 49 |
+| runtime (four configurations) | 67 |
+| **union** | **68** |
+| static-only residue after driving | **0** |
+
+The 19 runtime-only addresses are reached through base registers a static pass cannot resolve —
+the MC6840 `movep` registers `$F70001`-`$F7000F`, the four channel-window `+$00` registers,
+`$FF0212`/`$FF0214`/`$FF0216`, `$FF0240`, `$FF0248`.
+
+**`$FF0004` was the one static-only address** — the bulk-port ready flag polled at `$F04B22` and
+`$F05A22`, present in the code and in no runtime log. It is now reached
+(`FPS3K_XPIRQ=6 FPS3K_RESP=0x00` plus a staging sequence drives `$F04B22` 1,365,711 times), so
+**every device address in the disassembly is also reachable at runtime**.
+
+### The `$400000` window carries SBC **writes**, not only reads
+
+Chassis operation `$3` is listed in the op table as "read chassis memory". It is **bidirectional**
+— `$F04D52` tests bit 5 of the command byte, the documented direction bit, and branches to a
+symmetric write implementation at `$F04DC0`:
+
+```
+F04DD6  move.w  $204(a0),$e72     ; data half from CHANNEL_SELECT
+F04DE8  move.w  d1,$210(a0)       ; page = addr >> 20
+F04DF8  lsl.l   #$2,d1            ; offset = (addr & $FFFFF) << 2
+F04E0A  move.l  $e70,(a1,d1.l)    ; STORE 32 bits into the window
+F04E30  addq.l  #$1,$e58          ; bit 4 = auto-increment
+```
+
+Confirmed executing: **219 stores**, logged as four byte-writes at `$400000`-`$400003` from that
+single instruction. So the SBC has a **32-bit paged write port with auto-increment** into the
+chassis address space, not merely a read window — which is the mechanism by which data reaches
+System Common Memory and, through it, the XP-32 side.
+
+This also explains why `$FF0204` is the busiest register on the board (~33k writes): it is the
+**data conduit** for that port, assembled in two 16-bit halves selected by bit 6, not merely a
+channel selector.
+
+### What is still out of reach
+
+Unchanged: the SBC never addresses XP-32 EXEC, XP-32 ARITH or UNIV FMT. The self-test draws the
+same boundary — it exercises SBC, PTM, VMOD, bus watchdog, XLTR, AP I/F and SCM via MEM CTL, and
+touches none of those three. They sit behind the chassis, reachable only through the `$400000`
+window and the channel command ports, so no amount of firmware analysis will map them; that needs
+hardware.
