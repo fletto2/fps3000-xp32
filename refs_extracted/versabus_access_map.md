@@ -16124,3 +16124,33 @@ Static reference counts and runtime event counts now agree that XP4I is not mere
 functionally trimmed. Worth noting the test was run because a claim built on one task should be
 checked against the other three — and the check both confirmed the claim and found something the
 original measurement could not have shown.
+
+## Auto-increment confirmed: the write port is a streaming channel
+
+The `addq.l #$1,$e58` at `$F04E30`, gated on bit 4 of the command byte, was read from the
+disassembly and never measured. Driving op `$3` with and without that bit:
+
+| response code | bit 4 | distinct chassis addresses written |
+|---|---|---:|
+| `$03` | clear | **4** — `$400000`-`$400003`, rewritten every time |
+| `$13` | set | **876** — `$400000`, `$400004`, `$400008`, … |
+
+**876 = 219 × 4.** The 219 executions of `$F04E0A` measured earlier, four bytes each, landing on
+consecutive longword addresses. The two measurements were taken for different reasons and the
+arithmetic closes exactly.
+
+So op `$3` with bit 4 is a **streaming write channel**: the chassis presents a code and a data
+half through `CHANNEL_SELECT`, the SBC assembles 32 bits, stores them through the `$FF0210`-paged
+`$400000` window, and advances the transfer address by one word — repeatedly, without further
+address setup. That is a DMA-shaped path in software, and it is the mechanism by which bulk data
+reaches System Common Memory.
+
+The full op-`$3` picture, now entirely measured rather than decoded:
+
+| aspect | how established |
+|---|---|
+| bidirectional, bit 5 selects | decoded, then both paths executed |
+| 32-bit stores | four byte-writes per instruction in the bus log |
+| bit 4 auto-increments | **876 vs 4 distinct addresses** |
+| paged via `$FF0210` | `page = addr >> 20` in the decode |
+| 219 stores in one run | PC count, cross-checked by 876/4 |
