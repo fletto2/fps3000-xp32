@@ -1598,6 +1598,43 @@ The pattern across all of this is the session's recurring one, one level up: **t
 itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
 here changed what is known about the machine; it changed how much a passing suite is worth.
 
+### The EU store looks like ONE 80-bit word: ~10 PROMs in the `225-0600` series
+
+Reading the second white-label column at full resolution finds **approximately ten**
+white-labelled DIPs in a **`225-0600-0NN`** series — a different series from the five
+`225-0071-00N` parts in the centre column — with the **AMD arrow logo** visible on several,
+which makes them bipolar PROMs rather than the `29F52` PALs.
+
+**Ten PROMs is an exact fit for the documented word width:**
+
+| if the PROMs are | devices needed for 80 bits |
+|---|---|
+| 4 bits wide | 20 |
+| **8 bits wide** | **10** |
+
+Hockney gives the EU program store as **2K x 80**. Ten 8-bit devices give exactly 80 bits, and
+the Am2910 found on the same card is the sequencer that addresses them.
+
+**That bears directly on the question this project could not settle.** The record asks whether
+the two Am29116s "divide the 80-bit word: two 16-bit instruction fields, or one field plus a
+cascade link, or independent sequencing", and notes it *"has to be settled before an EU PROM
+dump can be assembled, because it decides whether a dump holds one instruction stream or two."*
+
+**A single 80-bit store addressed by a single Am2910 is one instruction stream**, with the word
+divided between the two processors — not two independent streams. Two streams would need two
+sequencers or a partitioned store, and the card shows one sequencer and one PROM bank of the
+right width. *So a dump would hold one stream, and the assembly order is the PROM order.*
+
+**Held at the confidence the evidence supports.** My count is "approximately ten" — the column
+is interrupted by a `74F245N` and several labels are illegible at this resolution, so it could
+be nine or eleven, and 80/9 and 80/11 are not integers. **The fit at exactly ten is what makes
+the reading persuasive, and a recount is what would make it solid.** The five `225-0071-00N`
+parts are a separate group whose function is unidentified; they are not part of this store.
+
+*This is as far as photographs can take the EU.* The next step is a physical dump, and the
+finding that matters for planning one is that it should be read as **ten 8-bit devices forming a
+single 80-bit word**, in board order, rather than as two independent streams.
+
 ### RETRACTION: there IS an Am2910 microprogram sequencer on the EXEC card
 
 Reading the left column of the EXEC card at full resolution finds **`AM2910ADC 8506GM`** —
