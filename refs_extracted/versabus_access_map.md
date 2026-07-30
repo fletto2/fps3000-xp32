@@ -1489,7 +1489,7 @@ $F07F8C  jmp   (a4,d0.w)    ; 16-entry dispatch
 ```
 
 `$F083FC` is a **16 × 4-byte table** of inline stubs — `jmp d16(pc)` where a
-handler exists, `rts` where none does — and sixteen command codes collapse onto
+handler exists, `rts` where none does — and sixteen index values collapse onto
 **three** handlers:
 
 | index | target | ran |
@@ -1499,15 +1499,28 @@ handler exists, `rts` where none does — and sixteen command codes collapse ont
 | 8, 9 | **`$F08366`** | ✓ |
 | 1, 10 | `$F0826A` | not yet |
 
-**It is the channel-side twin of RDHC's `$F05102`.** Both are 16 × 4 bytes, both
-indexed by `(code & $F) << 2`, and both collapse a code space onto a handful of
-handlers — `$F05102` for the codes the *chassis* returns, `$F083FC` for the codes
-a *channel* returns. This project had documented only the RDHC one; the channel's
+**It is structurally the twin of RDHC's `$F05102`** — both 16 × 4 bytes, both
+indexed by a value shifted left 2, both collapsing an index space onto a handful
+of handlers. This project had documented only the RDHC one; the channel's
 existence was invisible while every transaction timed out before reaching it.
 
-Two of the three handlers execute. `$F0826A`, reached by codes 1 and 10, does not
-yet — so there are two channel command values whose behaviour is still dark, and
-they are now identifiable rather than merely absent.
+**But it does NOT dispatch on a channel command word — that was wrong.** Tracing
+what sets `d0` between the ISR's `trap #1` at `$F07F0E` and the dispatch at
+`$F07F84` finds three writes, and **all three are on paths not taken when the
+transfer succeeds**: `$F07F4C` (`$26C`) is reached only on a full timeout, and
+`$F07F5C` (`$269`) and `$F07F66` only on the bit-13 error path. On the
+acknowledged path `d0` still holds **the return value of the `trap #1` carrying
+directive `$0F`**.
+
+So `$F083FC` dispatches on an **RTOS directive result**, not on anything the
+chassis supplies. That changes what the two unreached handlers mean: `$F0826A`,
+at indices 1 and 10, is gated by the kernel returning 1 or 10 from directive
+`$0F`, so **no chassis model will ever reach it.** They are dark for a
+kernel-side reason, and looking for a chassis stimulus would have been wasted
+effort.
+
+Two of the three handlers execute. `$F0826A` does not, and per the paragraph
+above the reason is now specific: it needs directive `$0F` to return 1 or 10.
 
 **This is what the acknowledge bought beyond the coverage number.** A structure of
 this size does not appear in a static reading as anything but data: the table is

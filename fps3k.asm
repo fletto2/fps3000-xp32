@@ -6787,7 +6787,8 @@ loc_F08248:
 loc_F08260:
   f08260: 49 f9 00 f0 84 50       lea.l    loc_F08450.l, a4
   f08266: 4e f4 00 00             jmp      (a4, d0.w)
-;### channel dispatch handler C -- codes 1 and 10; NOT yet executed.
+;### dispatch handler C -- indices 1 and 10. NOT executed: needs directive $0F
+;###   to return 1 or 10, which is a KERNEL condition -- no chassis model reaches it.
   f0826a: 48 40                   swap     d0
   f0826c: 28 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a4
   f08272: 4b ec 00 08             lea.l    $8(a4), a5
@@ -6973,7 +6974,10 @@ loc_F083DA:
 
 loc_F083FC:
 ;>>>> [R6/BOTH] Returns from XLTR_IRQ_MASK manipulation subroutine in TCBXP1I channel task.
-;### 16 x 4-byte CHANNEL DISPATCH TABLE, twin of RDHC's $F05102. Sixteen codes
+;### 16 x 4-byte DISPATCH TABLE, twin of RDHC's $F05102. Indexed by d0 -- which
+;###   on the acknowledged path is the RETURN VALUE of the trap #1 at $F07F0E
+;###   (directive $0F), NOT a channel command word: all three d0 writes between
+;###   there and here sit on the timeout or error paths. Sixteen indices
   f083fc: 4e 75                   rts      
   f083fe: 4e 71                   DC.W     0x4e71  ; 'Nq'
 ;###   onto three handlers: idx 2-7,13-15 -> $F0810A; idx 8,9 -> $F08366;
