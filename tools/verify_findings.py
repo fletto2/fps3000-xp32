@@ -451,6 +451,47 @@ else:
           len({l for l in trk.split() if 'F07D00' <= l <= 'F086FF'}) > 200 and
           len({l for l in trn2.split() if 'F07D00' <= l <= 'F086FF'}) < 130)
 
+    # --- the 16-operation chassis command language --------------------------
+    TBL = [0xF04A84, 0xF04CF2, 0xF04D20, 0xF04D4E, 0xF04E3A, 0xF04EE4,
+           0xF04F30, 0xF04F3A, 0xF04F52, 0xF04FA0, 0xF04FBA, 0xF05002,
+           0xF0502C, 0xF05092, 0xF050CA, 0xF050F8]
+    def jmptgt(i):
+        e = 0xF05102 + 4 * i - 0xF00000
+        return 0xF05102 + 4 * i + 2 + struct.unpack('>h', d[e+2:e+4])[0]
+    check('$F05102: all 16 jmp d16(pc) targets are the documented handlers',
+          [jmptgt(i) for i in range(16)] == TBL)
+    check('op $3 reads chassis memory: addr>>$14 to MODE2, (addr&$FFFFF)<<2, base $400000',
+          d[0xF04D70-0xF00000:0xF04D78-0xF00000]
+              == b'\x74\x14\xe4\xa9\x31\x41\x02\x10'   # moveq $14 / lsr.l d2,d1 / -> MODE2
+          and d[0xF04D7E-0xF00000:0xF04D86-0xF00000]
+              == b'\x02\x81\x00\x0f\xff\xff\xe5\x89'   # andi.l #$FFFFF / lsl.l #2
+          and d[0xF04D88-0xF00000:0xF04D8E-0xF00000]
+              == b'\xb3\xfc\x00\x40\x00\x00')            # cmpa.l #$400000,a1
+    check('op $6 takes its address from $E58 and reaches the RAM access at $F04EA0',
+          d[0xF04F30-0xF00000:0xF04F36-0xF00000] == b'\x22\x79\x00\x00\x0e\x58')
+    check('op $6 bit 5 selects read $F04EB8 / write $F04EC0 of SBC RAM',
+          d[0xF04EAE-0xF00000:0xF04EB6-0xF00000][:2] == b'\x08\x39'
+          and d[0xF04EB8-0xF00000:0xF04EBE-0xF00000] == b'\x33\xd1\x00\x00\x0e\x74'
+          and d[0xF04EC0-0xF00000:0xF04EC4-0xF00000] == b'\x32\xa8\x02\x04')
+    check('op $B returns the staging base $10000 + $10 = $10010',
+          d[0xF05002-0xF00000:0xF0500E-0xF00000]
+          == b'\x20\x3c\x00\x01\x00\x00\x06\x80\x00\x00\x00\x10')
+    check('op $F is $F050F8, whose exit stub $F050FC is what !IDV gives for RDHC',
+          d[0xF050F8-0xF00000:0xF05102-0xF00000]
+          == b'\x4c\xdf\xff\xff\x44\xfc\x00\x0c\x4e\x41')
+    # the demonstration: op $6 writes SBC RAM from the firmware's own code
+    err = run_err({'FPS3K_SEQ': '01:10AA,06:0002', 'FPS3K_RAMWATCH': '10AA'},
+                  400_000_000)
+    check('op $6 DEMONSTRATED writing $10AA from $F04EC0 (no bus mastering needed)',
+          'write 0010AA <- 00 from PC=F04EC0' in err
+          and 'write 0010AB <- 02 from PC=F04EC0' in err)
+    check('...and the same route with no op $6 issued writes nothing there',
+          'from PC=F04EC0' not in run_err({'FPS3K_RAMWATCH': '10AA'}, 400_000_000))
+    check('$F05E12 reads $10AA as a LONGWORD and compares against 2',
+          d[0xF05E12-0xF00000:0xF05E18-0xF00000] == b'\x24\x39\x00\x00\x10\xaa'
+          and d[0xF05E22-0xF00000:0xF05E28-0xF00000]
+              == b'\x0c\x82\x00\x00\x00\x02')
+
     # --- FPS3K_RTOSDUMP reports the decoded state ---------------------------
     out = run_err({'FPS3K_RTOSDUMP': '1'}, 400_000_000)
     check('FPS3K_RTOSDUMP names all six tasks and their ASQ/stack blocks',

@@ -1119,6 +1119,11 @@ loc_F04D42:
   f04d66: 67 00 00 4a             beq.w    loc_F04DB2
 ;>>>> [R4/BOTH] This instruction loads a 32-bit value from global variable $e58 (which holds a microcode address or DMA counter) into d1, then shifts right by 20 bits (0x14) to extract the upper 12 bits, which are written to the Mode 2 register ($210) of the XP-32 interface — part of the DMA address setup for microcode transfer to the XP-32 WCS.
   f04d6a: 22 39 00 00 0e 58       move.l   $e58.l, d1
+;### OP $3 -- THE SBC READS CHASSIS MEMORY.  page = addr >> $14 into MODE2
+;###   ($FF0210), offset = (addr & $FFFFF) << 2, read through the $400000
+;###   window.  So MODE2 is the PAGE REGISTER for that window and the window
+;###   is longword-addressed.  This is the SBC read path into System Common
+;###   Memory -- the one direction of the data path that had no mechanism.
   f04d70: 74 14                   moveq    #$14, d2
   f04d72: e4 a9                   lsr.l    d2, d1
   f04d74: 31 41 02 10             move.w   d1, $210(a0)  [XLTR_MODE2_PAGE]
@@ -1247,10 +1252,21 @@ loc_F04EA0:
   f04eaa: 31 40 02 16             move.w   d0, $216(a0)  [XLTR_DATA_HI]
   f04eae: 08 39 00 05 00 00 0e 87  btst.b   #$5, $e87.l
   f04eb6: 67 08                   beq.b    loc_F04EC0
+;### OP $6 READ ARM: bit 5 set returns SBC RAM at $E58 to the chassis in $E74.
   f04eb8: 33 d1 00 00 0e 74       move.w   (a1), $e74.l
   f04ebe: 60 0c                   bra.b    loc_F04ECC
 
 loc_F04EC0:
+;### OP $6 WRITE ARM -- THIS IS HOW $10AA GETS WRITTEN.  The chassis sets an
+;###   address with op $1 and issues op $6; the SBC's OWN CPU does the store.
+;###   Demonstrated: FPS3K_SEQ="01:10AA,06:0002" ->
+;###     [RAMWATCH] write 0010AA <- 00 from PC=F04EC0
+;###     [RAMWATCH] write 0010AB <- 02 from PC=F04EC0
+;###   This SUPERSEDES the bus-master conclusion: that argument's premises were
+;###   right but it was too narrow.  Prior watchpoints missed this because
+;###   RDHC's dispatcher was never driven with op $6 -- the instrument could
+;###   not fire.  Note $F05E12 reads $10AA as a LONGWORD against 2 while op $6
+;###   writes 16 bits, so the chassis must target $10AC to set the gate.
   f04ec0: 32 a8 02 04             move.w   $204(a0)  [XLTR_CHANNEL_SELECT], (a1)
 ;>>>> [R2/BOTH] This instruction clears the 16-bit value at 0xE74, which serves as a "command pending" or "status ready" flag; it is executed after writing a command word to the XP-32 data register at offset 0x216, indicating completion of the command dispatch.
   f04ec4: 33 fc 00 00 00 00 0e 74  move.w   #$0, $e74.l
@@ -1455,6 +1471,24 @@ ChannelConfigDispatch:
   f05100: 4e 41                   trap     #$1
 
 loc_F05102:
+;### THE CHASSIS COMMAND TABLE, all 16 entries now decoded (was 2 of 16).
+;###   The command byte is the LOW BYTE OF XLTR_MODE0, saved at $E86/$E87:
+;###     bits 0-3 operation (this table)     bit 5 direction (0 write, 1 read)
+;###     bit 4 auto-increment $E7A           bit 6 half select of a 32-bit param
+;###     bit 7 selects the OTHER dispatcher $F0495C
+;###   So $01/$41 were always op 1 with bit 6 clear/set (address low/high),
+;###   and $02/$42 op 2 for the count.  The operations:
+;###     $0 F04A84 validate/arm transfer      $8 F04F52 CH1 reset when idle
+;###     $1 F04CF2 set address half           $9 F04FA0 set third param $E68/$E6A
+;###     $2 F04D20 set count half             $A F04FBA read word array $1064
+;###     $3 F04D4E read CHASSIS memory        $B F05002 return staging base $10010
+;###     $4 F04E3A validate channel $E60      $C F0502C read long array $1020
+;###     $5 F04EE4 validate CHANNEL_SELECT    $D F05092 validate chsel 0..$F
+;###     $6 F04F30 read/WRITE SBC RAM         $E F050CA CLEAR BUSY (MODE1 bit 7)
+;###     $7 F04F3A mask BIM0 ch0 (IRE)        $F F050F8 end of conversation (RTE)
+;###   op $E is the XPRUN clear-busy primitive; op $B is the S-record staging
+;###   base, so the chassis can ASK where microcode goes; and op $F is $F050F8,
+;###   whose exit stub $F050FC is exactly what !IDV gives for RDHC.
 ;### 16-entry jump table, index = (response & $F) << 2. All 4EFA jmp d16(pc).
   f05102: 4e fa f9 80             jmp      loc_F04A84(pc)
   f05106: 4e fa                   DC.W     0x4efa

@@ -1473,6 +1473,122 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### RESOLVED: the chassis command language is 16 operations, and it can write SBC RAM
+
+The `F04930` responder indexes `(code & $F) << 2` into a 16-entry jump table at
+`$F05102`. This document has carried that table with **2 of 16 targets confirmed
+and 14 unknown**, and called the chassis "a black box". All sixteen are now
+decoded, and the byte is not an opaque index — it is a **structured command word**.
+
+#### The command byte is the low byte of `XLTR_MODE0`
+
+`F04930` reads MODE0, stores the word at `$E86`, and every handler then tests bits
+of `$E87` — the *low byte* of that word. So the chassis presents its command in
+MODE0, and the byte decodes as:
+
+| bits | meaning |
+|---|---|
+| 0-3 | **operation** — index into the 16-entry table |
+| 4 | **auto-increment** the index register `$E7A` after the access |
+| 5 | **direction** — 0 = chassis writes / SBC stores, 1 = SBC reads and returns |
+| 6 | **half select** — which 16-bit half of a 32-bit parameter |
+| 7 | selects the *other* dispatcher (`$F0495C`, the 0..`$14` range-checked one) |
+
+This is what the previously-recorded codes were all along: `$01` is operation 1
+with bit 6 clear (address **low**), `$41` is operation 1 with bit 6 set (address
+**high**), `$02`/`$42` the same pair for the count, `$00` operation 0. The "bit 6
+of the code selects the half" rule recorded earlier was correct and is now
+explained — it is a field of the command byte, tested by the handlers themselves.
+
+#### The sixteen operations
+
+| op | handler | what it does |
+|---|---|---|
+| `$0` | `$F04A84` | **validate/arm transfer** — read CHANNEL_SELECT, accept `0..$10` or `$28`, else panel `$259` |
+| `$1` | `$F04CF2` | **set transfer address** half into `$E58`/`$E5A` |
+| `$2` | `$F04D20` | **set transfer count** half into `$E64`/`$E66` |
+| `$3` | `$F04D4E` | **read/write CHASSIS memory** through the `$400000` window (below) |
+| `$4` | `$F04E3A` | validate the channel in `$E60` against `$105E`, else `$25C` |
+| `$5` | `$F04EE4` | validate CHANNEL_SELECT against `$105E`, else `$25C` |
+| `$6` | `$F04F30` | **read/write SBC RAM at the address in `$E58`** (below) |
+| `$7` | `$F04F3A` | **mask BIM0 ch0** — `bclr #4` (IRE) on `$FF0230`, clear `$E74` |
+| `$8` | `$F04F52` | if MODE1 bit 14 set and CHANNEL_SELECT is 0, panel `$258` (CH1 reset) |
+| `$9` | `$F04FA0` | set a third parameter `$E68`/`$E6A` from CHANNEL_SELECT |
+| `$A` | `$F04FBA` | **read the per-channel word array** — validate `$E7A` in `0..$C`, return `$1064 + $E7A*2`, auto-increment if bit 4 |
+| `$B` | `$F05002` | **return the staging-buffer base** — `$10000 + $10` = `$10010` |
+| `$C` | `$F0502C` | **read the longword array at `$1020`**, indexed `$E7A*4` |
+| `$D` | `$F05092` | validate CHANNEL_SELECT in `0..$F`, else `$25D` |
+| `$E` | `$F050CA` | **clear busy** — if CHANNEL_SELECT is 0, `bclr #7` on MODE1 |
+| `$F` | `$F050F8` | **end of conversation** — `movem.l (a7)+,d0-d7/a0-a7`, `move #$C,ccr`, `trap #1` |
+
+Two of these land squarely on things the project already had names for but no
+mechanism. Operation `$E` clearing MODE1 bit 7 is the **`XPRUN` clear-busy**
+primitive. Operation `$B` returning `$10010` is the **S-record staging base** — the
+`$10 + addr + $10000` arithmetic in `SRecordDataHandler` — so the chassis can *ask*
+where to put microcode rather than being told.
+
+And operation `$F` is `$F050F8`, whose second instruction sits at **`$F050FC`** —
+exactly the "ISR exit" address `!IDV` gives for RDHC. Two structures and a jump
+table, built by unrelated code, agreeing on one address.
+
+#### Operation `$3`: the SBC can read chassis memory through a paged window
+
+```
+$F04D6A  move.l  $e58,d1
+$F04D70  moveq   #$14,d2
+$F04D72  lsr.l   d2,d1
+$F04D74  move.w  d1,$210(a0)     ; page = addr >> 20  -> MODE2
+$F04D78  move.l  $e58,d1
+$F04D7E  andi.l  #$fffff,d1      ; offset = addr & $FFFFF
+$F04D84  lsl.l   #$2,d1          ;        scaled by 4 (longwords)
+$F04D96  move.l  (a1,d1.l),$e70  ; read through the $400000 window
+```
+
+**`XLTR_MODE2` at `$FF0210` is the page register for the `$400000` chassis
+window**, and the address decode is `page = addr >> 20`, `offset = (addr &
+$FFFFF) << 2`. This document has recorded `$400000` as "the chassis window" and
+MODE2 as "cleared during channel setup"; MODE2's actual job is paging, and the
+window is longword-addressed. That is the SBC's read path into **System Common
+Memory** — the one direction of the data path that had no mechanism at all.
+
+#### Operation `$6`: this is how `$10AA` gets written, and no bus mastering is needed
+
+```
+$F04F30  movea.l $e58,a1            ; a1 = the address set by operation $1
+$F04EA0  ... clear bit 7 of $216 ...
+$F04EAE  btst.b  #$5,$e87
+$F04EB8  move.w  (a1),$e74          ; bit 5 set: READ SBC RAM, return it
+$F04EC0  move.w  $204(a0),(a1)      ; bit 5 clear: WRITE CHANNEL_SELECT to SBC RAM
+```
+
+The chassis sets an address with operation `$1` and then issues operation `$6`, and
+**the SBC's own CPU performs the write**. Demonstrated:
+
+```
+FPS3K_SEQ="01:10AA,06:0002"
+  [RAMWATCH] write 0010AA <- 00 from PC=F04EC0
+  [RAMWATCH] write 0010AB <- 02 from PC=F04EC0
+```
+
+**This supersedes the bus-master conclusion.** This document argued that because
+`$F053E2` is arithmetically barred from reaching `$10AA` and a write watchpoint
+caught only zeros, "a nonzero `$10AA` must come from off-board — so the
+chassis-as-bus-master reading is the only candidate." The premises were right and
+the conclusion was too narrow: there is a second route, it needs no unmodelled
+hardware capability, it uses only documented registers, and it is *the firmware's
+own code*. The watchpoints missed it for the usual reason — RDHC's dispatcher was
+never driven with operation `$6`, so the instrument could not fire.
+
+Two refinements come with it. `$F05E12` reads `$10AA` as a **longword** and
+compares against 2, while operation `$6` writes 16 bits, so the chassis must target
+**`$10AC`** to set the gate. And a bus trace can now distinguish the hypotheses
+directly: the bus-master route shows `$10AA` changing with no SBC cycle, the
+command route shows a CPU write cycle from `$F04EC0`.
+
+*The `$10AA` question was posed here as "unresolved — where does the value come
+from". It has an answer, and the answer was inside the 14 table entries this
+document had been calling a black box.*
+
 ### `FPS3K_RTOSDUMP`: the findings above, as a readout
 
 Everything in the three sections that follow is a *readout* rather than an
