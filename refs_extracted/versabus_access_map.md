@@ -15658,3 +15658,29 @@ are disabled in the shipped build.
 That the high byte does double duty — site discriminator *and* format selector — is why it varies
 across `$DD`, `$EE`, `$FD`, `$AA`, `$FF` rather than being constant, which looked arbitrary when
 only the low byte's meaning was known.
+
+### Practical use of the trace facility
+
+`FPS3K_POKE="0C34=FF80"` enables all ten hooks. Measured:
+
+| | |
+|---|---|
+| final PC | `$F00FE6` — the RTOS idle loop, so **enabling everything is safe** |
+| ring-writer calls | **1,428** against 4 with bit 15 alone |
+| active hooks | 10, 13, 15 |
+| bit-7 hooks (`$F022C8`, `$F022D8`) | **0** — see below |
+
+Hook 15 is the supervisor TRAP #1 route and carries the directive numbers (`SGSEM`, `WAIT`).
+Hooks 10 (`$F0059A`, before `bclr #$f,$148(a6)`) and 13 (`$F00F5E`, before `subq.w #$1,$c52.w`)
+fire frequently with `d0 = 0`, so they sit in hot paths rather than on directive dispatch.
+
+**The two bit-7 hooks never fire**, and the reason is a timing artefact of our own: they live in
+the connect-interrupt-vector directive, which each task issues **once during init** — before
+`FPS3K_POKE` takes effect, since the poke is gated on boot completion to avoid the diagnostics
+hang. Capturing them needs `FPS3K_POKE_FROM_RESET=1`, at the cost of that hang.
+
+**The ring holds nine records and wrapped 158 times** in that run. It is a *sampling* window, not
+a log: with all hooks on it shows the last nine events, and reading a full history means dumping
+RAM periodically rather than once at the end. With bit 15 alone the volume is low enough that the
+nine records are the whole story, which is why the directive traces earlier in this file are
+complete and these are not.
