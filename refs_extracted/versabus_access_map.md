@@ -12903,3 +12903,49 @@ eight Am29705 dual-port SRAMs on the card. Not yet explained.
 5. All VersaBus data traffic runs 16 bits wide. Any model that issues
    byte or long accesses to `$FF____` models something the firmware
    never does.
+
+## The TRAP #0 jump table names 34 kernel routines (2026-07-30)
+
+The kernel dispatches directives with `move.l (a0),-(a7)` / `rts` — the return stack used
+as an indirect jump. A disassembler following control flow linearly loses the thread at that
+`rts`, which is one concrete reason the kernel resisted automatic analysis. Following the
+table by hand recovers what the linear scan cannot reach.
+
+The 35-entry table at `$F001D6`-`$F00262` holds **34 distinct entry points**, all inside
+`$F00000`-`$F04487`. Slots `$00` and `$20` share `$F00182`, the error return. Mapping the
+five directives this firmware actually issues:
+
+| dir | name | address |
+|---|---|---|
+| `$04` | T0PAGAL — allocate physical pages | `$F01240` |
+| `$06` | T0GETTCB | `$F01710` |
+| `$16` | T0WAKEUP | `$F02C6E` |
+| `$18` | T0QEVNTI | `$F01602` |
+| `$1F` | T0CRTCB | `$F02894` |
+
+`$F01240` opens `movem.l d3-d5/a3-a5,-(a7)` / `move.l a0,d3` / `move.w d3,d2` — it takes its
+argument in `a0` and immediately splits it into halves, matching the "size in, block address
+out in `a0`" signature this project derived from the allocator's *behaviour* (`end = base +
+(size<<8) - 1`). Derivation and table agree, independently.
+
+### T0WAKEUP has two entry points, and the two-byte offset is not an accident
+
+```
+F02C6C   move.w  sr,-(a7)        <- three bsr.w callers: $F002B2, $F00962, $F009C2
+F02C6E   bset.b  #$7,$c5b.w      <- TRAP #0 directive $16, from the table slot at $F0022E
+```
+
+Internal callers enter at `$F02C6C` and push SR themselves. The directive path enters two
+bytes later and skips that push — **because a TRAP exception has already stacked SR**. The
+offset is the calling convention, not a coincidence, and it retires the guess that
+`$F02C6C` was merely "the scheduler" inferred from context: the table names it.
+
+Two measurement notes, both the same failure mode this file has recorded before:
+
+- A longword-pointer scan finds **zero** references to `$F02C6C`. All three callers use
+  `bsr.w` with a 16-bit displacement, which stores no address at all. An absolute-address
+  scan cannot see a `bsr` target, and reporting "none" would have been a false negative.
+- `fps3k.asm` spans `$F04488`-`$F0FFFE`. **The kernel's 17,544 bytes — 27% of the ROM — are
+  not in the project's main disassembly at all.** So these 34 entry points were never "lost
+  by the disassembler"; they are outside the file by construction. The distinction matters:
+  the gap is a scope decision that was never revisited, not a tool failure.
