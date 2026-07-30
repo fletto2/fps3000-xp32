@@ -14425,3 +14425,38 @@ One structural observation worth keeping, flagged as tentative: `$F03A02` does
 If `a6` is a TCB there, **`TCB+$100` is a saved register image** and this is a context restore.
 Against that, the TRAP #1 path writes `$100(a6)` and `$102(a6)` as *word* status fields, so
 either `a6` differs between the two paths or the offset is reused. Not resolved, and not assumed.
+
+## `TCB+$0FC` is the saved resume PC — and it identifies where every task is parked
+
+Computing the vendor `TCB.EQ` layout (it uses offset-accumulating `DS` directives, not `EQU`, so
+the offsets have to be summed) gives a 320-byte TCB with a context block near the end:
+
+```
++$0F8  TCBA6     user's A6
++$0FC  TCBUSP    user's A7
++$100  TCBSR     user's status register
++$102  TCBPC     user's program counter
+```
+
+Checked against live TCBs rather than adopted, and the build does **not** match:
+
+| task | `+$0F8` | `+$0FC` | `+$100` | `+$102` |
+|---|---|---|---|---|
+| RDHC `$1F300` | `$00000004` | **`$00F04740`** | `$0000` | `$00000000` |
+| IO1I `$1F100` | `$00000004` | **`$00F05DC2`** | `$0000` | `$00000000` |
+| XP1I `$1E900` | `$00000004` | **`$00F07E1C`** | `$0000` | `$00000000` |
+
+`+$0FC` holds a **ROM code address**, so it is a program counter, not a stack pointer — the
+vendor layout is shifted by 6 in this region. And the value is self-verifying: **RDHC's is
+`$F04740`**, the instruction this project has separately measured as *executing zero times*
+because RDHC enters its directive-`$13` wait at `$F0473C` and never leaves. The saved PC is
+exactly where the task will resume, and it matches the documented parked address on the nose.
+
+So **`TCB+$0FC` gives any task's resume point from a RAM dump** — IO1I is parked at `$F05DC2`,
+XP1I at `$F07E1C`. That is a directly useful emulation and debugging primitive, and it is
+measured rather than inferred from the vendor file, which is wrong here.
+
+**Retracting my own tentative reading** from the dispatch inventory: I suggested `TCB+$100` might
+be a saved register image because `$F03A02` does `movem.l $100(a6),d0-d7/a0-a4`. It is **zero in
+all three TCBs**, so it is not a populated register image in any configuration reached so far,
+and `a6` at that site is evidently not a TCB.
