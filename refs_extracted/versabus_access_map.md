@@ -14348,3 +14348,52 @@ kernel, not more static analysis.
 
 Worth stating because the idiom was the leading hypothesis for where the missing entry points
 were: it was a good hypothesis, it is now tested, and it is empty.
+
+## The TRAP #1 table's `w1` field decoded: its low nibble is the exit action
+
+Chasing register-indirect jumps found seven in the kernel. Two are the TRAP #1 dispatch pair —
+`$F00376 jmp (a2)` (into the handler) and `$F003C2 jmp (a0,d0.w)` (the **exit** dispatch) — and
+the second indexes a table at **`$F00650`** that had never been examined.
+
+The table is **5 entries of 2 bytes**, not 16 as the `andi.l #$f,d0` mask suggests:
+
+```
+[0] F00650  bra.b $f0065a
+[1] F00652  bra.b $f0066a
+[2] F00654  bra.b $f00670
+[3] F00656  bra.b $f0064c
+[4] F00658  bra.b $f0067c
+    F0065A  tst.b $c5b.w        <- entry 0's target; the table ends here
+```
+
+Index 5 is already code, so the table size is 5 — derived from where the entries stop being
+`bra.b`, not from the mask.
+
+**The index is the low nibble of `w1`**, the second word of each TRAP #1 table entry. `$F00332`
+pushes `d2` = `w1`, and `$F003B2` pops it, masks `#$F`, doubles it and jumps. Checked across all
+**77** entries:
+
+| low nibble | entries |
+|---|---:|
+| 0 | 60 |
+| 1 | 7 |
+| 2 | 7 |
+| 3 | 2 |
+| 4 | 1 |
+
+**Maximum 4, none out of range, and the table holds exactly 5.** Two independently derived
+numbers agreeing exactly is what makes this a decode rather than a guess.
+
+So a TRAP #1 table entry is now fully accounted for:
+
+| field | meaning |
+|---|---|
+| `w0` | **self-relative signed offset** to the handler (`adda.w (a2),a2`) |
+| `w1` bit 7 | tested at `$F00334`; selects a parameter-validation path |
+| `w1` bit 6 | tested at `$F00354` |
+| `w1` low nibble | **exit action**, 0-4, into the `$F00650` table |
+
+That the common case is 0 (60 of 77) fits: most directives return through the same path, and the
+seven-plus-seven-plus-two-plus-one tail is the set that needs special unwinding — `SUSPND` and
+`WAIT` both carry `$0001`, and `START` and `TERMT` both carry `$0A82`, which is exactly the
+pairing their semantics predict.
