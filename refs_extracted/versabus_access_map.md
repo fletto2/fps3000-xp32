@@ -1563,6 +1563,42 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### Why the two-phase conversation cannot be driven: delivery is pull-based
+
+Reading the delivery path rather than guessing at it settles why the collect never lands after
+an operation — and the answer is not the one I assumed.
+
+**Bit 7 survives delivery.** `MODE0_RESP_MASK` is `0xFF` (its own comment reads *"bit 7 selects
+the dispatcher; bits 0-4 are the code"*), and `versabus.c:1586` assigns the sequence code whole
+into `panel_resp_code`, which line 1589 ORs into MODE0's low byte. So a `94` entry in
+`FPS3K_SEQ` **would** arrive as a bit-7 collect. My earlier guess that SEQ entries cannot carry
+bit 7 was wrong.
+
+**The obstacle is when codes are handed over, not what they contain.** Dropping `FPS3K_RESP`
+and driving the same three-entry sequence alone gives no operation at all — op `$26` never runs,
+and the only event is one `$0000` reply. So `FPS3K_RESP` supplies the wake that starts the
+conversation, and the sequence supplies what follows.
+
+That matches the limitation this file already records — *"a code is handed over only when the
+SBC issues another panel command, and it stops after a handful"* — and now explains it:
+**delivery is pull-based.** The next code is released when the SBC writes a panel command. An
+operation that exits via `ChannelConfigDispatch` writes none, so nothing pulls the following
+code, and the sequence stalls with its remaining entries undelivered.
+
+**So the two-phase transaction is structurally undriveable with the current hooks**, and for a
+specific reason: the *operate* phase is exactly the phase that issues no panel command, so it
+can never pull its own *collect*. The documented "one operation per run" guidance is a
+consequence of this, not a separate quirk.
+
+What a fix requires is now clear and small: **a push-based delivery mode** that releases the
+next code after a cycle delay regardless of SBC panel activity. `FPS3K_SEQGAP` sets a spacing
+but is consulted only inside the same pull path (`panel_resp_tick`, on the acknowledge), so it
+paces handovers rather than causing them.
+
+*I am still not implementing it*, for the reasons given in the previous entry — but the
+requirement is now derived from the delivery code rather than inferred from failed experiments,
+which is the difference between a guess at a fix and a specification for one.
+
 ### The two-phase prediction is UNTESTED, not confirmed — and the missing hook is now named
 
 The two-phase model predicts: run op `$26` (which reads `$105E` = 2), then issue a bit-7

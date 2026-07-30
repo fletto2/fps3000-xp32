@@ -570,6 +570,16 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- SEQ codes DO carry bit 7; delivery is the obstacle -------------------
+    _vb = open('emulator/versabus.c').read()
+    check('MODE0_RESP_MASK is $FF, so a sequence code keeps bit 7',
+          '#define MODE0_RESP_MASK   0xFFu' in open('emulator/versabus.h').read())
+    check('...and the sequence code is assigned whole into panel_resp_code',
+          'panel_resp_code = sc;' in _vb)
+    check('delivery is pulled by the acknowledge, not pushed on a timer',
+          'seq_gap_left = seq_gap_cycles();' in _vb
+          and 'MODE0_RESP_ACK' in _vb.split('seq_gap_left = seq_gap_cycles();')[0][-600:])
+
     # --- the two-phase conversation cannot yet be driven -----------------------
     check('op $26 = op $6 with the read bit set',
           (0x26 & 0x0F) == 0x6 and (0x26 & 0x20) and not (0x26 & 0x80))
