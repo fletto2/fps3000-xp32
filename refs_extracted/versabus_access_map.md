@@ -14460,3 +14460,35 @@ measured rather than inferred from the vendor file, which is wrong here.
 be a saved register image because `$F03A02` does `movem.l $100(a6),d0-d7/a0-a4`. It is **zero in
 all three TCBs**, so it is not a populated register image in any configuration reached so far,
 and `a6` at that site is evidently not a TCB.
+
+## A complete task snapshot from two of today's findings
+
+`TCB+$2C` is the task-state word (bit 9 suspended, bit 14 waiting, from the SUSPND/RESUME and
+WAIT/WAKEUP inverse pairs) and `TCB+$0FC` is the saved resume PC. Together they read a whole
+machine out of a RAM dump:
+
+| TCB | name | state | flags | resume PC |
+|---|---|---|---|---|
+| `$1E900` | XP1I | `$4000` | WAITING | `$F07E1C` |
+| `$1EB00` | XP2I | `$4000` | WAITING | `$F0741C` |
+| `$1ED00` | XP3I | `$4000` | WAITING | `$F06A1C` |
+| `$1EF00` | XP4I | `$4000` | WAITING | `$F06022` |
+| `$1F100` | IO1I | `$4000` | WAITING | `$F05DC2` |
+| `$1F300` | RDHC | `$4000` | WAITING | `$F04740` |
+
+Three independent confirmations fall out of one table:
+
+- **All six read `$4000` — bit 14 alone.** That is exactly the bit derived this morning from
+  `WAIT` setting it and `WAKEUP` clearing it, and it matches the documented boot state in which
+  every task blocks on directive `$13`. The bit identification and the boot description confirm
+  each other.
+- **RDHC's `$F04740`** is the instruction measured as executing *zero* times, because RDHC waits
+  at `$F0473C` and never leaves. Saved PC and execution trace agree.
+- **The XP4I offset anomaly appears again, as `+$6`.** XP1I→XP2I→XP3I step by exactly `$A00`,
+  but XP3I→XP4I is `$9FA`. This project has recorded XP4I as `−$1E` in the task body and `−$18`
+  in its `!IDV` ISR entry; here the same copy is `+$6`. **Three different deltas in three
+  different fields** is the signature of a hand-patched template rather than a relocated one,
+  which is what the "hand-written assembly, not compiled" finding predicts.
+
+Practically: `TCB+$0FC` plus `TCB+$2C` answers "where is every task and why is it stopped" from a
+single dump, with no trace required.
