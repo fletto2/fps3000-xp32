@@ -12994,3 +12994,50 @@ This is the mechanism behind a phase already documented here: **`$600` requires 
 `$F80001`-`$F82001`**, and it can only survive provoking one because it installs `$F08902` on
 vectors 2 and 3 first. The DRAM phases install `$F098E0` on bus error for the same reason.
 Vector 85 is not a BIM vector (those are `$41`-`$4A`) and its role is unestablished.
+
+## Two kernel conventions, both recovered from the new listing (2026-07-30)
+
+### Nearly every directive handler has two entry points, two bytes apart
+
+`T0WAKEUP` looked like a curiosity: `$F02C6C` pushes SR and falls into `$F02C6E`, the TRAP #0
+table target. It is not a curiosity. **29 of the 33 real handlers are preceded exactly two
+bytes earlier by `move.w sr,-(a7)` (`$40E7`)** — 87%.
+
+The convention: internal `bsr` callers enter at the earlier address and push SR themselves;
+the TRAP path enters at the table pointer and skips the push, **because the trap has already
+stacked SR**. One routine, two calling conventions, no duplicated code.
+
+The four exceptions confirm rather than weaken it. `$F01108` and `$F02894` (T0CRTCB) are
+preceded by `$4E73` = `rte`, i.e. the previous routine ends there and no prologue exists —
+these are TRAP-entry-only handlers with no internal callers.
+
+**Consequence for any analysis of this kernel: the real routine start is two bytes before
+every table pointer.** A tool seeded from the table alone mislabels 29 routine boundaries,
+and a caller census that looks only at the table pointer misses the `bsr` callers entirely.
+
+### Structure teardown uses two different invalidation mechanisms
+
+The free routine at `$F02FBA` does three things:
+
+```
+f02fc0: move.l  $e34.w,$4(a0)    ; push onto a free list at $E34
+f02fc6: move.l  a0,$e34.w        ; LIFO head update
+f02fd2: not.l   (a0)             ; one's-complement each linked structure's marker
+f02fda: move.l  #$21746362,(a4)  ; stamp the TCB itself '!tcb', lowercase
+```
+
+- Subordinate structures are invalidated by **one's-complementing the marker longword**.
+  `$F02FD2` is the only `not.l (an)` in the kernel.
+- The TCB itself gets a **lowercase `!tcb`** — `$21746362`. This is the **only** lowercase
+  marker variant in the whole 64 KB; the other eleven tags appear in uppercase only. That
+  fits: the TCB is the one structure ever destroyed, since the other eleven are allocated
+  once at boot and never freed.
+
+**Neither invalidated form is ever tested for.** The ROM contains zero references to
+`$DEABBCBD` (`~!TCB`) or any other complemented tag, so this is one-way destruction rather
+than a recoverable state.
+
+Hard prediction for a RAM dump after a task terminates: the TCB base reads `!tcb`, and
+subordinate tags read as `$DEAB…` complements. **A scan counting `!TCB` undercounts** — this
+project's marker inventory and `FPS3K_RTOSDUMP` both match uppercase only. No current
+configuration terminates a task, so nothing measured so far is affected.

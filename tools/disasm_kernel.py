@@ -58,6 +58,18 @@ def seed_set(rom):
             nm = DIRECTIVE_NAMES.get(i)
             names.setdefault(t, f"TRAP0_{nm}" if nm else f"TRAP0_dir_{i:02X}")
 
+            # 29 of the 33 real handlers are preceded two bytes earlier by
+            # `move.w sr,-(a7)` (0x40E7).  That is the kernel's calling
+            # convention, not a coincidence: internal bsr callers enter at the
+            # earlier address and push SR themselves, while the TRAP path
+            # enters at the table pointer and skips the push BECAUSE THE TRAP
+            # HAS ALREADY STACKED SR.  So the real routine start is two bytes
+            # before every table entry, and seeding only the pointer loses it.
+            if t - 2 >= START and struct.unpack(
+                    ">H", rom[t - 2 - BASE:t - BASE])[0] == 0x40E7:
+                seeds.add(t - 2)
+                names.setdefault(t - 2, f"{names[t]}_bsr")
+
     # NOT a vector table.  The reset overlay aliases ROM at 0 only so the
     # 68000 can fetch SSP from +0 and PC from +4; measured, +4 = $F09C00 and
     # offsets $08-$3FF are zero.  RMS68K builds the whole vector table in RAM

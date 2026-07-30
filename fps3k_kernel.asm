@@ -3,8 +3,8 @@
 ; Range   : 0xF00000-0xF04487  (17544 bytes)
 ; Method  : recursive descent seeded from the TRAP #0 jump
 ;           table at 0xF001D6 + exception vectors
-; Coverage: 7904/17544 bytes as code  (45.1%)
-; Instructions: 2429   Labels: 461
+; Coverage: 7906/17544 bytes as code  (45.1%)
+; Instructions: 2430   Labels: 463
 
   f00000: 00 00 00 00              ori.b    #$0, d0
   f00004: 00 f0                    DC.W     $00f0
@@ -743,7 +743,7 @@ loc_F006D2:
 loc_F006E6:
   f006e6: 4e 73                    rte      
 
-loc_F006E8:
+TRAP0_dir_01_bsr:
   f006e8: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_01:
@@ -811,7 +811,7 @@ loc_F0077C:
   f00782: 4c df 30 80              movem.l  (a7)+, d7/a4-a5
   f00786: 4e 75                    rts      
 
-loc_F00788:
+TRAP0_dir_02_bsr:
   f00788: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_02:
@@ -839,7 +839,7 @@ loc_F007A0:
   f007bc: 22 5f                    movea.l  (a7)+, a1
   f007be: 4e 73                    rte      
 
-loc_F007C0:
+TRAP0_dir_03_bsr:
   f007c0: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_03:
@@ -877,7 +877,7 @@ loc_F007FC:
 loc_F00812:
   f00812: 60 ac                    bra.b    $f007c0
 
-loc_F00814:
+TRAP0_dir_0E_bsr:
   f00814: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_0E:
@@ -885,7 +885,7 @@ TRAP0_dir_0E:
   f0081c: 61 00 ff 1e              bsr.w    $f0073c
   f00820: 60 00 fc ea              bra.w    $f0050c
 
-loc_F00824:
+TRAP0_dir_15_bsr:
   f00824: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_15:
@@ -1478,7 +1478,7 @@ loc_F00D9A:
   f00d9a: 08 ee 00 0a 00 2c        bset.b   #$a, $2c(a6)
   f00da0: 60 00 f7 6a              bra.w    $f0050c
 
-loc_F00DA4:
+TRAP0_dir_13_bsr:
   f00da4: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_13:
@@ -1690,7 +1690,7 @@ loc_F00EAC:
   f00f92: 60 00                    DC.W     $6000
   f00f94: f6 f8                    DC.W     $f6f8
 
-loc_F00F96:
+TRAP0_dir_1C_bsr:
   f00f96: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_1C:
@@ -1829,7 +1829,7 @@ loc_F010DE:
   f010ea: 52 81                    addq.l   #$1, d1
   f010ec: 60 00 ff 7a              bra.w    $f01068
 
-loc_F010F0:
+TRAP0_dir_21_bsr:
   f010f0: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_21:
@@ -1899,7 +1899,9 @@ loc_F0115C:
 
 loc_F01194:
   f01194: 4e 73                    rte      
-  f01196: 40 e7                    DC.W     $40e7
+
+TRAP0_dir_22_bsr:
+  f01196: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_22:
   f01198: 48 e7 10 70              movem.l  d3/a1-a3, -(a7)
@@ -1964,7 +1966,7 @@ loc_F01216:
   f01238: 4c df 0e 08              movem.l  (a7)+, d3/a1-a3
   f0123c: 4e 73                    rte      
 
-loc_F0123E:
+TRAP0_T0PAGAL_bsr:
   f0123e: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_T0PAGAL:
@@ -2244,7 +2246,7 @@ loc_F01480:
 TRAP0_dir_1B:
   f01490: 61 00 ec f4              bsr.w    $f00186
 
-loc_F01494:
+TRAP0_dir_05_bsr:
   f01494: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_05:
@@ -2386,7 +2388,7 @@ loc_F015B6:
   f015b6: 54 af 00 02              addq.l   #$2, $2(a7)
   f015ba: 60 ec                    bra.b    $f015a8
 
-loc_F015BC:
+TRAP0_dir_0B_bsr:
   f015bc: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_0B:
@@ -2405,7 +2407,7 @@ loc_F015D4:
   f015d4: 22 4d                    movea.l  a5, a1
   f015d6: 60 02                    bra.b    $f015da
 
-loc_F015D8:
+TRAP0_dir_17_bsr:
   f015d8: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_17:
@@ -2422,7 +2424,7 @@ loc_F015F8:
   f015f8: 54 af 00 02              addq.l   #$2, $2(a7)
   f015fc: 60 00 00 6a              bra.w    $f01668
 
-loc_F01600:
+TRAP0_T0QEVNTI_bsr:
   f01600: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_T0QEVNTI:
@@ -2532,7 +2534,7 @@ loc_F016D8:
   f016f8: 4c df 38 03              movem.l  (a7)+, d0-d1/a3-a5
   f016fc: 4e 75                    rts      
 
-loc_F016FE:
+TRAP0_dir_0D_bsr:
   f016fe: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_0D:
@@ -2546,7 +2548,7 @@ loc_F0170A:
   f0170a: 20 4e                    movea.l  a6, a0
   f0170c: 4e 73                    rte      
 
-loc_F0170E:
+TRAP0_T0GETTCB_bsr:
   f0170e: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_T0GETTCB:
@@ -2590,7 +2592,7 @@ loc_F01754:
   f01758: 40 e7                    move.w   sr, -(a7)
   f0175a: 60 06                    bra.b    $f01762
 
-loc_F0175C:
+TRAP0_dir_08_bsr:
   f0175c: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_08:
@@ -2644,6 +2646,8 @@ loc_F017BC:
   f017bc: 54 af 00 02              addq.l   #$2, $2(a7)
   f017c0: 2c 03                    move.l   d3, d6
   f017c2: 4e 73                    rte      
+
+TRAP0_dir_07_bsr:
   f017c4: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_07:
@@ -2675,7 +2679,7 @@ loc_F017EC:
 loc_F017F2:
   f017f2: 4e 73                    rte      
 
-loc_F017F4:
+TRAP0_dir_09_bsr:
   f017f4: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_09:
@@ -2744,7 +2748,7 @@ loc_F01872:
   f01872: 20 43                    movea.l  d3, a0
   f01874: 4e 73                    rte      
 
-loc_F01876:
+TRAP0_dir_0C_bsr:
   f01876: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_0C:
@@ -3110,7 +3114,7 @@ loc_F01B5A:
   f01b6a: 53 2d 00 05              subq.b   #$1, $5(a5)
   f01b6e: 4e 73                    rte      
 
-loc_F01B70:
+TRAP0_dir_12_bsr:
   f01b70: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_12:
@@ -3918,7 +3922,7 @@ loc_F01BFC:
   f021ca: 61 32                    DC.W     $6132
   f021cc: 4e 73                    DC.W     $4e73
 
-loc_F021CE:
+TRAP0_dir_1D_bsr:
   f021ce: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_1D:
@@ -4198,7 +4202,7 @@ loc_F021FE:
   f023fa: 28 4e                    DC.W     $284e
   f023fc: 60 02                    DC.W     $6002
 
-loc_F023FE:
+TRAP0_dir_11_bsr:
   f023fe: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_11:
@@ -4538,7 +4542,7 @@ loc_F0252A:
   f026a4: 00 04                    DC.W     $0004
   f026a6: 4e 73                    DC.W     $4e73
 
-loc_F026A8:
+TRAP0_dir_0A_bsr:
   f026a8: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_0A:
@@ -4619,7 +4623,7 @@ loc_F0275C:
 loc_F02762:
   f02762: 4e 73                    rte      
 
-loc_F02764:
+TRAP0_dir_19_bsr:
   f02764: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_19:
@@ -5261,7 +5265,7 @@ loc_F02A32:
   f02c68: 60 00                    DC.W     $6000
   f02c6a: 00 0a                    DC.W     $000a
 
-loc_F02C6C:
+TRAP0_T0WAKEUP_bsr:
   f02c6c: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_T0WAKEUP:
@@ -6218,7 +6222,7 @@ loc_F0348E:
   f03490: 28 4e                    DC.W     $284e
   f03492: 60 02                    DC.W     $6002
 
-loc_F03494:
+TRAP0_dir_10_bsr:
   f03494: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_10:
@@ -6329,7 +6333,7 @@ loc_F034AE:
   f03560: 00 06                    DC.W     $0006
   f03562: 4e 73                    DC.W     $4e73
 
-loc_F03564:
+TRAP0_dir_14_bsr:
   f03564: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_14:
@@ -7039,7 +7043,7 @@ loc_F03B1C:
 loc_F03B2E:
   f03b2e: 4e 73                    rte      
 
-loc_F03B30:
+TRAP0_dir_0F_bsr:
   f03b30: 40 e7                    move.w   sr, -(a7)
 
 TRAP0_dir_0F:
