@@ -570,6 +570,27 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- $F0517E is a DISCARDING drain; the XP trio are validators ------------
+    check('$F0517E arms $400, polls bit 15, clears, then reads the port',
+          d[0xF0517E-0xF00000:0xF05196-0xF00000]
+          == b'\x3b\x7c\x04\x00\x02\x18\x3e\x2d\x02\x18'
+             b'\x08\x07\x00\x0f\x67\xf6\x3b\x7c\x00\x00\x02\x18'
+             b'\x32\x10')
+    check('...and DISCARDS the word: d1 is loaded then never stored',
+          d[0xF05196-0xF00000:0xF051A0-0xF00000]
+          == b'\x52\x80\x53\x44\x0c\x44\x00\x00\x66\xde')
+    check('$F070AA and $F07150 are channel validators with codes $263 and $264',
+          d[0xF070B8-0xF00000:0xF070BC-0xF00000] == b'\x30\x3c\x02\x63'
+          and d[0xF0715E-0xF00000:0xF07162-0xF00000] == b'\x30\x3c\x02\x64')
+    check('both gate on 1 <= ch <= $105E',
+          d[0xF070AA-0xF00000:0xF070B6-0xF00000]
+          == b'\x0c\x40\x00\x01\x6d\x08\xb0\x79\x00\x00\x10\x5e')
+    check('$F07216 is the bit-11 test path, present in XP2I/XP3I',
+          d[0xF07216-0xF00000:0xF07226-0xF00000]
+          == b'\x42\x84\x18\x39\x00\x00\x10\x7e\x52\x04\x3a\x10'
+             b'\x08\x05\x00\x0b'
+          and d[0xF07C16-0xF00000:0xF07C1A-0xF00000] == b'\x42\x84\x18\x39')
+
     # --- $F09A7E is a DRAM retention test -------------------------------------
     check('$F09A7E fills with $09ABCDEF, skipping $1FFF0',
           d[0xF09A8A-0xF00000:0xF09A9C-0xF00000]

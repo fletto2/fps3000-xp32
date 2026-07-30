@@ -1563,6 +1563,49 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### Task-region tally: 42 call targets, and the last nine resolve into four routines
+
+Applying the self-test's inventory method to the six task regions gives 42 distinct call
+targets, of which 33 were already documented. The nine gaps are not nine routines — they are
+**four**, template-replicated at the `$A00` XP stride:
+
+| routine | copies | what it is |
+|---|---|---|
+| `$F0517E` | RDHC only | **polled bulk-read that DISCARDS** — new, see below |
+| `$F070AA` / `$F07AAA` / … | per XP task | channel validator, reject code **`$263`** |
+| `$F07150` / `$F07B50` / `$F08550` | per XP task | channel validator, reject code **`$264`** |
+| `$F07216` / `$F07C16` | XP2I, XP3I | the **bit-11 test** path |
+
+**`$F0517E` is a fourth transfer primitive.** It runs the documented bulk cycle — arm
+`XLTR_STATUS_IRQ` with `$400`, poll bit 15, clear it, read the port — but:
+
+```
+move.w (a0),d1        ; read a word...
+addq.l #$1,d0         ; ...count it
+subq.w #$1,d4         ; ...decrement the remaining count
+cmpi.w #$0,d4  ;  bne loop
+```
+
+**`d1` is never stored anywhere.** Where `BLK_XFR` moves channel→memory and `POLL` moves
+memory→channel, this consumes N words and throws them away. It is a **drain/flush**: the
+primitive for discarding a pending transfer without a destination buffer. That makes the
+transfer set four operations, not three — two movers, a sender, a finalizer, and now a
+discarder.
+
+**The gap distribution independently confirms a documented asymmetry.** XP2I and XP3I each
+had three gaps; XP4I and XP1I had one apiece. That is exactly what the bit-11 finding
+predicts: this file already records that *"`$C801` sets bit 11, which XP1I/2/3 test to take a
+short branch, and XP4I (which never tests bit 11) is unaffected"*. XP4I is missing the bit-11
+routine entirely, so it cannot appear as a gap there — **a claim about branch behaviour,
+made from execution counts months ago, reappearing as a structural fact in a subroutine
+census.** Two unrelated methods, same asymmetry.
+
+*(XP1I's single gap is its `$264` validator at `$F08550`; its `$263` and bit-11 copies were
+already documented, which is why its count is low for a different reason than XP4I's.)*
+
+With these four decoded, **both inventories are complete**: 42/42 self-test subroutines and
+42/42 task-region call targets.
+
 ### `$F09A7E` is a DRAM refresh test — fill, wait 0.7 s, verify
 
 Auditing my own labels after the `$F089EE` correction, this was the other one asserted from
