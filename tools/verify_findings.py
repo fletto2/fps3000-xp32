@@ -550,6 +550,25 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- phase $600 is the bus-error watchdog test ----------------------------
+    check('$600 walks $F82001 down by 2 with a byte read and NOP padding',
+          d[0xF08F36-0xF00000:0xF08F48-0xF00000]
+          == b'\x41\xf9\x00\xf8\x20\x01\x41\xe8\xff\xfe'
+             b'\x10\x10\x4e\x71\x4e\x71\x4e\x71')
+    check('$600 EXITS on a fault and FAILS if the sweep completes cleanly',
+          d[0xF08F4C-0xF00000:0xF08F5E-0xF00000]
+          == b'\x4a\x81\x66\x0e\xb1\xfc\x00\xf8\x00\x01'
+             b'\x66\xe4\x2e\x3c\xf0\xf0\xf0\xf0')
+    check('its handler counts faults with a skip-zero guard, and does NOT adjust PC',
+          d[0xF08F06-0xF00000:0xF08F1C-0xF00000]
+          == b'\x06\x81\x00\x00\x00\x01\x67\x02\x60\x06'
+             b'\x06\x81\x00\x00\x00\x01\x4f\xef\x00\x08\x4e\x73')
+    check('$800 derives the three PTM timer MSBs from a0 = $F70001',
+          d[0xF0905E-0xF00000:0xF09064-0xF00000] == b'\x41\xf9\x00\xf7\x00\x01'
+          and d[0xF09096-0xF00000:0xF0909A-0xF00000] == b'\x43\xe8\x00\x04'
+          and d[0xF090A4-0xF00000:0xF090A8-0xF00000] == b'\x43\xe8\x00\x08'
+          and d[0xF090B2-0xF00000:0xF090B6-0xF00000] == b'\x43\xe8\x00\x0c')
+
     # --- phase $300 IS a whole-ROM XOR checksum test --------------------------
     check('$300 sweeps $F00000-$F10000 XOR-accumulating into d0',
           d[0xF08D32-0xF00000:0xF08D44-0xF00000]

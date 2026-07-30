@@ -1528,6 +1528,70 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Phase `$600` is the BUS-ERROR WATCHDOG test — and `$F80000` is not a device
+
+`$F08F1C` walks `$F82001` down to `$F80001` in steps of 2, reading a byte at each with a
+private bus-error handler installed. My first reading was "an undocumented 8 KB device
+region". The exit condition says otherwise:
+
+```
+$F08F4C  tst.l  d1
+$F08F4E  bne    $F08F5E          ; a fault occurred -> EXIT, PASS
+$F08F50  cmpa.l #$f80001,a0
+$F08F56  bne    $F08F3C          ; else keep walking down
+$F08F58  move.l #$F0F0F0F0,d7    ; swept all 8 KB with NO fault -> FAIL
+```
+
+**The test requires a bus error.** Sweeping the whole range without one is the failure case.
+So `$F80000-$F82000` is not a device at all — it is **deliberately unpopulated address
+space, chosen as a safe place to provoke a bus timeout**. That is precisely why it appears
+in no memory map: there is nothing there, by design. The stage verifies that the board's
+**bus-timeout watchdog** still asserts BERR when no DTACK arrives, which is a genuinely
+important thing to check — a dead watchdog means any stray access hangs the bus forever
+instead of trapping.
+
+**The handler is more careful than the one in `$1700`/`$1800`:**
+
+```
+$F08F06:  addi.l #$1,d1        ; count the fault
+          beq    $F08F10       ; if it wrapped to zero...
+          bra    $F08F16
+$F08F10:  addi.l #$1,d1        ; ...count again, so d1 is NEVER zero after a fault
+$F08F16:  lea    $8(a7),a7
+          rte
+```
+
+The skip-zero guard makes `tst.l d1` a reliable "did we fault" test even across 2^32 faults.
+And unlike `$F098E0`, this handler **does not advance the PC** — no `addq.w #4`. It relies
+entirely on the three NOPs after the read to absorb the imprecise fault. Two bus-error
+handlers in one ROM with deliberately different strategies, each matched to its probe.
+
+**Measured — the stage passes on the first probe:**
+
+| PC | count | |
+|---|---|---|
+| `$F08F3C` | 1 | one downward step |
+| `$F08F40` | 1 | the byte read |
+| `$F08F06` | 2 | the handler |
+| `$F08F5E` | **1** | fault path — **PASS** |
+| `$F08F58` | **0** | sweep-exhausted — never |
+
+So the emulator does raise BERR on unmapped reads and satisfies the stage immediately.
+*(The handler entering twice against a single logged read is unexplained; the pass/fail
+outcome does not depend on it, and I have not chased it.)*
+
+**Emulator constraint, now explicit:** reads anywhere in `$F80001-$F82001` must raise a bus
+error. A model that silently returns zero for unmapped space — the common shortcut — fails
+this stage, and since failure loops back to `$F08F36` it would **hang forever at phase
+`$600`** rather than reporting anything. Combined with the phase beacon on `CHANNEL_SELECT`,
+a board or model stuck at `$0600` is reporting exactly this.
+
+For completeness, **`$800` (`$F0905A`) is the PTM stage**: it sets `a0 = $F70001`, derives
+`$4(a0)`, `$8(a0)`, `$c(a0)` — the three timer MSB registers at `$F70005`/`$F70009`/`$F7000D`
+— and calls the `movep` walking-ones routine at `$F09154` once per timer, at IPL 4
+(`SR <- $2400`). That confirms from the calling side what was derived earlier from the
+callee.
+
 ### RETRACTION: the firmware DOES verify the ROM checksum — phase `$300`
 
 `$F08D1A` is a **whole-ROM XOR checksum test**, and it runs as the second stage of the
