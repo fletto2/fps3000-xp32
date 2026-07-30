@@ -1528,6 +1528,67 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The last two stages test System Common Memory — and that closes the board map
+
+`$F09AD6` and `$F09B20`, the final stages before the third `$D0` checkpoint, both operate on
+`$400000` with `XLTR_MODE2 <- 0` (page 0). They are the textbook memory-test pair:
+
+**`$F09AD6` — address-line test.**
+
+```
+movea.l #$400000,a0  ;  move.l #$4000,d0  ;  moveq #$4,d1
+loop:  move.l d1,(a0,d1.l)     ; write each offset's own value AT that offset
+       lsl.l  #$1,d1           ; walk the address bit
+       cmp.l  d1,d0            ; until $4000
+```
+
+Offsets `4, 8, 16 … 8192` — **twelve powers of two, exercising address lines A2-A13** of the
+chassis window (A0/A1 lie inside the longword). Writing each address's own value at that
+address is the standard way to catch shorted or open address lines: any aliasing shows up as
+a location holding the wrong offset.
+
+**`$F09B20` — data-pattern test.** It fills `$400000-$404000` in longword strides from a ROM
+pattern table at `$F09BB6`:
+
+| pair | pattern | complement |
+|---|---|---|
+| 1 | `$00000000` | `$FFFFFFFF` |
+| 2 | `$55555555` | `$AAAAAAAA` |
+
+All-zeros/all-ones and checkerboard/inverse-checkerboard, in **32-bit** longwords —
+consistent with everything else about this window being 32 bits wide, and complementary to
+the `$AAAA` 16-bit test the AP I/F gets in `$1A00`.
+
+**Both cover only 16 KB, at page 0** — not the megaword the MAIN DATA card carries. The
+self-test verifies a window into SCM, not the array. (This matches the extent noted
+independently for phase `$29xx`.)
+
+**With that, every board the SBC can reach is accounted for:**
+
+| board / device | stages that exercise it |
+|---|---|
+| SBC — RAM, ROM, vectors | `$200`-`$500`, sequence C DRAM walk |
+| **ROM checksum** | `$300` |
+| MC6840 PTM | `$800`, and `$1100`'s `movep` walk |
+| VERSAmodule interrupter | `$700`, `$1300` |
+| bus-timeout watchdog | `$600` |
+| XLTR register file | `$1500`, `$1600` |
+| XLTR window / page | `$1700`, `$1800` |
+| XLTR data mux (16→32 conversion) | `$1900` |
+| AP I/F | `$1A00` |
+| **SCM / MAIN DATA via MEM CTL** | `$F09AD6`, `$F09B20` |
+| **XP-32 EXEC (Am29116)** | **never** |
+| **XP-32 ARITH** | **never** |
+| **UNIV FMT** | **never** |
+
+*That table is the structural answer to "map all communications to and from the devices,
+including EU/AU".* The self-test is the firmware's own authoritative statement about what
+the SBC can touch, and it exercises **every board in the chassis except the three on the far
+side of the XP32 bus**. The EU and AU are not missing from our analysis through oversight —
+they are outside the SBC's reach by design, and the machine's own diagnostics draw the same
+boundary we kept arriving at. Nothing in this ROM can map them; only an EU PROM dump or a
+bus trace on the XP32 side can.
+
 ### The VERSAmodule block is larger than two bytes — four write-only neighbours
 
 Sweeping everything reached through `a5 = $1FFF0` (excluding `lea`, which accesses nothing)

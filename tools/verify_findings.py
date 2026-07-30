@@ -550,6 +550,26 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- the last two stages test SCM through the $400000 window --------------
+    check('$F09AD6 walks address lines A2-A13 writing each offset at itself',
+          d[0xF09AE6-0xF00000:0xF09AFE-0xF00000]
+          == b'\x20\x7c\x00\x40\x00\x00\x20\x3c\x00\x00\x40\x00'
+             b'\x74\x04\x72\x04\x21\x81\x18\x00\xe3\x89\xb0\x81')
+    check('...which is exactly 12 powers of two from 4 to 8192',
+          [4 << i for i in range(12)] == [4, 8, 16, 32, 64, 128, 256, 512,
+                                          1024, 2048, 4096, 8192])
+    check('$F09B20 spans $400000-$404000 from a ROM pattern table at $F09BB6',
+          d[0xF09B30-0xF00000:0xF09B42-0xF00000]
+          == b'\x45\xf9\x00\x40\x00\x00\x43\xf9\x00\x40\x40\x00'
+             b'\x47\xf9\x00\xf0\x9b\xb6')
+    check('the pattern table is two complementary longword pairs',
+          d[0xF09BB6-0xF00000:0xF09BC6-0xF00000]
+          == b'\x00\x00\x00\x00\xff\xff\xff\xff'
+             b'\x55\x55\x55\x55\xaa\xaa\xaa\xaa')
+    check('both SCM stages run at page 0 (XLTR_MODE2 cleared)',
+          d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
+          and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
+
     # --- four write-only neighbours of VMOD_CTRL ------------------------------
     check('$1FFE2/$1FFE4/$1FFE6/$1FFF2 are all move.w writes through a5',
           d[0xF08F8C-0xF00000:0xF08F90-0xF00000] == b'\x3b\x40\xff\xf2'
