@@ -3189,5 +3189,54 @@ check("...and no literal 'HXP0' handler name exists per channel",
 check('$F0A825-$F0FFFD is 22,489 bytes of nothing but zero',
       _rom[0xF0A825 - _B:0xF0FFFE - _B] == b'\x00' * 22489)
 
+# ---------------------------------------------------------------------------
+# The ISR-exit / wake chain, verified 2026-07-30.  These replace the retracted
+# claim that $F04930 "modifies the saved PC out of bra ." -- it does not; the
+# kernel does, at $F00282, and the adjusted value is a TABLE KEY not a return
+# address.
+# ---------------------------------------------------------------------------
+check('TRAP #1 entry tests a CCR sentinel, not just supervisor mode',
+      _rom[0xF00262 - _B:0xF00278 - _B]
+      == b'\x3f\x17\x02\x2f\x00\x0c\x00\x01\x02\x17\x00\x7f'
+         b'\x67\x08\x0c\x2f\x00\x0c\x00\x01\x67\x08')
+check('the ISR-exit path adjusts the stacked PC by -6 at $F00282',
+      _rom[0xF00280 - _B:0xF00284 - _B] == b'\x58\x8f\x5f\x97')
+check('...and reads it back at $3c(a7), past the 60 bytes of saved registers',
+      _rom[0xF00284 - _B:0xF00288 - _B] == b'\x48\xe7\xff\xfe'
+      and _rom[0xF00296 - _B:0xF0029A - _B] == b'\x28\x6f\x00\x3c')
+check('the !IDV walk compares at offset 10 and strides 14 bytes',
+      _rom[0xF0029A - _B:0xF0029E - _B] == b'\xb9\xed\x00\x0a'
+      and _rom[0xF0029E - _B:0xF002A4 - _B] == b'\xd2\xfc\x00\x00\x00\x0e')
+check('it wakes the matched record\'s TCB via T0WAKEUP at $F02C6C',
+      _rom[0xF002AC - _B:0xF002B6 - _B]
+      == b'\x2c\x6d\xff\xf4\x41\xd6\x61\x00\x29\xb8')
+# The arithmetic that makes the key work: the exit stub's sentinel is exactly
+# six bytes before the address trap #1 stacks.
+check('$F050FC (the sentinel) == $F05102 (stacked PC) - 6',
+      0xF05102 - 6 == 0xF050FC)
+check('the exit stub is movem / move #$c,ccr / trap #1',
+      _rom[0xF050F8 - _B:0xF05102 - _B]
+      == b'\x4c\xdf\xff\xff\x44\xfc\x00\x0c\x4e\x41')
+
+# --- !IDV, read from a live machine ---------------------------------------
+with tempfile.TemporaryDirectory() as _tdv:
+    subprocess.run([EMU, '-rom', ROM, '-cycles', '150000000',
+                    '-dump-ram', f'{_tdv}/r'], capture_output=True, timeout=400)
+    _r = open(f'{_tdv}/r', 'rb').read()
+    _idv = struct.unpack('>I', _r[0xC6E:0xC72])[0] & 0xFFFFFF
+    _recs = [_r[_idv + 8 + 14 * i: _idv + 8 + 14 * (i + 1)] for i in range(6)]
+    check('!IDV is at $1F800 with six 14-byte records',
+          _idv == 0x1F800 and all(len(x) == 14 for x in _recs))
+    check('RDHC\'s record (vector $41) stores ISR exit $F050FC -- the -6 target',
+          any(struct.unpack('>H', x[0:2])[0] == 0x41
+              and struct.unpack('>I', x[10:14])[0] == 0xF050FC for x in _recs))
+    check('...and its TCB field is $1F300, the sixth TCB',
+          any(struct.unpack('>H', x[0:2])[0] == 0x41
+              and struct.unpack('>I', x[2:6])[0] == 0x1F300 for x in _recs))
+    check('every !IDV record\'s ISR-exit field is 6 past a move #$c,ccr',
+          all(_rom[(struct.unpack('>I', x[10:14])[0]) - _B:
+                   (struct.unpack('>I', x[10:14])[0]) - _B + 4]
+              == b'\x44\xfc\x00\x0c' for x in _recs))
+
 print(f'\n{checks - len(fails)}/{checks} passed')
 sys.exit(1 if fails else 0)

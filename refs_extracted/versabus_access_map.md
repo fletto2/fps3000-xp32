@@ -14230,3 +14230,25 @@ it trapped from.
 
 This also independently re-derives the `!IDV` record layout from the code that consumes it,
 having previously been read off the structure that produces it.
+
+### The sentinel convention is uniform across all six tasks
+
+Every `!IDV` record's ISR-exit field points at a `move.w #$c,ccr` — checked, all six:
+
+| task | ISR-exit field | bytes at that address |
+|---|---|---|
+| XP1I | `$F07F08` | `44 fc 00 0c` |
+| XP2I | `$F07508` | `44 fc 00 0c` |
+| XP3I | `$F06B08` | `44 fc 00 0c` |
+| XP4I | `$F060F0` | `44 fc 00 0c` |
+| IO1I | `$F05E4C` | `44 fc 00 0c` |
+| RDHC | `$F050FC` | `44 fc 00 0c` |
+
+Six for six. So the CCR sentinel is not an RDHC quirk — it is **the ISR-exit calling convention
+of the whole firmware**, and `!IDV` stores each task's sentinel address as the key that
+identifies it to the one shared kernel routine.
+
+This makes the mechanism emulator-relevant in a concrete way: a model that lets an ISR return by
+`rte` instead of routing it through `trap #1` with `CCR = $0C` will never wake the task, and the
+failure will look like "the interrupt fired but nothing happened" — which is exactly the symptom
+this project chased for several sessions under the heading of the `bra .` deadlock.
