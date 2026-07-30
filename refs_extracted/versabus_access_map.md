@@ -14110,3 +14110,53 @@ Three consequences:
 - It explains the dual-entry convention from the other direction: `$F02C6C` needs a `bsr`-callable
   entry precisely because the kernel calls it internally from *this* path, while directive `$16`
   enters two bytes later.
+
+## PARTIAL UN-RETRACTION: the PC *is* modified — at `$F00282`, not in `$F04930`
+
+Two sections ago I retracted "the IRQ handler modifies the saved PC out of `bra .`" after
+searching `$F04930`-`$F05160` and finding no `a7`-relative write. That search was correct and its
+conclusion was too broad: **the instruction exists, in the kernel, outside the window I searched.**
+
+TRAP #1 vectors to **`$F00262`** — not `$F002C6`, which I had assumed because it shares the
+SR-masking idiom. `$F00262` is the byte immediately after the TRAP #0 jump table, and it tests a
+**CCR sentinel**:
+
+```
+F00262  move.w  (a7),-(a7)
+F00264  andi.b  #$c,$1(a7)     ; mask the stacked CCR with $0C
+F0026A  andi.b  #$7f,(a7)      ; mask the system byte
+F0026E  beq.b   $f00278        ; user mode -> ordinary directive dispatch
+F00270  cmpi.b  #$c,$1(a7)     ; supervisor AND CCR == N|Z ?
+F00276  beq.b   $f00280        ; -> the ISR-exit path
+```
+
+That is why every ISR exit stub executes `move #$0C,ccr` before its `trap #1`: **the sentinel is
+the calling convention.** Mode alone is not enough — a supervisor `trap #1` without the sentinel
+falls through to the normal path. This also explains why `$F0093A`, the supervisor branch I
+decoded first, executes **zero** times: the sentinel diverts before reaching it.
+
+The ISR-exit path itself:
+
+```
+F00280  addq.l   #$4,a7
+F00282  subq.l   #$6,(a7)        <-- the stacked PC, backed up by 6
+F00288  movea.l  $c6e.l,a5       <-- the !IDV directory slot
+F00296  movea.l  $3c(a7),a4      <-- the interrupted PC
+F0029A  cmpa.l   $a(a5),a4
+F0029E  adda.l   #$e,a5          <-- stride $E = 14 bytes
+F002AC  movea.l  -$c(a5),a6
+F002B2  bsr.w    $f02c6c         <-- T0WAKEUP on that record's TCB
+F002BE  rte
+```
+
+**It identifies which task's ISR just finished by matching the interrupted PC against the `!IDV`
+table, then wakes that task.** The `$E` stride is exactly the 14-byte `!IDV` record this project
+documented as `{vector, TCB, ISR entry, ISR exit}` — an independent confirmation of that
+structure from code that was never examined when it was derived.
+
+Measured, at `FPS3K_BIM0LVL=7`: `$F050F8` and `$F02C6C` each execute **219 times**, in lockstep.
+The exit stub and the waker are the same event.
+
+So the corrected attribution is: the PC adjustment is real, it is `subq.l #$6,(a7)` at
+`$F00282`, it lives in the RMS68K kernel rather than the FPS panel handler, and it is reached
+only via a CCR sentinel. Everything said about `$F04930` doing it remains wrong.
