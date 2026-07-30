@@ -570,6 +570,21 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- $F09A7E is a DRAM retention test -------------------------------------
+    check('$F09A7E fills with $09ABCDEF, skipping $1FFF0',
+          d[0xF09A8A-0xF00000:0xF09A9C-0xF00000]
+          == b'\x20\x3c\x09\xab\xcd\xef\x24\x48\x20\xc0'
+             b'\xb1\xfc\x00\x01\xff\xf0\x66\x04')
+    check('...then busy-waits 300,000 iterations doing nothing',
+          d[0xF09AA4-0xF00000:0xF09AAE-0xF00000]
+          == b'\x2a\x3c\x00\x04\x93\xe0\x53\x85\x66\xfc'
+          and 0x493E0 == 300000)
+    check('...which is ~0.675 s at 8 MHz (18 cycles per iteration)',
+          abs(300000 * 18 / 8e6 - 0.675) < 0.001)
+    check('...then verifies the pattern survived, failing if not',
+          d[0xF09AAE-0xF00000:0xF09AB8-0xF00000]
+          == b'\xb0\x9a\x67\x06\x2e\x3c\xf0\xf0\xf0\xf0')
+
     # --- $F089EE brackets a longword access with a status check ---------------
     check('$F089EE arms XLTR_MODE1 bit 12 and clears VMOD bit 6 first',
           d[0xF089FE-0xF00000:0xF08A0A-0xF00000]

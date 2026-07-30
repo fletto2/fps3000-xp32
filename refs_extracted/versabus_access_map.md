@@ -1537,7 +1537,7 @@ that rule gets without hardware.*
 | `$F089EE` | 3 | **error-gated longword access test** — see below; "chassis handshake probe" was wrong |
 | `$F090EA` | 2 | **PTM configuration** — `movep.w #$fff` into all three timer latches, then `CR2 <- 0`, `CR1 <- $C2` |
 | `$F094AE` | 3 | interrupt-level request — `andi.w #$fff8,(a5)`, `bset #7`, `ori.w #$1,(a5)` |
-| `$F09A7E` | 1 | final DRAM sub-test prologue |
+| `$F09A7E` | 1 | **DRAM retention/refresh test** — see below; "final sub-test prologue" was near-contentless |
 
 Two of these close open questions.
 
@@ -1562,6 +1562,57 @@ because it shows the rest of the firmware treating the field the same way.
 `$F08700-$F09C00` are accounted for, against **3** when this thread began. Every stage of
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
+
+### `$F09A7E` is a DRAM refresh test — fill, wait 0.7 s, verify
+
+Auditing my own labels after the `$F089EE` correction, this was the other one asserted from
+too few instructions. Decoded properly it is the most physically interesting stage in the
+suite:
+
+```
+move.l  #$09abcdef,d0            ; a fixed pattern
+movea.l a0,a2                    ; remember the start
+.fill:  move.l d0,(a0)+
+        cmpa.l #$1fff0,a0  ; bne .  ; lea $4(a0),a0     ; skip the register longword
+        cmpa.l a0,a1       ; bne .fill
+
+move.l  #$000493e0,d5            ; 300,000
+.delay: subq.l #$1,d5  ;  bne .delay      ; BUSY-WAIT, nothing else
+
+.verify: cmp.l (a2)+,d0
+         beq   ok
+         move.l #$F0F0F0F0,d7    ; the pattern did NOT survive
+```
+
+**Fill memory with a pattern, do nothing at all for 300,000 iterations, then check the
+pattern is still there.** At 18 cycles per iteration (`subq.l` 8 + `bne.b` taken 10) that is
+**5,400,000 cycles = 0.675 seconds** at 8 MHz.
+
+That is a **DRAM data-retention test**, and the duration is the point: unrefreshed dynamic
+RAM loses charge in milliseconds, so data surviving two-thirds of a second proves the
+**refresh circuitry is running**. No other stage tests this — the address-line, pattern and
+rotating-pattern tests all read back immediately, where a dead refresh would pass.
+
+Two consequences.
+
+**It accounts for a large share of boot time.** 5.4 M cycles of pure busy-wait is roughly 4%
+of the 120 M cycles a full boot takes, spent deliberately doing nothing.
+
+**It is a constraint the emulator satisfies trivially and hardware might not.** A `ram[]`
+array retains contents perfectly across any delay, so this stage cannot fail in emulation —
+which means *a green emulator boot says nothing whatever about refresh*, and this is one more
+entry for the "known divergences" list: the model cannot reproduce the failure mode the stage
+exists to catch.
+
+*It also contributes two of the eight `$1FFF0` exclusions* — `$F09A94` in the fill loop and
+`$F09ABC` in the verify loop — so the register longword is skipped consistently on both
+passes, which is what one would expect of a genuine exclusion rather than an accident.
+
+**On the labels themselves.** Both corrections this round came from summaries I wrote after
+reading four to eight instructions and inferring the rest from context. The pattern is worth
+naming: *a routine's first few instructions establish its setup, not its purpose* — the
+purpose is usually in the loop body and the failure branch, which is exactly what a short
+read misses.
 
 ### What `$F089EE` actually probes — correcting a vague label
 
