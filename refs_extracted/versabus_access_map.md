@@ -14914,3 +14914,30 @@ generic Motorola code serving an application that uses a small slice of it.**
 That also bounds what any future emulator work can achieve here: driving the chassis harder moves
 the *application* regions, but the kernel's unexecuted 85% is mostly unreachable without faults,
 unused directives, or instrumentation the build ships disabled.
+
+### The trace confirms "RDHC wakes and re-parks", from the firmware's own log
+
+Running the level-7 driven configuration with tracing on (`FPS3K_POKE="0C34=8000"`) gives five
+records against four:
+
+```
+IO1I   $13 WAIT     a0=$F05D00
+RDHC   $01 GTSEG    a0=$F046B0
+RDHC   $4C CNCTIRQ  a0=$F04600
+RDHC   $13 WAIT     a0=$F04600
+RDHC   $13 WAIT     a0=$F04600      <- only in the driven run
+```
+
+**The single difference is RDHC issuing a second `WAIT`.** It is woken, does whatever the one
+delivered chassis operation asks, and blocks again — which is exactly the "wakes but re-parks"
+reading previously inferred from `TCB+$2C` flipping `$4000 → $0018`, now shown by the kernel's own
+instrumentation rather than by our reading of a state word.
+
+Equally informative is what is **absent**: no `$29`/`$2A` semaphore operations, no `$12` RESUME.
+RDHC's dispatcher work — waking the XP tasks, posting to their queues — never begins. It is not
+that RDHC does its job slowly under our chassis model; **it never reaches the part of its job that
+would show up as new directive types.**
+
+That makes the syscall trace a sharper progress metric than PC coverage for this question: any
+future chassis model that genuinely drives RDHC should produce `$12` RESUME and semaphore
+directives in this ring, and their absence is a cleaner failure signal than a coverage percentage.
