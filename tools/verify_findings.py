@@ -550,6 +550,27 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- the channel window is exactly four registers ------------------------
+    # Each ISR reads +$0E, +$08, +$0A in that order into a 6-byte record, and the
+    # task body clears +$04.  No other offset in any 32-byte window is touched.
+    for ch, (sts, dhi, dlo, rec) in enumerate(
+            [(0xF07EEE, 0xF07EF6, 0xF07EFE, 0x1066),
+             (0xF074EE, 0xF074F6, 0xF074FE, 0x106C),
+             (0xF06AEE, 0xF06AF6, 0xF06AFE, 0x1072),
+             (0xF060D6, 0xF060DE, 0xF060E6, 0x1078)], 1):
+        off = 0x40 + 0x20 * (ch - 1)
+        # Check the displacement and destination fields directly rather than a
+        # whole byte string: the opcode is the same in all four copies and only
+        # the displacement and destination differ, so this is what varies.
+        ok = (struct.unpack('>H', d[sts-0xF00000+2:sts-0xF00000+4])[0] == off + 0x0E
+              and struct.unpack('>I', d[sts-0xF00000+4:sts-0xF00000+8])[0] == rec
+              and struct.unpack('>H', d[dhi-0xF00000+2:dhi-0xF00000+4])[0] == off + 0x08
+              and struct.unpack('>I', d[dhi-0xF00000+4:dhi-0xF00000+8])[0] == rec + 2
+              and struct.unpack('>H', d[dlo-0xF00000+2:dlo-0xF00000+4])[0] == off + 0x0A
+              and struct.unpack('>I', d[dlo-0xF00000+4:dlo-0xF00000+8])[0] == rec + 4)
+        check(f'ch{ch} ISR snapshots +$0E/+$08/+$0A into the 6-byte record ${rec:04X}',
+              ok)
+
     # --- $FF004A IS read: each channel ISR takes both halves of the pair ----
     check('each channel ISR reads its data LOW half into the per-channel record',
           d[0xF07EFE-0xF00000:0xF07F06-0xF00000]

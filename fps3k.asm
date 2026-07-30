@@ -6703,6 +6703,25 @@ loc_F07EE6:
 ;### XP1I CHANNEL ISR. Snapshots the channel into its 6-byte RAM block:
   f07ee6: 2f 0d                   move.l   a5, -(a7)
   f07ee8: 2a 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a5
+;### THE CHANNEL WINDOW IS EXACTLY FOUR REGISTERS -- a systematic sweep of every
+;###   access through a base register holding $FF0000 (the form absolute scans
+;###   miss) finds NO fifth per-channel register.  All four windows are
+;###   perfectly symmetric: the task body writes #$0 to +$04, and the ISR READS
+;###   +$0E, +$08, +$0A in that order.  So the reconstructed four-register table
+;###   is COMPLETE.
+;###   +$0E IS BIDIRECTIONAL: command on write (three tasks send $8000), STATUS
+;###   on read -- this instruction -- and the word read here is the one then
+;###   bit-tested for bits 15, 14 and 11.  That is why FPS3K_CHCMD works by
+;###   supplying a value on that port, and why the local symbol g_ch_block on
+;###   $1066 is a poor name for a channel STATUS word.
+;###   AND IT EXPLAINS THE 6-BYTE RECORD STRIDE: $1066+(ch-1)*6 holds exactly
+;###   {status from +$0E, data-high from +$08, data-low from +$0A} -- three
+;###   words, six bytes.  The record is the ISR snapshot of its channel window.
+;###   Trap worth remembering: the first version of this sweep accepted any
+;###   register that holds $FF0000 SOMEWHERE, so $2(a1) -- a channel data
+;###   pointer -- counted as $FF0002 with 96 sites, and lea.l -$50(a5),a5
+;###   reported a nonexistent register at $FF0050.  A sweep written to catch a
+;###   blind spot introduced two of its own.
   f07eee: 33 ed 00 4e 00 00 10 66  move.w   $4e(a5), $1066.l  [g_ch_block]
 ;###   $4E->$1066, $48->$1068, $4A->$106A. NOTE: $FF0048 IS READ, here, as $48(a5).
   f07ef6: 33 ed 00 48 00 00 10 68  move.w   $48(a5), $1068.l

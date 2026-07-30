@@ -1528,6 +1528,50 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The channel window is exactly four registers, and the ISR snapshots three
+
+Applying the "revisit every claim that rested on a blind method" rule to the whole
+`$FF00xx` window: enumerate every access through a base register holding `$FF0000`,
+which is the form absolute-address scans miss.
+
+**A first attempt over-counted badly** and is worth recording as a trap. Accepting
+any register that holds `$FF0000` *somewhere* in the ROM produced 382 hits including
+96 at `$FF0002` and 71 at `$FF0001` — but `a1` is loaded with `$FF0000` at four sites
+and used as a *channel data pointer* everywhere else, so `$2(a1)` was counted as a
+window access when it is the data-pair low half. It also reported a register at
+**`$FF0050`**, past the documented `+$0E`, which turned out to be `lea.l -$50(a5),a5`
+— a *negative* displacement in the driver-chain routine — plus a truncated
+`$250(a5)`. *A sweep written to catch a blind spot introduced two of its own.*
+
+Restricting to `a5`, which is reliably `$FF0000` inside the channel ISRs, and to
+positive two-digit displacements, gives a clean and completely symmetric result:
+
+| offset | ch1 | ch2 | ch3 | ch4 | direction |
+|---|---|---|---|---|---|
+| `+$04` | `$F07E00` | `$F07400` | `$F06A00` | `$F06000` | **written** `#$0` |
+| `+$0E` | `$F07EEE` | `$F074EE` | `$F06AEE` | `$F060D6` | **read** → record `+$0` |
+| `+$08` | `$F07EF6` | `$F074F6` | `$F06AF6` | `$F060DE` | **read** → record `+$2` |
+| `+$0A` | `$F07EFE` | `$F074FE` | `$F06AFE` | `$F060E6` | **read** → record `+$4` |
+
+**No other offset in any of the four 32-byte windows is touched.** The corrected
+four-register table this project reconstructed from usage patterns is *complete* —
+a negative result, but a real one: there is no fifth per-channel register hiding
+behind the displacement form.
+
+Two things it settles.
+
+**`+$0E` is bidirectional.** The table lists it as the command/trigger register
+because three tasks write `$8000` to it. The ISR **reads** it, first of the three,
+and stores it as the word that is then bit-tested for bits 15, 14 and 11. So `+$0E`
+is *command on write, status on read* — which is exactly why `FPS3K_CHCMD` works by
+supplying a value on that port, and why the local symbol `g_ch_block` on `$1066` is
+a misleading name for what is a channel **status** word.
+
+**The 6-byte per-channel record is fully explained.** `$1066 + (ch-1)*6` holds
+precisely `{status from +$0E, data-high from +$08, data-low from +$0A}` — three words,
+six bytes, exactly the observed stride. The record is the ISR's snapshot of its
+channel window, and the stride was never arbitrary.
+
 ### The complete `$10xx` per-channel state map, and `$FF004A` *is* read
 
 Collecting every non-data reference into `$1000-$10FF` from the disassembly gives the

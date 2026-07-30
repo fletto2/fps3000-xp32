@@ -80,6 +80,26 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- the channel window is exactly four registers ----
+ (0xF07EEE,'THE CHANNEL WINDOW IS EXACTLY FOUR REGISTERS -- a systematic sweep of every'),
+ (0xF07EEE,'  access through a base register holding $FF0000 (the form absolute scans'),
+ (0xF07EEE,'  miss) finds NO fifth per-channel register.  All four windows are'),
+ (0xF07EEE,'  perfectly symmetric: the task body writes #$0 to +$04, and the ISR READS'),
+ (0xF07EEE,'  +$0E, +$08, +$0A in that order.  So the reconstructed four-register table'),
+ (0xF07EEE,'  is COMPLETE.'),
+ (0xF07EEE,'  +$0E IS BIDIRECTIONAL: command on write (three tasks send $8000), STATUS'),
+ (0xF07EEE,'  on read -- this instruction -- and the word read here is the one then'),
+ (0xF07EEE,'  bit-tested for bits 15, 14 and 11.  That is why FPS3K_CHCMD works by'),
+ (0xF07EEE,'  supplying a value on that port, and why the local symbol g_ch_block on'),
+ (0xF07EEE,'  $1066 is a poor name for a channel STATUS word.'),
+ (0xF07EEE,'  AND IT EXPLAINS THE 6-BYTE RECORD STRIDE: $1066+(ch-1)*6 holds exactly'),
+ (0xF07EEE,'  {status from +$0E, data-high from +$08, data-low from +$0A} -- three'),
+ (0xF07EEE,'  words, six bytes.  The record is the ISR snapshot of its channel window.'),
+ (0xF07EEE,'  Trap worth remembering: the first version of this sweep accepted any'),
+ (0xF07EEE,'  register that holds $FF0000 SOMEWHERE, so $2(a1) -- a channel data'),
+ (0xF07EEE,'  pointer -- counted as $FF0002 with 96 sites, and lea.l -$50(a5),a5'),
+ (0xF07EEE,'  reported a nonexistent register at $FF0050.  A sweep written to catch a'),
+ (0xF07EEE,'  blind spot introduced two of its own.'),
  # ---- the $10xx per-channel map; $FF004A IS read ----
  (0xF07EFE,'CORRECTION: $FF004A IS READ.  This project states of the value $4F that'),
  (0xF07EFE,'  "it has no connection to $FF004A, which is neither read nor written in a'),
