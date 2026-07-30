@@ -3518,6 +3518,7 @@ TCBXP4I_Data:
 ; TCBXP4I_CRTCBParams
 ; ============================================================
 TCBXP4I_CRTCBParams:
+;### [template copy of $F07D2C, XP4I -$1E18]   flags, STCK, $190 stack); +$2C and +$36 two 10-byte ASQ entries (AXP1/HXP1).
   f05f14: 58 50                   addq.w   #$4, (a0)
   f05f16: 34 49                   movea.w  a1, a2
   f05f18: 00 00 00 00             ori.b    #$0, d0
@@ -3588,6 +3589,7 @@ loc_F05F7A:
 loc_F05FA0:
   f05fa0: 4b ee 00 14             lea.l    $14(a6), a5
   f05fa4: 22 7c 00 f0 5f 3e       movea.l  #loc_F05F3E, a1
+;### [template copy of $F07DC2, XP4I -$1E18] XP task startup: a chain of guarded RMS68K syscalls. Each step tests the
   f05faa: 60 04                   bra.b    loc_F05FB0
 
 loc_F05FAC:
@@ -3595,13 +3597,16 @@ loc_F05FAC:
   f05fae: 55 89                   subq.l   #$2, a1
 
 loc_F05FB0:
+;### [template copy of $F07DC8, XP4I -$1E18]   result and, on failure, loads a PANEL CODE IDENTIFYING THE STEP and aborts
   f05fb0: b3 fc 00 f0 5f 36       cmpa.l   #loc_F05F36, a1
   f05fb6: 6c f4                   bge.b    loc_F05FAC
   f05fb8: 70 2d                   moveq    #$2d, d0
   f05fba: 41 d5                   lea.l    (a5), a0
   f05fbc: 4e 41                   trap     #$1
+;### [template copy of $F07DD6, XP4I -$1E18]   via the local panel issuer. $26E = step 1/2, $270 = step 3, $271 = step 4/5.
   f05fbe: 2b 48 00 04             move.l   a0, $4(a5)
   f05fc2: 0c 40 00 00             cmpi.w   #$0, d0
+;### [template copy of $F07DDE, XP4I -$1E18]   trap #1 with d0 = $4C. RMS68K directive numbers seen here: $4C, $2B, $13,
   f05fc6: 67 0e                   beq.b    loc_F05FD6
   f05fc8: 30 3c 02 6e             move.w   #$26e, d0
   f05fcc: 4e b9 00 f0 68 a8       jsr      PanelTimeoutAbortPath.l
@@ -3610,9 +3615,15 @@ loc_F05FB0:
 loc_F05FD6:
   f05fd6: 70 4c                   moveq    #$4c, d0
   f05fd8: 41 f9 00 f0 5f 00       lea.l    TCBXP4I_Data.l, a0
+;### [template copy of $F07DF6, XP4I -$1E18] PRESENCE GATE: cmpi.w #<own channel>,$105E / blt skip. $105E is the count of
+;### [template copy of $F07DF6, XP4I -$1E18]   $11 and $0F. RETRACTED: "$0F = 15 = TERM (terminate task)" is a numeric
+;### [template copy of $F07DF6, XP4I -$1E18]   coincidence with the RMS68K source and does not fit. $0F is called exactly
+;### [template copy of $F07DF6, XP4I -$1E18]   once per task, at the TAIL OF THE ISR-EXIT PATH in five of six tasks --
+;### [template copy of $F07DF6, XP4I -$1E18]   terminating the task there would end it on its first interrupt.
   f05fde: 4e 41                   trap     #$1
   f05fe0: 67 0e                   beq.b    loc_F05FF0
   f05fe2: 30 3c 02 70             move.w   #$270, d0
+;### [template copy of $F07DFE, XP4I -$1E18]   channels the chassis presents, written by the CPU at $F0A224. Task n runs if count>=n.
   f05fe6: 4e b9 00 f0 68 a8       jsr      PanelTimeoutAbortPath.l
   f05fec: 60 00 01 08             bra.w    loc_F060F6
 
@@ -3673,6 +3684,18 @@ loc_F06088:
   f06098: 70 2b                   moveq    #$2b, d0
   f0609a: 41 d6                   lea.l    (a6), a0
   f0609c: 4e 41                   trap     #$1
+;### [template copy of $F07EB6, XP4I -$1E18] FPS3K_CHCMD=C801 SUPPRESSES COVERAGE, and it was in the config this project
+;### [template copy of $F07EB6, XP4I -$1E18]   recorded as the XP-driven best case (the source of "XP tasks 18-20%
+;### [template copy of $F07EB6, XP4I -$1E18]   each").  Measured, own IRQ alone vs + CHCMD=C801:
+;### [template copy of $F07EB6, XP4I -$1E18]     XP1I 34.4% -> 16.7%    XP3I 12.1% -> 12.1%
+;### [template copy of $F07EB6, XP4I -$1E18]     XP2I 31.4% -> 13.7%    XP4I 12.6% -> 12.6%
+;### [template copy of $F07EB6, XP4I -$1E18]   $C801 sets bits 15, 14 AND 11.  XP1I/2/3 test bit 11 and take the short
+;### [template copy of $F07EB6, XP4I -$1E18]   $8000/$1B branch when it is set; XP4I never tests it, so is unaffected --
+;### [template copy of $F07EB6, XP4I -$1E18]   exactly the asymmetry measured.  The bit added to unblock the channel
+;### [template copy of $F07EB6, XP4I -$1E18]   transaction also SHORT-CIRCUITS the code it was meant to expose.
+;### [template copy of $F07EB6, XP4I -$1E18]   Driving all four channels at once is worse still (7-12% each): the tasks
+;### [template copy of $F07EB6, XP4I -$1E18]   contend, so a config meant to exercise all of them exercises each less.
+;### [template copy of $F07EB6, XP4I -$1E18]   bit 11, the last gate.
   f0609e: 67 0a                   beq.b    loc_F060AA
   f060a0: 30 3c 02 71             move.w   #$271, d0
   f060a4: 4e b9 00 f0 68 a8       jsr      PanelTimeoutAbortPath.l
@@ -3685,6 +3708,7 @@ loc_F060AA:
   f060b6: 60 04                   bra.b    loc_F060BC
 
 loc_F060B8:
+;### [template copy of $F07ED0, XP4I -$1E18]   XP1I/2/3 only -- 3 sites in the whole ROM. XP4I has no bit-11 test and no $8000.
   f060b8: 30 bc 1f 45             move.w   #$1f45, (a0)
 
 loc_F060BC:
@@ -3701,10 +3725,44 @@ loc_F060CA:
 ; TCBXP4I_MainEntry
 ; ============================================================
 TCBXP4I_MainEntry:
+;### [template copy of $F07EE6, XP4I -$1E18] XP1I CHANNEL ISR. Snapshots the channel into its 6-byte RAM block:
   f060ce: 2f 0d                   move.l   a5, -(a7)
   f060d0: 2a 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a5
+;### [template copy of $F07EEE, XP4I -$1E18] THE CHANNEL WINDOW IS EXACTLY FOUR REGISTERS -- a systematic sweep of every
+;### [template copy of $F07EEE, XP4I -$1E18]   access through a base register holding $FF0000 (the form absolute scans
+;### [template copy of $F07EEE, XP4I -$1E18]   miss) finds NO fifth per-channel register.  All four windows are
+;### [template copy of $F07EEE, XP4I -$1E18]   perfectly symmetric: the task body writes #$0 to +$04, and the ISR READS
+;### [template copy of $F07EEE, XP4I -$1E18]   +$0E, +$08, +$0A in that order.  So the reconstructed four-register table
+;### [template copy of $F07EEE, XP4I -$1E18]   is COMPLETE.
+;### [template copy of $F07EEE, XP4I -$1E18]   +$0E IS BIDIRECTIONAL: command on write (three tasks send $8000), STATUS
+;### [template copy of $F07EEE, XP4I -$1E18]   on read -- this instruction -- and the word read here is the one then
+;### [template copy of $F07EEE, XP4I -$1E18]   bit-tested for bits 15, 14 and 11.  That is why FPS3K_CHCMD works by
+;### [template copy of $F07EEE, XP4I -$1E18]   supplying a value on that port, and why the local symbol g_ch_block on
+;### [template copy of $F07EEE, XP4I -$1E18]   $1066 is a poor name for a channel STATUS word.
+;### [template copy of $F07EEE, XP4I -$1E18]   AND IT EXPLAINS THE 6-BYTE RECORD STRIDE: $1066+(ch-1)*6 holds exactly
+;### [template copy of $F07EEE, XP4I -$1E18]   {status from +$0E, data-high from +$08, data-low from +$0A} -- three
+;### [template copy of $F07EEE, XP4I -$1E18]   words, six bytes.  The record is the ISR snapshot of its channel window.
+;### [template copy of $F07EEE, XP4I -$1E18]   Trap worth remembering: the first version of this sweep accepted any
+;### [template copy of $F07EEE, XP4I -$1E18]   register that holds $FF0000 SOMEWHERE, so $2(a1) -- a channel data
+;### [template copy of $F07EEE, XP4I -$1E18]   pointer -- counted as $FF0002 with 96 sites, and lea.l -$50(a5),a5
+;### [template copy of $F07EEE, XP4I -$1E18]   reported a nonexistent register at $FF0050.  A sweep written to catch a
+;### [template copy of $F07EEE, XP4I -$1E18]   blind spot introduced two of its own.
   f060d6: 33 ed 00 ae 00 00 10 78  move.w   $ae(a5), $1078.l
+;### [template copy of $F07EF6, XP4I -$1E18]   $4E->$1066, $48->$1068, $4A->$106A. NOTE: $FF0048 IS READ, here, as $48(a5).
   f060de: 33 ed 00 a8 00 00 10 7a  move.w   $a8(a5), $107a.l
+;### [template copy of $F07EFE, XP4I -$1E18] CORRECTION: $FF004A IS READ.  This project states of the value $4F that
+;### [template copy of $F07EFE, XP4I -$1E18]   "it has no connection to $FF004A, which is neither read nor written in a
+;### [template copy of $F07EFE, XP4I -$1E18]   full boot."  The second half is wrong.  Each channel ISR reads BOTH
+;### [template copy of $F07EFE, XP4I -$1E18]   halves of its data pair -- $48(a5) at $F07EF6, already recorded, and
+;### [template copy of $F07EFE, XP4I -$1E18]   $4A(a5) HERE two instructions later -- filing the low half in its
+;### [template copy of $F07EFE, XP4I -$1E18]   per-channel record.  Measured: FPS3K_XPIRQ=1 runs both 468 times, and
+;### [template copy of $F07EFE, XP4I -$1E18]   with a 4-channel chassis all four equivalents ($F074FE, $F06AFE,
+;### [template copy of $F07EFE, XP4I -$1E18]   $F060E6) run 467 times.  The instructive part: this exact claim was
+;### [template copy of $F07EFE, XP4I -$1E18]   ALREADY retracted for $FF0048 on the grounds that absolute-address scans
+;### [template copy of $F07EFE, XP4I -$1E18]   cannot see the $4A(a5) form -- and the neighbouring sentence about
+;### [template copy of $F07EFE, XP4I -$1E18]   $FF004A, same paragraph, same register pair, same instruction sequence,
+;### [template copy of $F07EFE, XP4I -$1E18]   was left standing.  When a method is found blind, EVERY claim resting on
+;### [template copy of $F07EFE, XP4I -$1E18]   it needs revisiting, not just the one that prompted the check.
   f060e6: 33 ed 00 aa 00 00 10 7c  move.w   $aa(a5), $107c.l
   f060ee: 2a 5f                   movea.l  (a7)+, a5
 
@@ -3712,6 +3770,7 @@ TCBXP4I_MainEntry:
 ; TCBXP4I_ISRExit
 ; ============================================================
 TCBXP4I_ISRExit:
+;### [template copy of $F07F08, XP4I -$1E18] XP1I ISR exit stub (descriptor +$10).
   f060f0: 44 fc 00 0c             move.w   #$c, ccr
   f060f4: 4e 41                   trap     #$1
 
@@ -3726,6 +3785,7 @@ loc_F060FA:
   f06100: 32 bc 00 00             move.w   #$0, (a1)
   f06104: 3e 00                   move.w   d0, d7
   f06106: 33 40 00 02             move.w   d0, $2(a1)
+;### [template copy of $F07F22, XP4I -$1E18]   then BIM CR $4F (IRE clear), data pair, $8004 REQUEST-TRANSFER, poll.
   f0610a: 30 bc 80 04             move.w   #$8004, (a0)
   f0610e: 2a 3c 00 00 03 e8       move.l   #$3e8, d5
 
@@ -3746,6 +3806,7 @@ loc_F06126:
   f06138: 4e b9 00 f0 68 a8       jsr      PanelTimeoutAbortPath.l
 
 loc_F0613E:
+;### [template copy of $F07F56, XP4I -$1E18] post-poll: btst #$D,d4 -- bit 13 = transfer ERROR -> $269 abort + spin.
   f0613e: 08 04 00 0d             btst.b   #$d, d4
   f06142: 67 28                   beq.b    loc_F0616C
 ;>>>> [R6/BOTH] This instruction at `f06144` loads the panel command code 0x269 (`PCMD_ERROR_ABORT`) into d0, which is then used by the subsequent `jsr PanelTimeoutAbortPath.l` to abort the XP-32 channel after detecting an error condition (bit 13 of d4 set).
@@ -3763,6 +3824,7 @@ loc_F0613E:
   f0616a: 4e 75                   rts      
 
 loc_F0616C:
+;### [template copy of $F07F84, XP4I -$1E18] CHANNEL COMMAND DISPATCH: lsl.w #2,d0 / lea $F083FC,a4 / jmp (a4,d0.w).
   f0616c: e5 48                   lsl.w    #$2, d0
   f0616e: 49 f9 00 f0 65 e4       lea.l    loc_F065E4.l, a4
   f06174: 4e f4 00 00             jmp      (a4, d0.w)
@@ -3916,6 +3978,7 @@ loc_F062CA:
   f062ec: 30 bc 80 05             move.w   #$8005, (a0)
   f062f0: 4e 75                   rts      
 ;>>>> [R15/BOTH] This instruction at 0xf062f2 swaps the word halves of d1, then writes the swapped value to the data register at (a1) — part of the XLTR interrupt handler that prepares a 32-bit argument for the CONTINUE-TRANSFER command (0x8005) by swapping the high and low words of the data before writing to the AP I/F command register at 0xFF0000.
+;### [template copy of $F0810A, XP4I -$1E18] channel dispatch handler A -- 9 of the 16 codes land here.
   f062f2: 48 41                   swap     d1
   f062f4: 32 81                   move.w   d1, (a1)
   f062f6: 48 41                   swap     d1
@@ -4052,6 +4115,8 @@ loc_F06430:
 loc_F06448:
   f06448: 49 f9 00 f0 66 38       lea.l    loc_F06638.l, a4
   f0644e: 4e f4 00 00             jmp      (a4, d0.w)
+;### [template copy of $F0826A, XP4I -$1E18] dispatch handler C -- indices 1 and 10. NOT executed: needs directive $0F
+;### [template copy of $F0826A, XP4I -$1E18]   to return 1 or 10, which is a KERNEL condition -- no chassis model reaches it.
   f06452: 48 40                   swap     d0
   f06454: 28 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a4
   f0645a: 4b ec 00 08             lea.l    $8(a4), a5
@@ -4166,6 +4231,7 @@ loc_F06530:
   f0654c: 4e 75                   rts      
 
 loc_F0654E:
+;### [template copy of $F08366, XP4I -$1E18] channel dispatch handler B -- codes 8 and 9.
   f0654e: 48 40                   swap     d0
   f06550: 28 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a4
   f06556: 4b ec 00 08             lea.l    $8(a4), a5
@@ -4234,16 +4300,27 @@ loc_F065C2:
   f065e2: 4e 75                   rts      
 
 loc_F065E4:
+;### [template copy of $F083FC, XP4I -$1E18] 42 x 4-byte DISPATCH TABLE, $F083FC-$F084A3 -- the exact twin of RDHC's
+;### [template copy of $F083FC, XP4I -$1E18]   PanelStatusDispatchTable at $F05BA4-$F05C4B: same 42 entries, same 4-byte
+;### [template copy of $F083FC, XP4I -$1E18]   stubs, same d0<<2 index, same 4 handlers. Indexed by d0 -- which
+;### [template copy of $F083FC, XP4I -$1E18]   on the acknowledged path is the RETURN VALUE of the trap #1 at $F07F0E
+;### [template copy of $F083FC, XP4I -$1E18]   (directive $0F), NOT a channel command word: all three d0 writes between
+;### [template copy of $F083FC, XP4I -$1E18]   there and here sit on the timeout or error paths. Sixteen indices
   f065e4: 4e 75                   rts      
   f065e6: 4e 71                   DC.W     0x4e71  ; 'Nq'
+;### [template copy of $F08400, XP4I -$1E18]   onto 4 handlers: $F0810A x10, $F0826A x9, $F08366 x9, $F07F90 x1, and
   f065e8: 4e fa                   DC.W     0x4efa
   f065ea: fe 68                   DC.W     0xfe68
+;### [template copy of $F08404, XP4I -$1E18]   13 rts entries with no handler. Measured d0 = $0E and $10, so only two
   f065ec: 4e fa                   DC.W     0x4efa
   f065ee: fd 04                   DC.W     0xfd04
+;### [template copy of $F08408, XP4I -$1E18]   of the 42 indices are exercised. An earlier note said 16 entries and 3
   f065f0: 4e fa                   DC.W     0x4efa
   f065f2: fd 00                   DC.W     0xfd00
+;### [template copy of $F0840C, XP4I -$1E18]   handlers -- that read only the first 16 and assumed the size from the
   f065f4: 4e fa                   DC.W     0x4efa
   f065f6: fc fc                   DC.W     0xfcfc
+;### [template copy of $F08410, XP4I -$1E18]   WRONG table ($F05102 is the 16-entry one).
   f065f8: 4e fa                   DC.W     0x4efa
   f065fa: fc f8                   DC.W     0xfcf8
   f065fc: 4e fa                   DC.W     0x4efa
@@ -4326,6 +4403,17 @@ loc_F0668C:
   f06690: 02 00                   DC.W     0x0200
 
 loc_F06692:
+;### [template copy of $F084AA, XP4I -$1E18] EXTRA ROUTINE PRESENT IN ALL FOUR XP COPIES AND ABSENT FROM RDHC's.
+;### [template copy of $F084AA, XP4I -$1E18]   Diffing the five dispatch-subsystem copies over $5C8 bytes: RDHC differs
+;### [template copy of $F084AA, XP4I -$1E18]   from every XP copy by 197 bytes while the XP copies differ from each
+;### [template copy of $F084AA, XP4I -$1E18]   other by only 25-49 -- and most of RDHC's difference is that it ENDS
+;### [template copy of $F084AA, XP4I -$1E18]   EARLIER: from $F05C52 to the end RDHC is ALL ZEROS where the XP copies
+;### [template copy of $F084AA, XP4I -$1E18]   carry ~180 bytes of code.  So the subsystem is four copies of a longer
+;### [template copy of $F084AA, XP4I -$1E18]   version plus one shortened variant, not five copies of one thing.
+;### [template copy of $F084AA, XP4I -$1E18]   This routine validates 1 <= channel <= $105E, rejects with panel $263,
+;### [template copy of $F084AA, XP4I -$1E18]   takes the TOP BYTE of d1 (lsr.l #$18) and if nonzero issues DIRECTIVE
+;### [template copy of $F084AA, XP4I -$1E18]   $10 with the task's own region base as the parameter block, then writes
+;### [template copy of $F084AA, XP4I -$1E18]   panel code $264 + CHANNEL to the command port.
   f06692: 0c 40 00 01             cmpi.w   #$1, d0
   f06696: 6d 08                   blt.b    loc_F066A0
   f06698: b0 79 00 00 10 5e       cmp.w    $105e.l  [g_ac_count], d0
@@ -4347,6 +4435,15 @@ loc_F066AA:
   f066b8: 41 f9 00 f0 5f 40       lea.l    loc_F05F40.l, a0
   f066be: 4e 41                   trap     #$1
   f066c0: 30 01                   move.w   d1, d0
+;### [template copy of $F084DA, XP4I -$1E18] SEVEN UNDOCUMENTED PANEL CODES, $262-$268, all XP-task-only:
+;### [template copy of $F084DA, XP4I -$1E18]     $262  4 sites, one per task, in the ISR prologue
+;### [template copy of $F084DA, XP4I -$1E18]     $263  4 sites, one per task -- the channel-number reject
+;### [template copy of $F084DA, XP4I -$1E18]     $264  8 sites, two per task, one being THIS addi.w #$264,d1 with
+;### [template copy of $F084DA, XP4I -$1E18]           d1 = the channel, so the family is $265-$268 for channels 1-4
+;### [template copy of $F084DA, XP4I -$1E18]   They fill exactly the gap between the documented $260 and $269, and
+;### [template copy of $F084DA, XP4I -$1E18]   $261 is used NOWHERE -- consistent, since $25D-$260 are the four
+;### [template copy of $F084DA, XP4I -$1E18]   per-channel config codes and a fifth would have no channel.  The panel
+;### [template copy of $F084DA, XP4I -$1E18]   code space is denser than recorded and organised in runs of four.
   f066c2: 06 41 02 64             addi.w   #$264, d1
   f066c6: 3b 41 00 0e             move.w   d1, $e(a5)
   f066ca: 32 2d 02 02             move.w   $202(a5)  [XLTR_MODE1], d1
@@ -4405,11 +4502,38 @@ loc_F06752:
   f06754: 53 47                   subq.w   #$1, d7
   f06756: e5 4f                   lsl.w    #$2, d7
   f06758: 34 47                   movea.w  d7, a2
+;### [template copy of $F08572, XP4I -$1E18] THE $10xx PER-CHANNEL STATE AREA is several PARALLEL arrays, not one
+;### [template copy of $F08572, XP4I -$1E18]   structure.  Stride 4, four entries each: $1080 register-image pointer,
+;### [template copy of $F08572, XP4I -$1E18]   $10AE USER-connect gate, $10BE USER task handle, $10CE and $10DE
+;### [template copy of $F08572, XP4I -$1E18]   per-channel longwords.  Those four sit exactly $10 apart -- 4x4 -- so
+;### [template copy of $F08572, XP4I -$1E18]   $10AE-$10ED is a 4-wide by 4-deep block, confirmed by RTOS init treating
+;### [template copy of $F08572, XP4I -$1E18]   $10EE as the next thing.  Stride 2: $1062 own channel, $1064 the word
+;### [template copy of $F08572, XP4I -$1E18]   array chassis op $A reads back, $10A0 the flag command 1 sets to 2.
+;### [template copy of $F08572, XP4I -$1E18]   Stride 6: the per-channel records at $1066/$106C/$1072/$1078.  Shared:
+;### [template copy of $F08572, XP4I -$1E18]   $105E channel count, $107E a byte all four read, $1098, $10AA.
   f0675a: 4a aa 10 ae             tst.l    $10ae(a2)
   f0675e: 67 00 00 90             beq.w    loc_F067F0
   f06762: 4f ef ff a0             lea.l    -$60(a7), a7
   f06766: 48 57                   pea.l    (a7)
   f06768: 2f 3c 00 00 00 00       move.l   #$0, -(a7)
+;### [template copy of $F08586, XP4I -$1E18] *** THERE IS A SEVENTH TASK, NAMED USER, AND THIS ROM NEVER CREATES IT. ***
+;### [template copy of $F08586, XP4I -$1E18]   #$55534552 is the ASCII literal 'USER', pushed with a longword and a
+;### [template copy of $F08586, XP4I -$1E18]   pointer for DIRECTIVE $43 -- task-lookup-by-name, the task-level analogue
+;### [template copy of $F08586, XP4I -$1E18]   of $29 for queues.  Exactly four sites, one per XP task: $F06774 $F0718C
+;### [template copy of $F08586, XP4I -$1E18]   $F07B8C $F0858C.  So every XP channel controller tries to resolve a task
+;### [template copy of $F08586, XP4I -$1E18]   called USER, gated on its per-channel longword at $10AE, filing the
+;### [template copy of $F08586, XP4I -$1E18]   answer at $10BE.  TDTI creates only RDHC IO1I XP4I XP3I XP2I XP1I -- but
+;### [template copy of $F08586, XP4I -$1E18]   the name table at $F0467E has SIX entries, XP1I..XP4I then USER TWICE,
+;### [template copy of $F08586, XP4I -$1E18]   and 'USER' occurs 13 times in the ROM including just before each XP
+;### [template copy of $F08586, XP4I -$1E18]   task entry point.  This fits the FPS-3000 model exactly: the host issues
+;### [template copy of $F08586, XP4I -$1E18]   CPLOAD to load a CONTROL-PROCESSOR PROGRAM, and that program is the USER
+;### [template copy of $F08586, XP4I -$1E18]   task the XP controllers notify on completion.  The ROM is the half of the
+;### [template copy of $F08586, XP4I -$1E18]   system that boots the machine and moves microcode; the other half arrives
+;### [template copy of $F08586, XP4I -$1E18]   from the host.  Consequence for emulation: no chassis model can carry an
+;### [template copy of $F08586, XP4I -$1E18]   XP channel through a full cycle, because the COUNTERPARTY is missing, not
+;### [template copy of $F08586, XP4I -$1E18]   a register.  Hardware prediction: on a real machine running a CP program
+;### [template copy of $F08586, XP4I -$1E18]   $10BE+(ch-1)*4 holds a task handle and $10AE+(ch-1)*4 is nonzero; on this
+;### [template copy of $F08586, XP4I -$1E18]   ROM alone both stay zero.  One RAM dump settles it.
   f0676e: 2f 3c 55 53 45 52       move.l   #$55534552, -(a7)
   f06774: 70 43                   moveq    #$43, d0
   f06776: 41 d7                   lea.l    (a7), a0
@@ -4450,8 +4574,26 @@ loc_F067F0:
   f067fc: 4e 75                   rts      
 
 loc_F067FE:
+;### [template copy of $F08616, XP4I -$1E18] THE "XP3I OUTLIER" WAS THE $105E PRESENCE GATE, nothing about the code.
+;### [template copy of $F08616, XP4I -$1E18]   With the emulator default FPS3K_CHANNELS=2 (the real 2-AC machine),
+;### [template copy of $F08616, XP4I -$1E18]   $105E reads 2 and each task's cmpi.w #<own channel>,$105E / blt gates
+;### [template copy of $F08616, XP4I -$1E18]   tasks 3 and 4 off before they touch their bodies.  Measured:
+;### [template copy of $F08616, XP4I -$1E18]                 CHANNELS=2   CHANNELS=4
+;### [template copy of $F08616, XP4I -$1E18]       XP1I         36.7%        36.7%
+;### [template copy of $F08616, XP4I -$1E18]       XP2I         34.1%        34.1%
+;### [template copy of $F08616, XP4I -$1E18]       XP3I         13.0%        33.8%
+;### [template copy of $F08616, XP4I -$1E18]       XP4I         13.7%        36.5%
+;### [template copy of $F08616, XP4I -$1E18]   All four reach 34-37% once their channel is present -- the 12-to-40%
+;### [template copy of $F08616, XP4I -$1E18]   spread was never a property of the code, and XP4I is not the poor
+;### [template copy of $F08616, XP4I -$1E18]   relation its $18-shifted layout suggests.  The 13% floor is the
+;### [template copy of $F08616, XP4I -$1E18]   SELF-GATED BASELINE: prologue, connect vector, check $105E, park.
+;### [template copy of $F08616, XP4I -$1E18]   CAUTION: for fidelity to this machine CHANNELS=2 is correct and
+;### [template copy of $F08616, XP4I -$1E18]   XP3I/XP4I SHOULD be dormant; CHANNELS=4 exercises code the real box
+;### [template copy of $F08616, XP4I -$1E18]   never runs, so it is a tool for reading the disassembly, not a model.
+;### [template copy of $F08616, XP4I -$1E18] CHANNEL SCAN: move.w $4E(a2,d4.l),d2 / btst #15 / btst #14 / add $20 to d4 /
   f067fe: 42 84                   clr.l    d4
   f06800: 18 39 00 00 10 7e       move.b   $107e.l, d4
+;### [template copy of $F0861E, XP4I -$1E18]   loop while d3 <= $105E. Confirms $20 stride and $105E as the channel count.
   f06806: 52 04                   addq.b   #$1, d4
   f06808: 3a 10                   move.w   (a0), d5
   f0680a: 08 05 00 0b             btst.b   #$b, d5

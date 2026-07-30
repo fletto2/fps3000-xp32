@@ -1228,15 +1228,21 @@ src = open(IN).read().split('\n')
 # bytes of 2304, all patched constants inside instructions -- so instruction
 # BOUNDARIES coincide even though bytes differ).
 #
-# XP4I IS DELIBERATELY EXCLUDED.  Its alignment is recorded as -$1E in one place
-# and $18 in the region table above, and the two disagree.  Propagating on a
-# wrong shift would attach notes to the middle of instructions -- worse than no
-# notes at all.  Left for whoever resolves that discrepancy.
+# XP4I RESOLVED 2026-07-30, and the two figures never disagreed -- they measure
+# from different bases.  Scanning every shift, the minimum is 498 differing
+# bytes at $F05FFA; the runner-up is 2264, so it is unambiguous.  And
+#     $F05FFA = $F06012 - $18   (the pure $A00 grid position)   <- "shifted $18"
+#     $F05FFA = $F06018 - $1E   (the TDTI-documented body start) <- "aligns -$1E"
+# The TDTI start sits $6 above the grid, which is the whole discrepancy.  So an
+# XP1I address maps to XP4I at a - $1E18.  XP4I is a more heavily patched copy
+# than the others (498 differing bytes against 71 for the XP2I/XP3I pair), which
+# is why its divergence was read as a different alignment rather than more edits.
 #
 # Guarded: a note is only copied if the target address is itself a decoded
 # instruction line in the source, so a misalignment drops the note instead of
 # misplacing it.
 _XP_BASES = (0xF07D00, 0xF07300, 0xF06900)
+_XP4_DELTA = 0x1E18          # XP1I addr -> XP4I addr, measured above
 _decoded = set()
 for _l in src:
     _m = re.match(r'\s+f0([0-9a-f]{4}): ', _l)
@@ -1260,6 +1266,18 @@ for _a, _ts in list(NOTES.items()):
             _prop.setdefault(_tgt, []).extend(
                 '[template copy of $%06X] %s' % (_a, _x) for _x in _ts)
         break
+# XP1I -> XP4I, using the resolved delta.  Same guard: drop rather than misplace.
+for _a, _ts in list(NOTES.items()):
+    if not (0xF07D00 <= _a < 0xF08700):
+        continue
+    _tgt = _a - _XP4_DELTA
+    if _tgt in NOTES or _tgt not in _decoded:
+        if _tgt not in _decoded:
+            _dropped += 1
+        continue
+    _prop.setdefault(_tgt, []).extend(
+        '[template copy of $%06X, XP4I -$1E18] %s' % (_a, _x) for _x in _ts)
+
 for _a, _ts in _prop.items():
     NOTES.setdefault(_a, []).extend(_ts)
 if _prop:
