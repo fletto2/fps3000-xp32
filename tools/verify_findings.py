@@ -550,6 +550,27 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- the XP-task template: alignment and the per-channel scan mask -------
+    BODY = {1: 0xF07E12, 2: 0xF07412, 3: 0xF06A12, 4: 0xF06018}
+    _ref = d[BODY[1]-0xF00000:BODY[1]-0xF00000+0x900]
+    def _nd(sh, base):
+        o = base - 0xF00000 + sh
+        return sum(1 for x, y in zip(_ref, d[o:o+0x900]) if x != y)
+    check('XP2I and XP3I align with XP1I at zero shift, ~71 bytes differing',
+          _nd(0, BODY[2]) < 90 and _nd(0, BODY[3]) < 90)
+    check('XP4I aligns at -$1E (not -$18), and it is an unambiguous minimum',
+          _nd(-0x1E, BODY[4]) < 300
+          and min(_nd(s, BODY[4]) for s in range(-0x100, 0x101, 2)
+                  if s != -0x1E) > 1500)
+    check('the per-channel scan mask is one nibble per channel, own cleared',
+          [struct.unpack('>I', d[a2-0xF00000+2:a2-0xF00000+6])[0]
+           for a2 in (0xF07E3C, 0xF0743C, 0xF06A3C, 0xF06042)]
+          == [0xFFF0, 0xFF0F, 0xF0FF, 0x0FFF])
+    # btst.b #$7,d2 / beq.b +$10 sits immediately before each mask load
+    check('...each guarded on MODE1 bit 7 (btst #7,d2 / beq just above the mask)',
+          all(d[a2-0xF00000-6:a2-0xF00000] == b'\x08\x02\x00\x07\x67\x10'
+              for a2 in (0xF07E3C, 0xF0743C, 0xF06A3C, 0xF06042)))
+
     # --- not Pascal either: zero CHK in the application ---------------------
     check('zero CHK instructions in the FPS application (Pascal range checks)',
           not any((struct.unpack('>H', d[i:i+2])[0] & 0xF1C0) == 0x4180

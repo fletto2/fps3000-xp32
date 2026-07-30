@@ -1528,6 +1528,66 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The complete XP-task template parameterization, by diffing the four copies
+
+Using the template-diff lever the authorship finding suggests. First the alignment,
+because the recorded figures were wrong:
+
+| task | body | best shift vs XP1I | differing bytes of 2304 |
+|---|---|---|---|
+| XP1I | `$F07E12` | — | — |
+| XP2I | `$F07412` | 0 | **71** |
+| XP3I | `$F06A12` | 0 | **72** |
+| XP4I | `$F06018` | **−`$1E`** | **265** |
+
+**The XP4I displacement is `$1E`, not `$18`**, and it is a clean minimum — the next
+best alignment is 2026 differing bytes against 265, so there is no ambiguity. XP4I *is*
+a template copy; its 265 divergences are accumulated constant patches, not a different
+implementation. And **"XP1I/2/3 differ in exactly 77 bytes" applies to the XP2I/XP3I
+pair only** — XP1I differs from each of them by 71-72 over the body.
+
+Diffing all four yields the complete set of patched constants, and every family
+resolves:
+
+| family | XP1I | XP2I | XP3I | XP4I | what it is |
+|---|---|---|---|---|---|
+| channel literal | `01` | `02` | `03` | `04` | the channel number |
+| **BIM CR low byte** | `44` | `46` | `50` | `52` | `$FF0244/46/50/52` |
+| channel `+$0E` | `4E` | `6E` | `8E` | `AE` | command/status port |
+| channel `+$08` | `48` | `68` | `88` | `A8` | data high |
+| channel `+$0A` | `4A` | `6A` | `8A` | `AA` | data low |
+| record base | `66` | `6C` | `72` | `78` | `$1066 + (ch-1)*6` |
+| record `+2` | `68` | `6E` | `74` | `7A` | |
+| record `+4` | `6A` | `70` | `76` | `7C` | |
+| six routine addresses | `86 84 83 85 7D 7F` | `7C 7A 79 7B 73 75` | `72 70 6F 71 69 6B` | `68 66 65 67 5F 61` | third byte of `jsr abs.l` — each task calls **its own copies** |
+| **scan mask** | `$FFF0` | `$FF0F` | `$F0FF` | `$0FFF` | one nibble per channel |
+
+**The BIM CR family independently re-derives the documented BIM assignment table** —
+`44/46/50/52` are exactly `$FF0244`, `$FF0246`, `$FF0250`, `$FF0252`, and the
+irregular step (+2, +$A, +2) is why: the four XP channels are not contiguous across
+the three BIMs. A diff of four code copies reproducing a table assembled from
+datasheet reasoning is a good independent check on both.
+
+**The scan mask is new and it types a register field.** Guarded on MODE1 bit 7 (busy),
+each task loads a mask and calls its own copy of the channel scan:
+
+```
+$F07E3C  move.l  #$fff0,d2 / jsr $F08616     ; XP1I
+$F0743C  move.l  #$ff0f,d2                   ; XP2I
+$F06A3C  move.l  #$f0ff,d2                   ; XP3I
+$F06042  move.l  #$fff,d2  / jsr $F067FE     ; XP4I  ($0FFF)
+```
+
+`FFF0 / FF0F / F0FF / 0FFF` — **a 16-bit word holding one nibble per channel, and each
+task clears its own.** So the scan word is nibble-per-channel and the mask means "all
+channels except mine". That is a field layout no usage pattern would have revealed, and
+it tells a chassis model that the scan operand is four 4-bit per-channel fields rather
+than a bitmask of flags.
+
+*Small trap on the way: `grep '#\$0fff'` found nothing because the disassembler prints
+`#$fff` without the leading zero, which briefly made XP4I look like it lacked the mask
+entirely. Third time a search has failed on formatting rather than content.*
+
 ### Nor Pascal — and the positive evidence for hand-authorship
 
 *Follow-up question: could it have been Pascal?* Pascal is a **harder** fit than C,

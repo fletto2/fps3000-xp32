@@ -6668,6 +6668,25 @@ loc_F07E06:
 loc_F07E0C:
   f07e0c: 2a 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a5
 ;>>>> [R14/GLM] Configures XP-32 channel 1 hardware by writing 0x5F to the XLTR_CH1_CONFIG register (address FF0244).
+;### COMPLETE XP-TASK TEMPLATE PARAMETERIZATION, from diffing the four copies.
+;###   ALIGNMENT CORRECTED: XP2I and XP3I align with XP1I at ZERO shift (71 and
+;###   72 differing bytes of 2304); XP4I aligns at -$1E, NOT -$18, with 265
+;###   differing -- and it is unambiguous, the next-best shift gives 2026.  So
+;###   XP4I IS a template copy, its divergence being accumulated patches.  And
+;###   "XP1I/2/3 differ in exactly 77 bytes" is really the XP2I/XP3I pair.
+;###   The patched constant families, XP1I/2/3/4:
+;###     channel literal      01 02 03 04
+;###     BIM CR low byte      44 46 50 52   = $FF0244/46/50/52
+;###     channel +$0E         4E 6E 8E AE   command/status port
+;###     channel +$08         48 68 88 A8   data high
+;###     channel +$0A         4A 6A 8A AA   data low
+;###     record base/+2/+4    66/68/6A ...  = $1066 + (ch-1)*6
+;###     six routine addrs    86 84 83 85 7D 7F  ->  7C 7A ... per task
+;###     scan mask            FFF0 FF0F F0FF 0FFF
+;###   The BIM CR family INDEPENDENTLY RE-DERIVES the documented BIM assignment
+;###   table, irregular step and all (+2, +$A, +2), because the four XP channels
+;###   are not contiguous across the three BIMs.  A diff of four code copies
+;###   reproducing a table built from datasheet reasoning checks both.
   f07e12: 3b 7c 00 5f 02 44       move.w   #$5f, $244(a5)  [BIM1_CR2_XP1]
 ;>>>> [R11/BOTH] This instruction loads the immediate value `0x13` into `d0` as a parameter for the subsequent `trap #$1` (RMS68K system call), which likely invokes a kernel service (such as task delay or resource allocation) during the TCBXP1I task's initialization or command dispatch sequence after configuring the XP-32 channel 1 config register at `0xFF0244` with `0x5F`.
   f07e18: 70 13                   moveq    #$13, d0
@@ -6679,6 +6698,14 @@ loc_F07E0C:
   f07e32: 34 2d 02 02             move.w   $202(a5)  [XLTR_MODE1], d2
   f07e36: 08 02 00 07             btst.b   #$7, d2
   f07e3a: 67 10                   beq.b    loc_F07E4C
+;### THE PER-CHANNEL SCAN MASK IS ONE NIBBLE PER CHANNEL.  Guarded on MODE1
+;###   bit 7 (busy), each XP task loads a mask and calls ITS OWN copy of the
+;###   channel scan:  XP1I $FFF0, XP2I $FF0F, XP3I $F0FF, XP4I $0FFF.
+;###   So the scan word holds FOUR 4-BIT PER-CHANNEL FIELDS and each task
+;###   clears its own -- the mask means "all channels except mine".  A field
+;###   layout no usage pattern would reveal, and it tells a chassis model the
+;###   operand is nibble-per-channel rather than a bitmask of flags.
+;###   (XP4I prints as #$fff, which is why a grep for #$0fff found only three.)
   f07e3c: 24 3c 00 00 ff f0       move.l   #$fff0, d2
 ;### jsr to the channel scan at $F08616.
   f07e42: 4e b9 00 f0 86 16       jsr      loc_F08616.l
