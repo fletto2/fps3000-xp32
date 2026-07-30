@@ -1598,6 +1598,45 @@ The pattern across all of this is the session's recurring one, one level up: **t
 itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
 here changed what is known about the machine; it changed how much a passing suite is worth.
 
+### THE MONITOR WORKED ON REAL HARDWARE (2026-07-30)
+
+The owner reports the monitor running on the machine. That closes the project's principal open
+question and resolves all three "open hardware unknowns" at once — none of which needed the
+scope measurement that was planned for them:
+
+| unknown | resolved by the machine running |
+|---|---|
+| is the µPD7201 populated and clocked? | **yes** — it could not have talked otherwise |
+| which of sixteen baud straps is set? | **the one burned for** |
+| is RXC/TXC on the on-board BRG? | **yes** — no external clock was supplied |
+
+**The SBC photograph corroborates the hardware side**: `MC1488P` x3 (RS-232 line **drivers**)
+and `MC1489AP` x2 (**receivers**) are physically fitted, with jumper blocks `J21`-`J24` shunted
+and two DIP-switch banks `J25`/`J26` set — the strap configuration the baud rate comes from.
+
+**What the success validates, retroactively.** Each of these was a *diagnosed defect with a
+mechanism*, not a guess, and the first burn failed on them:
+
+- the SIO decode being **odd-byte and function-grouped** — `$F70011`/`$F70015`, where the first
+  attempt used `$F70010`/`$F70012` and `$F70013` is channel **B** data;
+- `cold_init` filling **all 256 exception vectors** before any I/O, since on a 68000 the table
+  is DRAM and garbage at power-on — BERR plus a junk vector is a double fault and a halt;
+- the group-0 frame stub, the `MON_NEST` re-entry guard, and `g` refusing non-resumable frames;
+- `patch_rom.py` **recomputing the ROM checksum word**.
+
+*That last item is worth dwelling on.* It was added as prudence — the stock image XORs to zero
+and every monitor image before 2026-07-29 broke that. This session found the reason it is
+**necessary**: self-test phase `$300` at `$F08D1A` XOR-accumulates the entire ROM and **retries
+forever** on mismatch, so an image that boots the stock path with a broken checksum never
+starts, silently. The claim recorded for three days — *"patching the ROM cannot fail a
+self-test, because no such test exists"* — was wrong, and the hardware would have demonstrated
+it.
+
+**What this does not tell us**, and worth stating rather than assuming: which image was burned
+(`--reset` bypasses the checksum path; `panic_only` does not), and therefore whether the
+checksum fix was load-bearing on this particular attempt or merely correct. The distinction
+matters for anyone reproducing it.
+
 ### The emulator now models three BIMs — and bit 4 is a ONE-SHOT, not a strap
 
 Acting on the photograph, `$FF0218` bit 4 now reads set by default. The first attempt —
