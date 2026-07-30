@@ -80,6 +80,31 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- phase $1700 specifies the $400000 BERR gate ----
+ (0xF09626,'PHASE $1700 IS THE FIRMWARE\'S OWN SPECIFICATION OF THE $400000 BERR GATE,'),
+ (0xF09626,'  and it requires BOTH POLARITIES: with $FF0216 bit 5 SET the probe must'),
+ (0xF09626,'  fault (d1 nonzero); with bit 5 CLEAR it must not (d1 zero).  Either way'),
+ (0xF09626,'  round the error marker $F0F0F0F0 goes into d7.  The emulator gate'),
+ (0xF09626,'  -- serve memory unless data_hi & $20 -- matches exactly.  This is a'),
+ (0xF09626,'  VALIDATION, not a correction: the rule was inferred and the firmware\'s'),
+ (0xF09626,'  own test confirms it in both directions.'),
+ (0xF096AC,'READ PROBE, and the FOUR NOPs ARE LOAD-BEARING.  The temporary bus-error'),
+ (0xF096AC,'  handler at $F098E0 resumes at SAVED-PC + 4, but this instruction is only'),
+ (0xF096AC,'  2 bytes and the 68000\'s saved PC for a bus error is IMPRECISE -- somewhere'),
+ (0xF096AC,'  in or after the faulting instruction.  The NOP padding is slack that makes'),
+ (0xF096AC,'  any landing point in that range harmless.  It looks like alignment filler.'),
+ (0xF096B8,'WRITE PROBE -- and clr.w matters: a real 68000 READS THE DESTINATION FIRST,'),
+ (0xF096B8,'  so on iron this phase exercises the read path too, while the emulator'),
+ (0xF096B8,'  (CLR as a pure write) exercises only the write path.  The divergence table'),
+ (0xF096B8,'  lists that as a DRAM parity risk; here it changes what a CHASSIS test'),
+ (0xF096B8,'  actually covers -- a second, unrecorded consequence of the same gap.'),
+ (0xF098E0,'THE TEMPORARY BUS-ERROR HANDLER.  moveq #1,d1 to flag the fault, then'),
+ (0xF098E0,'  lea $8(a7),a7 to step over SSW + access address + IR, then'),
+ (0xF098E0,'  addq.w #$4,$4(a7) to advance the saved PC by 4, then rte.  That'),
+ (0xF098E0,'  arithmetic only lands on the PC low word for the 68000 SEVEN-WORD group-0'),
+ (0xF098E0,'  frame -- Musashi had to be patched off its hard-coded 68010 frame for'),
+ (0xF098E0,'  exactly this, and with the wrong frame it would fail SILENTLY by resuming'),
+ (0xF098E0,'  at a wrong address rather than by faulting.'),
  # ---- the self-test "phase" is a running counter, not a test ID ----
  (0xF08996,'THE PHASE NUMBER IS A RUNNING COUNTER IN d6, NOT A TEST IDENTIFIER.'),
  (0xF08996,'  addi.w #$100,d6 bumps the base between sub-tests, and $F098F0 does'),

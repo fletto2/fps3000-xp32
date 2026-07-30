@@ -9397,6 +9397,13 @@ loc_F09602:
 
 loc_F09624:
   f09624: 42 41                   clr.w    d1
+;### PHASE $1700 IS THE FIRMWARE'S OWN SPECIFICATION OF THE $400000 BERR GATE,
+;###   and it requires BOTH POLARITIES: with $FF0216 bit 5 SET the probe must
+;###   fault (d1 nonzero); with bit 5 CLEAR it must not (d1 zero).  Either way
+;###   round the error marker $F0F0F0F0 goes into d7.  The emulator gate
+;###   -- serve memory unless data_hi & $20 -- matches exactly.  This is a
+;###   VALIDATION, not a correction: the rule was inferred and the firmware's
+;###   own test confirms it in both directions.
   f09626: 3d 7c 00 20 02 16       move.w   #$20, $216(a6)  [XLTR_DATA_HI]
   f0962c: 61 7e                   bsr.b    loc_F096AC
   f0962e: 4a 41                   tst.w    d1
@@ -9458,6 +9465,11 @@ loc_F0969A:
   f096aa: 4e 75                   rts      
 
 loc_F096AC:
+;### READ PROBE, and the FOUR NOPs ARE LOAD-BEARING.  The temporary bus-error
+;###   handler at $F098E0 resumes at SAVED-PC + 4, but this instruction is only
+;###   2 bytes and the 68000's saved PC for a bus error is IMPRECISE -- somewhere
+;###   in or after the faulting instruction.  The NOP padding is slack that makes
+;###   any landing point in that range harmless.  It looks like alignment filler.
 ;### ChassisProbe_Read: ONE read then four NOPs. The padding exists because a 68000
   f096ac: 30 11                   move.w   (a1), d0
   f096ae: 4e 71                   nop      
@@ -9468,6 +9480,11 @@ loc_F096AC:
 
 loc_F096B8:
 ;>>>> [R5/BOTH] This is a utility subroutine that clears the word at (a1) — likely a panel bus command/status register — used as a "clear-and-wait" primitive before initiating a new panel command sequence.
+;### WRITE PROBE -- and clr.w matters: a real 68000 READS THE DESTINATION FIRST,
+;###   so on iron this phase exercises the read path too, while the emulator
+;###   (CLR as a pure write) exercises only the write path.  The divergence table
+;###   lists that as a DRAM parity risk; here it changes what a CHASSIS test
+;###   actually covers -- a second, unrecorded consequence of the same gap.
 ;### ChassisProbe_Write: ONE write then four NOPs - same reason: a bus error is
   f096b8: 42 51                   clr.w    (a1)
   f096ba: 4e 71                   nop      
@@ -9715,6 +9732,13 @@ loc_F098C4:
   f098de: 4e 75                   rts      
 
 loc_F098E0:
+;### THE TEMPORARY BUS-ERROR HANDLER.  moveq #1,d1 to flag the fault, then
+;###   lea $8(a7),a7 to step over SSW + access address + IR, then
+;###   addq.w #$4,$4(a7) to advance the saved PC by 4, then rte.  That
+;###   arithmetic only lands on the PC low word for the 68000 SEVEN-WORD group-0
+;###   frame -- Musashi had to be patched off its hard-coded 68010 frame for
+;###   exactly this, and with the wrong frame it would fail SILENTLY by resuming
+;###   at a wrong address rather than by faulting.
   f098e0: 72 01                   moveq    #$1, d1
   f098e2: 4f ef 00 08             lea.l    $8(a7), a7
   f098e6: 58 6f 00 04             addq.w   #$4, $4(a7)

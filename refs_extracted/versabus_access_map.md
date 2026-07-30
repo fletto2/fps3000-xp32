@@ -1528,6 +1528,70 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Phases `$1700`-`$1703` specify the `$400000` BERR gate — and explain the NOPs
+
+The first chassis-memory phase group is a **bus-error gating test**, and it is the
+firmware's own specification of a rule the emulator already implements:
+
+```
+$F0961A  clr.w   $210(a6)          ; MODE2 = page 0
+$F0961E  movea.l #$400000,a1
+$F09626  move.w  #$20,$216(a6)     ; $FF0216 bit 5 SET
+$F0962C  bsr     $F096AC           ;   probe
+$F0962E  tst.w   d1 / bne -> ok    ;   d1 must be NONZERO (a fault was taken)
+$F09632  move.l  #$f0f0f0f0,d7     ;   else error marker
+
+$F09648  clr.w   $216(a6)          ; $FF0216 bit 5 CLEAR
+$F0964C  bsr     $F096AC
+$F0964E  tst.l   d1 / beq -> ok    ;   d1 must be ZERO (no fault)
+```
+
+**Both polarities are required**: bit 5 set must fault, bit 5 clear must not. The
+emulator's gate — `if (!(versabus_xltr_data_hi() & 0x20))` serve memory, else BERR —
+matches this exactly. *That is a validation rather than a correction, which is worth
+recording in a document that has mostly been finding errors: this rule was inferred,
+and the firmware's own test confirms it in both directions.*
+
+#### Two probes, read and write, and a hand-installed bus-error vector
+
+```
+$F096AC  move.w  (a1),d0     ; READ probe   } each followed by
+$F096B8  clr.w   (a1)        ; WRITE probe  } FOUR NOPs, then rts
+$F096C4  movem.l d0-d1/a0-a1,-(a7)
+$F096C8  movea.l $8.w,a0                ; save the old bus-error vector
+$F096CC  move.l  #$F098E0,$8.w          ; install a temporary one
+$F096A2  move.l  a0,$8.w                ; and restore it afterwards
+```
+
+and the temporary handler:
+
+```
+$F098E0  moveq   #$1,d1          ; flag that a fault happened
+$F098E2  lea     $8(a7),a7       ; step over SSW + access address + IR
+$F098E6  addq.w  #$4,$4(a7)      ; ADVANCE THE SAVED PC BY 4
+$F098EA  rte
+```
+
+**This is why the probes are followed by four NOPs.** The handler resumes at
+saved-PC + 4, but the probe instruction is only 2 bytes, and on a 68000 the PC saved
+in a bus-error frame is *imprecise* — somewhere in or after the faulting instruction.
+The NOP padding is slack that makes any landing point in that range harmless. What
+looks like alignment filler is load-bearing.
+
+Two consequences for emulation, both concrete:
+
+- **The handler depends on the exact group-0 frame layout.** It does `lea $8(a7),a7`
+  then `addq.w #$4,$4(a7)`, which only lands on the PC's low word for the **68000**
+  7-word frame. The known-divergence table already records that Musashi had to be
+  patched from its hard-coded 68010 frame; this is the code that would break, and it
+  would break silently by resuming at a wrong address rather than by faulting.
+- **The write probe is `clr.w`, and that matters.** A real 68000 **reads the
+  destination before writing**, so on iron phase `$1702` exercises the read path too;
+  the emulator models `CLR` as a pure write, so it exercises only the write path. The
+  divergence table lists this as a parity-BERR risk for DRAM — here it changes what a
+  *chassis* test actually covers, which is a second, unrecorded consequence of the
+  same modelling gap.
+
 ### The self-test "phase" is a running counter in `d6`, not a test identifier
 
 The phase beacon is `move.w d6,$204(a6)` and the value is maintained by hand:

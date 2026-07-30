@@ -550,6 +550,26 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- phase $1700 specifies the $400000 BERR gate, both polarities --------
+    check('phase $1700 requires a fault with $FF0216 bit 5 SET',
+          d[0xF09626-0xF00000:0xF09632-0xF00000]
+          == b'\x3d\x7c\x00\x20\x02\x16\x61\x7e\x4a\x41\x66\x06')
+    check('...and NO fault with bit 5 CLEAR',
+          d[0xF09648-0xF00000:0xF09652-0xF00000]
+          == b'\x42\x6e\x02\x16\x61\x5e\x4a\x81\x67\x06')
+    check('the probes are a word READ and a word WRITE, each padded with four NOPs',
+          d[0xF096AC-0xF00000:0xF096B8-0xF00000]
+              == b'\x30\x11\x4e\x71\x4e\x71\x4e\x71\x4e\x71\x4e\x75'
+          and d[0xF096B8-0xF00000:0xF096C4-0xF00000]
+              == b'\x42\x51\x4e\x71\x4e\x71\x4e\x71\x4e\x71\x4e\x75')
+    check('a temporary bus-error vector is installed at $8 and restored',
+          d[0xF096CC-0xF00000:0xF096D4-0xF00000]
+              == b'\x21\xfc\x00\xf0\x98\xe0\x00\x08'
+          and d[0xF096A2-0xF00000:0xF096A6-0xF00000] == b'\x21\xc8\x00\x08')
+    check('...and it resumes at saved-PC + 4, which is why the NOPs are there',
+          d[0xF098E0-0xF00000:0xF098EA-0xF00000]
+          == b'\x72\x01\x4f\xef\x00\x08\x58\x6f\x00\x04')
+
     # --- the phase beacon is a running counter in d6 -------------------------
     check('the phase beacon writes d6, and clr.b d6 preserves the high byte',
           d[0xF098F0-0xF00000:0xF098F6-0xF00000] == b'\x42\x06\x3d\x46\x02\x04')
