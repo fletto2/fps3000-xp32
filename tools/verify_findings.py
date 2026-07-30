@@ -550,6 +550,20 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- phase $1Axx: $FF0216 bit 7 is the AP I/F bus-error enable ------------
+    check('phase $1A00 sets $FF0216 bit 7 and requires a fault',
+          d[0xF0984C-0xF00000:0xF09856-0xF00000]
+          == b'\x3d\x7c\x00\x80\x02\x16\x61\x70\x66\x06')
+    check('phase $1A02 clears it and requires NO fault',
+          d[0xF098A0-0xF00000:0xF098A8-0xF00000]
+          == b'\x42\x6e\x02\x16\x61\x1e\x67\x06')
+    check('phase $1A01: $FF000E round-trips $AAAA with STATUS_IRQ cleared',
+          d[0xF09878-0xF00000:0xF09888-0xF00000]
+          == b'\x42\x6e\x02\x18\x3d\x7c\xaa\xaa\x00\x0e'
+             b'\x0c\x6e\xaa\xaa\x00\x0e')
+    check('the emulator gates AP I/F BERR on bit 7, not on data_hi != 0',
+          'xltr.data_hi & 0x80' in open('emulator/versabus.c').read())
+
     # --- phase $1700 specifies the $400000 BERR gate, both polarities --------
     check('phase $1700 requires a fault with $FF0216 bit 5 SET',
           d[0xF09626-0xF00000:0xF09632-0xF00000]

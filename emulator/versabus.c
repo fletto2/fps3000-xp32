@@ -599,7 +599,18 @@ static uint16_t apif_read(uint32_t addr) {
  *   stage 2 (DATA_HI=0,    armed)   → no BERR (chassis idle)
  * So the BERR condition is "armed AND DATA_HI != 0". */
 int versabus_apif_dma_busy(void) {
-    return xltr.arm_pending && xltr.data_hi != 0;
+    /* Self-test phase $1Axx is the firmware's own specification of this gate, and
+     * it names a SPECIFIC BIT rather than "nonzero":
+     *
+     *   $F0984C  move.w #$80,$216(a6)   ; bit 7 SET   -> the probe MUST fault
+     *   $F098A0  clr.w  $216(a6)        ; bit 7 CLEAR -> it MUST NOT
+     *
+     * exactly mirroring phase $17xx, which uses bit 5 for the $400000 window.
+     * So $FF0216 carries TWO independent bus-error enables -- bit 5 for chassis
+     * memory, bit 7 for the AP I/F -- and gating on `!= 0` conflated them: a
+     * write of $20 intended only to arm the chassis-memory gate would also have
+     * armed this one. */
+    return xltr.arm_pending && (xltr.data_hi & 0x80);
 }
 
 static void apif_write(uint32_t addr, uint16_t val) {

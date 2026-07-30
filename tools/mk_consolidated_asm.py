@@ -80,6 +80,26 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- $FF0216 holds TWO BERR-enable bits ----
+ (0xF0984C,'PHASE $1Axx IS THE AP I/F SPECIFICATION, and it names BIT 7 of $FF0216:'),
+ (0xF0984C,'    $1A00  bit 7 SET   -> the probe MUST fault'),
+ (0xF0984C,'    $1A01  with $218 CLEARED, $FF000E must round-trip $AAAA'),
+ (0xF0984C,'    $1A02  bit 7 CLEAR -> it MUST NOT fault'),
+ (0xF0984C,'  Same three-part shape as phase $17xx, which uses BIT 5 for the $400000'),
+ (0xF0984C,'  window.  So $FF0216 HOLDS TWO INDEPENDENT BUS-ERROR ENABLES -- bit 5'),
+ (0xF0984C,'  chassis memory, bit 7 AP I/F -- and is at least partly a bus-error'),
+ (0xF0984C,'  enable register, not just a "mode/page register".'),
+ (0xF0984C,'  THE EMULATOR GATE WAS TOO LOOSE: `arm_pending && data_hi != 0` meant a'),
+ (0xF0984C,'  write of $20, intended only for the chassis-memory gate, ALSO armed the'),
+ (0xF0984C,'  AP I/F one.  Narrowed to `data_hi & 0x80`.  Verified: the self-test still'),
+ (0xF0984C,'  reaches phase $29xx, the RDHC path is unchanged (wake/arm/cmd1/$F0572C'),
+ (0xF0984C,'  all identical), and all three golden digests are byte-identical.'),
+ (0xF09878,'PHASE $1A01 PROVES $FF000E IS PLAIN 16-BIT STORAGE: with the fault enable'),
+ (0xF09878,'  SET but STATUS_IRQ cleared, $AAAA written here must read back.  So the AP'),
+ (0xF09878,'  I/F fault is conditional on more than bit 7 alone, and the command port'),
+ (0xF09878,'  itself is a latch.'),
+ (0xF098C4,'The probe opens with move.w #$FF,$20C -- one of the COUNTER values recorded'),
+ (0xF098C4,'  as "boot-diagnostic only", now with a purpose: arming this probe.'),
  # ---- phase $1700 specifies the $400000 BERR gate ----
  (0xF09626,'PHASE $1700 IS THE FIRMWARE\'S OWN SPECIFICATION OF THE $400000 BERR GATE,'),
  (0xF09626,'  and it requires BOTH POLARITIES: with $FF0216 bit 5 SET the probe must'),

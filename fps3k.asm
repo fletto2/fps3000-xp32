@@ -9671,6 +9671,19 @@ loc_F09832:
 
 loc_F0984A:
   f0984a: 42 41                   clr.w    d1
+;### PHASE $1Axx IS THE AP I/F SPECIFICATION, and it names BIT 7 of $FF0216:
+;###     $1A00  bit 7 SET   -> the probe MUST fault
+;###     $1A01  with $218 CLEARED, $FF000E must round-trip $AAAA
+;###     $1A02  bit 7 CLEAR -> it MUST NOT fault
+;###   Same three-part shape as phase $17xx, which uses BIT 5 for the $400000
+;###   window.  So $FF0216 HOLDS TWO INDEPENDENT BUS-ERROR ENABLES -- bit 5
+;###   chassis memory, bit 7 AP I/F -- and is at least partly a bus-error
+;###   enable register, not just a "mode/page register".
+;###   THE EMULATOR GATE WAS TOO LOOSE: `arm_pending && data_hi != 0` meant a
+;###   write of $20, intended only for the chassis-memory gate, ALSO armed the
+;###   AP I/F one.  Narrowed to `data_hi & 0x80`.  Verified: the self-test still
+;###   reaches phase $29xx, the RDHC path is unchanged (wake/arm/cmd1/$F0572C
+;###   all identical), and all three golden digests are byte-identical.
   f0984c: 3d 7c 00 80 02 16       move.w   #$80, $216(a6)  [XLTR_DATA_HI]
   f09852: 61 70                   bsr.b    loc_F098C4
 ;>>>> [R7/BOTH] Branches to error handling if panel bus diagnostic test fails.
@@ -9689,6 +9702,10 @@ loc_F0985C:
 
 loc_F09872:
   f09872: 3d 7c 00 80 02 16       move.w   #$80, $216(a6)  [XLTR_DATA_HI]
+;### PHASE $1A01 PROVES $FF000E IS PLAIN 16-BIT STORAGE: with the fault enable
+;###   SET but STATUS_IRQ cleared, $AAAA written here must read back.  So the AP
+;###   I/F fault is conditional on more than bit 7 alone, and the command port
+;###   itself is a latch.
   f09878: 42 6e 02 18             clr.w    $218(a6)  [XLTR_STATUS_IRQ]
   f0987c: 3d 7c aa aa 00 0e       move.w   #$aaaa, $e(a6)
   f09882: 0c 6e aa aa 00 0e       cmpi.w   #$aaaa, $e(a6)
@@ -9721,6 +9738,8 @@ loc_F098AE:
   f098c2: 4e 75                   rts      
 
 loc_F098C4:
+;### The probe opens with move.w #$FF,$20C -- one of the COUNTER values recorded
+;###   as "boot-diagnostic only", now with a purpose: arming this probe.
   f098c4: 3d 7c 00 ff 02 0c       move.w   #$ff, $20c(a6)  [XLTR_COUNTER]
   f098ca: 3d 7c 04 00 02 18       move.w   #$400, $218(a6)  [XLTR_STATUS_IRQ]
   f098d0: 4a 6e 00 0e             tst.w    $e(a6)

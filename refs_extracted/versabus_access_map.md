@@ -1528,6 +1528,59 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### `$FF0216` carries two BERR-enable bits, and the AP I/F gate was too loose
+
+Phase `$1Axx` is the only group that touches the AP I/F, and it is that card's
+specification — the same three-part shape as the `$400000` test:
+
+```
+$F0984C  move.w #$80,$216(a6)   ; bit 7 SET   -> the probe MUST fault   (phase $1A00)
+$F0987C  move.w #$aaaa,$e(a6)   ; with $218 CLEARED, $FF000E must
+$F09882  cmpi.w #$aaaa,$e(a6)   ;   read back what was written          (phase $1A01)
+$F098A0  clr.w  $216(a6)        ; bit 7 CLEAR -> it MUST NOT fault      (phase $1A02)
+```
+
+So **`$FF0216` holds two independent bus-error enables**: **bit 5** for the `$400000`
+chassis-memory window (phase `$17xx`) and **bit 7** for the AP I/F (phase `$1Axx`).
+That is a sharper statement of that register's role than "mode/page register,
+read-modify-written" — it is at least partly a **bus-error enable register**, and the
+firmware tests each bit in both polarities.
+
+Phase `$1A01` also establishes that **`$FF000E` is a genuine read/write 16-bit
+latch**: with the fault enable *set* but `STATUS_IRQ` cleared, `$AAAA` written there
+must read back. So the AP I/F fault is conditional on more than bit 7 alone, and the
+command port itself is plain storage. The probe at `$F098C4` opens with
+`move.w #$FF,$20C(a6)` — one of the `$01`/`$FF` COUNTER values this document records
+as "boot-diagnostic only", now with a purpose: it is part of arming the probe.
+
+#### The emulator's AP I/F gate conflated the two bits
+
+```c
+/* before */ return xltr.arm_pending && xltr.data_hi != 0;
+/* after  */ return xltr.arm_pending && (xltr.data_hi & 0x80);
+```
+
+Gating on `!= 0` meant a write of `$20` — intended only to arm the *chassis-memory*
+gate, which the `$400000` path reads as `data_hi & 0x20` — would **also** arm the AP
+I/F gate. The two enables live in one register and the model merged them. Narrowed to
+bit 7, per the firmware's own test.
+
+Verified rather than assumed, because a change like this can easily break a working
+configuration:
+
+| check | result |
+|---|---|
+| self-test completes, reaches phase `$29xx` | **yes**, both configurations |
+| RDHC wakes, command arm taken, cmd 1 runs, `$F0572C` fires | **unchanged** (1/1/1/2) |
+| all three golden-master digests | **byte-identical** |
+
+*One process note. At 200 M cycles the RDHC-driven run's final PC moved from `F00FCC`
+to `F056B8` and its RAM md5 changed, which read as a regression — `F056B8` is a
+`bra .`. It is not: that is where RDHC's ISR legitimately sits between interrupts, and
+the digests are taken at 400 M, where all three are unchanged. I nearly updated the
+golden masters on the strength of a hash that is not what they measure. The tripwire
+worked; my first reading of it did not.*
+
 ### Phases `$1700`-`$1703` specify the `$400000` BERR gate — and explain the NOPs
 
 The first chassis-memory phase group is a **bus-error gating test**, and it is the
