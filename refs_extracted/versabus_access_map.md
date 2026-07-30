@@ -1563,6 +1563,51 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The dynamic profile of the whole machine: one live spin, four idle tasks
+
+Applying the profiling lesson to every task at once gives the machine's actual behaviour in a
+single table, and it is worth having in this form.
+
+| region | executions | hottest PC |
+|---|---|---|
+| **RDHC** | 201,534 | **`$F056B8` x182,124 (90%) — `bra .`** |
+| IO1I | **126** | `$F05F7A` x6 |
+| XP4I | **81** | `$F0697A` x6 |
+| XP3I | **81** | `$F0737A` x6 |
+| XP2I | **81** | `$F07D7A` x6 |
+| XP1I | **59** | `$F08700` x1 |
+| RTOS + kernel | 417,447 | `$F00552` x7,251 (1%) |
+
+**Four of the five service tasks execute fewer than 130 instructions in a 300 M-cycle run.**
+They are not blocked in a spin — they are barely entered at all, which is consistent with their
+being gated behind conditions this configuration never satisfies.
+
+**And the spin census is decisive.** The ROM contains **nine** `bra .` sites — the eight
+panel-command issuer copies this file documents plus `$F001AA` in the kernel:
+
+```
+$F001AA  x0      $F04530  x0      $F056B8  x182,124  <-- the only live one
+$F05E86  x0      $F068D8  x0      $F072F0  x0
+$F07CF0  x0      $F086F0  x0      $F0A5AE  x0
+```
+
+**Exactly one executes.** Every other issuer copy, including TCBIO1I's `$F05E86` — the deadlock
+this file describes in detail — is **never reached** in this configuration. So of the two
+"self-programmed deadlocks" documented for this machine, only RDHC's is live; TCBIO1I's is real
+in the code and dormant in practice, because TCBIO1I executes 126 instructions and never gets
+there.
+
+*That reframes the emulator's remaining work usefully.* The picture is not "several tasks stuck
+in spins needing several chassis responses". It is **one task stuck in one spin**, four tasks
+that never start, and a kernel scheduling around them. Releasing `$F056B8` — by making the
+panel-status responder rewrite the spinning PC — is a single change that would let RDHC run, and
+RDHC is the task that drives everything else.
+
+*Method note, and the lesson of this whole thread:* nine rounds of hypotheses about protocol
+mechanics were resolved by one profile of where the program counter goes. **Instruction counts
+per PC are the cheapest measurement available on an emulator and should be the first one taken,
+not the last.** I reached for it only after six explanations had failed.
+
 ### ANSWERED: RDHC spends 90% of the run in a `bra .` spin at `$F056B8`
 
 Measuring where RDHC actually executes settles the question the previous entry left open, and

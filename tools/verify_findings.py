@@ -570,6 +570,18 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- nine bra . sites exist; the census is exact --------------------------
+    _spins = [a2 for a2 in range(0xF00000, 0xF0FFFE, 2)
+              if d[a2-0xF00000:a2-0xF00000+2] == b'\x60\xfe']
+    check('the ROM contains exactly nine bra . spin sites',
+          len(_spins) == 9)
+    check('...eight issuer copies plus $F001AA in the kernel',
+          0xF001AA in _spins
+          and all(a2 in _spins for a2 in (0xF04530, 0xF056B8, 0xF05E86, 0xF068D8,
+                                          0xF072F0, 0xF07CF0, 0xF086F0, 0xF0A5AE)))
+    check('$F05E86 -- TCBIO1I\'s documented deadlock -- is among them',
+          0xF05E86 in _spins)
+
     # --- RDHC spins at $F056B8, the tail of PanelIOConfigure_25A --------------
     check('$F056B8 is bra.b to itself -- an unconditional spin',
           d[0xF056B8-0xF00000:0xF056BA-0xF00000] == b'\x60\xfe')
