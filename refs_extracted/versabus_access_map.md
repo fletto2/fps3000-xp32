@@ -1528,6 +1528,60 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The complete `$10xx` per-channel state map, and `$FF004A` *is* read
+
+Collecting every non-data reference into `$1000-$10FF` from the disassembly gives the
+whole per-channel state area. It is several **parallel arrays**, not one structure:
+
+| base | stride | entries | what |
+|---|---|---|---|
+| `$1062` | 2 | 4 | task's own channel number |
+| `$1064` | 2 | 4 | word array, the one chassis operation `$A` reads back |
+| `$1066` | 6 | 4 | per-channel record (`$1066`/`$106C`/`$1072`/`$1078`), bit-tested at `+$0` |
+| `$1080` | 4 | 4 | pointer to the channel's register image (`&$101E`) |
+| `$10A0` | 2 | 4 | flag word; command 1 writes `2`, and `btst #1,$10A1` gates the ASQ post |
+| `$10AE` | 4 | 4 | **`USER`-connect gate** |
+| `$10BE` | 4 | 4 | **`USER` task handle** from directive `$43` |
+| `$10CE` | 4 | 4 | per-channel longword |
+| `$10DE` | 4 | 4 | per-channel longword, cleared on entry |
+
+The four longword arrays sit **exactly `$10` apart**, which is `4 × 4` — so
+`$10AE-$10ED` is a clean 4-wide × 4-deep block, and the block ending at `$10ED` is
+confirmed by RTOS init referencing `$10EE` as the start of something else. Shared,
+non-per-channel: `$105E` (channel count), `$107E` (byte read by all four tasks),
+`$1098` (word array cleared per channel), `$10AA` (TCBIO1I's gate).
+
+#### Correction: `$FF004A` is read, 468 times per run
+
+This document states of the value `$4F` that *"it has no connection to `$FF004A`,
+which is neither read nor written in a full boot."* The second half is wrong.
+
+```
+$F07EFE  move.w  $4a(a5),$106a      ; XP1I   -- a5 = $FF0000
+$F074FE  move.w  $6a(a5),$1070      ; XP2I
+$F06AFE  move.w  $8a(a5),$1076      ; XP3I
+$F060E6  move.w  $aa(a5),$107c      ; XP4I
+```
+
+Each channel ISR reads **both halves** of its channel data pair — `$48(a5)` at
+`$F07EF6`, already recorded, and `$4A(a5)` two instructions later at `$F07EFE` — and
+files the low half in its per-channel record. Measured: `FPS3K_XPIRQ=1` executes
+`$F07EF6` and `$F07EFE` **468 times each**, and with a four-channel chassis all four
+tasks' equivalents run 467 times.
+
+*The instructive part is how this survived.* This document already retracted exactly
+this claim for `$FF0048` — "over-stated as 'never read anywhere' and that is
+retracted… absolute-address scans cannot see that form" — and the neighbouring
+sentence about `$FF004A`, in the same paragraph, describing the same register pair
+read by the same instruction sequence, was left standing. **A correction was applied
+to one address and not to its twin two instructions away.** When a measurement method
+is found to be blind, every claim that rests on it needs revisiting, not just the one
+that prompted the check.
+
+So the corrected reading of the channel window: the ISR reads `+$08` and `+$0A` as a
+pair, exactly as the "one 32-bit data register" model predicts, and the low half ends
+up in the per-channel record at `$106A + (ch-1)*6`.
+
 ### There is a seventh task, named `USER`, and this ROM never creates it
 
 Sweeping for `d7` writes — now known to carry the operation code — turned up **nine

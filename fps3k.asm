@@ -6706,6 +6706,19 @@ loc_F07EE6:
   f07eee: 33 ed 00 4e 00 00 10 66  move.w   $4e(a5), $1066.l  [g_ch_block]
 ;###   $4E->$1066, $48->$1068, $4A->$106A. NOTE: $FF0048 IS READ, here, as $48(a5).
   f07ef6: 33 ed 00 48 00 00 10 68  move.w   $48(a5), $1068.l
+;### CORRECTION: $FF004A IS READ.  This project states of the value $4F that
+;###   "it has no connection to $FF004A, which is neither read nor written in a
+;###   full boot."  The second half is wrong.  Each channel ISR reads BOTH
+;###   halves of its data pair -- $48(a5) at $F07EF6, already recorded, and
+;###   $4A(a5) HERE two instructions later -- filing the low half in its
+;###   per-channel record.  Measured: FPS3K_XPIRQ=1 runs both 468 times, and
+;###   with a 4-channel chassis all four equivalents ($F074FE, $F06AFE,
+;###   $F060E6) run 467 times.  The instructive part: this exact claim was
+;###   ALREADY retracted for $FF0048 on the grounds that absolute-address scans
+;###   cannot see the $4A(a5) form -- and the neighbouring sentence about
+;###   $FF004A, same paragraph, same register pair, same instruction sequence,
+;###   was left standing.  When a method is found blind, EVERY claim resting on
+;###   it needs revisiting, not just the one that prompted the check.
   f07efe: 33 ed 00 4a 00 00 10 6a  move.w   $4a(a5), $106a.l
   f07f06: 2a 5f                   movea.l  (a7)+, a5
 ;### XP1I ISR exit stub (descriptor +$10).
@@ -7415,6 +7428,15 @@ loc_F0856A:
   f0856c: 53 47                   subq.w   #$1, d7
   f0856e: e5 4f                   lsl.w    #$2, d7
   f08570: 34 47                   movea.w  d7, a2
+;### THE $10xx PER-CHANNEL STATE AREA is several PARALLEL arrays, not one
+;###   structure.  Stride 4, four entries each: $1080 register-image pointer,
+;###   $10AE USER-connect gate, $10BE USER task handle, $10CE and $10DE
+;###   per-channel longwords.  Those four sit exactly $10 apart -- 4x4 -- so
+;###   $10AE-$10ED is a 4-wide by 4-deep block, confirmed by RTOS init treating
+;###   $10EE as the next thing.  Stride 2: $1062 own channel, $1064 the word
+;###   array chassis op $A reads back, $10A0 the flag command 1 sets to 2.
+;###   Stride 6: the per-channel records at $1066/$106C/$1072/$1078.  Shared:
+;###   $105E channel count, $107E a byte all four read, $1098, $10AA.
   f08572: 4a aa 10 ae             tst.l    $10ae(a2)
   f08576: 67 00 00 90             beq.w    loc_F08608
   f0857a: 4f ef ff a0             lea.l    -$60(a7), a7

@@ -80,6 +80,29 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- the $10xx per-channel map; $FF004A IS read ----
+ (0xF07EFE,'CORRECTION: $FF004A IS READ.  This project states of the value $4F that'),
+ (0xF07EFE,'  "it has no connection to $FF004A, which is neither read nor written in a'),
+ (0xF07EFE,'  full boot."  The second half is wrong.  Each channel ISR reads BOTH'),
+ (0xF07EFE,'  halves of its data pair -- $48(a5) at $F07EF6, already recorded, and'),
+ (0xF07EFE,'  $4A(a5) HERE two instructions later -- filing the low half in its'),
+ (0xF07EFE,'  per-channel record.  Measured: FPS3K_XPIRQ=1 runs both 468 times, and'),
+ (0xF07EFE,'  with a 4-channel chassis all four equivalents ($F074FE, $F06AFE,'),
+ (0xF07EFE,'  $F060E6) run 467 times.  The instructive part: this exact claim was'),
+ (0xF07EFE,'  ALREADY retracted for $FF0048 on the grounds that absolute-address scans'),
+ (0xF07EFE,'  cannot see the $4A(a5) form -- and the neighbouring sentence about'),
+ (0xF07EFE,'  $FF004A, same paragraph, same register pair, same instruction sequence,'),
+ (0xF07EFE,'  was left standing.  When a method is found blind, EVERY claim resting on'),
+ (0xF07EFE,'  it needs revisiting, not just the one that prompted the check.'),
+ (0xF08572,'THE $10xx PER-CHANNEL STATE AREA is several PARALLEL arrays, not one'),
+ (0xF08572,'  structure.  Stride 4, four entries each: $1080 register-image pointer,'),
+ (0xF08572,'  $10AE USER-connect gate, $10BE USER task handle, $10CE and $10DE'),
+ (0xF08572,'  per-channel longwords.  Those four sit exactly $10 apart -- 4x4 -- so'),
+ (0xF08572,'  $10AE-$10ED is a 4-wide by 4-deep block, confirmed by RTOS init treating'),
+ (0xF08572,'  $10EE as the next thing.  Stride 2: $1062 own channel, $1064 the word'),
+ (0xF08572,'  array chassis op $A reads back, $10A0 the flag command 1 sets to 2.'),
+ (0xF08572,'  Stride 6: the per-channel records at $1066/$106C/$1072/$1078.  Shared:'),
+ (0xF08572,'  $105E channel count, $107E a byte all four read, $1098, $10AA.'),
  # ---- THE SEVENTH TASK: 'USER', never created ----
  (0xF08586,'*** THERE IS A SEVENTH TASK, NAMED USER, AND THIS ROM NEVER CREATES IT. ***'),
  (0xF08586,'  #$55534552 is the ASCII literal \'USER\', pushed with a longword and a'),
