@@ -99,26 +99,35 @@ static uint64_t chassis_mem_reads, chassis_mem_writes, chassis_mem_berrs;
  * Format: comma-separated 32-bit hex longwords, laid down from $400000.
  *   FPS3K_CHASSIS_CMD=1,1              -> cmd 1, channel 1
  *   FPS3K_CHASSIS_CMD=4,10,5330,...    -> cmd 4 (CPLOAD), count, 'S0', ... */
+static uint8_t  cmd_record[256];
+static uint32_t cmd_record_len;
+
+/* The record is NOT written into chassis_mem.  Self-test phase $29 at $F096AC
+ * walks and WRITES 131,148 chassis addresses, so anything staged there before
+ * the run is overwritten long before RDHC looks -- the first attempt did
+ * exactly that and RDHC read a command number of 0.  Serving it from a private
+ * buffer, and only after the RTOS is up, keeps the self-test's own
+ * write-then-read-back patterns intact. */
 static void chassis_cmd_preload(void) {
     const char *spec = getenv("FPS3K_CHASSIS_CMD");
     if (!spec) return;
     uint32_t off = 0;
     const char *p = spec;
-    while (*p && off + 4 <= CHASSIS_MEM_SIZE) {
+    while (*p && off + 4 <= sizeof cmd_record) {
         char *end;
         unsigned long v = strtoul(p, &end, 16);
         if (end == p) break;
-        chassis_mem[off + 0] = (uint8_t)(v >> 24);
-        chassis_mem[off + 1] = (uint8_t)(v >> 16);
-        chassis_mem[off + 2] = (uint8_t)(v >> 8);
-        chassis_mem[off + 3] = (uint8_t)v;
-        chassis_written[off + 0] = chassis_written[off + 1] =
-        chassis_written[off + 2] = chassis_written[off + 3] = 1;
+        cmd_record[off + 0] = (uint8_t)(v >> 24);
+        cmd_record[off + 1] = (uint8_t)(v >> 16);
+        cmd_record[off + 2] = (uint8_t)(v >> 8);
+        cmd_record[off + 3] = (uint8_t)v;
         off += 4;
         p = end;
         while (*p == ',' || *p == ' ') p++;
     }
-    fprintf(stderr, "[chassis-cmd] %u longwords placed at $400000\n", off / 4);
+    cmd_record_len = off;
+    fprintf(stderr, "[chassis-cmd] %u longwords served at $400000 once the "
+                    "RTOS is up\n", off / 4);
 }
 
 static uint8_t  rom[ROM_SIZE];
@@ -234,6 +243,14 @@ static uint8_t bus_read8(uint32_t a) {
     /* Chassis-routed memory: backed by chassis_mem when not BERR'd.
      * BERR is gated by XLTR_DATA_HI bit 5 (see below). */
     if (a >= CHASSIS_MEM_BASE && a < CHASSIS_MEM_BASE + CHASSIS_MEM_SIZE) {
+        if (cmd_record_len && a - CHASSIS_MEM_BASE < cmd_record_len) {
+            uint32_t v128 = ((uint32_t)ram[0x128] << 24) | ((uint32_t)ram[0x129] << 16)
+                          | ((uint32_t)ram[0x12A] << 8)  |  (uint32_t)ram[0x12B];
+            if (v128 == 0xF05DD6) {          /* RTOS up: tasks have connected */
+                chassis_mem_reads++;
+                return cmd_record[a - CHASSIS_MEM_BASE];
+            }
+        }
         if (!(versabus_xltr_data_hi() & 0x20)) {
             /* FPS3K_CHASSIS_UNINIT=<file>: log reads of chassis memory that
              * has not been written this run.  The same question the SBC-side

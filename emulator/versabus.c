@@ -1579,7 +1579,24 @@ void versabus_tick(uint32_t cycles) {
             for (int k = 1; k <= 6; k++)
                 if ((xpmask >> k) & 1) {
                     int u = U[k-1], c = C[k-1];
-                    if (versabus_bim_enabled(u, c)) versabus_bim_assert(u, c);
+                    if (!versabus_bim_enabled(u, c)) continue;
+                    /* Channel 6 is BIM0 ch0, the panel responder.  $F04930
+                     * latches MODE0 into $E86 and dispatches on its low byte,
+                     * so raising the BIM without also PRESENTING A CODE IN
+                     * MODE0 is not what the chassis does -- and it left $E86
+                     * holding whatever MODE0 happened to be, which is why no
+                     * FPS3K_RESP value ever selected an operation and the ISR
+                     * always fell into a handler that spun.  Stamp the code
+                     * first, the way the arm path does. */
+                    if (k == 6) {
+                        const char *e = getenv("FPS3K_RESP");
+                        uint8_t code = (uint8_t)(e ? strtoul(e, NULL, 0) : 0x14)
+                                       & MODE0_RESP_MASK;
+                        xltr.mode0 = (uint16_t)((xltr.mode0 & ~MODE0_RESP_MASK)
+                                                | code | MODE0_RESP_VALID);
+                        xltr.raw[(XLTR_MODE0 - XLTR_BASE) / 2] = xltr.mode0;
+                    }
+                    versabus_bim_assert(u, c);
                 }
         }
     }

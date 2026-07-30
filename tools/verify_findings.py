@@ -478,12 +478,33 @@ else:
           d[0xF05316-0xF00000:0xF05322-0xF00000]
           == b'\x3b\x7c\x00\x00\x02\x10\x20\x7c\x00\x40\x00\x00')
     err = run_err({'FPS3K_CHASSIS_CMD': '1,1'}, 400_000_000)
-    check('FPS3K_CHASSIS_CMD places the record and says so',
-          '[chassis-cmd] 2 longwords placed at $400000' in err)
-    check('GAP: no response value makes the bit-7 dispatcher $F0495C run',
-          all('F0495C' not in run({'FPS3K_RESP': r, 'FPS3K_XPIRQ': '6'},
-                                  400_000_000)[0].split('\n')
-              for r in ('0x94', '0x0B')))
+    check('FPS3K_CHASSIS_CMD stages the record and says so',
+          '[chassis-cmd] 2 longwords served at $400000' in err)
+
+    # --- RDHC UNBLOCKED: the code must be PRESENTED IN MODE0 with the IRQ ----
+    # $F04930 latches MODE0 into $E86 and dispatches on its low byte, so raising
+    # BIM0 ch0 without also putting a code there left $E86 holding whatever
+    # MODE0 happened to be -- which is why every FPS3K_RESP value looked inert.
+    t94 = run({'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6'}, 400_000_000)[0].split('\n')
+    check('RESP=$94 + IRQ: the bit-7 dispatcher $F0495C runs (it never had before)',
+          t94.count('F0495C') > 1000 and t94.count('F04A6E') == 0)
+    check('...the ISR now returns via $F050F8 and RDHC leaves its $13 wait',
+          t94.count('F050F8') > 1000 and t94.count('F04740') >= 1)
+    check('...and the bit-7 command arm $F048D8 is taken',
+          t94.count('F048D8') >= 1)
+    t0b = run({'FPS3K_RESP': '0x0B', 'FPS3K_XPIRQ': '6'}, 400_000_000)[0].split('\n')
+    check('a benign op ($B) also lets the ISR return and wakes RDHC repeatedly',
+          t0b.count('F050F8') > 1000 and t0b.count('F04740') > 1000)
+    # all four RDHC commands now execute
+    for num, spec, entry in ((1, '1,1', 'F05370'), (2, '2,0,0,4', 'F054A2'),
+                             (3, '3,4,11,22,33,44', 'F054E8'),
+                             (4, '4,8,53300000', 'F05502')):
+        tc = run({'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6',
+                  'FPS3K_CHASSIS_CMD': spec}, 400_000_000)[0].split('\n')
+        check(f'RDHC command {num} executes (entry {entry})', tc.count(entry) >= 1)
+    tc4 = run({'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6',
+               'FPS3K_CHASSIS_CMD': '4,8,53300000'}, 400_000_000)[0].split('\n')
+    check('command 4 reaches the S-record type dispatch at $F05522', tc4.count('F05522') >= 1)
 
     # --- RDHC's four-command host interface ---------------------------------
     check('RDHC dispatcher: cmd number is the FIRST LONGWORD of the block, 1..4',

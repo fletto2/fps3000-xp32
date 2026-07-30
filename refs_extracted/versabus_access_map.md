@@ -1473,6 +1473,84 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### RDHC UNBLOCKED: the code must be presented in MODE0 *with* the interrupt
+
+The blocker described below turned out to be a **modelling defect, not a firmware
+one**, and it is now fixed. `$F04930` latches MODE0 into `$E86` and dispatches on
+its low byte. The model had two separate mechanisms that never met:
+
+- the **arm path** (`versabus.c:929`) put an `FPS3K_RESP` code in MODE0, but in a
+  clean boot nothing ever completes a panel command in a way that fires the ISR —
+  `$F04930` executed **0** times through it;
+- **`FPS3K_XPIRQ=6`** raised BIM0 ch0 directly and fired the ISR, but **never
+  touched MODE0** — so `$E86` latched whatever MODE0 happened to hold.
+
+A real chassis does both in one action: it presents the code *and* raises the
+interrupt. `FPS3K_XPIRQ` now stamps the `FPS3K_RESP` code into MODE0 before
+asserting BIM0 ch0. The effect is immediate:
+
+| PC | meaning | before | `RESP=$0B` | `RESP=$94` |
+|---|---|---|---|---|
+| `$F04930` | ISR entry | 1 | 1467 | 1463 |
+| `$F04A6E` | bit-7-clear dispatcher | 1 | 1467 | 0 |
+| `$F0495C` | bit-7-set dispatcher | **0** | 0 | **1463** |
+| `$F050F8` | ISR exit — the waker | **0** | **1467** | **1463** |
+| `$F04740` | first instruction after the `$13` wait | **0** | **1467** | **1** |
+| `$F048D8` | the command arm | **0** | 0 | **1** |
+
+**RDHC leaves its blocking wait for the first time in this project's history**, the
+bit-7 dispatcher `$F0495C` executes for the first time, and with `$94` the command
+arm is taken.
+
+*Note which claim this vindicates and which it corrects.* The deadlock analysis was
+right about the mechanism — with the default code `$14` the ISR still picks
+operation `$4`, fails validation, and spins in the panel issuer's `bra .`; that
+check still passes. What was wrong was concluding the firmware had no escape: it
+does, and the escape is simply *a code that selects an operation which validates*.
+The model could never present one.
+
+#### All four RDHC commands now execute, including CPLOAD
+
+The command record cannot be staged in `chassis_mem` before the run. **Self-test
+phase `$29` at `$F096AC` walks and writes 131,148 chassis addresses**, so anything
+placed there is overwritten long before RDHC looks — the first attempt did exactly
+that and RDHC read a command number of 0 while the hook cheerfully reported the
+record was in place. `FPS3K_CHASSIS_CMD` now serves the record from a private
+buffer and only once vector `$128` holds `F05DD6`, which leaves the self-test's own
+write-then-read-back patterns intact.
+
+| configuration | RDHC instructions | decoded bytes | reached |
+|---|---|---|---|
+| baseline | 16 / 1653 (1%) | 52 (1%) | — |
+| `RESP=$94` only | 67 (4%) | 286 (5%) | dispatcher |
+| + command 1 | 81 (5%) | 340 (6%) | `$F05370` |
+| + command 2 | 94 (6%) | 372 (6%) | `$F054A2` |
+| + command 3 | 84 (5%) | 348 (6%) | `$F054E8` |
+| + **command 4** | **102 (6%)** | **408 (7%)** | `$F05502` **and the S-record type dispatch `$F05522`** |
+
+**`CPLOAD` executes.** The path this ROM exists to implement now runs from a
+command record through to the S-record parser, driven entirely by the firmware's
+own mechanisms.
+
+#### Coverage after the unlock
+
+Union over five configurations (default, RDHC-driven, XP-driven, IO1I-driven,
+scripted operations), measured against decoded instruction bytes:
+
+| region | bytes | default | union |
+|---|---|---|---|
+| RDHC | 5888 | 1% | **15%** |
+| IO1I | 586 | 16% | 33% |
+| XP4I | 2560 | 6% | 13% |
+| XP1I…XP3I | ~7700 | 5-9% | 7-10% |
+| self-test | 5298 | 85% | 85% |
+| RTOS init | 2560 | 70% | 70% |
+
+**RDHC 1% → 15%**, and excluding the 23 KB of tables and data at `$F0A600+` the
+executable total is **33%**. Two paths cover different code — the scripted
+operations reach 10% of RDHC and the command-record path 7%, and they conflict by
+design (`FPS3K_SEQ` overrides `FPS3K_RESP`), so the union is the honest figure.
+
 ### What blocks RDHC is one instruction: the directive-`$13` wait at `$F0473E`
 
 RDHC's main loop is four instructions long:
