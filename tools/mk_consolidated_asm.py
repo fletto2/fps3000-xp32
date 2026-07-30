@@ -80,6 +80,29 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- TCB field names from Motorola's TCB.EQ ----
+ (0xF0A0A6,'TCB FIELD NAMES, from versados/SR10/U9995/TCB.EQ.  Every offset this'),
+ (0xF0A0A6,'  project used positionally now has a name, and RAM confirms three:'),
+ (0xF0A0A6,'    +$00 TCB      \'!TCB\' eye-catcher'),
+ (0xF0A0A6,'    +$10 TCBNAME  4-byte task name            (matched)'),
+ (0xF0A0A6,'    +$36 TCBTST   pointer to Task Segment Table'),
+ (0xF0A0A6,'    +$40 TCBASQ   pointer to ASQ -- NULL FOR ALL SIX TASKS'),
+ (0xF0A0A6,'    +$6C TCBENTRY task initial entry point     (matched)'),
+ (0xF0A0A6,'    +$72 TCBSSP   EXEC STACK DEPTH  <-- NOT a parameter-block length'),
+ (0xF0A0A6,'    +$138 TCBA6   user\'s saved A6   <-- NOT a defined block pointer'),
+ (0xF0A0A6,'    +$13C TCBUSP  user\'s A7                   (matched: the saved SP)'),
+ (0xF0A0A6,'    +$160         start of the trailing pad, DS.B $200-$20-* -- which is'),
+ (0xF0A0A6,'                  why the TCB stride is $200'),
+ (0xF0A0A6,'  TCBASQ = $00000000 FOR ALL SIX TASKS is decisive: a task with no ASQ'),
+ (0xF0A0A6,'  cannot have ASQ names, so AXP1..HIO1 are SEMAPHORE names.  Threefold'),
+ (0xF0A0A6,'  evidence now -- CRSEM counts 2/2/2/2/1/0, !UST = User Semaphore Table,'),
+ (0xF0A0A6,'  and null TCBASQ.'),
+ (0xF0A0A6,'  TCBTST POINTS AT EXACTLY TCB+$160 for every task, so the !TST marker'),
+ (0xF0A0A6,'  found there is the Task Segment Table EMBEDDED IN THE TCB\'s own pad.'),
+ (0xF0A0A6,'  +$138 is TCBA6, so the semaphore-descriptor block is simply where A6'),
+ (0xF0A0A6,'  pointed when the task blocked -- the a6-as-structure-pointer idiom -- and'),
+ (0xF0A0A6,'  +$13C (A7) is in the SAME $200 segment, so ONE segment is both the'),
+ (0xF0A0A6,'  descriptor area (at its base) and the stack (growing down from its top).'),
  # ---- the TRAP #1 parameter-block copier ----
  (0xF00756,'THE TRAP #1 PARAMETER-BLOCK COPIER.  d0 = $0C08 minus (a7+$10) gives a'),
  (0xF00756,'  LENGTH; it is bounded at 80 bytes ($50) at $F00760, the length byte is'),

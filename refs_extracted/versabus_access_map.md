@@ -1528,6 +1528,56 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The TCB layout from Motorola's source, and `TCBASQ = 0` clinches the semaphores
+
+`~/src/claude/versados/SR10/U9995/TCB.EQ` names every offset this project has been
+using positionally:
+
+| offset | field | project's empirical name | verdict |
+|---|---|---|---|
+| `+$00` | `TCB` | `'!TCB'` eye-catcher | ✓ |
+| `+$10` | **`TCBNAME`** | "task name at `+$10`" | **✓** |
+| `+$36` | **`TCBTST`** | — | pointer to the Task Segment Table |
+| `+$40` | **`TCBASQ`** | — | pointer to the ASQ |
+| `+$6C` | **`TCBENTRY`** | "entry point at `+$6C`" | **✓** |
+| `+$72` | **`TCBSSP`** — *exec stack depth* | "the PB length at `TCB+$72`" | **✗ corrected** |
+| `+$138` | **`TCBA6`** — *user's saved A6* | "the ASQ/stack block pointer" | **✗ corrected** |
+| `+$13C` | **`TCBUSP`** — *user's A7* | "saved stack pointer" | **✓** |
+| `+$160` | start of the trailing pad | where `!TST` sits | see below |
+
+Read against live RAM, three of these settle open questions:
+
+```
+task   TCBTST(+$36)   TCBASQ(+$40)   TCBENTRY(+$6C)   TCBA6(+$138)   TCBUSP(+$13C)
+XP1I     $01EA60        $000000        $F07D4A          $1E700         $1E814
+RDHC     $01F460        $000000        $F046F0          $1DD00         $1DE16
+```
+
+**`TCBASQ` is `$00000000` for all six tasks.** That is independent, decisive
+confirmation of the semaphore correction: a task with no ASQ cannot have ASQ names, so
+`AXP1`-`AXP4`/`HXP1`-`HXP4`/`HIO1` are semaphore names and nothing else. The evidence is
+now threefold — the directive numbers (`CRSEM` counts 2/2/2/2/1/0), the marker expansion
+(`!UST` = User Semaphore Table), and the null `TCBASQ`.
+
+**`TCBTST` points at exactly `TCB+$160`** — `$1E900 + $160 = $1EA60` for XP1I, and so on
+for all six. So the `!TST` marker this project found at `+$160` is not in an arbitrary
+spot: the **Task Segment Table is embedded in the TCB's own trailing pad**, and RMS68K's
+defined pointer confirms it. `TCB.EQ` ends with `DS.B $200-$20-*` starting at `$160`,
+which is why the TCB stride is `$200`.
+
+**`+$138` is not a structure field at all** — it is `TCBA6`, the task's saved A6. The
+semaphore-descriptor block is simply *where A6 happened to point when the task blocked*,
+which is exactly the a6-as-structure-pointer idiom established from the 150-positive /
+0-negative displacement count. And `+$13C` = `TCBUSP` = user A7 sits in the same `$200`
+segment, so **one segment serves as both semaphore-descriptor area (at its base) and
+stack (growing down from its top)** — reconciling two names this document had been using
+for the same block.
+
+**And `+$72` is `TCBSSP`, "exec stack depth"** — not a parameter-block length. So the
+copier at `$F00756` is pushing the parameter block onto the **exec stack** and recording
+its depth, which makes better sense of the 80-byte cap than "a PB save area" did. That
+corrects the reading published one commit ago, on the same day.
+
 ### `$4C` is in no available RMS68K release, and the "80" is a parameter-block limit
 
 Two results on directive `$4C` = 76, one exhaustive negative and one self-caught

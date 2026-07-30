@@ -550,6 +550,23 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- TCB fields named from TCB.EQ, verified against RAM -------------------
+    _, rtcb = run({}, CYC)
+    _g = lambda x: struct.unpack('>I', rtcb[x:x+4])[0]
+    check('TCBASQ (+$40) is NULL for all six tasks -- no ASQs, so they are semaphores',
+          all(_g(0x1E900 + 0x200*i + 0x40) == 0 for i in range(6)))
+    check('TCBTST (+$36) points at exactly TCB+$160, where the !TST marker sits',
+          all(_g(0x1E900 + 0x200*i + 0x36) == 0x1E900 + 0x200*i + 0x160
+              for i in range(6))
+          and all(rtcb[0x1E900 + 0x200*i + 0x160:
+                       0x1E900 + 0x200*i + 0x164] == b'!TST' for i in range(6)))
+    check('TCBENTRY (+$6C) holds each task entry point from the TDTI table',
+          [_g(0x1E900 + 0x200*i + 0x6C) for i in range(6)]
+          == [0xF07D4A, 0xF0734A, 0xF0694A, 0xF05F4A, 0xF05D36, 0xF046F0])
+    check('TCBA6 (+$138) and TCBUSP (+$13C) lie in one $200 segment per task',
+          all(_g(0x1E900 + 0x200*i + 0x138) <= _g(0x1E900 + 0x200*i + 0x13C)
+              < _g(0x1E900 + 0x200*i + 0x138) + 0x200 for i in range(6)))
+
     # --- $F00760's "80" is a parameter-block length limit, not a directive max -
     check('$F00760 bounds a LENGTH derived from $0C08 minus a stack pointer',
           d[0xF00756-0xF00000:0xF00760-0xF00000]

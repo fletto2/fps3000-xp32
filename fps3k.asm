@@ -10920,6 +10920,28 @@ loc_F0A082:
   f0a09c: 3c 2b 00 10             move.w   $10(a3), d6
   f0a0a0: 3e 3c 80 00             move.w   #$8000, d7
   f0a0a4: 70 1f                   moveq    #$1f, d0
+;### TCB FIELD NAMES, from versados/SR10/U9995/TCB.EQ.  Every offset this
+;###   project used positionally now has a name, and RAM confirms three:
+;###     +$00 TCB      '!TCB' eye-catcher
+;###     +$10 TCBNAME  4-byte task name            (matched)
+;###     +$36 TCBTST   pointer to Task Segment Table
+;###     +$40 TCBASQ   pointer to ASQ -- NULL FOR ALL SIX TASKS
+;###     +$6C TCBENTRY task initial entry point     (matched)
+;###     +$72 TCBSSP   EXEC STACK DEPTH  <-- NOT a parameter-block length
+;###     +$138 TCBA6   user's saved A6   <-- NOT a defined block pointer
+;###     +$13C TCBUSP  user's A7                   (matched: the saved SP)
+;###     +$160         start of the trailing pad, DS.B $200-$20-* -- which is
+;###                   why the TCB stride is $200
+;###   TCBASQ = $00000000 FOR ALL SIX TASKS is decisive: a task with no ASQ
+;###   cannot have ASQ names, so AXP1..HIO1 are SEMAPHORE names.  Threefold
+;###   evidence now -- CRSEM counts 2/2/2/2/1/0, !UST = User Semaphore Table,
+;###   and null TCBASQ.
+;###   TCBTST POINTS AT EXACTLY TCB+$160 for every task, so the !TST marker
+;###   found there is the Task Segment Table EMBEDDED IN THE TCB's own pad.
+;###   +$138 is TCBA6, so the semaphore-descriptor block is simply where A6
+;###   pointed when the task blocked -- the a6-as-structure-pointer idiom -- and
+;###   +$13C (A7) is in the SAME $200 segment, so ONE segment is both the
+;###   descriptor area (at its base) and the stack (growing down from its top).
   f0a0a6: 4e 40                   trap     #$0
   f0a0a8: 60 04                   bra.b    loc_F0A0AE
 ;>>>> [R12/BOTH] This instruction performs a branch-to-subroutine to `loc_F0A306`, which is a helper routine that processes TCB initialization data from a table pointed to by `a3`; it is called from the main `RTOSKernelInit` loop after a `trap #0` instruction (used for RMS68K system call dispatch) to handle a specific TCB attribute configuration step.
