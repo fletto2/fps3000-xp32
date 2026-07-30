@@ -16827,3 +16827,34 @@ exactly the state the six `$4000` WAITING flags describe.
 
 Guessing "the bulk-clear routines are the obvious candidate" would have been wrong, and the
 watchpoint cost one run.
+
+## The scheduler control block at `$0C08`, fully mapped
+
+Four adjacent longwords, read from a live machine after boot:
+
+| offset | address | value | meaning |
+|---|---|---|---|
+| `+$00` | `$0C08` | `$00000C00` | base / stack pointer (`movea.l $c08.w,a7` at `$F0050C`) |
+| `+$04` | `$0C0C` | `$0001F300` → **RDHC** | **the current task** |
+| `+$08` | `$0C10` | `$0001E900` → **XP1I** | **the all-tasks list head** |
+| `+$0C` | `$0C14` | `$00000000` | **the ready-queue head — empty at rest** |
+
+Walking `$0C10` through `TCB+$0C` gives a perfect six-node chain terminating at zero:
+
+```
+XP1I -> XP2I -> XP3I -> XP4I -> IO1I -> RDHC
+```
+
+**That is exactly reverse TDTI creation order.** This project records the TDTI creating
+`RDHC IO1I XP4I XP3I XP2I XP1I`, and a LIFO push leaves the last-created at the head — so the six
+pushes onto `$0C14` measured earlier built *this* list, which was then transferred to `$0C10`
+leaving `$0C14` as the empty ready-queue head.
+
+That closes the `$0C14` question completely and explains every observation about it: initialised
+with a dead value, cleared, pushed six times, transferred, and thereafter maintained by the
+scheduler's dequeue at `$F00536`.
+
+**The whole structure is now accounted for** — `$0C08` is one control block whose four fields are a
+stack base, the running task, every task, and the runnable ones. `$0C0C` holding RDHC matches the
+documented "`$00C0C` is the current-task TCB pointer", and the empty ready queue matches the six
+`$4000` WAITING flags: every task blocked, none runnable, RDHC merely the last to have run.
