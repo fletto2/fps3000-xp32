@@ -16797,3 +16797,33 @@ which it never is by the time anything reads it.
 `$0C14` reads `$00000000` after boot, so the list is emptied once the six tasks are started. What
 clears it is not established — the bulk-clear routines at `$F0A1D2`/`$F0A33C` cover this range and
 are the obvious candidate, but I have not traced it and am not asserting it.
+
+## RESOLVED: `$0C14` is maintained by the scheduler's dequeue, and it confirms the queue flag
+
+I guessed a bulk-clear routine emptied `$0C14`. The watchpoint says otherwise — 101 writes, from
+three sites: `$F0A0C2` (the TDTI push, 6 per boot), `$F099BC` (a self-test RAM walk), and
+**`$F00536`**, which is not a clear at all:
+
+```
+F0052C  move.w  $2c(a6),d0       ; the task state word
+F00530  andi.w  #$ff00,d0        ; mask to the flag byte
+F00534  bne.b   $f0051c          ; any flag set -> skip
+F00536  move.l  $c(a6),$c(a1)    ; UNLINK: this node's next -> predecessor's next
+F0053C  bclr.b  #$4,$2d(a6)      ; clear the queued flag
+F00542  move.l  a6,$c0c.w
+```
+
+With `a1` = `$0C08`, `$c(a1)` **is** `$0C14` — so `$0C08`, `$0C0C` and `$0C14` are adjacent fields
+of one queue structure, and `$F00536` is the scheduler **removing a task from the ready queue**.
+
+**That completes a matched pair.** The insertion at `$F007C2` opens `bset.b #$4,$2d(a0)` as a
+double-insert guard; the removal at `$F0053C` closes `bclr.b #$4,$2d(a6)`. Set on enqueue, cleared
+on dequeue — **`TCB+$2D` bit 4 is "this task is on the ready queue"**, which was inferred from the
+insertion side alone and is now confirmed from the other end.
+
+So `$0C14` is not emptied by a bulk clear; it is a live queue pointer the scheduler maintains, and
+it reads zero at rest because the ready queue is empty when every task is blocked — which is
+exactly the state the six `$4000` WAITING flags describe.
+
+Guessing "the bulk-clear routines are the obvious candidate" would have been wrong, and the
+watchpoint cost one run.
