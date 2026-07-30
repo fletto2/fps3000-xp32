@@ -305,8 +305,27 @@ int versabus_is_device(uint32_t addr) {
          || (addr >= PTM_BASE && addr < PTM_END)
          || (addr >= UART_BASE && addr < UART_END)
          || (addr >= BOARD_STATUS_BASE && addr < BOARD_STATUS_END)
-         || (addr == VMOD_CTRL || addr == VMOD_CTRL+1);
+         || (addr == VMOD_CTRL || addr == VMOD_CTRL+1)
+         || (addr == KERNEL_REG_F70030);
 }
+
+/* $F70030 -- the RMS68K kernel's ONE device access, and the only one in the
+ * whole 17,544-byte kernel region.  $F00A3A reads it, ORs in bit 5 and writes
+ * it back, inside a routine that masks interrupts, restores a saved supervisor
+ * stack and returns via rte.  It is above every documented $F7xxxx range (PTM
+ * ends $F7000F, SIO $F70017, board status $F7001A), so it is presumably a
+ * standard M68KVM02 register that Motorola's kernel knows about and the FPS
+ * application layer never touches.  What it DOES is unestablished.
+ *
+ * Modelled as a plain read/write latch rather than left unmapped.  Unmapped
+ * would raise BERR -- correct for genuinely absent space, as phase $600's
+ * watchdog test requires -- but this address is read by kernel code, so a BERR
+ * here would fault the kernel rather than diagnose anything.  A latch lets the
+ * read-modify-write complete as the code expects.  The path is currently
+ * DORMANT: $F00A32/$F00A3A/$F00A44/$F00A56 all execute zero times across a full
+ * boot in which 620 distinct kernel PCs do run, so this removes a latent hang
+ * rather than changing any observed behaviour. */
+static uint8_t kernel_reg_f70030 = 0;
 
 /* ============== AP I/F handler ============== */
 
@@ -1273,7 +1292,12 @@ static void board_status_write(uint32_t addr, uint32_t val) {
 uint32_t versabus_read(uint32_t addr, int size) {
     uint32_t val = 0;
 
-    if (addr >= APIF_BASE && addr < APIF_END) {
+    if (addr == KERNEL_REG_F70030) {
+        val = kernel_reg_f70030;
+        if (getenv("FPS3K_LOGCHASSIS"))
+            fprintf(stderr, "[F70030] read -> %02X\n", kernel_reg_f70030);
+    }
+    else if (addr >= APIF_BASE && addr < APIF_END) {
         if (size == 2) val = apif_read(addr);
         else if (size == 1) val = apif_read(addr & ~1u) >> ((addr & 1) ? 0 : 8);
         else { val = (apif_read(addr) << 16) | apif_read(addr+2); }
@@ -1327,6 +1351,13 @@ uint32_t versabus_read(uint32_t addr, int size) {
 
 void versabus_write(uint32_t addr, uint32_t val, int size) {
     log_access("WR", addr, val, size);
+
+    if (addr == KERNEL_REG_F70030) {
+        kernel_reg_f70030 = (uint8_t)val;
+        if (getenv("FPS3K_LOGCHASSIS"))
+            fprintf(stderr, "[F70030] write <- %02X\n", kernel_reg_f70030);
+        return;
+    }
 
     /* A device-range write that matches no handler is silently dropped, which is
      * indistinguishable from a card accepting it.  Tested as an explicit range

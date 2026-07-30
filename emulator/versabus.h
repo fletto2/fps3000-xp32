@@ -98,6 +98,9 @@ void     versabus_arm_panel_response(uint8_t code, uint32_t delay_cycles);
 #define UART_END       0xF70018
 
 /* ---- M68KVM02 board status/control register (PAL-decoded, 28 bits) ---- */
+/* the kernel's lone device access -- see versabus.c */
+#define KERNEL_REG_F70030  0xF70030
+
 #define BOARD_STATUS_BASE  0xF70018
 #define BOARD_STATUS_END   0xF7001C
 
