@@ -1528,6 +1528,61 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The system tick is 10 ms — and the emulator's is 27% slow
+
+The PTM's operational programming is a nine-write sequence at `$F0A298`-`$F0A2E4`, and the
+walking-ones writes at `$F09156` that dominate the access log are a **register test**, not
+configuration:
+
+```
+$F0A298  CR2      <- $01     ; bit 0 = 1, so register 0 addresses CR1
+$F0A29E  CR1      <- $01     ; internal reset ON, all timers held
+$F0A2C6  T3 latch <- $27C7
+$F0A2CE  T1 latch <- $0100
+$F0A2D2  CR2      <- $00     ; bit 0 = 0, so register 0 now addresses CR3
+$F0A2D8  CR3      <- $C6
+$F0A2DE  CR2      <- $01     ; back to CR1
+$F0A2E4  CR1      <- $00     ; release reset, timers run
+```
+
+`CR3 = $C6` decodes as: prescaler **off** (bit 0), clock source **internal E** (bit 1),
+**dual 8-bit** mode (bit 2), continuous (bits 3-5), interrupt **enabled** (bit 6), output
+**enabled** (bit 7).
+
+In dual 8-bit mode the period is **(MSB+1) × (LSB+1)**, not `latch+1`. With
+`$27C7`: `MSB = $27 = 39`, `LSB = $C7 = 199`, so `40 × 200 = 8000` E-clock cycles. E is
+CPU/10 = **800 kHz**, giving
+
+**8000 / 800 000 = 10.0000 ms — a 10 ms system tick.**
+
+Landing on exactly 10 ms is itself the check: a misread mode or divider would not produce a
+round number, and RMS68K's `DELAY` directive is specified in *milliseconds*.
+
+**T1 is not a timer.** `CR1 = $00` has bit 1 clear — **external clock** — and bit 6 clear,
+interrupt disabled. So T1 (latch `$0100`) is an **external-input counter** the firmware can
+read, not a periodic source. **T2 is never programmed operationally at all**; only the
+register walk touches it.
+
+#### The emulator's tick is 12.73 ms
+
+`mc6840.c:170-176` decrements a 16-bit `counter[t]` and reloads `latch[t]` on underflow —
+**dual 8-bit mode (CR bit 2) is not modelled**. So T3's period is `$27C7`+1 = 10 184 E
+cycles = **12.73 ms**, making the emulated tick **27% slow**.
+
+Fixing it needs the LSB half to count down each clock, decrement the MSB half on its
+underflow, and fire only when the MSB half underflows — which also makes T3's counter reads
+meaningful, and the firmware does read T3 MSB (`$F7000D`, 1852 reads). **This is left as a
+flagged defect rather than a silent change: correcting the tick moves every timing-dependent
+result, so all three golden-master digests will move with it, and that should be a
+deliberate step taken with the diff in hand rather than a side effect of a documentation
+pass.**
+
+*One documentation error in the emulator while here: the comment at `mc6840.c:136` says "the
+RTOS programs CR1 = $C6 at $F0A2D8". It programs **CR3** — `$F0A2D2` clears CR2 bit 0
+immediately before, which switches register 0 from CR1 to CR3. The value and address are
+right; the register name is wrong, and the distinction is exactly what makes the prescaler
+bit T3-only.*
+
 ### The `$FF0100` "gap" is unpopulated windows, and window 1 is skipped by design
 
 The AP I/F block reads as a uniform grid of `$20`-byte windows, index

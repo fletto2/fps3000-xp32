@@ -133,7 +133,9 @@ void mc6840_tick(mc6840_t *p, uint32_t cpu_cycles) {
          * line applied a /8 on BIT 1, for ALL THREE timers.  Bit 1 is the CLOCK
          * SOURCE (1 = internal E, 0 = external), not a prescaler.
          *
-         * It matters for the RTOS tick: the RTOS programs CR1 = $C6 at $F0A2D8,
+         * It matters for the RTOS tick: the RTOS programs CR3 = $C6 at $F0A2D8
+         * (CR3, not CR1 -- $F0A2D2 clears CR2 bit 0 immediately before, which
+         * switches register 0 from CR1 to CR3),
          * which has bit 1 SET, so the model divided the tick rate by 8.  The
          * system tick therefore ran 8x slow, and the clock-source selection the
          * bit actually encodes went unmodelled.
@@ -167,6 +169,17 @@ void mc6840_tick(mc6840_t *p, uint32_t cpu_cycles) {
                 if (t == 2 && (p->cr[2] & 0x01)) to_decr /= 8;
             }
         }
+        /* KNOWN DEFECT, flagged not fixed: dual 8-bit mode (CR bit 2) is not
+         * modelled.  The RTOS programs T3 with CR3 = $C6 -- bit 2 SET -- and
+         * latch $27C7, so the real period is (MSB+1)*(LSB+1) = 40*200 = 8000 E
+         * cycles = exactly 10.0000 ms at E = 800 kHz.  This 16-bit reload gives
+         * $27C7+1 = 10184 cycles = 12.73 ms, so the emulated system tick is 27%
+         * SLOW.  A correct fix counts the LSB half down each clock, decrements
+         * the MSB half on its underflow, and fires only when the MSB half
+         * underflows -- which also makes T3 counter reads meaningful, and the
+         * firmware does read T3 MSB 1852 times per run.  Left flagged because
+         * changing the tick moves every timing-dependent result and all three
+         * golden-master digests with it: a deliberate step, not a side effect. */
         if (p->counter[t] >= to_decr) {
             p->counter[t] -= to_decr;
         } else {

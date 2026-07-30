@@ -550,6 +550,22 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- the PTM tick: T3 = $27C7 in dual-8-bit mode off the 800 kHz E clock --
+    check('$F0A2C6 programs T3 = $27C7 (MSB $27, LSB $C7)',
+          d[0xF0A2C8-0xF00000:0xF0A2CC-0xF00000] == b'\x00\x0d\x30\x3c')
+    check('$F0A2D2 clears CR2 bit 0, so $F0A2D8 addresses CR3 not CR1',
+          d[0xF0A2D2-0xF00000:0xF0A2DA-0xF00000]
+          == b'\x13\x7c\x00\x00\x00\x03\x13\x7c')
+    check('CR3 = $C6: dual-8-bit (bit2), internal E clock (bit1), no /8 (bit0)',
+          d[0xF0A2DA-0xF00000:0xF0A2DE-0xF00000] == b'\x00\xc6\x00\x01'
+          and (0xC6 & 0x04) and (0xC6 & 0x02) and not (0xC6 & 0x01))
+    check('...giving (39+1)*(199+1) = 8000 E cycles = exactly 10 ms at 800 kHz',
+          (0x27 + 1) * (0xC7 + 1) == 8000
+          and abs(8000 / (8_000_000 / 10) - 0.010) < 1e-9)
+    check('the emulator does NOT model dual-8-bit, so its tick is 27% slow',
+          'counter[t] = p->latch[t]' in open('emulator/mc6840.c').read()
+          and '0x04' not in open('emulator/mc6840.c').read().split('mc6840_tick')[1])
+
     # --- the AP I/F is 8 windows of $20; only five are populated --------------
     check('the channel port formula is (ch+1)<<5 + $FF000E, so ch1 is window 2',
           d[0xF053EA-0xF00000:0xF053F4-0xF00000]
