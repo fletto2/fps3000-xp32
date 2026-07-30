@@ -3246,8 +3246,8 @@ with tempfile.TemporaryDirectory() as _tdv:
 check('$0C34 is read by eight btst sites, one per bit of its high byte',
       len({struct.unpack('>H', _rom[a - _B + 2:a - _B + 4])[0]
            for a in range(0xF00000, 0xF04488, 2)
-           if _rom[a - _B:a - _B + 2] == b'\x08\x39'
-           and struct.unpack('>I', _rom[a - _B + 4:a - _B + 8])[0] == 0xC34}) == 8)
+           if _rom[a - _B:a - _B + 2] == b'\x08\x38'          # btst #imm,abs.W
+           and struct.unpack('>H', _rom[a - _B + 4:a - _B + 6])[0] == 0x0C34}) == 8)
 check('directive $02 uses TAS.B -- the 68000 atomic read-modify-write',
       _rom[0xF0078E - _B:0xF00790 - _B] == b'\x4a\xd0')
 check('...guarded by a level-7 mask',
