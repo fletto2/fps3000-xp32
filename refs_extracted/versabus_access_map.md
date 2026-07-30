@@ -1563,6 +1563,45 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### CONFIRMED: TCB+`$FC` holds the spin address — and the escape is now a single write
+
+The `+$FC` = saved-PC identification is confirmed by the strongest available test: the field
+holds exactly the address the task was independently measured spinning at.
+
+| configuration | RDHC's TCB+`$FC` |
+|---|---|
+| clean boot | **`$F04740`** — its main-loop `btst #7`, parked in the directive-`$13` wait |
+| driven (`FPS3K_RESP=0x94 FPS3K_XPIRQ=6`) | **`$F056B8`** — **the spin** |
+
+The other tasks read sensibly in both: XP1I `$F07E1C`, XP4I `$F06022`, IO1I `$F05DC2`, each
+inside its own region. **A task parked at `bra .` has that `bra .` saved in its TCB**, which is
+what a correctly-working context save looks like — the kernel is not failing to save RDHC's
+position, it is saving it faithfully.
+
+**Two things this settles.**
+
+*The clean-boot resting place is `$F04740`.* This project documents RDHC as entering its wait
+and not leaving; the TCB now shows exactly where it sits, and it is the `btst #7` immediately
+after the wait — consistent with the measured `$F0473C` x1 / `$F04740` x1 from the very first
+profile, and independent of it.
+
+*The escape is a single memory write.* Releasing RDHC means putting a different value in
+**`$1F300 + $FC`**. That is a concrete, testable intervention where previously there was only
+"something must rewrite the saved PC" — and `FPS3K_POKE`, which this emulator already has and
+which is gated on boot completion, can perform it without any code change.
+
+The natural value is **`$F056BA`**, the instruction after the spin — which is the start of the
+routine this project labels `PanelSendAndWait` (`move.w #$4f,(a3)` …). *That labelling now
+looks like it was reaching for something real*: the code after the spin is a continuation, and
+a task released from `$F056B8` would run it. Whether the hardware ever produces that release is
+still unknown, but the shape of what the release does is no longer a mystery.
+
+*This closes the thread properly.* It began with "why does only one reply ship", ran through six
+superseded explanations, and ends with a measured field, a measured value, and an intervention
+that can be executed with an existing hook. **The chain was long because each explanation was
+testable only by the experiment that displaced it; it terminated because the last step asked
+what the machine had recorded rather than what it was doing.**
+
 ### The TCB layout derived empirically — and `+$FC` is the saved PC, which IS written
 
 Rather than trust a header from the wrong revision, diffing the six live TCBs gives a

@@ -583,6 +583,14 @@ else:
     check('...and inside the $200 allocation stride, so they are FPS extension',
           all(0xFC <= o < 0x200 for o in (0x100, 0x102, 0x138, 0x160)))
 
+    # --- $F056BA is the instruction after the spin ----------------------------
+    check('the instruction after the spin is move.w #$4f,(a3)',
+          d[0xF056BA-0xF00000:0xF056BE-0xF00000] == b'\x36\xbc\x00\x4f')
+    check('RDHC\'s TCB is the sixth, at $1F300',
+          0x1E900 + 5 * 0x200 == 0x1F300)
+    check('...so the escape target is $1F300 + $FC',
+          0x1F300 + 0xFC == 0x1F3FC)
+
     # --- the saved PC is at TCB+$FC, and the kernel writes it -----------------
     check('displacement $00FC has kernel writes -- the saved-PC field',
           len([a2 for a2 in range(0xF00000, 0xF04488, 2)
