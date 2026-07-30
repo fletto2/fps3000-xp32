@@ -80,6 +80,20 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- RESOLVED: $0A is distinguished by d7 ----
+ (0xF056C4,'THIS PRESERVES THE OPERATION CODE.  $F0572C does lsl.w #2,d0 to build the'),
+ (0xF056C4,'  jump index, destroying the code -- so PanelSendAndWait saves it in d7'),
+ (0xF056C4,'  first.  This is the ONLY write to d7 in all of RDHC, so d7 is'),
+ (0xF056C4,'  unambiguously the operation code in every handler.  d0 is consumed by'),
+ (0xF056C4,'  the dispatch; d7 survives it.'),
+ (0xF05AC8,'RESOLVES THE $0A QUESTION.  If MODE1 bit 7 (busy) is clear AND d7 == $0A,'),
+ (0xF05AC8,'  POLL takes a DRAIN-TO-COMPLETION path: spin while (a0) bit 15 is set,'),
+ (0xF05AC8,'  then check the error bit 13.  Every other POLL code skips this and is'),
+ (0xF05AC8,'  re-entered on the next interrupt -- exactly the measured "fires once vs'),
+ (0xF05AC8,'  fires 1468 times" split.  So $0A and $14 terminate for DIFFERENT'),
+ (0xF05AC8,'  reasons: $14 because it IS D2_FIN, the single finalize slot; $0A because'),
+ (0xF05AC8,'  POLL special-cases it here.  The earlier guess -- "the primitives hold'),
+ (0xF05AC8,'  d0-dependent early exits" -- was the right class and the wrong register.'),
  # ---- POLL is BLK_XFR's mirror; D1_SEND fire-and-forget ----
  (0xF05A12,'POLL IS MISNAMED -- it is not a status poll, it is the OUTBOUND BULK'),
  (0xF05A12,'  MOVER, the exact mirror of BLK_XFR.  Same swap d0 mode trick, same'),

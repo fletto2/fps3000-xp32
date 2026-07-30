@@ -2352,6 +2352,11 @@ PanelSendAndWait:
 ;>>>> [R1/BOTH] This `move.w #$0, (a1)` clears the command argument register at the XLTR interface (a1 points to FF000E, the per-channel cmd-arg echo register) as part of the panel command send-and-wait sequence, before writing the opcode 0x8004 to the command/status register at (a0)=FF0000.
 ;>>>> [R1/BOTH] This `move.w` clears the per-channel command argument register (at `FF000E`) to zero before initiating a panel bus transfer with opcode 0x8004.
   f056c0: 32 bc 00 00             move.w   #$0, (a1)
+;### THIS PRESERVES THE OPERATION CODE.  $F0572C does lsl.w #2,d0 to build the
+;###   jump index, destroying the code -- so PanelSendAndWait saves it in d7
+;###   first.  This is the ONLY write to d7 in all of RDHC, so d7 is
+;###   unambiguously the operation code in every handler.  d0 is consumed by
+;###   the dispatch; d7 survives it.
   f056c4: 3e 00                   move.w   d0, d7
   f056c6: 33 40 00 02             move.w   d0, $2(a1)
   f056ca: 30 bc 80 04             move.w   #$8004, (a0)
@@ -2814,6 +2819,14 @@ loc_F05AC0:
 loc_F05AC2:
   f05ac2: b2 82                   cmp.l    d2, d1
   f05ac4: 6f 00 ff 72             ble.w    loc_F05A38
+;### RESOLVES THE $0A QUESTION.  If MODE1 bit 7 (busy) is clear AND d7 == $0A,
+;###   POLL takes a DRAIN-TO-COMPLETION path: spin while (a0) bit 15 is set,
+;###   then check the error bit 13.  Every other POLL code skips this and is
+;###   re-entered on the next interrupt -- exactly the measured "fires once vs
+;###   fires 1468 times" split.  So $0A and $14 terminate for DIFFERENT
+;###   reasons: $14 because it IS D2_FIN, the single finalize slot; $0A because
+;###   POLL special-cases it here.  The earlier guess -- "the primitives hold
+;###   d0-dependent early exits" -- was the right class and the wrong register.
   f05ac8: 3a 2c 02 02             move.w   $202(a4)  [XLTR_MODE1], d5
   f05acc: 08 05 00 07             btst.b   #$7, d5
   f05ad0: 66 1e                   bne.b    loc_F05AF0

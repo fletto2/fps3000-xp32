@@ -541,6 +541,20 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- RESOLVED: $0A is distinguished by d7, the preserved operation code --
+    check('PanelSendAndWait preserves the operation code in d7 ($F056C4)',
+          d[0xF056C4-0xF00000:0xF056C6-0xF00000] == b'\x3e\x00')
+    check('...and that is the ONLY write to d7 in all of RDHC $F04600-$F05CFF',
+          sum(1 for a2 in range(0xF04600, 0xF05D00, 2)
+              if struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0]
+              in (0x3E00, 0x3E80, 0x2E00, 0x3E3C, 0x7E00)) == 1)
+    check('POLL exits via MODE1 bit 7 then cmpi.w #$A,d7 -- the $0A special case',
+          d[0xF05AC8-0xF00000:0xF05AD4-0xF00000]
+          == b'\x3a\x2c\x02\x02\x08\x05\x00\x07\x66\x1e\x0c\x47')
+    check('...and the $0A path drains bit 15 then checks the error bit 13',
+          d[0xF05AD8-0xF00000:0xF05AE4-0xF00000]
+          == b'\x38\x10\x08\x04\x00\x0f\x66\xf8\x08\x04\x00\x0d')
+
     # --- POLL is BLK_XFR's mirror; D1_SEND has a fire-and-forget exit --------
     check('POLL opens with the same swap d0 mode trick as BLK_XFR',
           d[0xF05A12-0xF00000:0xF05A14-0xF00000] == b'\x48\x40')

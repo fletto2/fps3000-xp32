@@ -1528,6 +1528,61 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### RESOLVED: `$0A` is distinguished by `d7`, the preserved operation code
+
+The operation sweep found that `$0A` and `$14` complete while the other 27 live
+codes loop forever, and that `$0A` is an *ordinary* `POLL` slot — nothing in the
+jump table distinguishes it from `$01`, `$16`, `$17`, `$19`, `$1B`, `$1F`, `$22` or
+`$24`. That question is now answered.
+
+`PanelSendAndWait` preserves the operation code before the dispatcher destroys it:
+
+```
+$F056C4  move.w  d0,d7          ; save the operation code
+...
+$F0572C  lsl.w   #$2,d0         ; d0 becomes index << 2 for the jmp
+$F05734  jmp     (a4,d0.w)
+```
+
+**`$F056C4` is the only write to `d7` anywhere in RDHC's 5.5 KB region**, so `d7` is
+unambiguously the preserved operation code for the whole subsystem. And `POLL`'s
+exit tests it:
+
+```
+$F05AC8  move.w  $202(a4),d5    ; XLTR_MODE1
+$F05ACC  btst.b  #$7,d5         ; busy?
+$F05AD0  bne     -> $F05AF0     ;   busy -> ordinary exit
+$F05AD2  cmpi.w  #$a,d7         ; operation $0A?
+$F05AD6  bne     -> $F05AF0     ;   no -> ordinary exit
+$F05AD8  move.w  (a0),d4        ; yes: drain to completion --
+$F05ADA  btst.b  #$f,d4         ;   spin while bit 15 is set,
+$F05ADE  bne     -> $F05AD8
+$F05AE0  btst.b  #$d,d4         ;   then check the error bit
+```
+
+So **operation `$0A` is `POLL`'s drain-to-completion variant**: when the channel is
+not busy and the code is `$0A`, it waits for bit 15 to clear and checks bit 13
+before returning. Every other `POLL` code skips that and is simply re-entered on the
+next interrupt — which is exactly the "fires once versus fires 1468 times" split the
+sweep measured.
+
+Two things worth carrying forward:
+
+- **`d7` is the operation code, available in every handler.** That is a general fact
+  about this subsystem and it was invisible until the sweep raised the question:
+  `d0` is consumed by the dispatch, `d7` survives it. A handler distinguishing its
+  own slots — as `POLL` does — must use `d7`, and any future reading of these four
+  primitives should check for `d7` comparisons.
+- **`$0A` and `$14` are the two terminating operations for the same structural
+  reason.** `$14` terminates because it *is* `D2_FIN`, the single finalize slot;
+  `$0A` terminates because `POLL` special-cases it. Different mechanisms, same
+  observable — and the sweep could not have told them apart, which is why the static
+  decode was needed to close it.
+
+*This closes the last question the 42-operation sweep opened. The mechanism guess
+recorded earlier — "the primitives contain `d0`-dependent early exits" — was the
+right class and the wrong register.*
+
 ### `POLL` is `BLK_XFR`'s mirror, and it explains the `XLTR_COUNTER = $04`
 
 With `BLK_XFR` and `D2_FIN` already decoded, the remaining two primitives complete
