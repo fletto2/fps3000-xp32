@@ -15234,3 +15234,40 @@ living inside its own TCB at `+$138`.
 **The caller-PC field makes the trace far more useful than expected.** It is not just "which task
 issued which directive" but "from which instruction" — enough to walk straight to the call site and
 read its guard conditions, which is how this entry was written.
+
+### Channel validation is two-layered, and the inner layer never fires
+
+Immediately before the SGSEM, XP1I calls `$F08550`:
+
+```
+F08550  cmpi.w #$1,d0          ; channel >= 1 ?
+F08554  blt.b  $f0855e
+F08556  cmp.w  $105e.l,d0      ; channel <= the AC count ?
+F0855C  ble.b  $f0856a
+F0855E  move.w #$264,d0        ; reject -> panel command $264
+F08562  jsr    $f086c0         ; ...through the issuer that ends in bra .
+```
+
+Measured across chassis configurations:
+
+| `FPS3K_CHANNELS` | `$F08550` calls | rejects at `$F0855E` | SGSEM records |
+|---|---:|---:|---:|
+| **2** (Lovett's machine) | 218 | **0** | 4 |
+| **0** (empty chassis) | **0** | 0 | 0 |
+
+Two layers, and only the outer one does work:
+
+- **Outer**: each XP task gates itself in its prologue on `cmpi.w #<own channel>,$105E`, so with an
+  empty chassis XP1I never reaches the validator at all — 0 calls, not 218 rejects.
+- **Inner**: `$F08550` re-checks `1 <= ch <= $105E` before each signal and, on the real 2-AC
+  configuration, **never rejects**.
+
+So panel command `$264` is unreachable in a correctly-configured machine. This project records
+`$264` as "two per task, one of them `addi.w #$264,d1` with `d1` = the channel, so the family is
+`$265`-`$268` for channels 1-4" — consistent, and now with the emitting site and its guard
+identified. Note the reject path issues its command through `$F086C0`, one of the eight `bra .`
+issuers, so a malformed channel number would **park the XP task permanently** rather than return
+an error.
+
+That is a real hazard for any chassis model that reports a channel count inconsistent with the
+channels it then drives: the failure is silent and terminal, not a returned status.
