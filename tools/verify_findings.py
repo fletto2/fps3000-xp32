@@ -570,6 +570,21 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- $0E74 is chassis-written: the ROM only ever clears it ----------------
+    check('RDHC tests $0E74 against panel code $25A',
+          d[0xF0475E-0xF00000:0xF04766-0xF00000]
+          == b'\x0c\x79\x02\x5a\x00\x00\x0e\x74')
+    check('every write to $0E74 is zero -- 22 sites, none otherwise',
+          len([a2 for a2 in range(0xF04488, 0xF0FFF0, 2)
+               if word(a2) == 0x33FC and long_(a2 + 4) & 0xFFFFFF == 0x0E74
+               and word(a2 + 2) == 0]) == 22
+          and not [a2 for a2 in range(0xF04488, 0xF0FFF0, 2)
+                   if word(a2) == 0x33FC and long_(a2 + 4) & 0xFFFFFF == 0x0E74
+                   and word(a2 + 2) != 0])
+    check('...and there are no absolute-SHORT references to it either',
+          not [a2 for a2 in range(0xF04488, 0xF0FFF0, 2)
+               if (word(a2) & 0x3F) == 0x38 and word(a2 + 2) == 0x0E74])
+
     # --- three emission forms, and $264 uses two of them ----------------------
     check('$264 is emitted by addi.w #imm,d1 as well as move.w #imm,d0',
           any(word(a2) == 0x0641 and word(a2 + 2) == 0x264
