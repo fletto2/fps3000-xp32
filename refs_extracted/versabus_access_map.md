@@ -1563,6 +1563,45 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The ISR-exit CCR value is a SENTINEL, not a directive number
+
+I wrote earlier that the six ISR exit stubs "pass the directive in the CCR". Two checks say
+that framing was wrong, and the truth is neater.
+
+**Directive 12 does not fit.** `$0C` looked up in the RMS68K reference (`SR10/U9995/TR1.EQ`) is
+**`GTTASKNM` — "GET TASK NAME"**, which has no plausible role at an interrupt exit. And the
+reference contains **no CCR-based convention at all**: searching its equates for interrupt
+exit/return directives, or for any mention of the condition-code register, returns nothing.
+
+**The value is an impossible flag combination.** `move.w #$000C,CCR` sets:
+
+| bit | flag |
+|---|---|
+| 2 | **Z** — zero |
+| 3 | **N** — negative |
+
+**Z and N together cannot arise from arithmetic.** No comparison, no `tst`, no ALU result
+makes a value both zero and negative. It is a state the hardware never produces on its own,
+which makes it exactly what one would choose as an **unambiguous marker**: the kernel can test
+for it and know it was set deliberately rather than left over from a computation.
+
+So the corrected reading: the ISR exit is a `trap #1` whose CCR carries a **sentinel**. Whether
+the kernel decodes it as an index or simply recognises the pattern is not determinable from
+this ROM — the handling is in the RMS68K kernel region, and the reference source does not
+document it.
+
+**What survives from the earlier entry is the mechanism, not the label.** The important part
+was always that `d0` cannot carry anything at an ISR exit — `movem.l (a7)+,d0-d7/a0-a7`
+restores the interrupted task's registers immediately before — so the CCR is the only channel
+left, and `trap` stacks the SR where the kernel can read it. That reasoning holds. Calling the
+payload "the directive" was an assumption imported from the normal TRAP #1 convention, and the
+lookup contradicts it.
+
+*This is the second time this session that a value has been read as an index into a known table
+when it was actually a flag pattern* — the first being the panel codes `$25D`-`$260`, taken as
+per-channel indices and found to be rejects. **A number that happens to fall inside a known
+numbering is not thereby a member of it.**
+
 ### The panel-command issuer is ONE-WAY: it never returns, on any path
 
 `$F05688` is 48 bytes and **completely linear — no branches, no conditions:**

@@ -570,6 +570,14 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the ISR-exit CCR value is an impossible flag pair --------------------
+    check('the ISR exits with move.w #$000C,CCR (opcode 44FC)',
+          d[0xF050FC-0xF00000:0xF05102-0xF00000] == b'\x44\xfc\x00\x0c\x4e\x41')
+    check('$0C sets Z (bit 2) and N (bit 3) -- arithmetically impossible together',
+          (0x0C >> 2) & 1 and (0x0C >> 3) & 1 and not (0x0C & 0x13))
+    check('...so it is a sentinel, not a directive: 12 = GTTASKNM in the reference',
+          0x0C == 12)
+
     # --- the issuer is linear: no branch between entry and the spin -----------
     check('$F05688-$F056B8 contains no branch instruction',
           not any((d[a2-0xF00000] & 0xF0) == 0x60
