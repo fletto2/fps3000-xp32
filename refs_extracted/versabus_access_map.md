@@ -1571,19 +1571,32 @@ site decodes:
 | code | real sites | what each one is |
 |---|---|---|
 | `$25D` | 2 | **range rejects** — `CHANNEL_SELECT` outside `0..$F` |
-| **`$25E`** | **0** | *my earlier count of 1 was a false positive* — the bytes sit inside the 16-entry `jmp` table at `$F05102`-`$F05142`, which is **data** |
+| `$25E` | 1 | emitted then `bra ChannelConfigDispatch` — see the correction below |
 | `$25F` | 2 | one **drain-completion**, one **S-record type reject** (`$5339` = `'S9'`) |
 | `$260` | 2 | one **drain-completion**, one reject arm |
 | `$261` | 0 | unused |
 
 **So the block is a reject/completion family, and the "per-channel config" label is wrong for
-all four codes** — not just `$25D`. Two of the four codes are never emitted at all, which no
-per-channel scheme would produce.
+all four codes** — not just `$25D`. The site counts are 2/1/2/2 with `$261` unused, which no
+one-code-per-channel scheme produces.
 
-*The `$25E` miscount is worth owning:* I scanned for `303C xxxx` byte pairs and reported one
-site without checking whether the address was code. It is the fourth time this session a
-detector was run over data as if it were instructions. The jump table is 16 entries of
-`4EFA dddd` and my pattern matched its displacement bytes.
+**CORRECTION, made immediately after: my `$25E` dismissal was itself wrong.** I claimed the
+site at `$F05142` was a false positive lying "inside the 16-entry `jmp` table". The table is
+16 entries of 4 bytes starting at `$F05102`, so it ends at **`$F05141`** — and `$F05142` is
+the first byte *after* it, and is genuine code:
+
+```
+$F05142:  move.w #$25e,d0
+$F05146:  jsr    PanelIOConfigure_25A
+$F0514C:  bra    ChannelConfigDispatch
+```
+
+So `$25E` has **one real site**, and only `$261` is genuinely unused. I dismissed a real
+finding by asserting an address was data without checking — the *inverse* of the error I was
+correcting in the same paragraph, and made while writing the sentence warning about it.
+
+*This was caught by the code map built in the next entry, within minutes of writing it*, which
+is the strongest argument for that tool: the first thing it did was contradict its author.
 
 **`$FF0000` is polled as a signed remaining-count.** Both drain-completion sites share a shape:
 

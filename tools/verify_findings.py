@@ -581,8 +581,12 @@ else:
     check('$25F also guards the S-record type against $5339 = "S9"',
           d[0xF05560-0xF00000:0xF05566-0xF00000] == b'\x0c\x41\x53\x39\x6e\x08'
           and bytes([0x53, 0x39]) == b'S9')
-    check('$25E has NO real site: its apparent one is inside the $F05102 jmp table',
-          0xF05102 <= 0xF05142 <= 0xF05102 + 16 * 4)
+    # The 16-entry table is $F05102..$F05141; $F05142 is the first byte AFTER it
+    # and is real code.  An earlier version of this check asserted the opposite.
+    check('$25E DOES have a real site at $F05142, just past the jmp table',
+          0xF05102 + 16 * 4 == 0xF05142
+          and d[0xF05142-0xF00000:0xF0514C-0xF00000]
+              == b'\x30\x3c\x02\x5e\x4e\xb9\x00\xf0\x56\x88')
 
     # --- chassis ops $C and $D; $25D is a reject ------------------------------
     check('op $C writes CHANNEL_SELECT into $101E/$1020, half by half',
