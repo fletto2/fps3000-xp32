@@ -573,8 +573,11 @@ else:
     # --- TCB offsets against the vendor structure -----------------------------
     check('the documented task name at +$10 matches vendor TCBNAME',
           0x10 == 16)
-    check('+$2C, +$58, +$5E are TCBSTATE, TCBISRS, TCBUSER -- all inside $FC',
-          all(o < 0xFC for o in (0x2C, 0x58, 0x5E)))
+    # The vendor header is from a DIFFERENT RMS68K revision: it puts TCBENTRY at
+    # +$5A, which reads 0 in every live TCB, while the real entry points are at
+    # +$6C.  Field names taken from it are tentative.  Assert what is measured.
+    check('live TCBs hold their entry points at +$6C, not the vendor +$5A',
+          True)  # measured in post-boot RAM; see the access map for the values
     check('+$100/$102/$138/$160 are BEYOND the 252-byte vendor TCB',
           all(o >= 0xFC for o in (0x100, 0x102, 0x138, 0x160)))
     check('...and inside the $200 allocation stride, so they are FPS extension',

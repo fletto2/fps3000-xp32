@@ -1563,6 +1563,47 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### CAUTION: the vendor `TCB.EQ` does NOT match this build — the field naming is tentative
+
+The previous entry named `+$2C`, `+$58` and `+$5E` from `SR10/U9995/TCB.EQ`, calibrated on
+`TCBNAME` landing at `+$10`. **One matching field was not enough calibration.** Checking live
+TCBs in post-boot RAM:
+
+| offset | vendor field | XP1I | XP2I | XP3I |
+|---|---|---|---|---|
+| `+$10` | `TCBNAME` | `XP1I` | `XP2I` | `XP3I` | ✓ matches |
+| **`+$5A`** | **`TCBENTRY`** — initial entry point | **0** | **0** | **0** | ✗ empty |
+| **`+$6C`** | *(inside `TCBXREGS`)* | **`$F07D4A`** | **`$F0734A`** | **`$F0694A`** | the real entry points |
+| `+$D8` | `TCBPC` | 0 | 0 | 0 | |
+
+**The entry points are at `+$6C`, where the vendor header says saved registers live, and
+`TCBENTRY` at `+$5A` is zero.** This project's empirically-derived `+$6C` is right; the vendor
+offset is not. So the SR10 header describes a **related but different TCB layout** — a
+different RMS68K revision than this firmware was built against.
+
+**Consequences, stated plainly:**
+
+- The names `TCBSTATE` (`+$2C`), `TCBISRS` (`+$58`), `TCBUSER` (`+$5E`) are **tentative**, not
+  authoritative. They come from a header that is demonstrably wrong about `+$5A` for this
+  build. They remain plausible — the scheduler's use of `+$2C` as a flag word fits "task
+  state" well — but "named from the vendor source" overstated it and is withdrawn.
+- The `$FC` boundary and the "FPS extension space" reading inherit the same doubt. The
+  *observation* that `+$100`, `+$138` and `+$160` sit past 252 bytes is arithmetic and stands;
+  the *interpretation* that 252 is where the vendor structure ends does not, if the layout
+  differs.
+- **The `TCBPC` search is unaffected in what it measured** — there are no `d16(An)` references
+  with displacement `$D8` anywhere in the ROM — but it no longer supports "nothing writes a
+  task's saved PC", because `$D8` may not be the PC in this build.
+
+*What went wrong, precisely.* I calibrated on one known value, it matched, and I proceeded. A
+second known value was available the whole time — this project documents the entry point at
+`+$6C` — and it contradicts the header. **One agreeing control is consistent with a correct
+map and equally consistent with a coincidence; two are what distinguish them.** The same
+mistake in a different medium as the address scans: a check that can only confirm.
+
+The conclusion that RDHC has no in-ROM escape still rests on the three eliminated candidates
+and the 182,124-iteration measurement, which are independent of any of this.
+
 ### TCB fields named from the vendor source — and where the FPS extension begins
 
 `SR10/U9995/TCB.EQ` declares the TCB as 51 sequential `DS` fields rather than numeric equates,
