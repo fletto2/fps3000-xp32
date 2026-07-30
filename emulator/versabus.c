@@ -852,6 +852,22 @@ static int bim_level_of(int unit, int ch) {
         const char *e = getenv("FPS3K_HOSTLVL");
         if (e && lvl) lvl = (int)strtoul(e, NULL, 0) & 7;
     }
+    /* FPS3K_BIM0LVL -- EXPERIMENTAL, and deliberately not the default.
+     *
+     * The firmware writes $5E to $FF0230, i.e. BIM0 ch0 at level 6.  Measured,
+     * the panel-issuer spin at $F056B8 runs at SR=$2600 -- IPL 6 -- because the
+     * chassis-op handlers execute inside $F04930's own ISR.  A 68000 takes an
+     * interrupt only when its level EXCEEDS the mask, so a level-6 responder
+     * can never release a level-6 spin: the ISR waits on an event only its own
+     * interrupt could deliver.
+     *
+     * This override raises that one channel so the hypothesis "the real chassis
+     * answers above the spin's mask" can be tested.  It contradicts the CR the
+     * firmware itself programs, so it is a probe, not a model of the board. */
+    if (unit == 0 && ch == 0) {
+        const char *e = getenv("FPS3K_BIM0LVL");
+        if (e && lvl) lvl = (int)strtoul(e, NULL, 0) & 7;
+    }
     return lvl;
 }
 

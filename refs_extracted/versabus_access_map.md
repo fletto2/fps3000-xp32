@@ -13666,3 +13666,45 @@ That third option is the one worth testing next, and it is the same shape as the
 already reached for TCBIO1I: the `$281` arm is not the normal path. Here too, the economical
 reading is that a real chassis does not answer a panel command through the level-6 responder
 while the SBC sits at IPL 6.
+
+## CONFIRMED: the SBC's 32-bit write port into chassis memory executes
+
+Op `$3`'s write path was decoded statically and flagged as unmeasured. It is now measured.
+
+Testing the level-7 hypothesis from the blocker-3 analysis with an experimental override
+(`FPS3K_BIM0LVL=7`, raising BIM0 ch0 above the IPL-6 spin):
+
+| | level 6 (as the firmware programs it) | level 7 (probe) |
+|---|---:|---:|
+| `$F04930` ISR fires | 3 | **44** |
+| chassis ops dispatched | 5 | **219** |
+| spin released | no | **yes** |
+
+With `FPS3K_RESP=0x03` so every response carries op `$3`:
+
+```
+F04D4E  op $3 handler        219
+F04DC0  write branch          219      (bit 5 clear)
+F04E0A  move.l $e70,(a1,d1.l) 219      <- the store
+F04D74  read branch             0
+[CHASSIS-MEM] WR 400000=00 400001=00 400002=29 400003=03  @F04E0A
+```
+
+**Four byte-writes at `$400000`-`$400003` from a single instruction — a 32-bit longword into the
+chassis window.** The decode was right: op `$3` is bidirectional, bit 5 selects direction, and
+the write direction is a full-width paged store.
+
+### What this does and does not establish
+
+**Established:** the firmware's own instructions perform a 32-bit write into the `$400000`
+window. Nothing about the handler was altered — the probe changes only *when the ISR may
+preempt*, not what the handler does once entered.
+
+**Not established:** that a real board delivers responses at level 7. The firmware writes `$5E`
+to `$FF0230` itself, which is level 6, and `FPS3K_BIM0LVL=7` deliberately contradicts that. So
+this confirms the *code path* while leaving the *delivery level* an open hardware question. The
+override is kept as a probe and is not the default.
+
+It does, however, make the level-7 reading considerably more attractive: at level 6 the machine
+deadlocks in its own ISR, and at level 7 it runs 219 chassis operations and writes to system
+common memory. One of those is what the hardware did for a decade.
