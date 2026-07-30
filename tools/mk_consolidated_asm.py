@@ -80,6 +80,26 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- the XLTR block by two methods; $FF0212 is an artefact ----
+ (0xF0A086,'NOT AN XLTR ACCESS.  $12(a3) here looks like $FF0212 and is not: a3 is'),
+ (0xF0A086,'  walking the TDTI TABLE searching for the !TCB marker ($F0A06E loads'),
+ (0xF0A06E,'  #$21544342 and $F0A074 compares (a3)), so $12(a3) is a TDTI entry field.'),
+ (0xF0A086,'  $FF0212 IS NOT A REGISTER: in the bus log its accesses appear immediately'),
+ (0xF0A086,'  after $FF0210 with a different value, because they are the second half of'),
+ (0xF0A086,'  a 32-BIT ACCESS to $FF0210 that the logger splits into two words.'),
+ (0xF04F3A,'THIS PROVES THE BIM CRs ARE NOT WRITE-ONLY -- a read-modify-write on'),
+ (0xF04F3A,'  $FF0230.  A static basic-block sweep reported ZERO reads of every BIM CR'),
+ (0xF04F3A,'  because its 80-instruction attribution window cannot reach the ISR'),
+ (0xF04F3A,'  prologue where the base register is loaded, jump-table handlers being far'),
+ (0xF04F3A,'  from it.  Every absence claim from that method is unsound.  Runtime'),
+ (0xF04F3A,'  logging has the opposite flaw -- it INVENTS registers by splitting wide'),
+ (0xF04F3A,'  accesses.  Four false positives across two sweeps ($FF0002, $FF0050,'),
+ (0xF04F3A,'  $FF00FF, $FF0212), the last from the method just called reliable.'),
+ (0xF04F3A,'  What the two methods AGREE on: the channel windows are exactly +$04,'),
+ (0xF04F3A,'  +$08, +$0A, +$0E; $FF0214 never appears standalone, only as the leading'),
+ (0xF04F3A,'  half of a 32-bit access paired with $FF0216 (which IS used alone 14'),
+ (0xF04F3A,'  times); 23 of the 24 BIM registers are used, only $FF025E is spare; and'),
+ (0xF04F3A,'  $FF0204 is the hottest register in the machine, 32,968 writes in one run.'),
  # ---- the AP I/F is five identical windows; $FF0010 is invented ----
  (0xF0450C,'THE AP I/F IS FIVE IDENTICAL 32-BYTE WINDOWS.  A basic-block-attributed'),
  (0xF0450C,'  sweep of the BASE window $FF0000-$FF003F finds exactly four offsets --'),

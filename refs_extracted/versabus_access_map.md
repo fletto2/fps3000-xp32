@@ -1528,6 +1528,72 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The XLTR block by two methods, and why neither is authoritative alone
+
+Giving `$FF0200-$FF025F` the same treatment produced a **false positive from each
+method**, which is the useful part of the exercise.
+
+**Static attribution under-counts.** The basic-block scan (register loaded with
+`#$FF0000`, used within 80 instructions before any reload) reported `$FF0214` as
+*documented but never touched*, and showed the BIM control registers with **zero
+reads** — even though chassis operation `$7` at `$F04F3A` plainly does a
+read-modify-write on `$FF0230`. The cause is the window: handlers reached through a
+jump table have their base register loaded far away in the ISR prologue, well past 80
+instructions. So every absence claim from that scan is unsound.
+
+**Runtime logging over-counts.** Switching to the bus log — 696,226 device accesses —
+gave 42 distinct addresses and one that is not in the documented table at all:
+`$FF0212`, with 2 reads and 2 writes, which the emulator itself labels
+`XLTR_unknown`. Inspecting the log ordering settles it:
+
+```
+WR 2-byte FF0210 = 0010   XLTR_MODE2
+WR 2-byte FF0212 = 0020   XLTR_unknown     <-- same instruction
+RD 2-byte FF0210 = 0010
+RD 2-byte FF0212 = 0020                    <-- same instruction
+```
+
+**`$FF0212` is not a register.** It is the second half of a **32-bit access to
+`$FF0210`**, which the logger decomposes into two word accesses. The two ROM sites
+that looked like candidates — `move.b $12(a3),d4` at `$F0A086`/`$F0A08C` — are not
+XLTR accesses either: `a3` there is walking the **TDTI table** searching for the
+`!TCB` marker, so `$12(a3)` is a TDTI entry field.
+
+*That is four false positives across two sweeps — `$FF0002`, `$FF0050`, `$FF00FF`,
+`$FF0212` — and the fourth came from the method I had just called the reliable one.
+Static attribution misses accesses; runtime logging invents them by splitting wide
+transfers. Neither is authoritative, and every hit needs its site read.*
+
+#### What the two methods agree on
+
+**The channel windows are exactly four offsets**, now confirmed at runtime with the
+ISRs actually running on all four channels:
+
+| offset | ch1 | ch2 | ch3 | ch4 |
+|---|---|---|---|---|
+| `+$04` | 0R/1W | 0R/1W | 0R/1W | 0R/1W |
+| `+$08` | 467R | 467R | 467R | 484R/6W |
+| `+$0A` | 467R | 467R | 467R | 484R/6W |
+| `+$0E` | 468R | 468R | 468R | 489R/23W |
+
+Nothing else in any 32-byte window is touched. XP4I additionally *writes* `+$08`,
+`+$0A` and `+$0E` where the other three only read — worth noting alongside the other
+XP4I divergences rather than explaining away.
+
+**`$FF0214` never appears standalone.** Every access to it is the leading half of a
+32-bit access at `$FF0214`, paired with `$FF0216` carrying a different value
+(`$0040`/`$0080`). `$FF0216` is *also* written alone 14 times. So `$214` behaves as
+the high half of a 32-bit data register whose low half doubles as the independently
+read-modify-written mode/page register — which is consistent with the table's
+description of `$216` and refines what `$214` is for.
+
+**23 of the 24 BIM registers are used.** All of BIM0 and BIM1's eight, and BIM2's
+`$250`-`$25C`; **only `$FF025E` (BIM2 VR3) is never touched**, in any configuration.
+
+**`$FF0204` is by far the hottest register in the machine** — 32,968 writes against
+7 reads in one run, which is the phase/beacon traffic. Any performance work on a
+chassis model should start there.
+
 ### The AP I/F is five identical windows, and `$FF0010` is an emulator invention
 
 Repeating the sweep on the **base** window `$FF0000-$FF003F`, with a conservative

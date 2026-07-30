@@ -1356,6 +1356,19 @@ loc_F04F2C:
   f04f2c: 60 00 01 ca             bra.w    ChannelConfigDispatch
   f04f30: 22 79 00 00 0e 58       movea.l  $e58.l, a1
   f04f36: 60 00 ff 68             bra.w    loc_F04EA0
+;### THIS PROVES THE BIM CRs ARE NOT WRITE-ONLY -- a read-modify-write on
+;###   $FF0230.  A static basic-block sweep reported ZERO reads of every BIM CR
+;###   because its 80-instruction attribution window cannot reach the ISR
+;###   prologue where the base register is loaded, jump-table handlers being far
+;###   from it.  Every absence claim from that method is unsound.  Runtime
+;###   logging has the opposite flaw -- it INVENTS registers by splitting wide
+;###   accesses.  Four false positives across two sweeps ($FF0002, $FF0050,
+;###   $FF00FF, $FF0212), the last from the method just called reliable.
+;###   What the two methods AGREE on: the channel windows are exactly +$04,
+;###   +$08, +$0A, +$0E; $FF0214 never appears standalone, only as the leading
+;###   half of a 32-bit access paired with $FF0216 (which IS used alone 14
+;###   times); 23 of the 24 BIM registers are used, only $FF025E is spare; and
+;###   $FF0204 is the hottest register in the machine, 32,968 writes in one run.
 ;### code $7: clear IRE (bit 4) of BIM0 CR0 - the chassis can mute the dispatcher
   f04f3a: 32 28 02 30             move.w   $230(a0)  [BIM0_CR0], d1
   f04f3e: 08 81 00 04             bclr.b   #$4, d1
@@ -10574,6 +10587,7 @@ RTOSKernelInit:
   f0a066: 47 fa 05 16             lea.l    PanelCmdIssuer_8(pc), a3
 ;>>>> [R10/BOTH] Sets up the XLTR_MODE0 register pointer for TCB initialization in the RTOS kernel.
   f0a06a: 43 eb 02 00             lea.l    $200(a3)  [XLTR_MODE0], a1
+;###   #$21544342 and $F0A074 compares (a3)), so $12(a3) is a TDTI entry field.
   f0a06e: 20 3c 21 54 43 42       move.l   #$21544342, d0
 
 loc_F0A074:
@@ -10586,6 +10600,11 @@ loc_F0A074:
 
 loc_F0A082:
   f0a082: 47 eb 00 04             lea.l    $4(a3), a3
+;### NOT AN XLTR ACCESS.  $12(a3) here looks like $FF0212 and is not: a3 is
+;###   walking the TDTI TABLE searching for the !TCB marker ($F0A06E loads
+;###   $FF0212 IS NOT A REGISTER: in the bus log its accesses appear immediately
+;###   after $FF0210 with a different value, because they are the second half of
+;###   a 32-BIT ACCESS to $FF0210 that the logger splits into two words.
   f0a086: 18 2b 00 12             move.b   $12(a3), d4
   f0a08a: e1 4c                   lsl.w    #$8, d4
   f0a08c: 18 2b 00 12             move.b   $12(a3), d4

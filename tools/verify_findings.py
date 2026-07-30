@@ -550,6 +550,15 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- the XLTR block: $FF0212 is a logging artefact, not a register -------
+    check('the $F0A086 "$12(a3)" sites walk the TDTI table, not the XLTR',
+          d[0xF0A06E-0xF00000:0xF0A074-0xF00000]
+              == b'\x20\x3c\x21\x54\x43\x42'          # move.l #'!TCB',d0
+          and d[0xF0A086-0xF00000:0xF0A08A-0xF00000] == b'\x18\x2b\x00\x12')
+    check('chassis op $7 read-modify-writes $FF0230, so BIM CRs are NOT write-only',
+          d[0xF04F3A-0xF00000:0xF04F46-0xF00000]
+          == b'\x32\x28\x02\x30\x08\x81\x00\x04\x31\x41\x02\x30')
+
     # --- $FF0010 is never accessed; $FF000E is the panel command port --------
     for _cfg in ({}, {'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6'},
                  {'FPS3K_XPIRQ': '1,2,3,4', 'FPS3K_CHANNELS': '4'}):
