@@ -1528,6 +1528,55 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### `$F70030` — one device register in the whole RMS68K kernel, and it is off our map
+
+The kernel region `$F00000-$F04488` (17,544 bytes, 26% of the ROM) is excluded from
+`fps3k.asm` on the grounds that it is stock Motorola code. Sweeping it for device references
+gives a sharp result: **exactly one genuine absolute device access in the entire region.**
+
+```
+$F00A32:  movea.l $0C78.w,a7          ; supervisor stack from a saved slot
+$F00A36:  ori.w   #$700,sr            ; mask all interrupts
+$F00A3A:  move.b  $F70030,d0          ; READ
+$F00A40:  ori.b   #$20,d0             ; set bit 5
+$F00A44:  move.b  d0,$F70030          ; WRITE BACK
+$F00A4A:  movea.l $0C78.w,a7
+$F00A4E:  movem.l (a7)+,d0-d7/a0-a7
+$F00A52:  clr.l   $0C78.w
+$F00A56:  rte
+```
+
+**`$F70030` is not in any memory map this project holds.** The documented `$F7xxxx` devices
+stop at `$F7001A` (PTM `$F70001-$F7000F`, SIO `$F70011-$F70017`, board status
+`$F70018-$F7001A`). This is a separate register, read-modify-written to set **bit 5**, inside
+a routine that masks interrupts, restores a saved stack and returns via `rte`.
+
+Because the kernel is generic RMS68K rather than FPS code, `$F70030` is presumably a
+**standard M68KVM02 register** that Motorola's kernel knows about and the FPS application
+layer never uses. What it does is unestablished; the shape — mask interrupts, set one bit,
+restore context, `rte` — fits an interrupt-acknowledge or a board-level status assertion,
+but the ROM gives no way to choose between them.
+
+**Emulator status: unmodelled, and dormant.** `versabus.h` maps `$F70000-$F7001C` and
+nothing above, so `$F70030` falls through to unmapped handling — which, given phase `$600`
+requires unmapped reads to raise BERR, means this code would bus-error if reached. It is not
+reached: **`$F00A32`, `$F00A3A`, `$F00A44` and `$F00A56` all execute zero times** across a
+full boot, in which 620 distinct kernel PCs do run. So the hazard is real but latent, and
+worth a stub before any work that exercises more of the kernel.
+
+**Method note — this sweep failed the opposite way from all the others.** My first pass
+flagged **262** "device address constants" in the kernel by matching any longword in
+`$400000-$7FFFFF`. That range is essentially the 68000 opcode space: `4E73` is `rte`, `48E7`
+is `movem`, `60FE` is the spin, `4CDF` is the restore. Every one was noise. The five other
+plausible-looking hits (`$FF0000`, `$FF0008`, `$FF0018`, `$FF004A`, `$FF0100`) are also
+coincidences, and the test that separates them is cheap: **a genuine absolute-long operand
+is preceded by an opcode word that takes one.** `$F70030`'s is `$1039` = `move.b abs,d0`;
+the others are preceded by `$0C2A` (`cmpi.b #imm,d16(a2)`), `$11BC`, `$0C29`, `$48EE`
+(`movem.l d0-d7,d16(a6)` — the `$00FF` is a *register mask*), none of which take an absolute
+long. After six false negatives from over-narrow detectors this session, this is the first
+false-positive flood from an over-broad one; both are the same discipline failure, and the
+same fix applies — **validate the detector before believing its output.**
+
 ### The six unresolvable TRAP #1 sites are the ISR exits — and they pass the directive in the CCR
 
 Resolving TRAP #1 directives by scanning backwards for a `d0` load reaches 65 of 71 sites.

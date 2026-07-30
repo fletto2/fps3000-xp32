@@ -570,6 +570,22 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- $F70030: the kernel's only device access -----------------------------
+    check('the kernel read-modify-writes $F70030, setting bit 5',
+          d[0xF00A3A-0xF00000:0xF00A4A-0xF00000]
+          == b'\x10\x39\x00\xf7\x00\x30\x00\x00\x00\x20'
+             b'\x13\xc0\x00\xf7\x00\x30')
+    check('...inside an interrupt-masked routine that ends in rte',
+          d[0xF00A36-0xF00000:0xF00A3A-0xF00000] == b'\x00\x7c\x07\x00'
+          and d[0xF00A56-0xF00000:0xF00A58-0xF00000] == b'\x4e\x73')
+    check('$F70030 is above every modelled device range in the emulator',
+          '#define BOARD_STATUS_END   0xF7001C'
+          in open('emulator/versabus.h').read() and 0xF70030 > 0xF7001C)
+    check('the five other $FFxxxx-looking kernel hits are not absolute operands',
+          all(struct.unpack('>H', d[a2-2-0xF00000:a2-0xF00000])[0] == pw
+              for a2, pw in ((0xF03FF4, 0x11BC), (0xF03DCA, 0x0C2A),
+                             (0xF03F52, 0x0C29), (0xF02804, 0x48EE))))
+
     # --- the six ISR-exit stubs pass their directive in the CCR ---------------
     _isr = (0xF05100, 0xF05E50, 0xF060F4, 0xF06B0C, 0xF0750C, 0xF07F0C)
     check('six TRAP #1 sites are preceded by move.w #$c,ccr, one per task',
