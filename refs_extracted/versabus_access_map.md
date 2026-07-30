@@ -13343,3 +13343,52 @@ own literally.
 
 Segment names also recovered from the string scan: **`PROG`** in every TDTI entry, **`STCK`**
 declared once per task (the stack segment), and **`UPGM`** once at `$F046D4` in RDHC's region.
+
+## 62 of the 77 directives now have vendor names, and 17 are stubbed out
+
+`~/src/claude/versados/SR10/U9995/TR1.EQ` names directives 1-75. Mapping them onto the 77-entry
+table at `$F003D8` names **62** handlers and cross-checks the offset arithmetic independently:
+`$0B CRTCB` → `$F0289E` and `$0D START` → `$F02A34` are the values computed from the table
+before the vendor list was consulted.
+
+**`$F003D0` is the unimplemented-directive stub** — `move.w #$1,$102(a6)` / `rte`, i.e. return
+status 1. Seventeen of the 77 slots route there:
+
+`$00`, `$0A GTTASKID`, `$0C GTTASKNM`, `$26 GTEVNT`, `$27`, `$28`, `$2F`, `$30`, `$31`, `$32`,
+`$37`, `$38`, `$39`, `$3F`, `$46`, `$47`, `$4B FLUSHC`
+
+Thirteen of those are numbers TR1.EQ does not name either, so they are simply reserved. The
+substantive absences are **`GTTASKID`, `GTTASKNM`, `GTEVNT` and `FLUSHC`** — this kernel build
+does not implement them.
+
+No contradiction with the existing note that the ASQ directives "appear nowhere in this
+firmware": `GTASQ` 31, `RDEVNT` 34, `QEVNT` 35 and `WTEVNT` 36 all have **real handlers** here.
+That note is about call sites in the FPS application, not about kernel support, and both remain
+true.
+
+### `$3B` is an undocumented directive behind a magic key
+
+Two slots are unnamed by TR1.EQ yet have real handlers: `$4C` and `$3B`.
+
+`$4C` is the connect-interrupt-vector directive already traced — `$F02216` opens
+`movea.l $c66.w,a1`, the `!VCT` slot. Its absence from TR1.EQ simply dates that file earlier
+than this kernel.
+
+`$3B` (59) is more interesting:
+
+```
+F039C2  move.w   #$1,$102(a6)      ; default status = error
+F039C8  move.l   $120(a6),d0
+F039CC  cmpi.l   #$4baa7bfb,d0     ; magic key
+F039D2  bne.b    $f03a12           ; wrong key -> out
+```
+
+The caller must present **`$4BAA7BFB`** at `+$120` of its parameter block. Measured: that
+constant occurs **exactly once in the 64 KB**, in the comparison itself, and **no site anywhere
+loads `$3B` into `d0`**. So the ROM neither invokes this directive nor contains the key — it is
+a kernel capability reachable only by host-side software or a Motorola tool that knows the
+value.
+
+Emulation consequence: none today, and that is the point — a chassis or host model can be
+written without it, but a *host* implementation that appears to need a privileged RMS68K call
+has exactly one gate to satisfy, and its constant is now known.
