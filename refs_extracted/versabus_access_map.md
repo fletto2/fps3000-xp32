@@ -15722,3 +15722,32 @@ This project records *"Only **one** of `!CCB`/`!DLY` has no instance at all."* *
 The `!ASQ` and `!VCT` zeros are expected and already explained — those structures exist untagged —
 but `!CCB` and `!DLY` have neither a tag nor a documented untagged instance, so on this build the
 RTOS creates neither a Channel Control Block nor a Delay record.
+
+### Why the `!PAT` scan looks like idling: the active list is empty
+
+`!PAT` at `$1F700`:
+
+```
++00  '!PAT'
++04  $0001F714     -> a chain of records: $1F714, $1F732, $1F750 ... stride $1E = 30 bytes
++08  $00000000     <- the head the resting loop reads, via lea $8(a1),a3 / movea.l (a3),a2
+     $FFFFFFFF     sentinels within the chain
+```
+
+**Two lists.** `+4` heads a populated pool of 30-byte records; `+8` heads the *active* list, and it
+is **zero**. The resting loop loads `$8(a1)`, gets null, and goes round again — so the sweep this
+project has called "the idle loop" is a real timer scan over an **empty work list**, which is why
+it behaves like idling and why the machine sits there indefinitely.
+
+That completes the resting-state picture:
+
+| | |
+|---|---|
+| what the CPU runs at rest | a deadline computation (`$0C56` + tick base `$0C42`) and a `!PAT` active-list walk |
+| why it never progresses | the active list head at `!PAT+8` is null — nothing has been queued |
+| what would change it | anything that enqueues a `!PAT` record, which on this build nothing does |
+
+So "final PC `$F00FCC`, the RTOS idle loop" — the sentence that ends nearly every measurement in
+this project — means specifically: *the machine is scanning an empty pending-work list on a tick
+deadline, forever*. The 30-byte pool at `+4` is allocated and never used, in the same way the
+nine-record trace ring is allocated and never written.
