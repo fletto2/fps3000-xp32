@@ -16320,3 +16320,31 @@ Note `FPS3K_RESP=0x94` is the value this project uses throughout for driving RDH
 one code in the collect range that the dispatcher throws away. That is not a contradiction: `$94`
 was chosen because it wakes RDHC via the ISR entry, and the absorption is precisely why it
 produces one wake rather than a stream.
+
+### Choice of collect code decides whether RDHC ends parked or healthy
+
+Comparing the absorbed code against three that reach the handler:
+
+| `FPS3K_RESP` | code | RDHC distinct PCs (of 1,451) | final PC |
+|---|---|---:|---|
+| `$94` | `$14` — **absorbed** | 67 | **`$F056B8`** — the panel-issuer `bra .` spin |
+| `$80` | `$00` | **69** | `$F00FC8` — the `!PAT` rest scan |
+| `$8B` | `$0B` | **69** | `$F00FC8` |
+| `$8F` | `$0F` | **69** | `$F00FC8` |
+
+Coverage barely moves — two PCs — but the **final state differs qualitatively**. With `$94` the
+machine ends parked in a spin; with any non-absorbed collect code it ends in the normal rest state,
+because the handler completes and returns through the ISR exit rather than the dispatcher throwing
+the code away mid-conversation.
+
+**Practical consequence for driving this model:** `FPS3K_RESP=0x94` is used throughout this project
+and leaves the machine in a state it would not rest in. A non-absorbed collect code — `$80` is the
+simplest — reaches the same code and finishes cleanly. Any measurement whose result depends on
+where the machine *ends* (final PC, task state, a structure's last value) is affected by that
+choice, and several in this file were taken with `$94`.
+
+This does not overturn those measurements: the counts they report are of events that happened
+before the ending, and the ending is where the machine stopped, not a corruption. But "final PC
+`$F056B8`" has been read in this project as evidence of the RDHC blocker, and with `$80` the same
+run ends at `$F00FC8` — so that particular ending is partly an artefact of the code chosen to
+drive it.
