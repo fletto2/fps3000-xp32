@@ -1598,6 +1598,38 @@ The pattern across all of this is the session's recurring one, one level up: **t
 itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
 here changed what is known about the machine; it changed how much a passing suite is worth.
 
+### `MC26S10` on the XLTR: physical evidence for the arbitration the emulator omits
+
+A fourth XLTR tile finds parts that bear directly on a documented emulator gap:
+
+| part | function |
+|---|---|
+| **`MC26S10P`** x2 | Motorola **quad open-collector bus transceiver with arbitration** — the classic VERSAbus/Multibus daisy-chained request/grant part |
+| `AM25LS2521PC` | 8-bit comparator — address match, the usual bus-interface decode |
+| `74S240`, `74LS244`, `7417` | buffers |
+
+**The `MC26S10` matters.** This project's known-divergences table opens with:
+
+> *"No VERSAbus arbitration; the CPU always owns the bus — the chassis is a **bus master**, it
+> DMAs into SBC RAM and holds the 68000 off during those cycles."*
+
+That was inferred from firmware behaviour and from the `$10AA` puzzle. **The photograph shows
+the hardware that does it**: open-collector arbitration transceivers are used for exactly one
+thing — resolving which of several masters owns the bus — and there are at least two of them on
+the translator card, adjacent to an 8-bit address comparator.
+
+So the divergence is not a modelling shortcut around something hypothetical. **The arbitration
+logic is physically present, identifiable, and on the card that mediates between the SBC's
+VERSAbus and the chassis.** Anything that depends on *when* a DMA'd value lands remains wrong in
+the model, and now there is a part number attached to why.
+
+*Still not found: the MC68153 BIMs.* Four of twelve tiles examined. What has turned up instead —
+bus transceivers, arbitration transceivers, comparators, registers, buffers, a delay line — is a
+coherent picture of a **bus translator**: the card's job is moving cycles between two buses and
+arbitrating for them. The interrupter half is presumably there (23 of its 24 registers are
+written by the firmware, which is not something one does to absent hardware) but has not been
+photographed yet.
+
 ### XLTR card photograph: part number confirmed, BIM count NOT yet settled
 
 Tiling `02_VBUS_XLTR.JPG` and examining three of twelve tiles establishes some things and
