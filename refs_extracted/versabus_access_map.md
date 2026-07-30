@@ -15271,3 +15271,46 @@ an error.
 
 That is a real hazard for any chassis model that reports a channel count inconsistent with the
 channels it then drives: the failure is silent and terminal, not a returned status.
+
+## The XP service path, traced end to end — and it stops exactly at the missing counterparty
+
+Following the trace's caller-PC field through XP1I gives the complete cycle:
+
+```
+channel IRQ -> ISR fills $1066 with {status, data-hi, data-lo}
+  -> task wakes from $13 WAIT
+  -> outer gate: prologue cmpi.w #<own channel>,$105E
+  -> $F07E86  btst #$e,$1066   AND  btst #$b,$1066     (bit 14 set, bit 11 clear)
+  -> $F08550  inner validator, 1 <= ch <= $105E        (never rejects on a 2-AC machine)
+  -> $F07EA8  trap #1, d0=$2B  SGSEM                   (signal own semaphore, a0 = the TCB)
+  -> $F08572  tst.l $10ae(a2)  <-- THE USER-CONNECT GATE
+       nonzero -> $F0857A: build a parameter block, push 'USER', d0=$43 RSTATE, look the task up
+       zero    -> $F08608: skip
+  -> back to $13 WAIT
+```
+
+Measured with XP1I's channel driven:
+
+| site | executions |
+|---|---:|
+| `$F08572` — the gate test | **218** |
+| `$F0857A` — the `USER` lookup | **0** |
+| `$F08608` — the skip | **218** |
+| `$10AE`, `$10BE` (all four channels) | all `$00000000` |
+
+**The loop completes 218 times and stops at the gate every time.** Not because the path is
+unreachable — it is reached on every iteration — but because `$10AE` is zero, and `$10AE` is
+nonzero only when a host-loaded CP program has connected itself as the `USER` task.
+
+This is the exact prediction this project recorded when it found the seventh task: *"on a real
+machine running a CP program, `$10BE + (ch-1)*4` holds a task handle and `$10AE + (ch-1)*4` is
+nonzero. On this ROM alone both stay zero."* **Both stay zero, measured, with the gate reached 218
+times.**
+
+So the XP side of the machine is now understood end to end, and the terminus is not a gap in the
+analysis or a defect in the model — **it is the architectural boundary**. The ROM is the half that
+boots the machine and moves microcode; the other half arrives from the host, and the XP service
+loop runs correctly right up to the instruction that would hand off to it.
+
+**That also means the emulator is behaving correctly here.** A model that somehow drove past this
+gate would be wrong, not better.
