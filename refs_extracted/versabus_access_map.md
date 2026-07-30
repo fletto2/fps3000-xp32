@@ -16528,3 +16528,39 @@ Method note on this check: my first attempt compared `ds/` against `emulator/*.o
 one invocation and produces no object files. Comparing against the linked binary gives 2,758
 symbols and the same answer for a real reason. A clean result from an empty set is the same defect
 as a zero counter on a crashed machine, and it is the fourth instance this session.
+
+### The exact mechanism of the `CHSEL_RD` hang — a register test, not a RAM test
+
+I explained the hang by borrowing the comment attached to the `FPS3K_POKE` gate: *"the diagnostics
+walk all of RAM writing a pattern and reading it back, so any location forced to read a constant
+fails a pattern test."* **That is the right defect class and the wrong test.** The self-test reads
+`CHANNEL_SELECT` exactly twice, and both are register write/read-back checks:
+
+```
+F094FA  move.w d6,$204(a6)       ; write the phase number to CHANNEL_SELECT
+F094FE  cmp.w  $204(a6),d6       ; read it back and compare
+F09502  beq.b  loc_F0950A        ; equal -> continue
+F09504  move.l #$F0F0F0F0,d7     ; mismatch -> failure marker in d7
+
+F09582  cmp.w  $204(a6),d6       ; the same check again
+F09586  bne.b  loc_F095E8        ; mismatch -> the phase's fail path
+F09588  cmpi.w #$2000,$202(a6)   ; then MODE1 must read $2000
+```
+
+So the firmware **verifies that `CHANNEL_SELECT` is a working read/write register**, which is
+precisely what forcing a constant readback breaks.
+
+The full chain, end to end:
+
+1. `FPS3K_CHSEL_RD=28` makes `$FF0204` read `$28` regardless of what was written.
+2. `$F094FE` writes the phase number and reads back `$28` — mismatch.
+3. `d7` receives the failure marker **`$F0F0F0F0`**.
+4. `$F0891C` — the self-test checkpoint, and the routine the hang was measured in — tests `d7`
+   and on failure clears VMOD bit 6 and MODE1 `$1000`.
+5. The checkpoint handshake never completes, so the boot never leaves the diagnostics.
+
+That also explains why the hang was observed *at* `$F08920`: it is the checkpoint routine spinning
+on board status, and it spins because a phase upstream failed its register test.
+
+`$F0F0F0F0` is worth remembering as the self-test's failure marker — a value distinctive enough to
+recognise in a register dump on real hardware.
