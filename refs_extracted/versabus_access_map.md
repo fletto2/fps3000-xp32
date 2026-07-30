@@ -15851,3 +15851,36 @@ Two details worth keeping: `!UDR`'s `+4` is `$00190000`, whose high word is `$00
 likely a record size in the family-B position but with no count beside it; and the `$1F500` trace
 pool is the only allocation with **no marker at all**, which is why it appears in the directory
 (slot `$0C30`) but not in any marker census.
+
+## `!IDV` read in full, and a refinement to the XP4I tally
+
+All six records, stride 14, from `$1F808`:
+
+| vector | TCB | task | ISR entry | ISR exit |
+|---|---|---|---|---|
+| `$45` | `$1E900` | XP1I | `$F07EE6` | `$F07F08` |
+| `$46` | `$1EB00` | XP2I | `$F074E6` | `$F07508` |
+| `$47` | `$1ED00` | XP3I | `$F06AE6` | `$F06B08` |
+| `$48` | `$1EF00` | XP4I | `$F060CE` | `$F060F0` |
+| `$4A` | `$1F100` | IO1I | `$F05DD6` | `$F05E4C` |
+| `$41` | `$1F300` | RDHC | `$F04930` | `$F050FC` |
+
+Exactly the documented BIM vector assignments, now read from the structure the kernel actually
+uses rather than from the CR/VR writes that establish them.
+
+**Refinement to my own claim.** I reported "four fields, four distinct offsets" for XP4I. With the
+exit column read, it is **five fields and four distinct values** — entry and exit both shift by
+`−$18`, which they must, being two points in the same ISR:
+
+| field | offset |
+|---|---:|
+| task body | `−$1E` |
+| `!IDV` ISR entry | `−$18` |
+| `!IDV` ISR exit | `−$18` |
+| saved resume PC | `+$6` |
+| service-loop guard | `+$2` |
+
+The conclusion is unchanged and slightly better supported: **four mutually inconsistent offsets
+across five fields**, where a relocated or compiled copy would show one. But "four fields, four
+offsets" overstated the independence of the measurements, since two of them were never going to
+disagree.
