@@ -16096,3 +16096,31 @@ So `!VCT[$2D]` reads `$BF` because a page-allocator operation with `a6` pointing
 page cleared bit 6 of a byte the fill loop had already set to `$FF`. Not a vector tag, not a
 uniform stamp, and visible only by coincidence of ordering — which is why it looked anomalous in a
 table where every other byte means something.
+
+## Testing "the XP tasks work, RDHC is stuck" against all four channels
+
+That claim was made from XP1I alone. Driving each channel in turn with tracing on:
+
+| driven | SGSEM | WAIT | tasks appearing in the ring |
+|---|---:|---:|---|
+| XP1I | 4 | 5 | XP1I |
+| XP2I | 4 | 5 | XP2I |
+| XP3I | 4 | 5 | XP3I |
+| **XP4I** | **3** | **4** | XP4I, **plus leftover IO1I and RDHC boot records** |
+
+**The claim holds** — all four tasks signal semaphores and re-wait, so none of them is stuck in the
+way RDHC is. XP1I, XP2I and XP3I are indistinguishable: 4 + 5 = 9 events, exactly filling and
+wrapping the nine-record ring.
+
+**XP4I produces measurably less.** Its 3 + 4 = 7 events leave two boot-time records unoverwritten,
+which is why IO1I and RDHC still appear. Fewer service events in the same 150 M cycles.
+
+That is a **sixth** measured XP4I difference, and the first observed in *behaviour under load*
+rather than in addresses or static counts. It also corroborates the static finding from the
+execution side: XP4I lacks the two `btst #$b` (bit 11) tests its siblings have, so it takes fewer
+branches through the service path, and it duly generates fewer events.
+
+Static reference counts and runtime event counts now agree that XP4I is not merely relocated but
+functionally trimmed. Worth noting the test was run because a claim built on one task should be
+checked against the other three — and the check both confirmed the claim and found something the
+original measurement could not have shown.
