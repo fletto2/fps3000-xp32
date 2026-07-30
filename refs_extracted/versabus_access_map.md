@@ -13212,3 +13212,40 @@ exception table at `$F0A23A` are the obvious candidates, most of which `disasm.p
 scans in some form.
 
 Run the control with `FPS3K_DIS_START` / `FPS3K_DIS_END` / `FPS3K_DIS_OUT`.
+
+## What "49.6% coverage" actually means (2026-07-30)
+
+This project has repeatedly described the application region as about half decoded, with the
+implication that the other half is un-understood code. Checking that reading:
+
+| artifact | code bytes | data bytes |
+|---|---|---|
+| `fps3k.asm` (the file readers are pointed at) | 22,980 | 25,012 |
+| `fps3k_custom.asm` (current `disasm.py` output) | 23,962 | 24,018 |
+
+**The region is roughly half data by construction**, so 49.6% coverage is not a 50% gap. It is
+close to the share of the region that is code at all.
+
+### An apparent over-decode that was nothing of the sort
+
+`disasm.py` decodes 23,818 bytes as code while `code_map.json` classifies 22,588 as code —
+**105.4%**, which looks like a disassembler decoding data as instructions. It is not, for two
+reasons, and both were mistakes I made before checking:
+
+1. **The comparison is circular.** `code_map.json` is built *from* `fps3k.asm`, which descends
+   from `disasm.py`. It cannot independently validate that disassembler's coverage; it can only
+   measure disagreement between two artifacts in the same lineage.
+2. **The disagreement is entirely jump tables.** The 982 differing bytes fall in 96 runs, and
+   **77% start with a `jmp`/`rts`/`nop` opcode**; every 2-byte run is `$4E75` = `rts`, the
+   slot-0 no-op entries. The largest runs are exactly the dispatch tables — `$F05106`-`$F05141`
+   (the 16-entry chassis-op table) and five 44-byte runs at `$F05BA6`, `$F065E6`, `$F06FFE`,
+   `$F079FE`, `$F083FE` (the `PanelStatusDispatch` copies).
+
+A `jmp d16(pc)` table is **simultaneously code and a table**. One file renders it as
+instructions, the other as `DC.W`. Neither is wrong and neither is stale — so the "982 bytes
+behind" reading, which is where this started, is also withdrawn.
+
+**Net:** there is no drift-attributable undecoded-code gap in the application region, and the
+`105.4%` anomaly dissolves. What remains genuinely unknown is how much of the ~24 KB classified
+as data is truly data — and no artifact in this lineage can answer that, because they all
+inherit the same decisions.
