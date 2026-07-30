@@ -14322,3 +14322,29 @@ That is the convention documented from the 29-of-33 census, now observed being *
 internal caller enters at the `bsr` entry and pushes SR itself, while the directive path enters
 two bytes later because the trap already stacked it. The census established the pattern from the
 table side; this is the call side, in code the census never examined.
+
+### The `rts`-dispatch idiom is exhausted as an entry-point source
+
+The `move.l (a0),-(a7)` / `rts` idiom — the return stack used as an indirect jump, and the reason
+linear control-flow following loses the thread in this kernel — was the obvious remaining source
+of entry points for the orphaned subgraphs. Searching every `rts` in `$F00000`-`$F04487` for a
+preceding push of a memory longword finds **exactly two sites**:
+
+| site | dispatch through | status |
+|---|---|---|
+| `$F001D0` | `(a0)` — the TRAP #0 jump table | already the tool's main seed source |
+| `$F00D52` | the longword at **`$0C36`** | **dormant** |
+
+`$0C36` reads `$00F000BC` after a boot, which is a real kernel address — but `$F000BC` is
+**zero-filled** (the 27 nonzero bytes in that 100-byte span are the `!VCT` marker at `$F0011A`,
+past the zeros). And measured over a full boot, **`$F00D52` executes 0 times and `$F000BC` 0
+times**. So it is a dispatch vector initialised to a placeholder and never taken.
+
+**That closes the avenue.** The idiom yields no new entry points: one site is already exploited,
+the other is inert. The kernel's orphaned 18.5% is therefore *not* reached through the return-stack
+dispatch, which leaves computed jumps this tool does not model, or genuinely dead code in this
+build — and distinguishing those now needs execution on a configuration that exercises more of the
+kernel, not more static analysis.
+
+Worth stating because the idiom was the leading hypothesis for where the missing entry points
+were: it was a good hypothesis, it is now tested, and it is empty.
