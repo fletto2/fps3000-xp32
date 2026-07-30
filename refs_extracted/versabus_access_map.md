@@ -15624,3 +15624,37 @@ examined individually.
 For the communications map this settles a question that could otherwise stay open indefinitely:
 **there are no undiscovered RAM-mediated channels between the SBC and the chassis.** `$10AA` in,
 `$1062` out, and nothing else.
+
+## The instrumentation mask has TEN hooks, and the marker convention predicted the last two
+
+Bit 7 of the `$0C34` word — reached as `btst.b #$7,$c35.w` on the low byte — gates **two** further
+trace points, both in the connect-interrupt-vector region and both ending in `rte`:
+
+```
+F022C0  btst.b #$7,$c35.w      F022D0  btst.b #$7,$c35.w
+F022C6  beq.b  $f022ce         F022D6  beq.b  $f022de
+F022C8  bsr.w  $f01688         F022D8  bsr.w  $f01688
+F022CC  dc.w   $EE07           F022DC  dc.w   $DD07
+F022CE  rte                    F022DE  rte
+```
+
+Same five-instruction shape as the other eight. **The markers are `$EE07` and `$DD07` — BCD low
+byte `07`, matching the gating bit exactly.** That was a prediction: the convention was derived
+from eight hooks numbered 8-15, and it holds on two sites found afterwards by a completely
+different route (a read-only RAM sweep), which is the strongest form of confirmation available
+without hardware.
+
+**The marker word is now fully decoded across ten sites:**
+
+| field | meaning |
+|---|---|
+| low byte, BCD | **the gating bit number** — `$08`-`$15` for the eight, `$07` for these two |
+| high byte | **distinguishes sites sharing one bit** (`$EE07` vs `$DD07`) **and** selects the record format via the `$EFFF` compare |
+
+So `$0C34` is a **ten-hook** instrumentation mask, not eight: bits 8-15 with one trace point each,
+and bit 7 with two. All ten write to the same nine-record ring, all ten self-identify, and all ten
+are disabled in the shipped build.
+
+That the high byte does double duty — site discriminator *and* format selector — is why it varies
+across `$DD`, `$EE`, `$FD`, `$AA`, `$FF` rather than being constant, which looked arbitrary when
+only the low byte's meaning was known.
