@@ -570,6 +570,20 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the walker hard-codes a skip of $1FFF0 -------------------------------
+    check('$F098FC writes each address its own value with post-increment',
+          d[0xF098FC-0xF00000:0xF098FE-0xF00000] == b'\x20\xc8')
+    check('...and explicitly tests for $1FFF0, skipping 4 bytes past it',
+          d[0xF098FE-0xF00000:0xF0990A-0xF00000]
+          == b'\xb1\xfc\x00\x01\xff\xf0\x66\x04\x41\xe8\x00\x04')
+    check('so $1FFF0-$1FFF3 is protected by BOTH memory tests',
+          d[0xF089A4-0xF00000:0xF089AC-0xF00000]
+          == b'\xb3\xfc\x00\x01\xff\xf0\x6d\x20')
+    check('$1FFE2/$1FFE4/$1FFE6 lie in longwords the walker overwrites',
+          all((a2 & ~3) in (0x1FFE0, 0x1FFE4) for a2 in (0x1FFE2, 0x1FFE4, 0x1FFE6)))
+    check('$1FFF2 lies inside the skipped longword',
+          (0x1FFF2 & ~3) == 0x1FFF0)
+
     # --- the address-line walker DOES cover $1FFE0-$1FFFF ---------------------
     check('$F098FC writes each address its own value (address-line idiom)',
           d[0xF098FC-0xF00000:0xF09900-0xF00000][:2] in (b'\x20\x88', b'\x21\x88',

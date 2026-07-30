@@ -1528,6 +1528,55 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### RESOLVED: the register block is `$1FFF0-$1FFF3`, and three of my four candidates are RAM
+
+The address-line walker settles this, because it contains a hard-coded special case:
+
+```
+$F098FC:  move.l a0,(a0)+          ; write each address its own value
+$F098FE:  cmpa.l #$1fff0,a0        ; did we just reach $1FFF0?
+$F09904:  bne    $F0990A
+$F09906:  lea    $4(a0),a0         ; YES -- SKIP THIS LONGWORD ENTIRELY
+$F0990A:  cmpa.l a0,a1  ;  bne loop
+```
+
+**A branch in the middle of a tight loop, coded solely to avoid one longword.** That is far
+stronger evidence than the `-$20` range back-off in the pattern test: nobody adds a special
+case to a memory walker to protect scratch. `$1FFF0-$1FFF3` is protected by **both** memory
+tests, independently.
+
+The corollary is the part that corrects me. The walker writes **longwords**, so every
+4-byte-aligned slot it does *not* skip has its whole longword overwritten and read back:
+
+| address | walked? | consequence |
+|---|---|---|
+| `$1FFE0`-`$1FFEF` | **yes** (`E0, E4, E8, EC`) | must read back arbitrary written values → **behaves as RAM** |
+| **`$1FFF0`-`$1FFF3`** | **no — explicitly skipped** | the register block |
+| `$1FFF4`-`$1FFFF` | **yes** (`F4, F8, FC`) | behaves as RAM |
+
+So of the four write-only locations I proposed as registers two entries above:
+
+- **`$1FFF2` survives** — it lies inside the skipped longword, is written and never read, and
+  is protected by both tests. The VERSAmodule register block really is **larger than the two
+  documented bytes**: it is `$1FFF0-$1FFF3`.
+- **`$1FFE2`, `$1FFE4`, `$1FFE6` are retracted.** All three sit in longwords the walker
+  overwrites with each address's own value and then verifies. A hardware register that
+  returned a written address would be indistinguishable from RAM, and one that did not would
+  **fail the self-test and hang the machine**. They must behave as RAM.
+
+That leaves `$1FFE2`'s `lsr #2` vector-number write — the single strongest-looking case in my
+original argument — as a **write to RAM that nothing reads**. Either it is dead code, or its
+consumer is something I have not traced; what it is *not* is a hardware vector register, and
+the "signature of a vector register" reasoning was wrong to treat a suggestive value as
+decisive over an access pattern.
+
+**The methodological point.** My earlier inference used one test's exclusion as corroboration
+without asking whether any other code contradicted it. Two rounds later the contradiction
+appeared, and then resolved into a sharper answer than either version — but only because the
+question "what else touches this range?" got asked. *A hypothesis supported by one piece of
+evidence should be checked against the code that would refute it, not just the code that
+suggested it.*
+
 ### Static map vs runtime: what each can see, and one claim it qualifies
 
 Diffing the 59-address scoped map against a runtime access log (`FPS3K_ACCESSLOG`,
