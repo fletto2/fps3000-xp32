@@ -35,6 +35,16 @@ DIRECTIVE_NAMES = {
 }
 
 
+# The TRAP #1 directive table.  Names from Motorola's TR1.EQ/STR.EQ, which
+# number directives in DECIMAL -- the reason they went unmatched for so long.
+TRAP1_TABLE, TRAP1_N = 0xF003D8, 77
+TRAP1_NAMES = {
+    0x01: "GTSEG", 0x0B: "CRTCB", 0x0D: "START", 0x0F: "TERM", 0x10: "TERMT",
+    0x11: "SUSPND", 0x12: "RESUME", 0x13: "WAIT", 0x29: "ATSEM", 0x2A: "WTSEM",
+    0x2B: "SGSEM", 0x2D: "CRSEM", 0x43: "RSTATE", 0x4C: "CNCTIRQ",
+}
+
+
 def valid(a):
     return START <= a < END and (a & 1) == 0
 
@@ -69,6 +79,22 @@ def seed_set(rom):
                     ">H", rom[t - 2 - BASE:t - BASE])[0] == 0x40E7:
                 seeds.add(t - 2)
                 names.setdefault(t - 2, f"{names[t]}_bsr")
+
+    # The TRAP #1 directive table.  77 entries of 4 bytes covering directives
+    # $00-$4C; the dispatcher at $F00310 range-checks with `bgt #$130`, so
+    # d0 == $130 passes and $4C is the last valid entry, not an overflow.
+    #
+    # w0 is a SELF-RELATIVE SIGNED offset -- `adda.w (a2),a2` at $F0036A --
+    # so the handler is the entry's own address plus w0.  Reading it as an
+    # absolute address yields plausible-looking garbage.
+    for i in range(TRAP1_N):
+        e = TRAP1_TABLE + 4 * i
+        w0 = struct.unpack(">h", rom[e - BASE:e - BASE + 2])[0]
+        h = e + w0
+        if valid(h):
+            seeds.add(h)
+            nm = TRAP1_NAMES.get(i)
+            names.setdefault(h, f"TRAP1_{nm}" if nm else f"TRAP1_dir_{i:02X}")
 
     # NOT a vector table.  The reset overlay aliases ROM at 0 only so the
     # 68000 can fetch SSP from +0 and PC from +4; measured, +4 = $F09C00 and

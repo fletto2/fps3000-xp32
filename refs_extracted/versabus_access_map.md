@@ -13099,3 +13099,44 @@ the check that failed for three days because the source numbers directives in de
 It also identifies the field: **`TCB+$2C` is the task state word**, bit 9 = suspended,
 bit 14 = waiting. The full handler table for all 77 directives is reproducible from
 `$F003D8` with the offset arithmetic above.
+
+## RETRACTION: the three-BIM model derails the boot (2026-07-30)
+
+`cards/02_VBUS_XLTR.JPG` shows three `MC68153P` at positions F/G, H/J, K/L, and the card list
+says "V-BUS XLTR 3 BIMS". That hardware fact is not in doubt. **The model of it was wrong, and
+the measurement that appeared to confirm it was reading a crashed machine.**
+
+Presenting three BIMs (bit 4 of `STATUS_IRQ` set at reset) gives, at 150 M cycles:
+
+| config | `FPS3K_BIMS=2` | `FPS3K_BIMS=3` |
+|---|---|---|
+| `XPIRQ=5 DMA10AA=2` | final PC `$F00FD0` (RTOS idle) | final PC **`$011758`** |
+| `XPIRQ=5,6 MBOX=20010000` | final PC `$F0A5AE` | final PC **`$011758`** |
+
+`$011758` is **RAM**. In the three-BIM runs the machine leaves ROM entirely, vector `$128`
+reads `$00000128` instead of `$F05DD6`, and TCBIO1I's ISR executes **0** times against 219
+with two BIMs.
+
+### The check that "confirmed" three BIMs was measuring a corpse
+
+This file previously recorded: *"the three-BIM correction also removed a spurious interrupt
+storm (730 → 1 vector writes)"*. That comparison was invalid. `FPS3K_VECWATCH=post` counts
+vector writes **after boot completes**, and with three BIMs boot never completes — so the
+counter reports 0 or 1 because nothing is ever counted, not because nothing is wrong.
+
+**Storm-versus-clean was really crash-versus-run.** The harness check asserting
+`vecwrites < 10` under three BIMs passed for precisely the wrong reason.
+
+The general lesson, and it has now bitten this project repeatedly in different costumes: **a
+metric that a crash drives to zero cannot distinguish health from death.** Any such check must
+first assert the machine is alive. The replacement checks assert final PC is in ROM before
+believing any counter derived from that run.
+
+### Status
+
+Bit 4 of `STATUS_IRQ` is **not** simply "a third BIM is fitted". That reading was inferred
+from phase `$1600`'s 24-versus-16-register walk alone, and it cannot be the whole story if
+setting it derails the boot. The model therefore defaults to **two** BIMs — the configuration
+that demonstrably boots — with `FPS3K_BIMS=3` retained for whoever investigates the storm.
+
+This is an **open modelling defect**, not a settled question: the real card carries three.

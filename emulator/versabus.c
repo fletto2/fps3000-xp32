@@ -293,10 +293,28 @@ void versabus_init(FILE *trace_log, int verb) {
      * → board_status = 0x3F11_xx_xx (xx = unused upper bytes set 0). */
     board_status = 0x3F110000;
     vmod_ctrl = 0;
-    /* Three MC68153P BIMs are fitted -- photographed on 02_VBUS_XLTR.JPG,
-     * positions F/G, H/J, K/L, and the card list says "V-BUS XLTR 3 BIMS". */
-    xltr.bim3_present = !(getenv("FPS3K_BIMS")
-                          && strtoul(getenv("FPS3K_BIMS"), NULL, 0) == 2);
+    /* Three MC68153P BIMs are physically fitted -- photographed on
+     * 02_VBUS_XLTR.JPG at positions F/G, H/J, K/L, and the card list says
+     * "V-BUS XLTR 3 BIMS".  THE MODEL STILL DEFAULTS TO TWO, because
+     * presenting three is measurably broken:
+     *
+     *   FPS3K_XPIRQ=5 FPS3K_DMA10AA=2, 150 M cycles
+     *     bim3_present=0 -> final PC $F00FD0 (RTOS idle), vector $128 =
+     *                       $F05DD6, TCBIO1I ISR runs 219 times
+     *     bim3_present=1 -> final PC $011758 (EXECUTING IN RAM), vector
+     *                       $128 = $00000128, ISR runs 0 times
+     *
+     * A vector slot holding its own address is this project's known
+     * interrupt-storm signature: a re-entrant ISR walking the stack through
+     * the vector table.  So bit 4 of STATUS_IRQ is NOT simply "a third BIM
+     * is fitted" -- that reading is inferred from phase $1600's register
+     * walk alone, and it derails the boot in every XPIRQ-driven config.
+     *
+     * The photograph is not in doubt; the bit-4 semantics are.  Until the
+     * storm is understood, the default reproduces a machine that boots.
+     * FPS3K_BIMS=3 opts back in for anyone investigating it. */
+    xltr.bim3_present = (getenv("FPS3K_BIMS")
+                         && strtoul(getenv("FPS3K_BIMS"), NULL, 0) == 3);
     /* AP I/F: start with ready=1 (bit 14) so first read shows ready */
     apif.cmd_status = (1u << 14);
 }

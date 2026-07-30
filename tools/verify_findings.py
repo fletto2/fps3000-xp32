@@ -338,18 +338,36 @@ else:
                                    **env2}).stderr.count('[VECWATCH]')
     check('a plain boot makes exactly 4 post-boot vector writes (all benign)',
           vecwrites({}) == 4)
-    # THE OVERRUN WAS A TWO-BIM ARTEFACT.  Modelling the three MC68153s the card
-    # actually carries removes it entirely: measured 730 post-boot vector writes
-    # with FPS3K_BIMS=2 and ONE with the correct three.  So the interrupt storm
-    # this check documents was caused by our own misconfiguration, not by the
-    # $281 path.  Assert both halves -- the storm under the old config, and its
-    # absence under the correct one.
+    # RETRACTED: "the overrun was a two-BIM artefact, and modelling the three
+    # MC68153s the card carries removes it entirely (730 post-boot vector
+    # writes -> 1)".  That comparison was invalid.  VECWATCH=post only counts
+    # AFTER boot completes, and with three BIMs THE BOOT NEVER COMPLETES --
+    # measured final PC $011758, i.e. executing in RAM, in every configuration
+    # tried.  The "1" was a crashed machine being read as a healthy one.
+    #
+    # So the storm-vs-clean reading was really crash-vs-run.  Any check on a
+    # counter that a crash drives to zero must first assert the machine is
+    # still alive, which is what the final-PC assertions below do.
     _cfg281 = {'FPS3K_XPIRQ': '5,6', 'FPS3K_DMA10AA': '2',
                'FPS3K_MBOX': '20010000'}
+
+    def final_pc(env):
+        out = subprocess.run([EMU, '-rom', ROM, '-cycles', '150000000'],
+                             capture_output=True, text=True,
+                             env={**os.environ, **env}).stderr
+        m = re.search(r'final PC=([0-9A-F]+)', out)
+        return int(m.group(1), 16) if m else -1
+
     check('with TWO BIMs the $281 config overruns the stack into the vectors',
           vecwrites({**_cfg281, 'FPS3K_BIMS': '2'}) > 500)
-    check('...and with the correct THREE BIMs the overrun does not occur',
-          vecwrites(_cfg281) < 10)
+    check('...and that machine is still executing in ROM, so the count is real',
+          final_pc({**_cfg281, 'FPS3K_BIMS': '2'}) >= 0xF00000)
+    check('presenting THREE BIMs derails the boot into RAM (open defect)',
+          final_pc({**_cfg281, 'FPS3K_BIMS': '3'}) < 0xF00000
+          and final_pc({'FPS3K_XPIRQ': '5', 'FPS3K_DMA10AA': '2',
+                        'FPS3K_BIMS': '3'}) < 0xF00000)
+    check('...so the model defaults to two BIMs, which does boot',
+          final_pc({'FPS3K_XPIRQ': '5', 'FPS3K_DMA10AA': '2'}) >= 0xF00000)
 
     # --- the firmware never reads never-written DRAM ---------------------
     with tempfile.TemporaryDirectory() as _td3:
