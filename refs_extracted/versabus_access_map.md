@@ -1563,6 +1563,40 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### A warning that overstated its case: `FPS3K_RESP` is NOT ignored when `FPS3K_SEQ` is set
+
+Running the write-once experiment surfaced this warning:
+
+```
+[WARN] FPS3K_RESP and FPS3K_SEQ both set: FPS3K_SEQ wins, FPS3K_RESP is IGNORED
+```
+
+**It is false.** Logging every write to `XLTR_MODE0` with both variables set shows the model
+delivering codes from *both* sources:
+
+| value at MODE0 | source |
+|---|---|
+| `$0001`, `$0426` | the scripted sequence (`01`, `26` with the valid bit) |
+| **`$0094`, `$0494`** | **`FPS3K_RESP=0x94`**, the latter with the valid bit |
+
+The sequence wins only **while it has entries**; once exhausted, `FPS3K_RESP` is what continues
+to be delivered. That is a meaningful difference, because a long-running experiment spends most
+of its time in the exhausted state.
+
+**This cost real analysis time.** Several entries above attribute the bit-7 dispatches to
+`FPS3K_RESP=0x94`, and on seeing this warning I began doubting those conclusions — they were
+correct, and the warning was wrong. *A diagnostic that overstates a conflict is as misleading as
+one that reports the wrong decision*, which is a lesson this codebase already learned once: the
+comment beside the CHANNEL_SELECT arming log records exactly that defect, where "arm=yes" was
+printed for 32,967 beacon writes that armed nothing.
+
+**Corrected**, in both places it appears — the inline warning in `versabus.c` and the conflict
+table in `fps3k_sbc.c`, which now carries a per-pair qualifier. *The other three pairs in that
+table are left exactly as written*: `FPS3K_CHSEL_RD`/`FPS3K_SEQ`,
+`FPS3K_RESP`/`FPS3K_INJECT`, `FPS3K_MBOX`/`FPS3K_APIF_LEGACY` have **not** been measured, and
+weakening an unverified warning would be the same error in the opposite direction. Default RAM
+digest unchanged (`f72fb0a5…`).
+
 ### `FPS3K_POKEONCE`: a write-once release — RDHC escapes, then halts on the *next* command
 
 The read-override experiment established the mechanism and the wrong tool. `FPS3K_POKEONCE`

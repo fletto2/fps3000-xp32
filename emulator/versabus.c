@@ -1580,8 +1580,18 @@ static void panel_resp_tick(uint32_t cycles) {
             static int warned;
             if (!warned && getenv("FPS3K_RESP")) {
                 warned = 1;
-                fprintf(stderr, "[WARN] FPS3K_SEQ overrides FPS3K_RESP -- "
-                                "the scripted code wins; FPS3K_RESP ignored\n");
+                /* Overstated in an earlier revision as "FPS3K_RESP ignored",
+                 * which is false and cost real analysis time: with both set,
+                 * MODE0 was measured carrying $0001 and $0426 (scripted) AND
+                 * $0094 and $0494 (FPS3K_RESP, the latter with the valid bit).
+                 * The sequence wins only WHILE it has entries; once exhausted
+                 * the FPS3K_RESP code is what continues to be delivered.  A
+                 * diagnostic that overstates its case is as misleading as one
+                 * that reports the wrong decision -- the same defect this file
+                 * already records for the "arm=yes" logging. */
+                fprintf(stderr, "[WARN] FPS3K_SEQ and FPS3K_RESP both set: the "
+                                "scripted codes are delivered first, then "
+                                "FPS3K_RESP once the sequence is exhausted\n");
             }
             panel_resp_code = sc;
         }

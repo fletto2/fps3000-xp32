@@ -810,19 +810,36 @@ int main(int argc, char **argv) {
      *
      * Each pair below is (loser, winner, what is shared). */
     {
-        static const char *const conflicts[][3] = {
-            { "FPS3K_RESP",     "FPS3K_SEQ",     "the MODE0 response code" },
-            { "FPS3K_CHSEL_RD", "FPS3K_SEQ",     "the CHANNEL_SELECT readback" },
-            { "FPS3K_RESP",     "FPS3K_INJECT",  "MODE0 + the BIM0 ch0 request" },
-            { "FPS3K_MBOX",     "FPS3K_APIF_LEGACY", "mailbox.host_status" },
+        /* The fourth column qualifies the claim.  RESP/SEQ was previously
+         * reported as "IGNORED", which is FALSE and cost real analysis time:
+         * with both set, MODE0 was measured carrying $0001 and $0426 (scripted)
+         * AND $0094 and $0494 (FPS3K_RESP, the latter with the valid bit).  The
+         * sequence wins only WHILE it has entries; once exhausted, FPS3K_RESP
+         * is what continues to be delivered.  The other three pairs are left as
+         * written -- they have not been measured, and weakening an unverified
+         * warning is as wrong as overstating one. */
+        static const char *const conflicts[][4] = {
+            { "FPS3K_RESP",     "FPS3K_SEQ",     "the MODE0 response code",
+              "the scripted codes are delivered FIRST, then FPS3K_RESP once the "
+              "sequence is exhausted -- not ignored" },
+            { "FPS3K_CHSEL_RD", "FPS3K_SEQ",     "the CHANNEL_SELECT readback", NULL },
+            { "FPS3K_RESP",     "FPS3K_INJECT",  "MODE0 + the BIM0 ch0 request", NULL },
+            { "FPS3K_MBOX",     "FPS3K_APIF_LEGACY", "mailbox.host_status", NULL },
         };
-        for (size_t k = 0; k < sizeof conflicts / sizeof conflicts[0]; k++)
-            if (getenv(conflicts[k][0]) && getenv(conflicts[k][1]))
+        for (size_t k = 0; k < sizeof conflicts / sizeof conflicts[0]; k++) {
+            if (!(getenv(conflicts[k][0]) && getenv(conflicts[k][1])))
+                continue;
+            if (conflicts[k][3])
+                fprintf(stderr, "[WARN] %s and %s both set (shared state: %s): %s\n",
+                        conflicts[k][0], conflicts[k][1], conflicts[k][2],
+                        conflicts[k][3]);
+            else
                 fprintf(stderr,
                         "[WARN] %s and %s both set: %s wins, %s is IGNORED "
                         "(shared state: %s)\n",
                         conflicts[k][0], conflicts[k][1], conflicts[k][1],
                         conflicts[k][0], conflicts[k][2]);
+        }
     }
     fprintf(stderr, "[init] ROM loaded: %zu bytes from %s\n", n, rom_path);
 
