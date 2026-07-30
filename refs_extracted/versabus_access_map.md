@@ -1473,6 +1473,43 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### What is actually left: ~3.6 KB of distinct, unannotated code
+
+With the replication mapped, the remaining work can be stated precisely. Marking
+every byte that is either a replicated copy or within 64 bytes of a `;###` note,
+and taking the residual spans of 128 bytes or more:
+
+| span | bytes | region | note |
+|---|---|---|---|
+| `$F06692-$F068A7` | 534 | **XP4I** | genuinely distinct — see below |
+| `$F09F0E-$F0A145` | 568 | RTOS init | |
+| `$F08986-$F08B5B` | 470 | init / self-test | |
+| `$F05F40-$F06107` | 456 | **XP4I** | genuinely distinct |
+| `$F04F7A-$F050F7` | 382 | RDHC | |
+| `$F09C40-$F09D97` | 344 | RTOS init | |
+| `$F04D8E-$F04EE3` | 342 | RDHC | |
+| `$F05542-$F05651` | 272 | RDHC | |
+| `$F04970-$F04A6D` | 254 | RDHC | |
+
+**RDHC accounts for ~1,250 bytes across four spans** — the largest single owner,
+consistent with it being both the biggest region and the least executed at 7%.
+
+**The XP3I and XP2I spans on the first pass were false entries.** `$F06940` and
+`$F07340` are exactly `$A00` apart and differ in only 40 of 480 bytes — 8%, the
+template-patch rate — so they are copies the replication marking had missed.
+Removing them is what leaves the list above.
+
+**XP4I's two spans are real.** Tested at `$A00`, `$A00-$18` and `$A00+$18`
+against XP3I, the best match still differs in 52% of bytes. That is consistent
+with what was established earlier: XP4I is not a clean template copy — it lacks
+the bit-11 sub-case, carries its own `$8020` MODE1 write, and its dispatch table
+sits `$18` off the grid. Roughly a kilobyte of XP4I is genuinely its own code.
+
+So the honest remaining backlog is **about 3.6 KB of distinct, unannotated code**,
+concentrated in four places: RDHC's body, RTOS init, the self-test area around
+`$F08986`, and XP4I's divergent regions. Everything else in the 25 KB is either
+annotated, replicated, or both.
+
 ### The transfer primitive, replicated 15 times — and a matching gap in the model
 
 The original sweep also reported two **15-copy** groups, the highest replication

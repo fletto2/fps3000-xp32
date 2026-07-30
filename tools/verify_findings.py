@@ -348,6 +348,12 @@ else:
     check('$F096AC is a probe: read then 4 NOPs then rts, value discarded',
           d[0x96AC:0x96B8].hex().upper() == '30114E714E714E714E714E75')
 
+    check('XP3I/XP2I 480-byte spans are template copies (8% patch rate)',
+          sum(1 for i in range(480) if d[0x6940+i] != d[0x7340+i]) == 40)
+    check("XP4I's spans are NOT copies at any grid offset (>40% differ)",
+          min(sum(1 for i in range(400) if d[0x6940-o+i] != d[0x6940+i])
+              for o in (0xA00, 0xA00-0x18, 0xA00+0x18)) > 160)
+
     check('the transfer primitive is replicated 15 times for each command',
           d.count(d[0x56C8:0x56C8+52]) == 15 and d.count(d[0x5742:0x5742+50]) == 15)
     check('$F056C8 issues $8004 and $F05742 issues $8005, both polling bit 14',
