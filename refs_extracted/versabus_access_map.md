@@ -1563,6 +1563,48 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### VALIDATED IN EXECUTION: op `$B` returns `$0010`, exactly as derived
+
+The whole chassis protocol was derived statically. Driving it settles it.
+
+`FPS3K_RESP=0x94 FPS3K_XPIRQ=6 FPS3K_SEQ="0B:0000"` runs chassis op `$B` — documented as
+*"return the staging base `$10010`"* — and the access log, which records PCs, shows the
+complete round trip:
+
+```
+W 2 000E74 00000010  from PC=F05018     ; op $B's handler stores its answer
+R 2 000E74 00000010  from PC=F04924     ; the reply path reads it
+W 2 FF0204 00000010  from PC=F04924     ; and ships it to CHANNEL_SELECT
+```
+
+**`$0010` is the high half of `$00010010`** — the staging base, returned a half at a time as
+command bit 6 selects. Every element of the derivation is confirmed by measurement:
+
+| derived statically | observed |
+|---|---|
+| handlers store their answer in `$0E74` | `$F05018` writes `$0010` |
+| `$F04924` ships `$0E74` to CHANNEL_SELECT | that exact read-then-write pair |
+| the value is the operation's result | `$0010` = the documented `$10010`, high half |
+
+**This is the measurement the retracted `$0E74` entry never had.** The mailbox claim was
+reached by counting writes with a broken detector; this reading was reached by tracing the
+data path and is now confirmed by watching the datum move. *The difference between the two is
+not care — I was careful both times — it is that one made a prediction that execution could
+check and the other did not.*
+
+**One correction to the previous entry.** I wrote that `$F04910`-`$F04924` was a single reply
+sequence. The trace shows `$F04910` executes **zero** times in this run while `$F04924`
+executes once, so they are separate paths: the MODE0-acknowledge at `$F04910` belongs to the
+bit-7=1 dispatcher (`$F0495C`, 468 entries here), and the result write is reached
+independently. The reply consists of the CHANNEL_SELECT write; the acknowledge is a different
+concern reached by a different route.
+
+*And the `[REPLY]` log I added does not reliably catch it* — it fired once, on a panel-code
+write from another path, and missed the real result. The gate was copied from the arming logic,
+and MODE1 bit 12 is a beacon filter, not a reply marker. The model cannot see the PC, so the
+reliable observation is `FPS3K_ACCESSLOG`. That caveat is now recorded in `versabus.c` beside
+the log rather than left for someone to trip over.
+
 ### The emulated chassis is half-duplex: it never reads the SBC's replies
 
 The protocol mapping has a direct consequence for the model, and it is a real gap.

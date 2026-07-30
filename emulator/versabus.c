@@ -923,7 +923,17 @@ static void xltr_write(uint32_t addr, uint16_t val) {
              * its memory, but cannot READ it: the return path is not wired.
              *
              * Capturing it here changes no behaviour and makes the reply
-             * visible, which is the prerequisite for ever wiring it. */
+             * visible, which is the prerequisite for ever wiring it.
+             *
+             * CAVEAT, measured: this gate does NOT reliably isolate the reply.
+             * It is copied from the arming logic, and the actual result write
+             * at $F04924 does not satisfy it -- driving op $B logged one
+             * "[REPLY] $0259 (op $4)" which is a panel-code write from a
+             * different path, while the real result ($0010) went unlogged.
+             * The model cannot see the PC, and MODE1 bit 12 is a beacon
+             * filter rather than a reply marker.  To observe replies reliably
+             * use FPS3K_ACCESSLOG, which records the PC: the result write is
+             * the one from $F04924. */
             if (getenv("FPS3K_LOGCHASSIS") && !(xltr.mode0 & MODE0_RESP_ACK)
                 && (xltr.mode1 & 0x1000))
                 fprintf(stderr, "[REPLY] SBC -> chassis: $%04X (op $%X)\n",
