@@ -15347,3 +15347,42 @@ What is established: **the path is reachable, the gate is the only guard, and `$
 Incidental find from the same trace: the SGSEM caller PC here is **`$F07E76`**, not the `$F07EAA`
 seen earlier — so **XP1I has at least two SGSEM call sites**, and the service loop this file
 described is one of several paths to the same directive.
+
+### RESOLVED with a writable poke: the derail is firmware behaviour, not our artifact
+
+The previous entry could not attribute the crash because `FPS3K_POKE` forces a location to *read*
+a constant. `FPS3K_POKEONCE` performs a genuine one-time **write** after boot, which removes that
+objection. Redone:
+
+```
+[POKEONCE] $010AE <- $0001 (one-time write)
+$10AE after the run: $00010000     <- the write persisted, behaving like real memory
+$10BE after the run: $08434303     <- was $00000000; the handler FILED a result
+final PC=C382008
+```
+
+So with a properly writable gate the machine **still derails**, and `$10BE` now holds a value the
+firmware wrote — exactly the field this project predicted would hold a task handle on a real
+machine. `$08434303` is not a plausible handle; it is what a failed lookup returned.
+
+The code explains it:
+
+```
+F08592  lea.l   $c(a7),a7        ; drop the parameter block
+F08596  movea.l $3c(a7),a3
+F0859A  move.l  d0,$10be(a2)     ; file the result -- NO STATUS CHECK
+F0859E  move.l  d1,$10ce(a2)
+F085AE  move.l  #$0,-(a3)        ; then write zeros through a pointer
+F085B4  move.l  #$0,-(a3)
+```
+
+**The RSTATE status is never examined.** That is unusual for this firmware: the documented
+`$26D`-`$271` pattern is `trap #1` → `cmpi.w #0,d0` → `beq` on success → panel command on failure,
+and every other traced directive site follows it. Here `d0` goes straight into `$10BE` and
+execution proceeds to pointer writes.
+
+**Conclusion, now supportable:** the firmware assumes the `USER` task exists whenever `$10AE` is
+set. It is not defensive about the handoff, because on a real machine nothing sets that gate
+except a CP program that has already connected itself. Forcing the gate without the counterparty
+is a state the firmware was never written to survive — which is a stronger statement than "it
+crashed", and it is only sayable because the writable poke ruled out the alternative.
