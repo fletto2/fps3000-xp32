@@ -550,6 +550,24 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- phase $19xx: bit 4 is the 16-bit-access enable ----------------------
+    check('$F09806 writes a longword then a WORD over its high half',
+          d[0xF09806-0xF00000:0xF0980C-0xF00000]
+          == b'\x20\x80\x30\x81\xb4\x90')
+    check('$F0981A writes XLTR_DATA_LO then reads the word at $400002',
+          d[0xF0981A-0xF00000:0xF09824-0xF00000]
+          == b'\x20\x80\x3d\x41\x02\x14\xb4\x68\x00\x02')
+    check('phase $1901 expects $AAAA5555 with bit 4 set, $1902 $55555555 without',
+          struct.unpack('>I', d[0xF097B2-0xF00000+2:0xF097B2-0xF00000+6])[0]
+              == 0xAAAA5555
+          and d[0xF097B8-0xF00000:0xF097BE-0xF00000]
+              == b'\x3d\x7c\x00\x10\x02\x16')
+    check('phase $1900 round-trips a full longword through $400000',
+          d[0xF09798-0xF00000:0xF0979C-0xF00000] == b'\x20\x80\xb0\x90')
+    check('the word-access rules gate on bit 4 AND bit 5 clear, not data_hi == 0',
+          open('emulator/fps3k_sbc.c').read().count(
+              'versabus_xltr_data_hi() & 0x30') == 2)
+
     # --- phase $18xx: bit 6 is transparent, all four combinations -----------
     for _ph, _at, _val, _probe in (('$1800', 0xF096E8, 0x40, 'read'),
                                    ('$1802', 0xF0972E, 0x40, 'write')):

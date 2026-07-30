@@ -80,6 +80,31 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- phase $19xx: bit 4 is the 16-bit-access enable ----
+ (0xF09806,'PHASE $19xx SPECIFIES BIT 4 OF $FF0216 AS THE 16-BIT-ACCESS ENABLE.'),
+ (0xF09806,'  This comparator writes a longword then a WORD over its high half:'),
+ (0xF09806,'    $1901  $216 = $10  ->  expect $AAAA5555  (word write TOOK EFFECT)'),
+ (0xF09806,'    $1902  $216 = $00  ->  expect $55555555  (word write IGNORED)'),
+ (0xF09806,'  and $F0981A does the read half at $400002:'),
+ (0xF09806,'    $1903  $216 = $10  ->  expect $5555  (chassis memory)'),
+ (0xF09806,'    $1904  $216 = $00  ->  expect $AAAA  (XLTR_DATA_LO, $FF0214)'),
+ (0xF09806,'  So with bit 4 clear the window is LONGWORD-ONLY: word writes are dropped'),
+ (0xF09806,'  and word reads are shadowed by the XLTR data register.  Phase $1900'),
+ (0xF09806,'  separately shows a full longword round-trips with $216 untouched.'),
+ (0xF09806,'  $FF0216 IS NOW FULLY ACCOUNTED FOR: bit 4 16-bit-access enable, bit 5'),
+ (0xF09806,'  chassis-memory BERR enable, bit 6 transparent, bit 7 AP I/F BERR enable.'),
+ (0xF09806,'  Its resting $C0 means: longword-only, chassis memory readable, AP I/F'),
+ (0xF09806,'  armed to fault.  Every bit established by a test.'),
+ (0xF09806,'  BUT KEYING THE EMULATOR ON BIT 4 ALONE BREAKS THE BOOT.  Word accesses'),
+ (0xF09806,'  happen with $216 = $00, $10, $20 AND $40, and the $20 case is phase'),
+ (0xF09806,'  $17xx\'s clr.w write probe WHICH MUST FAULT.  Bit 4 is clear there, so the'),
+ (0xF09806,'  word-write rule swallowed the write before it reached the bus-error gate.'),
+ (0xF09806,'  The old `data_hi == 0` was not a sloppy approximation -- it was what kept'),
+ (0xF09806,'  one rule from shadowing the other.  The real fault is structural: the'),
+ (0xF09806,'  BERR gate and the 16-bit mux are INDEPENDENT in hardware and SEQUENTIAL'),
+ (0xF09806,'  in the model.  The condition satisfying both is bit 4 clear AND bit 5'),
+ (0xF09806,'  clear -- `!(data_hi & 0x30)` -- with all three golden digests matching'),
+ (0xF09806,'  and phase $29xx reached.'),
  # ---- phase $18xx is a NEGATIVE specification ----
  (0xF096E8,'PHASE $18xx IS A NEGATIVE SPECIFICATION: bit 6 of $FF0216 is TRANSPARENT.'),
  (0xF096E8,'  All four phases require NO fault (beq, d1 == 0), across the full 2x2 of'),

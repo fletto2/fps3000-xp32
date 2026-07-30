@@ -9656,6 +9656,30 @@ loc_F097F6:
   f09804: 4e 75                   rts      
 
 loc_F09806:
+;### PHASE $19xx SPECIFIES BIT 4 OF $FF0216 AS THE 16-BIT-ACCESS ENABLE.
+;###   This comparator writes a longword then a WORD over its high half:
+;###     $1901  $216 = $10  ->  expect $AAAA5555  (word write TOOK EFFECT)
+;###     $1902  $216 = $00  ->  expect $55555555  (word write IGNORED)
+;###   and $F0981A does the read half at $400002:
+;###     $1903  $216 = $10  ->  expect $5555  (chassis memory)
+;###     $1904  $216 = $00  ->  expect $AAAA  (XLTR_DATA_LO, $FF0214)
+;###   So with bit 4 clear the window is LONGWORD-ONLY: word writes are dropped
+;###   and word reads are shadowed by the XLTR data register.  Phase $1900
+;###   separately shows a full longword round-trips with $216 untouched.
+;###   $FF0216 IS NOW FULLY ACCOUNTED FOR: bit 4 16-bit-access enable, bit 5
+;###   chassis-memory BERR enable, bit 6 transparent, bit 7 AP I/F BERR enable.
+;###   Its resting $C0 means: longword-only, chassis memory readable, AP I/F
+;###   armed to fault.  Every bit established by a test.
+;###   BUT KEYING THE EMULATOR ON BIT 4 ALONE BREAKS THE BOOT.  Word accesses
+;###   happen with $216 = $00, $10, $20 AND $40, and the $20 case is phase
+;###   $17xx's clr.w write probe WHICH MUST FAULT.  Bit 4 is clear there, so the
+;###   word-write rule swallowed the write before it reached the bus-error gate.
+;###   The old `data_hi == 0` was not a sloppy approximation -- it was what kept
+;###   one rule from shadowing the other.  The real fault is structural: the
+;###   BERR gate and the 16-bit mux are INDEPENDENT in hardware and SEQUENTIAL
+;###   in the model.  The condition satisfying both is bit 4 clear AND bit 5
+;###   clear -- `!(data_hi & 0x30)` -- with all three golden digests matching
+;###   and phase $29xx reached.
   f09806: 20 80                   move.l   d0, (a0)
 ;>>>> [R2/BOTH] Writing a 16-bit XP-32 XLTR data register (likely FF0214) during interface diagnostic initialization.
   f09808: 30 81                   move.w   d1, (a0)

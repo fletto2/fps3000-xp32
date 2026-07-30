@@ -486,7 +486,21 @@ static unsigned int m68k_read_memory_16_impl(unsigned int a) {
      * the chassis-routed window return XLTR_DATA_LO regardless of
      * what was written to chassis memory.  Phase 0x1900 stage 4
      * (F097F4+) verifies this. */
-    if (a == 0x400002 && (versabus_xltr_data_hi() == 0)) {
+    /* Phase $19xx names BIT 4, not "data_hi is zero":
+     *   $1903  $216 = $10  ->  expect chassis memory  ($5555)
+     *   $1904  $216 = $00  ->  expect XLTR_DATA_LO    ($AAAA)
+     * and $FF0216 RESTS AT $C0, so bit 4 is clear in normal service while
+     * data_hi != 0 -- the two conditions disagree exactly where it matters. */
+    /* Phase $19xx names BIT 4 as the 16-bit-access enable:
+     *   $1903  $216 = $10  ->  word read at $400002 gives chassis memory
+     *   $1904  $216 = $00  ->  it gives XLTR_DATA_LO
+     * but bit 4 ALONE is the wrong condition here, because this early return
+     * would then swallow the word probes of the BERR phases: $17xx sets $216 =
+     * $20 and requires a FAULT, and bit 4 is clear in that value.  `data_hi ==
+     * 0` used to avoid that by accident.  The two mechanisms are independent in
+     * hardware and only sequential in this model, so gate on bit 4 clear AND no
+     * BERR armed (bit 5 clear), which satisfies $19xx and $17xx together. */
+    if (a == 0x400002 && !(versabus_xltr_data_hi() & 0x30)) {
         return versabus_xltr_data_lo() & 0xFFFF;
     }
     if (versabus_is_device(a) && versabus_is_device(a+1)) {
@@ -522,7 +536,12 @@ static void m68k_write_memory_16_impl(unsigned int a, unsigned int v) {
     /* With XLTR_DATA_HI=0, word writes to chassis-window word $400000
      * are ignored (long writes still go through).  Phase 0x1900 stage 2
      * verifies this. */
-    if (a == 0x400000 && (versabus_xltr_data_hi() == 0)) {
+    /* Same bit, the write half: phase $1901 sets $216 = $10 and requires the
+     * word write to TAKE EFFECT ($AAAA5555); phase $1902 clears it and requires
+     * the write to be IGNORED ($55555555). */
+    /* Same reasoning as the $400002 read shadow above: bit 4 clear (16-bit
+     * access disabled) AND bit 5 clear (no bus error armed). */
+    if (a == 0x400000 && !(versabus_xltr_data_hi() & 0x30)) {
         return;
     }
     if (versabus_is_device(a) && versabus_is_device(a+1)) {

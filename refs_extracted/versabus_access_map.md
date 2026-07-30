@@ -1528,6 +1528,77 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Phase `$19xx`: bit 4 is the 16-bit-access enable — and why `data_hi == 0` worked
+
+The chassis-memory data-path group specifies **bit 4** (`$10`) of `$FF0216`, in four
+cases, using two comparators:
+
+```
+$F09806  move.l  d0,(a0)          ; write $55555555 at $400000
+$F09808  move.w  d1,(a0)          ;   then a WORD $AAAA over its high half
+$F0980A  cmp.l   (a0),d2          ; read the longword back
+
+$F0981A  move.l  d0,(a0)
+$F0981C  move.w  d1,$214(a6)      ;   write $AAAA to XLTR_DATA_LO
+$F09820  cmp.w   $2(a0),d2        ; read the WORD at $400002
+```
+
+| phase | `$FF0216` | expected | meaning |
+|---|---|---|---|
+| `$1901` | `$10` | `$AAAA5555` | word write **takes effect** |
+| `$1902` | `$00` | `$55555555` | word write **ignored** |
+| `$1903` | `$10` | `$5555` | word read gives **chassis memory** |
+| `$1904` | `$00` | `$AAAA` | word read gives **`$FF0214`** |
+
+So **bit 4 is a 16-bit-access enable**: with it clear the window is longword-only,
+word writes are dropped and word reads are shadowed by the XLTR data register. Phase
+`$1900` separately establishes that a **full longword round-trips** with `$216`
+untouched.
+
+That completes `$FF0216` as a control register: **bit 4** 16-bit-access enable,
+**bit 5** chassis-memory BERR enable, **bit 6** transparent, **bit 7** AP I/F BERR
+enable. Its resting value `$C0` therefore means: longword-only chassis access, chassis
+memory readable, AP I/F armed to fault. Every bit accounted for by a test.
+
+#### The correction, and why the original condition was right by accident
+
+The emulator keyed both behaviours on `versabus_xltr_data_hi() == 0`. Changing that to
+bit 4 — which is what the phase text says — **broke the boot**: phase `$29xx` was never
+reached and all three golden digests collapsed to a single value, the signature of an
+early hang.
+
+The width-aware access log shows why. Word accesses to the window happen with `$216`
+= `$00`, `$10`, `$20` **and `$40`** — and the `$20` case is phase `$17xx`'s `clr.w
+(a1)` **write probe, which must fault**. Bit 4 is clear in `$20`, so keying on bit 4
+alone made the word-write rule **swallow the write before it could reach the bus-error
+gate**. Phase `$17xx` then failed and took the boot with it.
+
+**`data_hi == 0` was not a sloppy approximation of bit 4 — it was the condition that
+kept one rule from shadowing the other.** The real fault is structural: in hardware the
+bus-error gate and the 16-bit-access mux are independent mechanisms, and in this model
+they are *sequential*, with the early return in the 16-bit path bypassing the BERR
+check entirely.
+
+The condition that satisfies both specifications is **bit 4 clear *and* bit 5 clear**:
+
+```c
+if (a == 0x400002 && !(versabus_xltr_data_hi() & 0x30)) ...   /* read shadow  */
+if (a == 0x400000 && !(versabus_xltr_data_hi() & 0x30)) ...   /* write ignore */
+```
+
+With `$10` the word access goes through; with `$00` it is dropped or shadowed; with
+`$20` or `$40` it falls through to the BERR path. All three golden digests match and
+the self-test reaches phase `$29xx`.
+
+*Note what changed and what did not.* At the resting value `$C0` the old condition let
+word accesses through and the new one drops them, so the model's behaviour **is**
+different — yet the digests are byte-identical, which means nothing in the golden
+configurations does a word access to that window outside the self-test. So this is a
+fidelity improvement with no observable effect today, and it will matter the first time
+a chassis conversation moves data by word. *A change that is provably more correct and
+provably invisible is worth recording as exactly that, rather than as a fix for a
+symptom.*
+
 ### Phase `$18xx` is a *negative* specification: bit 6 is transparent
 
 The remaining chassis-memory group tests **bit 6** (`$40`) of `$FF0216`, and every one
