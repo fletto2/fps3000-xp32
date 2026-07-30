@@ -1598,6 +1598,43 @@ The pattern across all of this is the session's recurring one, one level up: **t
 itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
 here changed what is known about the machine; it changed how much a passing suite is worth.
 
+### SETTLED: three MC68153P BIMs are physically fitted — the emulator models two
+
+The fifth XLTR tile finds them, unambiguously: **three `MC68153P` chips** (Motorola, date code
+8626A), stacked vertically in board positions F/G, H/J and K/L, with a resistor pack `R25` and
+**jumper blocks `E2` and `E3`** immediately beside them.
+
+**That closes a question this project raised from the firmware side and could not answer.**
+Phase `$1600` reads `$FF0218` bit 4 and walks either 16 or 24 BIM registers accordingly:
+
+| bit 4 | walk | machine |
+|---|---|---|
+| clear | `$FF0230`-`$FF024E`, 16 registers | **2 BIMs** — what the emulator presents |
+| **set** | `$FF0230`-`$FF025E`, 24 registers | **3 BIMs** — **what the card actually has** |
+
+**The hardware is a three-BIM card and the model presents a two-BIM one.** That is now a
+demonstrated misconfiguration rather than "a defensible choice that should be stated": the card
+list says "V-BUS XLTR 3 BIMS", the photograph shows three, and the firmware has a code path for
+exactly that case which never executes.
+
+**Concrete consequences:**
+
+- The emulator should set **`$FF0218` bit 4**. Phase `$1600` would then walk all 24 registers.
+- **`$FF025E` would stop being anomalous.** This project records "23 of the 24 are used; only
+  `$FF025E` (BIM2 VR3) is never touched" — an asymmetry that had no explanation until the bit-4
+  finding, and now has none left at all: it is untouched *because we configure a two-BIM
+  chassis*, and on the real card it is the third BIM's last vector register.
+- Any experiment relying on BIM2 is currently running against absent hardware.
+
+**And the jumper blocks are suggestive.** `E2` shows four jumper positions (`1-2`, `3-4`, `5-6`,
+`7-8`) directly beside the third BIM, with one position appearing bridged. A strap next to the
+third interrupter is exactly where a "third BIM present" configuration bit would come from — and
+`$FF0218` bit 4 is read, not written, by the firmware. *That is a hypothesis the photograph
+suggests rather than proves*; tracing the strap needs the board, not a picture of it.
+
+Also on this tile: white-labelled FPS PROMs `225-0069-001` and `225-0070`, and more green-wire
+rework.
+
 ### `MC26S10` on the XLTR: physical evidence for the arbitration the emulator omits
 
 A fourth XLTR tile finds parts that bear directly on a documented emulator gap:
