@@ -1528,6 +1528,41 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The `$FF0100` "gap" is unpopulated windows, and window 1 is skipped by design
+
+The AP I/F block reads as a uniform grid of `$20`-byte windows, index
+`N = (addr − $FF0000) / $20`:
+
+| N | range | populated as |
+|---|---|---|
+| 0 | `$FF0000-$FF001F` | host / bulk link |
+| **1** | `$FF0020-$FF003F` | **never accessed** |
+| 2 | `$FF0040-$FF005F` | XP channel 1 |
+| 3 | `$FF0060-$FF007F` | XP channel 2 |
+| 4 | `$FF0080-$FF009F` | XP channel 3 |
+| 5 | `$FF00A0-$FF00BF` | XP channel 4 |
+| **6-7** | `$FF00C0-$FF00FF` | **never accessed** |
+
+**Window 1 is skipped by the firmware's own arithmetic, not by omission.** `$F053E8`
+computes a channel's command port as `(ch+1)<<5 + $FF000E`, so channel 1 lands at window
+**2**. The `+1` is deliberate: window 1 is architecturally reserved, with the host link at
+window 0 ahead of it. What it is for is not established — a second host port, or the IOP
+that `CHANNEL_SELECT` is documented to select among, are both consistent and neither is
+evidenced.
+
+**And the "unaccounted 256-byte gap at `$FF0100-$FF01FF`"** — carried as an open item in
+the gap analysis — is simply **windows 8-15 of the same grid**, none populated. It is not a
+hole in an otherwise-mapped block; it is the unpopulated upper half of a uniformly
+windowed 512-byte region, and there is nothing to account for. *That retires the item
+rather than answering it, which is the honest disposition: the question presupposed a
+structure the block does not have.*
+
+The emulator gets this right, which is worth recording since much of this session has been
+corrections: `versabus.c:166` decodes channels as `addr >= 0xFF0040 && addr <= 0xFF00BF`
+with `ch = ((addr − 0xFF0040) >> 5) + 1` — exactly windows 2-5, correctly excluding window
+1 and windows 6-7. And `APIF_END` is `$FF0100`, so an access into the upper half falls
+through to `versabus_note_unmapped()` and is reported rather than silently answered.
+
 ### "Panel command" is a project-invented name, and VERSAdos means something else by it
 
 The whole of this project calls the `$FF000E` protocol "panel commands" —

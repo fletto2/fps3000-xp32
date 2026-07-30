@@ -550,6 +550,17 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- the AP I/F is 8 windows of $20; only five are populated --------------
+    check('the channel port formula is (ch+1)<<5 + $FF000E, so ch1 is window 2',
+          d[0xF053EA-0xF00000:0xF053F4-0xF00000]
+          == b'\x52\x83\xeb\x8b\x06\x83\x00\xff\x00\x0e')
+    _vb = open('emulator/versabus.c').read()
+    check('the emulator decodes only windows 2-5 as channels, excluding 1 and 6-7',
+          'addr >= 0xFF0040 && addr <= 0xFF00BF' in _vb
+          and '((addr - 0xFF0040) >> 5) + 1' in _vb)
+    check('...and APIF_END is $FF0100, so the upper half is reported unmapped',
+          '#define APIF_END       0xFF0100' in open('emulator/versabus.h').read())
+
     # --- "panel" is a project label, not FPS or Motorola terminology ----------
     _am = open('refs_extracted/versabus_access_map.md').read()
     check('the access map records that "panel command" is a project-invented name',
