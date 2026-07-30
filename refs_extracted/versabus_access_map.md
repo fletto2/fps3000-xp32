@@ -16564,3 +16564,25 @@ on board status, and it spins because a phase upstream failed its register test.
 
 `$F0F0F0F0` is worth remembering as the self-test's failure marker — a value distinctive enough to
 recognise in a register dump on real hardware.
+
+### `d7` is a boolean failure flag, not a phase code — the phase lives in `CHANNEL_SELECT`
+
+Sweeping the self-test for `move.l #imm,d7` finds **65 sites, every one writing `$F0F0F0F0`**. So
+there is no family of failure markers to decode: `d7` records *that* something failed, never
+*what*.
+
+That makes the diagnostic model a pair, and confirms the approach this project already relies on:
+
+| | |
+|---|---|
+| **`d7`** | did any phase fail — one bit, internal, not externally visible |
+| **`CHANNEL_SELECT` (`$FF0204`)** | **which phase** — the counter the self-test broadcasts, and why that register is the busiest on the board |
+
+This is why the ROM-checksum note works: a failing phase `$300` *"leaves `$0300` in CHANNEL_SELECT
+as a readable signature on a board with no serial output"*. The phase register is the diagnostic
+channel; `d7` is only the gate that stops the boot.
+
+A negative result worth recording, since the opposite would have been more useful: **there is no
+per-phase failure code to read out of a dead board's registers.** A stalled machine tells you which
+phase it stopped in and nothing about why, so the 42 self-test subroutines already documented here
+remain the only route from a phase number to a cause.
