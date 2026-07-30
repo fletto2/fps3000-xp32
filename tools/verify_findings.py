@@ -348,6 +348,12 @@ else:
     check('$F096AC is a probe: read then 4 NOPs then rts, value discarded',
           d[0x96AC:0x96B8].hex().upper() == '30114E714E714E714E714E75')
 
+    check('both remaining 5-copy groups open with the same $5F re-enable epilogue',
+          d[0x57FA:0x580C] == d[0x599C:0x59AE] and
+          d[0x5806:0x580A].hex().upper() == '36BC005F')
+    check('the 88-byte group ends in $8005 CONTINUE-TRANSFER',
+          d[0x5820:0x5824].hex().upper() == '30BC8005')
+
     check("RDHC's four dispatch handlers map onto XP1I's at +$2858",
           all(d[a2-0xF00000:a2-0xF00000+64] == d[a2+0x2858-0xF00000:a2+0x2858-0xF00000+64]
               for a2 in (0xF05A12, 0xF05B0E)) and

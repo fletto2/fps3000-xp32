@@ -1473,6 +1473,52 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The last two replicated groups: a shared epilogue, and `$8005`
+
+Decoding the two remaining 5-copy groups completes the set. Both **begin with the
+same eight-instruction epilogue**:
+
+```
+clr.l   d5
+move.b  $0(a5,d4.w),d5
+move.w  d0,$21A(a0)        ; restore XLTR IRQ_MASK
+move.w  #$005F,(a3)        ; BIM CR with IRE SET -- re-enable the channel
+rts
+```
+
+**That identifies the `$4F`/`$5F` pairing.** `$4F` is written to a BIM control
+register on entry to suppress the channel's interrupt during a transfer — already
+documented — and **`$5F` here is the matching restore on exit.** Mute, transfer,
+unmute. The five occurrences of `$4F` and the handler-exit `$5F` are two halves of
+one idiom, which neither half's documentation said.
+
+After the shared epilogue the two groups diverge:
+
+**`$F057FA` +88** — `move.l a2,d1` / `swap d1` / `move.w d1,(a1)` / `swap d1` /
+`move.w d1,$2(a1)` / `move.w #$8005,(a0)`. A 32-bit value pushed across the data
+pair as two halves, then **`$8005` = CONTINUE-TRANSFER**. This is the `$8005`
+counterpart to the `$8004` REQUEST-TRANSFER in the channel ISR, and the `swap`
+idiom is the same one the tag census counted 35 times as `HA3A`/`HB3B`/`HC3C`.
+
+**`$F0599C` +106** — `movea.l #$FF0000,a4` / `move.w $202(a4),d5` /
+`btst #7,d5` / `bne`. A poll of **MODE1 bit 7, the busy flag** — the documented
+`$FF0202` bit 7.
+
+So all five replicated 5-copy groups are now accounted for:
+
+| group | contents |
+|---|---|
+| 192 × 5 | the 42-entry dispatch table + `PanelErrorMaskTable` |
+| 176 × 5 | the `POLL` handler |
+| 130 × 5 | the `BLK_XFR` handler |
+| 106 × 5 | shared epilogue + MODE1 busy-poll |
+| 88 × 5 | shared epilogue + 32-bit push + `$8005` CONTINUE-TRANSFER |
+| 408 × 4 | XP-only: the channel scan and the task tail |
+
+Every one is part of the `PanelStatusDispatch` machinery. **The 36% duplication
+figure is, almost entirely, this one subsystem replicated five times** — which is
+a more useful description of the ROM's structure than the percentage was.
+
 ### RESOLVED: the 42-slot table's "different caller" is the channel ISR
 
 CLAUDE.md has carried this as an open item since the dispatch table was decoded:
