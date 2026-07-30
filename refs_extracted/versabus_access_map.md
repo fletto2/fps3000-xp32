@@ -1485,8 +1485,35 @@ shared region:
 | TCBIO1I | its TCB `$1F10D`, its companion `$1F221`, `$1FBD4`, **plus `$00BA4-$00BFB`** |
 
 The per-task confinement confirms the ownership model derived statically. The
-**shared region is new**: `$00BA0-$00C60`, previously recorded only as "globals",
-is the **RTOS scheduler control block**, and several fields are now readable.
+**shared region is new** — but it is two different things, and an earlier draft of
+this section conflated them.
+
+**`$00C0C-$00C30` is scheduler state**: a current-task pointer and a structure
+directory, both decoded below.
+
+**`$00BA0-$00BFB` is a stack**, not a field table. Comparing XP1I, XP2I and XP3I
+appeared to show *50 task-dependent bytes*, which looked like a rich per-task
+structure. It is one stack observed at three different depths: the same byte
+sequences recur at shifted offsets in each configuration, and they decode as
+**68000 exception frames** — a status word followed by a 32-bit return PC:
+
+```
+27 08 00 F0 2C A2     SR $2708 (supervisor, IPL 7) + PC $F02CA2
+27 04 00 F0 02 B6     SR $2704 (supervisor, IPL 7) + PC $F002B6
+      00 F0 06 50     ... further kernel return addresses
+      00 F0 05 18     constant at the base, $00BFC in all three
+```
+
+`$2704` and `$2708` differ only in their condition codes; both are supervisor at
+IPL 7. So the "50 task-identity bytes" were an artefact of differencing a stack:
+nesting depth varies with which task ran, so almost every byte moves without any
+of them being a per-task field.
+
+**That is the failure mode of differential analysis, and it is worth naming.** The
+method finds *what changed*, which is exactly right for locating state — and
+exactly wrong for interpreting it, because a stack changes wholesale for reasons
+that carry no structure. The check on it is the same as everywhere else in this
+session: decode the bytes before believing the diff.
 
 **`$00C0C` is the current-task TCB pointer.** Verified across five
 configurations, each time holding exactly the TCB of the task that was driven:
