@@ -1,0 +1,374 @@
+{
+ "01FFE2": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "01FFE4": {
+  "sites": 2,
+  "profile": {
+   "W.w": 2
+  }
+ },
+ "01FFE6": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "01FFEA": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "01FFF0": {
+  "sites": 16,
+  "profile": {
+   "W.w": 4,
+   "W.l": 1,
+   "R.l": 2,
+   "RMW.b": 8,
+   "RMW.w": 1
+  }
+ },
+ "01FFF1": {
+  "sites": 39,
+  "profile": {
+   "RMW.b": 34,
+   "R.l": 3,
+   "R.b": 2
+  }
+ },
+ "01FFF2": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "400000": {
+  "sites": 3,
+  "profile": {
+   "R.l": 2,
+   "W.l": 1
+  }
+ },
+ "F70001": {
+  "sites": 1,
+  "profile": {
+   "W.b": 1
+  }
+ },
+ "F70003": {
+  "sites": 1,
+  "profile": {
+   "W.b": 1
+  }
+ },
+ "F70018": {
+  "sites": 4,
+  "profile": {
+   "R.w": 4
+  }
+ },
+ "F70019": {
+  "sites": 11,
+  "profile": {
+   "R.b": 8,
+   "R.l": 3
+  }
+ },
+ "FF0000": {
+  "sites": 4,
+  "profile": {
+   "R.w": 3,
+   "W.w": 1
+  }
+ },
+ "FF0004": {
+  "sites": 10,
+  "profile": {
+   "R.w": 10
+  }
+ },
+ "FF000E": {
+  "sites": 7,
+  "profile": {
+   "W.w": 7
+  }
+ },
+ "FF0044": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0048": {
+  "sites": 1,
+  "profile": {
+   "R.w": 1
+  }
+ },
+ "FF004A": {
+  "sites": 1,
+  "profile": {
+   "R.w": 1
+  }
+ },
+ "FF004E": {
+  "sites": 2,
+  "profile": {
+   "W.w": 1,
+   "R.w": 1
+  }
+ },
+ "FF0064": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0068": {
+  "sites": 1,
+  "profile": {
+   "R.w": 1
+  }
+ },
+ "FF006A": {
+  "sites": 1,
+  "profile": {
+   "R.w": 1
+  }
+ },
+ "FF006E": {
+  "sites": 2,
+  "profile": {
+   "W.w": 1,
+   "R.w": 1
+  }
+ },
+ "FF0084": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0088": {
+  "sites": 1,
+  "profile": {
+   "R.w": 1
+  }
+ },
+ "FF008A": {
+  "sites": 1,
+  "profile": {
+   "R.w": 1
+  }
+ },
+ "FF008E": {
+  "sites": 2,
+  "profile": {
+   "W.w": 1,
+   "R.w": 1
+  }
+ },
+ "FF00A4": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF00A8": {
+  "sites": 1,
+  "profile": {
+   "R.w": 1
+  }
+ },
+ "FF00AA": {
+  "sites": 1,
+  "profile": {
+   "R.w": 1
+  }
+ },
+ "FF00AE": {
+  "sites": 1,
+  "profile": {
+   "R.w": 1
+  }
+ },
+ "FF0200": {
+  "sites": 16,
+  "profile": {
+   "R.w": 8,
+   "W.w": 8
+  }
+ },
+ "FF0202": {
+  "sites": 26,
+  "profile": {
+   "R.w": 17,
+   "W.w": 9
+  }
+ },
+ "FF0204": {
+  "sites": 8,
+  "profile": {
+   "W.w": 7,
+   "R.w": 1
+  }
+ },
+ "FF020C": {
+  "sites": 6,
+  "profile": {
+   "W.w": 6
+  }
+ },
+ "FF0210": {
+  "sites": 5,
+  "profile": {
+   "R.w": 2,
+   "W.w": 3
+  }
+ },
+ "FF0218": {
+  "sites": 3,
+  "profile": {
+   "W.w": 2,
+   "R.w": 1
+  }
+ },
+ "FF021A": {
+  "sites": 10,
+  "profile": {
+   "R.w": 5,
+   "W.w": 5
+  }
+ },
+ "FF0230": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0232": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0234": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0236": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0238": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF023A": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF023C": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF023E": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0242": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0244": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0246": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF024A": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF024C": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF024E": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0250": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0252": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0254": {
+  "sites": 2,
+  "profile": {
+   "W.w": 2
+  }
+ },
+ "FF0256": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF0258": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF025A": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ },
+ "FF025C": {
+  "sites": 1,
+  "profile": {
+   "W.w": 1
+  }
+ }
+}
