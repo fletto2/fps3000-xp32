@@ -14585,3 +14585,42 @@ Consistency note: `WTEVNT` (36 = `$24`) is one of the ASQ directives this projec
 appearing **nowhere in this firmware**. That remains true of *call sites* — the FPS application
 never issues it — while the kernel plainly implements it and manipulates a state bit for it. The
 two statements describe different layers, as with the earlier `GTASQ`/`RDEVNT`/`QEVNT` check.
+
+## A usage-derived TCB field map — 54 fields, and `+$102` is the directive status
+
+Since `a6` is the TCB pointer throughout the kernel, every `$xx(a6)` displacement is a TCB field
+reference. Sweeping the decoded kernel gives **54 distinct displacements over 372 accesses**:
+
+| offset | accesses | operations | reading |
+|---|---:|---|---|
+| **`+$102`** | **119** | `addi, addq, clr, move, tst` | **directive status / return code** |
+| `+$036` | 24 | `movea` | a pointer field |
+| `+$014` | 23 | `cmp, move` | |
+| `+$028` | 23 | `btst, move` | flag byte |
+| `+$120` | 23 | `clr, move, movem` | vendor `TSTBEGIN` |
+| `+$100` | 16 | `clr, move, movem` | |
+| `+$02D` | 14 | `bclr, bset, btst` | flag byte |
+| `+$02C` | 11 | `bclr, bset, move` | **the task state word** |
+| `+$029` | 10 | `bclr, bset, btst` | flag byte |
+| `+$13C` | 10 | `add, move, movea, subi, subq` | a counter |
+
+**`+$102` is the busiest field in the kernel by a factor of five**, and the operations settle it:
+
+```
+F0030C  clr.w   $102(a6)      ; TRAP #1 entry — clear status before dispatch
+F003C6  move.w  #$1,$102(a6)  ; range-check failure — status 1
+F003D0  move.w  #$1,$102(a6)  ; the unimplemented-directive stub — status 1
+```
+
+Cleared on entry to every directive and set to 1 on every failure: it is the **return code**.
+The vendor `TCB.EQ` calls `+$102` `TCBPC`, the user's program counter, which is wrong here for
+the same reason its `+$0FC TCBUSP` was — **the measured saved PC is at `+$0FC`** (verified against
+RDHC's parked `$F04740`). The vendor layout is displaced by 6 across this whole region, so
+`TCBSR`→`+$0FA`, `TCBPC`→`+$0FC`, and what the file calls `TCBPC` at `+$102` is in fact the
+status word.
+
+Note `+$0FA` appears in the sweep with 5 accesses, exactly where the shifted `TCBSR` would land.
+
+Usage-derived mapping like this is worth more than the vendor file for this build: it cannot be
+wrong about which offsets the firmware touches, and it flags disagreements instead of inheriting
+them.
