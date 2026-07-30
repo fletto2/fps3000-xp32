@@ -9929,6 +9929,7 @@ loc_F09E58:
   f09e74: 20 42                   movea.l  d2, a0
   f09e76: 70 04                   moveq    #$4, d0
 ;>>>> [R8/BOTH] Executes trap #0 (d0=4) to register VCT during Phase2Init_VCTscan.
+;### !GST uses the same rich header with $D-byte records and ZERO in use.
 ;### ALLOCATOR SITE 1/8 -- TRAP #0 directive $04 is the RTOS PAGE ALLOCATOR.
 ;###   Size (in 256-byte pages) goes in via a0; the block comes back in a0.
 ;###   Each of the eight sites then: registers the pointer in a directory slot,
@@ -9965,6 +9966,12 @@ loc_F09EB0:
   f09eb8: 67 3c                   beq.b    loc_F09EF6
   f09eba: 20 42                   movea.l  d2, a0
   f09ebc: 70 04                   moveq    #$4, d0
+;### !UST is the ASQ NAME REGISTRY.  Rich header: +$0A pages, +$0C record size,
+;###   +$0E records in use, +$10 first record at base+$14.  Nine $16-byte
+;###   (task name, ASQ name) pairs: XP1I/AXP1 XP1I/HXP1 XP2I/AXP2 XP2I/HXP2
+;###   XP3I/AXP3 XP3I/HXP3 XP4I/AXP4 XP4I/HXP4 IO1I/HIO1.  2+2+2+2+1+0 = 9 --
+;###   a THIRD independent confirmation of the per-task ASQ counts, and the
+;###   first that is a plain readable list rather than an inference.
 ;### ALLOCATOR SITE 2/8 -> slot $0C24, tag !UST ($F09ECE), observed $1FB00
   f09ebe: 4e 40                   trap     #$0
   f09ec0: 60 04                   bra.b    loc_F09EC6
@@ -9994,6 +10001,8 @@ Init_UST_StoreTag:
 loc_F09EF6:
   f09ef6: 20 7c 00 00 00 01       movea.l  #$1, a0
   f09efc: 70 04                   moveq    #$4, d0
+;### Of the eight structures, four are populated (!UST, !IDV, !PAT free list,
+;###   !VCT) and four are allocated-but-unused (!GST, !IOV, !UDR, $1F500).
 ;### ALLOCATOR SITE 3/8 -> slot $0C66, NO tag stamped, observed $1FA00
   f09efe: 4e 40                   trap     #$0
   f09f00: 60 04                   bra.b    loc_F09F06
@@ -10064,6 +10073,15 @@ loc_F09F62:
   f09f6a: 67 24                   beq.b    loc_F09F90
   f09f6c: 20 42                   movea.l  d2, a0
   f09f6e: 70 04                   moveq    #$4, d0
+;### !IDV is the INTERRUPT-DEVICE TABLE and it is the whole IRQ wiring of the
+;###   machine in 84 bytes: six 14-byte records from +$08, each
+;###   {vector word, TCB pointer, ISR entry, ISR exit}.  Measured:
+;###     $45 $1E900 XP1I F07EE6 F07F08     $48 $1EF00 XP4I F060CE F060F0
+;###     $46 $1EB00 XP2I F074E6 F07508     $4A $1F100 IO1I F05DD6 F05E4C
+;###     $47 $1ED00 XP3I F06AE6 F06B08     $41 $1F300 RDHC F04930 F050FC
+;###   The entry column matches the six handlers assembled by hand from the BIM
+;###   vector registers.  The exit column is new -- and $F05E4C in it is the
+;###   address already independently named ISRExit, which pins the field.
 ;### ALLOCATOR SITE 5/8 -> slot $0C6E, tag !IDV ($F09F80), observed $1F800
   f09f70: 4e 40                   trap     #$0
   f09f72: 60 04                   bra.b    loc_F09F78
@@ -10090,6 +10108,11 @@ loc_F09F90:
   f09f9c: 67 44                   beq.b    loc_F09FE2
   f09f9e: 20 42                   movea.l  d2, a0
   f09fa0: 70 04                   moveq    #$4, d0
+;### !PAT is a FREE-LIST, not a table: +$04 is a first-record pointer (a third
+;###   header shape), records chained through their first longword at stride
+;###   $1E with $FFFFFFFF at +$04.  $1F714 -> ... -> $1F7E6 -> NULL, 8 records,
+;###   8*$1E + $14 = 254 of the 256-byte page.  The WHOLE page is free, i.e.
+;###   nothing has ever taken a record from it in any configuration reached.
 ;### ALLOCATOR SITE 6/8 -> slot $0C2C, tag !PAT ($F09FB2), observed $1F700
   f09fa2: 4e 40                   trap     #$0
   f09fa4: 60 04                   bra.b    loc_F09FAA

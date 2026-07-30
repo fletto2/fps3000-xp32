@@ -80,6 +80,30 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- what the eight structures actually hold, read out of RAM ----
+ (0xF09F70,'!IDV is the INTERRUPT-DEVICE TABLE and it is the whole IRQ wiring of the'),
+ (0xF09F70,'  machine in 84 bytes: six 14-byte records from +$08, each'),
+ (0xF09F70,'  {vector word, TCB pointer, ISR entry, ISR exit}.  Measured:'),
+ (0xF09F70,'    $45 $1E900 XP1I F07EE6 F07F08     $48 $1EF00 XP4I F060CE F060F0'),
+ (0xF09F70,'    $46 $1EB00 XP2I F074E6 F07508     $4A $1F100 IO1I F05DD6 F05E4C'),
+ (0xF09F70,'    $47 $1ED00 XP3I F06AE6 F06B08     $41 $1F300 RDHC F04930 F050FC'),
+ (0xF09F70,'  The entry column matches the six handlers assembled by hand from the BIM'),
+ (0xF09F70,'  vector registers.  The exit column is new -- and $F05E4C in it is the'),
+ (0xF09F70,'  address already independently named ISRExit, which pins the field.'),
+ (0xF09FA2,'!PAT is a FREE-LIST, not a table: +$04 is a first-record pointer (a third'),
+ (0xF09FA2,'  header shape), records chained through their first longword at stride'),
+ (0xF09FA2,'  $1E with $FFFFFFFF at +$04.  $1F714 -> ... -> $1F7E6 -> NULL, 8 records,'),
+ (0xF09FA2,'  8*$1E + $14 = 254 of the 256-byte page.  The WHOLE page is free, i.e.'),
+ (0xF09FA2,'  nothing has ever taken a record from it in any configuration reached.'),
+ (0xF09EBE,'!UST is the ASQ NAME REGISTRY.  Rich header: +$0A pages, +$0C record size,'),
+ (0xF09EBE,'  +$0E records in use, +$10 first record at base+$14.  Nine $16-byte'),
+ (0xF09EBE,'  (task name, ASQ name) pairs: XP1I/AXP1 XP1I/HXP1 XP2I/AXP2 XP2I/HXP2'),
+ (0xF09EBE,'  XP3I/AXP3 XP3I/HXP3 XP4I/AXP4 XP4I/HXP4 IO1I/HIO1.  2+2+2+2+1+0 = 9 --'),
+ (0xF09EBE,'  a THIRD independent confirmation of the per-task ASQ counts, and the'),
+ (0xF09EBE,'  first that is a plain readable list rather than an inference.'),
+ (0xF09E78,'!GST uses the same rich header with $D-byte records and ZERO in use.'),
+ (0xF09EFE,'Of the eight structures, four are populated (!UST, !IDV, !PAT free list,'),
+ (0xF09EFE,'  !VCT) and four are allocated-but-unused (!GST, !IOV, !UDR, $1F500).'),
  # ---- the two untagged structures ----
  (0xF09F1C,'!VCT BUILD.  a2 = $28 (the exception vector table); the loop writes ONE'),
  (0xF09F1C,'  BYTE PER VECTOR up to $400, and the 10 bytes of $FF written just above'),

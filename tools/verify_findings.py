@@ -441,6 +441,38 @@ else:
           len({l for l in trk.split() if 'F07D00' <= l <= 'F086FF'}) > 200 and
           len({l for l in trn2.split() if 'F07D00' <= l <= 'F086FF'}) < 130)
 
+    # --- the eight RTOS structures, read out of RAM ------------------------
+    _, rs = run({}, 400_000_000)
+    s16 = lambda x: struct.unpack('>H', rs[x:x+2])[0]
+    s32 = lambda x: struct.unpack('>I', rs[x:x+4])[0]
+    check('!IDV holds 6 x 14-byte records: {vector, TCB, ISR entry, ISR exit}',
+          [(s16(0x1F808+i*14), s32(0x1F808+i*14+2), s32(0x1F808+i*14+6),
+            s32(0x1F808+i*14+10)) for i in range(6)] ==
+          [(0x45, 0x1E900, 0xF07EE6, 0xF07F08), (0x46, 0x1EB00, 0xF074E6, 0xF07508),
+           (0x47, 0x1ED00, 0xF06AE6, 0xF06B08), (0x48, 0x1EF00, 0xF060CE, 0xF060F0),
+           (0x4A, 0x1F100, 0xF05DD6, 0xF05E4C), (0x41, 0x1F300, 0xF04930, 0xF050FC)])
+    chain, q = [], s32(0x1F704)
+    while 0x1F700 <= q < 0x1F800 and len(chain) < 12:
+        chain.append(q)
+        q = s32(q)
+    check('!PAT is a free-list of 8 records, stride $1E, terminating in NULL',
+          chain == [0x1F714 + 0x1E * i for i in range(8)] and s32(chain[-1]) == 0)
+    check('!UST rich header: 2 pages, $16 records, 9 in use, first at base+$14',
+          (s16(0x1FB0A), s16(0x1FB0C), s16(0x1FB0E), s32(0x1FB10)) ==
+          (2, 0x16, 9, 0x1FB14))
+    check('!UST records are the nine (task, ASQ) pairs, 2+2+2+2+1+0',
+          [(rs[0x1FB14+i*0x16:0x1FB18+i*0x16].decode(),
+            rs[0x1FB1C+i*0x16:0x1FB20+i*0x16].decode()) for i in range(9)] ==
+          [('XP1I', 'AXP1'), ('XP1I', 'HXP1'), ('XP2I', 'AXP2'), ('XP2I', 'HXP2'),
+           ('XP3I', 'AXP3'), ('XP3I', 'HXP3'), ('XP4I', 'AXP4'), ('XP4I', 'HXP4'),
+           ('IO1I', 'HIO1')])
+    check('!GST same header shape, $D records, ZERO in use',
+          (s16(0x1FD0A), s16(0x1FD0C), s16(0x1FD0E), s32(0x1FD10)) ==
+          (1, 0xD, 0, 0x1FD14))
+    check('!IOV and !UDR are tag + end address and hold no records',
+          s32(0x1F904) == 0x1F9FF and not any(rs[0x1F908:0x1FA00])
+          and not any(rs[0x1F608:0x1F700]))
+
     # --- $1FA00 is !VCT: byte[vector number] = owning task ----------------
     _, rv = run({}, 400_000_000)
     OWN = {0x41: 6, 0x45: 1, 0x46: 2, 0x47: 3, 0x48: 4, 0x4A: 5}

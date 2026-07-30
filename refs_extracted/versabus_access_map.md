@@ -1473,6 +1473,84 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### All eight RTOS structures decoded — including `!IDV`, the interrupt table
+
+With the allocator understood, the eight blocks can simply be read. They do not
+share one layout; there are four shapes.
+
+| structure | shape | contents |
+|---|---|---|
+| `!GST` `$1FD00` | rich header | `$D`-byte records, capacity 18, **0 in use** |
+| `!UST` `$1FB00` | rich header | `$16`-byte records, capacity 22, **9 in use** |
+| `!IDV` `$1F800` | tag + end | **6 × 14-byte interrupt records** |
+| `!PAT` `$1F700` | tag + first | **linked free-list, 8 × `$1E`-byte records** |
+| `!IOV` `$1F900` | tag + end | empty |
+| `!UDR` `$1F600` | tag + end | empty |
+| `$1FA00` | none | `!VCT`, byte per vector (above) |
+| `$1F500` | first/last | 9 × `$1A`-byte pool (above) |
+
+#### `!IDV` is the interrupt-device table, and it is the whole IRQ wiring in one place
+
+Six 14-byte records from `+$08`: **{vector word, TCB pointer, ISR entry, ISR
+exit}**.
+
+| vector | TCB | task | ISR entry | ISR exit |
+|---|---|---|---|---|
+| `$45` | `$1E900` | XP1I | `$F07EE6` | `$F07F08` |
+| `$46` | `$1EB00` | XP2I | `$F074E6` | `$F07508` |
+| `$47` | `$1ED00` | XP3I | `$F06AE6` | `$F06B08` |
+| `$48` | `$1EF00` | XP4I | `$F060CE` | `$F060F0` |
+| `$4A` | `$1F100` | IO1I | `$F05DD6` | `$F05E4C` |
+| `$41` | `$1F300` | RDHC | `$F04930` | `$F050FC` |
+
+The entry column matches, exactly and independently, the six handler addresses
+this project assembled by hand from the BIM vector registers and the TCB headers.
+The fourth column is new: it is the **ISR exit stub** for each task — and
+`$F05E4C` in that column is the address already independently named `ISRExit` for
+TCBIO1I, which is what confirms the field's meaning.
+
+*This single 84-byte table is the entire interrupt wiring of the machine —
+vector, owning task, handler in, handler out — and it can be read out of RAM
+rather than reconstructed. Between this and `!VCT` at `$1FA00`, an emulator can
+report the complete interrupt configuration without tracing a single directive.*
+
+#### `!PAT` is a free-list, and it is completely empty
+
+`+$04` holds a **first-record pointer** (`$1F714`), not an end address — a third
+header shape. The records are chained through their first longword with a constant
+stride of `$1E` (30 bytes) and `$FFFFFFFF` at `+$04`:
+
+```
+$1F714 -> $1F732 -> $1F750 -> $1F76E -> $1F78C -> $1F7AA -> $1F7C8 -> $1F7E6 -> NULL
+```
+
+Eight records, `8 × $1E = 240` bytes, plus the `$14` header = 254 of the page's
+256. **The entire page is on the free list**, i.e. `!PAT` is allocated, correctly
+initialised, and nothing has ever taken a record from it in any configuration
+reached so far.
+
+#### `!UST` is the ASQ name registry, and it confirms the counts a third way
+
+Rich header: `+$0A` = pages, `+$0C` = record size, `+$0E` = records in use, `+$10`
+= pointer to the first record at `base+$14`. Nine `$16`-byte records, each a
+**(task name, ASQ name) pair**:
+
+```
+XP1I/AXP1  XP1I/HXP1  XP2I/AXP2  XP2I/HXP2  XP3I/AXP3
+XP3I/HXP3  XP4I/AXP4  XP4I/HXP4  IO1I/HIO1
+```
+
+`2+2+2+2+1+0 = 9`. That is the third independent confirmation of the per-task ASQ
+counts — after the task descriptors in ROM and the nonzero-byte counts in the
+per-task blocks — and the first one that is a plain readable list rather than an
+inference.
+
+`!GST` has the same header shape with `$D`-byte records and **zero in use**;
+`!IOV` and `!UDR` carry only a tag and an end address and are empty. So of the
+eight structures the firmware allocates, **four are populated (`!UST`, `!IDV`,
+`!PAT`'s free list, `!VCT`) and four are allocated-but-unused** in every
+configuration reached so far.
+
 ### The two untagged structures: `!VCT` is a vector-ownership table
 
 The eight allocations include two that stamp no marker tag. Both are now
