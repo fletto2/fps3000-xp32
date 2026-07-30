@@ -798,8 +798,28 @@ else:
           and 'FPS3K_SEQPUSH' not in _vb)
 
     # --- the two-phase conversation cannot yet be driven -----------------------
-    check('op $26 = op $6 with the read bit set',
-          (0x26 & 0x0F) == 0x6 and (0x26 & 0x20) and not (0x26 & 0x80))
+    # Was an arithmetic identity -- (0x26 & 0x0F) == 0x6 and (0x26 & 0x20) --
+    # which is true by construction and says nothing about the firmware.
+    # Replaced with the executed behaviour: op $6's body tests btst #$5,$e87
+    # and branches to $F04EB8 (read SBC RAM into the result) or $F04EC0
+    # (write).  Measured complementary, 219/0 and 0/219.
+    _sr = os.path.join(os.path.dirname(ROM) or '.', 'FPS3K_U11_U12_JOIN.bin')
+
+    def _paths(code, sites):
+        with tempfile.TemporaryDirectory() as _td:
+            subprocess.run([EMU, '-rom', ROM, '-cycles', '150000000',
+                            '-trace', f'{_td}/t'], capture_output=True, timeout=400,
+                           env={**os.environ, 'FPS3K_BIM0LVL': '7',
+                                'FPS3K_XPIRQ': '6', 'FPS3K_RESP': code})
+            tr = open(f'{_td}/t').read()
+            return [tr.count(f'{s:06X}\n') for s in sites]
+
+    _r06 = _paths('0x06', (0xF04EB8, 0xF04EC0))
+    _r26 = _paths('0x26', (0xF04EB8, 0xF04EC0))
+    check('op $6 with bit 5 CLEAR takes the write path only',
+          _r06[0] == 0 and _r06[1] > 100)
+    check('op $26 -- bit 5 SET -- takes the read path only',
+          _r26[0] > 100 and _r26[1] == 0)
     check('a collect needs bit 7, which the op codes $0-$F never carry',
           all(not (op & 0x80) for op in range(0x10)))
     check('FPS3K_RESP is the only bit-7 carrier the model exposes',
