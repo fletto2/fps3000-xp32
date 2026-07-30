@@ -3426,5 +3426,43 @@ for _hk, _hv in (('FPS3K_DATAIN', '1'), ('FPS3K_RESP', '0x94'),
 check('FPS3K_CHSEL_RD does NOT -- ungated, hangs in the self-test (known)',
       not _boots({'FPS3K_CHSEL_RD': '28'}))
 
+# --- the self-test phase table, measured 2026-07-30 -----------------------
+# CHANNEL_SELECT carries the phase number and is the ONLY diagnostic a stalled
+# board offers -- d7 is a bare boolean, written $F0F0F0F0 at all 65 failure
+# sites.  The panel log is PC-tagged so a phase maps to its broadcasting
+# instruction and from there to one of the 42 self-test subroutines.
+with tempfile.TemporaryDirectory() as _tdp:
+    _lp = subprocess.run([EMU, '-rom', ROM, '-cycles', '150000000'],
+                         capture_output=True, text=True, timeout=400,
+                         env={**os.environ, 'FPS3K_LOGCHASSIS': '1'}).stderr
+    _ph = {}
+    for _m in re.finditer(r'CHANNEL_SELECT <- \$([0-9A-F]{4}) @([0-9A-F]{6})', _lp):
+        _v = int(_m.group(1), 16)
+        if _v and not (_v & 0xFF) and _v < 0x3000:
+            _ph.setdefault(_v, _m.group(2))
+    check('the self-test broadcasts 30 distinct phases', len(_ph) == 30)
+    check('sequence A runs $0100-$0900',
+          all(0x100 * i in _ph for i in range(1, 10)))
+    check('sequence B runs $1000-$1A00',
+          all(0x1000 + 0x100 * i in _ph for i in range(0, 11)))
+    check('sequence C runs $2000-$2900',
+          all(0x2000 + 0x100 * i in _ph for i in range(0, 10)))
+    # Block 3's four tests run twice over two RAM ranges: the same four
+    # instructions broadcast $2000-$2300 and again $2400-$2700.
+    check('block 3 runs its four tests twice -- same PCs, two phase bases',
+          all(_ph.get(0x2000 + 0x100 * i) == _ph.get(0x2400 + 0x100 * i)
+              for i in range(4)))
+    check('...and those four PCs are $F098F2/$F099B8/$F099FA/$F09A84',
+          [_ph.get(0x2000 + 0x100 * i) for i in range(4)]
+          == ['F098F2', 'F099B8', 'F099FA', 'F09A84'])
+    # Phase numbering is logical, not positional.
+    check('the sequences interleave: $1000 is broadcast below $0900',
+          int(_ph[0x1000], 16) < int(_ph[0x900], 16))
+
+check('d7 carries one failure marker, $F0F0F0F0, at every site',
+      len({struct.unpack('>I', _rom[a - _B + 2:a - _B + 6])[0]
+           for a in range(0xF08700, 0xF09C00, 2)
+           if _rom[a - _B:a - _B + 2] == b'\x2e\x3c'}) == 1)
+
 print(f'\n{checks - len(fails)}/{checks} passed')
 sys.exit(1 if fails else 0)
