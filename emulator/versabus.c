@@ -1031,8 +1031,15 @@ static void xltr_write(uint32_t addr, uint16_t val) {
                  * was armed, all 32,967 of them.  A diagnostic that reports a
                  * different decision from the one the code makes is worse
                  * than none. */
-                fprintf(log_fp, "[PANEL] CHANNEL_SELECT <- $%04X, mode0=$%04X, "
-                        "mode1=$%04X, arm=%s\n", val, xltr.mode0, xltr.mode1,
+                /* @PC tags the writing instruction, as the CHASSIS-MEM lines
+                 * already do.  The self-test broadcasts its phase number here
+                 * from d6 -- 72 write sites, 30 distinct phases -- and that
+                 * number is the ONLY diagnostic a stalled board offers, since
+                 * d7 is a bare boolean failure flag.  Without the PC the phase
+                 * cannot be mapped back to the routine that raised it. */
+                fprintf(log_fp, "[PANEL] CHANNEL_SELECT <- $%04X @%06X, mode0=$%04X, "
+                        "mode1=$%04X, arm=%s\n", val,
+                        m68k_get_reg(NULL, M68K_REG_PPC), xltr.mode0, xltr.mode1,
                         (xltr.mode0 & MODE0_RESP_ACK) ? "no (ACK set)"
                         : !(xltr.mode1 & 0x1000)      ? "no (MODE1 b12 clear -- beacon/walk)"
                         : "YES");

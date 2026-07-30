@@ -16615,3 +16615,31 @@ Combined with the 42 documented self-test subroutines, a phase number read from 
 stalled board now maps to a specific test. That is the entire diagnostic chain on hardware with no
 serial output: **`d7` says something failed, `$FF0204` says which of thirty phases, and the
 subroutine map says what that phase was testing.**
+
+## The phase → PC table, and it confirms the doubled block-3 tests
+
+Tagging the `[PANEL] CHANNEL_SELECT <-` log line with the writing PC — as the `CHASSIS-MEM` lines
+already were — completes the diagnostic chain. All 30 phases, with the instruction that broadcasts
+each:
+
+| | | | | | |
+|---|---|---|---|---|---|
+| `$0100` `$F08A66` | `$0200` `$F08C62` | `$0300` `$F08D20` | `$0400` `$F08D66` | `$0500` `$F08DFE` | `$0600` `$F08E64` |
+| `$0700` `$F08F22` | `$0800` `$F08F9E` | `$0900` `$F09092` | `$1000` `$F08EB2` | `$1100` `$F091AA` | `$1200` `$F0926A` |
+| `$1300` `$F09382` | `$1400` `$F09418` | `$1500` `$F094FA` | `$1600` `$F09536` | `$1700` `$F09616` | `$1800` `$F096D8` |
+| `$1900` `$F0977E` | `$1A00` `$F09846` | `$2000` `$F098F2` | `$2100` `$F099B8` | `$2200` `$F099FA` | `$2300` `$F09A84` |
+| `$2400` `$F098F2` | `$2500` `$F099B8` | `$2600` `$F099FA` | `$2700` `$F09A84` | `$2800` `$F09ADE` | `$2900` `$F09B54` |
+
+**Four PCs appear twice**: `$F098F2`, `$F099B8`, `$F099FA` and `$F09A84` each broadcast two phases
+— `$2000`/`$2400`, `$2100`/`$2500`, `$2200`/`$2600`, `$2300`/`$2700`.
+
+That is the same code executed twice with a different phase base, and it independently confirms a
+claim the harness already carries as a comment: *"block 3 runs its four tests twice, over two RAM
+ranges."* Four shared PCs, four phase pairs, exactly.
+
+Also visible: **the sequences interleave in address space.** `$1000` is broadcast from `$F08EB2`,
+*below* `$0900`'s `$F09092`. The phase numbering is logical, not positional, so a phase cannot be
+converted to a code location by arithmetic — which is why this table had to be measured.
+
+`$FF0204` on a stalled board now resolves to an instruction, and from there to one of the 42
+documented subroutines. That is the complete diagnostic path on hardware with no serial output.
