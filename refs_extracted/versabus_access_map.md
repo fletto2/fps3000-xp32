@@ -13491,3 +13491,45 @@ buffer (`$10010` stays zero; the only nonzero bytes above `$10000` are the six a
 are RTOS data), and the run ends at `$F056B8` — the already-documented `PanelSendAndWait` spin.
 So this configuration advances past the ready gate and then meets a blocker that is already
 understood, rather than revealing a new one.
+
+## Op $3 is bidirectional: the SBC's WRITE path into chassis memory (2026-07-30)
+
+The chassis-op table in this file lists `$3` as **"read chassis memory via the `$400000`
+window"**. That is only half of it. `$F04D52` tests **bit 5 of `$E87`** — the documented
+direction bit — and branches to a second, symmetric implementation at `$F04DC0`:
+
+```
+F04DC0  btst.b  #$6,$e87          ; half-select
+F04DCA  move.w  $204(a0),$e70     ; bit 6 set -> data HIGH half from CHANNEL_SELECT
+F04DD6  move.w  $204(a0),$e72     ; bit 6 clear -> data LOW half
+F04DE6  lsr.l   #$14,d1           ; page = addr >> 20
+F04DE8  move.w  d1,$210(a0)       ; -> XLTR_MODE2 page register
+F04DF2  andi.l  #$fffff,d1
+F04DF8  lsl.l   #$2,d1            ; offset = (addr & $FFFFF) << 2
+F04E0A  move.l  $e70,(a1,d1.l)    ; STORE 32 bits into the window
+F04E26  btst.b  #$4,$e87          ; auto-increment flag
+F04E30  addq.l  #$1,$e58          ; advance the transfer address
+```
+
+So the full command-byte layout already documented — bits 0-3 operation, bit 4 auto-increment,
+bit 5 direction, bit 6 half-select — is realised *within a single operation*: `$23` reads
+chassis memory and **`$03` writes it**, both with optional auto-increment and both assembling or
+splitting a 32-bit word through `$FF0204` in two 16-bit halves.
+
+This matters for the upload path. It means the SBC is **not** limited to staging microcode in
+its own RAM and waiting to be read: it has a direct 32-bit write port into the chassis address
+space, paged by `$FF0210`, with hardware-style auto-increment for streaming. It also explains
+why `$FF0204` is the busiest register on the board — it is the data conduit, not merely a
+channel selector.
+
+Alongside it, **op `$B` is the handoff**: `$F05002` computes `$10000 + $10 = $10010` literally
+and returns it in `$E74`, half-selected by the same bit 6. The SBC is telling the chassis where
+the staging buffer starts.
+
+**Status: static decode, not runtime-confirmed.** Driving op `$3` through `FPS3K_SEQ` failed in
+every arrangement tried — single-op, padded, and with the address and count pre-set. `$F04D4E`
+executes zero times in all of them, and the only `$400000` traffic in those runs comes from the
+self-test at `$F096AC`/`$F09798`/`$F09AF6`. That is consistent with the already-recorded
+limitation that a sequence hands over only a handful of codes and stops; it is a gap in the
+driving hook, not evidence against the decode. The read side of the *same handler* is confirmed,
+and the two paths differ only in the direction of one `move.l`.
