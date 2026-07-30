@@ -1598,6 +1598,48 @@ The pattern across all of this is the session's recurring one, one level up: **t
 itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
 here changed what is known about the machine; it changed how much a passing suite is worth.
 
+### ARITH card: three FP units confirmed, but the packages are UNMARKED
+
+The AU card yields a clear architectural picture and one firm negative.
+
+**Three large square packages**, gold-lidded **leadless chip carriers in sockets**, at board
+positions around N/P (two) and U/V (one). **Three is exactly Hockney's "1 multiplier + 2
+adders"** for the XP-32 arithmetic unit, so the count corroborates the documented architecture
+independently.
+
+**But they cannot be identified from the photograph.** Zooming to native resolution shows a
+**blank gold lid** — no part number, no manufacturer mark, only a **date code `8541`** (week 41,
+1985) on the package edge. The marking, if any, is on a face the photograph does not see.
+
+That matters because this project carries a specific hypothesis: the HPVP uses "Am29116 +
+Weitek WTL 1032/1033", and CLAUDE.md notes *"the same pairing Hockney attributes to the XP-32"*.
+A 68-pin LCC is the WTL 1032/1033 package, and the date code fits — **but a blank lid is not
+evidence for a part number.** The identification stays open, and confirming it needs the board
+or a photograph from a different angle. *Recording this as a negative rather than a
+near-confirmation is the point: "consistent with" is how a hypothesis survives without being
+tested.*
+
+**What the card does establish:**
+
+| part | significance |
+|---|---|
+| **`AM29540DC`** | AMD's **programmable FFT address sequencer** — a purpose-built FFT part, which fits XPMLIB's `ZRFFT` routines exactly |
+| **`AM2910ADC`** | a **second** microprogram sequencer — the AU is separately microprogrammed from the EU |
+| **`AM2168-45PCB`** array | the large SRAM bank — the AU's writable control store and data pads |
+| `CY7C168-45PC` | further SRAM |
+| **four ribbon connectors** | along the top edge — the XP32 bus links |
+| `29F52 SDC` PALs, `L29C520PC-R` PLDs | decode logic, as on the EXEC card |
+
+**The `AM29540` is the most informative of these.** It is not general-purpose logic — it is a
+dedicated FFT address generator, and its presence says the AU was designed with FFT as a
+first-class workload rather than as library code layered on generic hardware. That is consistent
+with the FPS product line, where FFT timings were the headline benchmark.
+
+**And the second Am2910 matters for the emulation model.** With one on the EXEC card and one
+here, the EU and AU each have their own microprogram sequencer — so they are two independently
+sequenced engines that synchronise, not one engine driving the other. Any future model of the
+XP-32 needs two control stores and two sequencers, not a master-slave pair.
+
 ### The EU store looks like ONE 80-bit word: ~10 PROMs in the `225-0600` series
 
 Reading the second white-label column at full resolution finds **approximately ten**
