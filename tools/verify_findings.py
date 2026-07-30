@@ -570,6 +570,16 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- access-log lines are BUS CYCLES, not executions ----------------------
+    check('the reply instruction at $F04924 is move.w $0E74,$204(a5) -- 5 bus cycles',
+          d[0xF04924-0xF00000:0xF0492C-0xF00000]
+          == b'\x3b\x79\x00\x00\x0e\x74\x02\x04')
+    check('...so a grep count of 5 access-log lines is ONE execution',
+          len(b'\x3b\x79\x00\x00\x0e\x74\x02\x04') == 8)
+    check('most op handlers end in bra ChannelConfigDispatch, not the reply path',
+          d[0xF0508E-0xF00000:0xF05092-0xF00000] == b'\x60\x00\x00\x68'
+          and d[0xF050C6-0xF00000:0xF050CA-0xF00000] == b'\x60\x00\x00\x30')
+
     # --- op $6 direction bit, measured in both states -------------------------
     check('op $6 read path stores the fetched word into the result register',
           d[0xF04EB8-0xF00000:0xF04EC0-0xF00000][:2] in (b'\x33\xf9', b'\x33\xd0',

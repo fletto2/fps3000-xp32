@@ -1563,6 +1563,49 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### One reply per run, and a counting trap in the access log
+
+Chasing why a two-op sequence ships only one reply produced a smaller result than expected and
+a measurement caution that nearly cost another wrong claim.
+
+**The counting trap first.** `grep -c " F04924$"` on an access log returns **5** for every run,
+which looks like five executions. It is one instruction's **bus cycles**:
+
+```
+R 2 F04924 00003B79 F04924     ; opcode fetch
+R 4 F04926 00000E74 F04924     ; operand fetch
+R 2 000E74 00000010 F04924     ; the read of the result word
+R 2 F0492A 00000204 F04924     ; operand fetch
+W 2 FF0204 00000010 F04924     ; the write
+```
+
+The PC trace for the same run reports **1**. So `FPS3K_ACCESSLOG` counts *bus accesses* and
+`-trace` counts *executions*, and a `grep -c` on the former is not an execution count. Every
+"x5" in this session's access-log work meant "one execution of a 5-cycle instruction". *This
+is the same shape as the earlier errors — a measure read as answering a question it does not
+answer — caught this time before it reached a conclusion.*
+
+**The finding, correctly counted.** In a two-op sequence (`01:105E,26:0000`), the PC trace
+shows both handlers execute once each (`$F04CF2` op `$1`, `$F04EB8` op `$6`-read) and
+`$F04924` executes **once**. In single-op runs `$F04924` also executes once. So the reply path
+fires **once per run**, not once per command — which is why op `$6`'s correctly-read `2` sat in
+`$0E74` unshipped while the first command's `$0000` went out.
+
+**What this does and does not establish.** It confirms the observation and rules out the
+simplest alternative explanation — that the second op never ran. It does **not** establish
+where the limit lives. The model's sequence advance waits on the SBC setting MODE0 bit 10 and
+that mechanism plainly works, since both commands were delivered and both handlers ran. So the
+one-reply limit is somewhere between the second handler completing and the reply path being
+re-entered, and I have not isolated it. *Stated as an open question rather than attributed to
+the model, because the firmware may simply not reply to every op* — most op handlers end in
+`bra ChannelConfigDispatch` (the ISR exit stub, 3,960 executions in that run) rather than
+routing through `$F04924`, and which ops ship a reply is not something I have determined.
+
+That distinction matters for anyone driving the machine: **"the chassis got no answer" may mean
+the model dropped it, or may mean that operation does not answer.** Separating those needs a
+per-op census of which handlers reach `$F04924`, which is a clean piece of work and not one I
+have done.
+
 ### The direction bit measured in both states — and `$06` is destructive
 
 Testing whether the chassis can read SBC memory produced the direction bit's meaning by
