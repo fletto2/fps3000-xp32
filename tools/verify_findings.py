@@ -451,6 +451,27 @@ else:
           len({l for l in trk.split() if 'F07D00' <= l <= 'F086FF'}) > 200 and
           len({l for l in trn2.split() if 'F07D00' <= l <= 'F086FF'}) < 130)
 
+    # --- END TO END: CPLOAD stages microcode with no bypass -----------------
+    # Chassis presents response $94 + IRQ -> RDHC wakes from its $13 wait ->
+    # bit-7 command arm -> fetch record from $400000 -> command 4 (CPLOAD) ->
+    # the S1 handler at $F055A2 -> a1 = $10 + addr + $10000 -> store.
+    _, ramsr = run({'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6',
+                    'FPS3K_CHASSIS_CMD': '4,8,53310004,0000DEAD,BEEF0000'},
+                   400_000_000)
+    check('CPLOAD end to end: DEADBEEF lands at $10010 via the firmware itself',
+          ramsr[0x10010:0x10014] == b'\xde\xad\xbe\xef')
+    check('...and nothing else in the staging buffer is touched',
+          not any(ramsr[0x10000:0x10010]) and not any(ramsr[0x10014:0x1DD00]))
+    check('the S1 handler seeds a1 = $10 and adds $10000, like $F051A2 does',
+          d[0xF055A2-0xF00000:0xF055A8-0xF00000]
+              == b'\x22\x7c\x00\x00\x00\x10'
+          and d[0xF055C4-0xF00000:0xF055CA-0xF00000]
+              == b'\xd3\xfc\x00\x01\x00\x00')   # adda.l #$10000,a1
+    check('...and bounds-checks $10000..$1FFFF, rejecting with panel $25A',
+          d[0xF055CC-0xF00000:0xF055D4-0xF00000]
+              == b'\xb3\xfc\x00\x01\x00\x00\x6d\x0c'
+          and struct.unpack('>H', d[0xF055E0-0xF00000+2:0xF055E0-0xF00000+4])[0] == 0x25A)
+
     # --- what blocks RDHC: the directive-$13 wait ---------------------------
     check("RDHC's main loop is moveq #$13 / trap #1 / btst #7,$E87 / bne",
           d[0xF0473C-0xF00000:0xF04740-0xF00000] == b'\x70\x13\x4e\x41'

@@ -80,6 +80,23 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- CPLOAD runs end to end ----
+ (0xF055A2,'S1 RECORD HANDLER -- and this path DEMONSTRABLY RUNS.  With'),
+ (0xF055A2,'  FPS3K_RESP=0x94 FPS3K_XPIRQ=6 FPS3K_CHASSIS_CMD=4,8,53310004,0000DEAD,'),
+ (0xF055A2,'  BEEF0000 the emulator lands DE AD BE EF at exactly $10010 with nothing'),
+ (0xF055A2,'  else in the 55 KB buffer touched -- no monitor L command, no hook writing'),
+ (0xF055A2,'  the buffer, no bypass.  Chain: chassis presents $94 in MODE0 and raises'),
+ (0xF055A2,'  BIM0 ch0 -> $F04930 latches -> $F0495C -> ISR returns via $F050F8 ->'),
+ (0xF055A2,'  RDHC leaves its $13 wait -> $F048D8 sees $14 -> $F052F8 fetches the'),
+ (0xF055A2,'  record from $400000 -> cmd 4 -> $F05522 matches S1 -> here.'),
+ (0xF055A2,'  The record is BINARY, not ASCII hex: a1 = $10, accumulate address words'),
+ (0xF055A2,'  with d5 as the shift count (0 for S1 = one 16-bit word), a1 += $10000.'),
+ (0xF055A2,'  So this and $F051A2 are TWO independent implementations of the same'),
+ (0xF055A2,'  $10 + addr + $10000 rule and the same $10000-$1FFFF bound -- a stronger'),
+ (0xF055A2,'  check on the offset arithmetic than either alone.'),
+ (0xF055CC,'HAZARD IN THE FIRMWARE: the bound is the full $10000-$1FFFF, but the live'),
+ (0xF055CC,'  TCBs start at $1E900.  A record addressed past $1E8F0 passes this check'),
+ (0xF055CC,'  and corrupts RTOS state.  Out of range -> panel $25A.'),
  # ---- what blocks RDHC ----
  (0xF0473E,'*** THIS IS WHAT BLOCKS RDHC. *** Directive $13 is the BLOCKING WAIT, and'),
  (0xF0473E,'  measured over a full boot $F0473C executes EXACTLY ONCE while $F04740'),

@@ -2117,6 +2117,19 @@ loc_F05594:
   f055a0: 4e 75                   rts      
 
 loc_F055A2:
+;### S1 RECORD HANDLER -- and this path DEMONSTRABLY RUNS.  With
+;###   FPS3K_RESP=0x94 FPS3K_XPIRQ=6 FPS3K_CHASSIS_CMD=4,8,53310004,0000DEAD,
+;###   BEEF0000 the emulator lands DE AD BE EF at exactly $10010 with nothing
+;###   else in the 55 KB buffer touched -- no monitor L command, no hook writing
+;###   the buffer, no bypass.  Chain: chassis presents $94 in MODE0 and raises
+;###   BIM0 ch0 -> $F04930 latches -> $F0495C -> ISR returns via $F050F8 ->
+;###   RDHC leaves its $13 wait -> $F048D8 sees $14 -> $F052F8 fetches the
+;###   record from $400000 -> cmd 4 -> $F05522 matches S1 -> here.
+;###   The record is BINARY, not ASCII hex: a1 = $10, accumulate address words
+;###   with d5 as the shift count (0 for S1 = one 16-bit word), a1 += $10000.
+;###   So this and $F051A2 are TWO independent implementations of the same
+;###   $10 + addr + $10000 rule and the same $10000-$1FFFF bound -- a stronger
+;###   check on the offset arithmetic than either alone.
   f055a2: 22 7c 00 00 00 10       movea.l  #$10, a1
 
 loc_F055A8:
@@ -2140,6 +2153,9 @@ loc_F055B6:
 
 loc_F055CA:
   f055ca: 34 18                   move.w   (a0)+, d2
+;### HAZARD IN THE FIRMWARE: the bound is the full $10000-$1FFFF, but the live
+;###   TCBs start at $1E900.  A record addressed past $1E8F0 passes this check
+;###   and corrupts RTOS state.  Out of range -> panel $25A.
   f055cc: b3 fc 00 01 00 00       cmpa.l   #$10000, a1
   f055d2: 6d 0c                   blt.b    loc_F055E0
 ;>>>> [R2/BOTH] This instruction compares the destination address a1 against the upper bound 0x1FFFF of the microcode staging buffer, part of the SRecordDataHandler's address validation that ensures S-record data is written only to the valid 0x10000-0x1FFFF range for XP-32 microcode upload.

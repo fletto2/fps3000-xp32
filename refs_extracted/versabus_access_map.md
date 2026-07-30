@@ -1473,6 +1473,67 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### END TO END: `CPLOAD` stages microcode through the firmware, no bypass
+
+With RDHC awake and command 4 reachable, the whole reason this ROM exists now runs:
+
+```
+FPS3K_RESP=0x94 FPS3K_XPIRQ=6 FPS3K_CHASSIS_CMD=4,8,53310004,0000DEAD,BEEF0000
+
+$10000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 DE AD BE EF 00 00 ...
+        ^-- $10000                                       ^-- $10010
+staging buffer: 4 nonzero bytes, first at $10010
+```
+
+`DE AD BE EF` at **exactly `$10010`**, and nothing else in the 55 KB buffer
+touched. The full chain, every step the firmware's own:
+
+1. chassis presents response `$94` in MODE0 **and** raises BIM0 ch0
+2. `$F04930` latches it, `$F0495C` dispatches the bit-7 arm
+3. the ISR returns via `$F050F8`, releasing RDHC's directive-`$13` wait
+4. `$F04740` sees bit 7, `$F048D8` sees `$14` → "command waiting"
+5. `$F052F8` forces MODE2 to page 0 and fetches the record from `$400000`
+6. `$F05322` reads command **4** → `$F05502`, `CPLOAD`
+7. `$F05522` matches `$5331` = `'S1'` → `$F055A2`
+8. `a1 = $10`, accumulate the address word, `a1 += $10000`, bounds-check,
+   `move.w d2,(a1)+`
+
+**No monitor `L` command, no hook writing into the buffer, no bypass.**
+
+#### The S1 handler is binary, and it confirms the offset arithmetic independently
+
+```
+$F055A2  movea.l #$10,a1            ; the "+$10" seed
+$F055A8  move.w  (a0)+,d2           ; address word
+$F055B4  lsl.l   d5,d2              ; d5 is the shift: 16 for a high half, 0 for low
+$F055B6  adda.l  d2,a1
+$F055BA  subi.b  #$10,d5            ; next half
+$F055C2  bge     $F055A8
+$F055C4  adda.l  #$10000,a1         ; the staging base
+$F055CA  move.w  (a0)+,d2           ; data word
+$F055CC  cmpa.l  #$10000,a1 / blt reject
+$F055D4  cmpa.l  #$1FFFF,a1 / bgt reject   -> panel $25A
+$F055DC  move.w  d2,(a1)+
+```
+
+So there are **two S-record data paths**, `$F051A2` (the SLC/panel one) and
+`$F055A2` (command 4's), and they implement the same `$10 + addr + $10000`
+arithmetic and the same `$10000-$1FFFF` bound. That the two agree is a stronger
+check on the offset rule than either alone. Note `d5` is the shift count, set to 0
+for S1 (one 16-bit address word) — which is how record type selects address width.
+
+*Also note the byte the ROM will happily accept: the bound is `$10000-$1FFFF`, the
+full 64 KB, but the live TCBs start at `$1E900`. A record addressed past `$1E8F0`
+passes the firmware's own check and corrupts RTOS state. That is a real hazard in
+the firmware, not in our model.*
+
+#### A trap in reading the result
+
+With a byte count larger than the data supplied, the parser reads past the record
+and stores whatever the chassis window returns — `AA AA` in these runs, the
+self-test's pattern residue. It looks like data. Only the first case above has
+count and payload matching, which is why it is the one asserted.
+
 ### RDHC UNBLOCKED: the code must be presented in MODE0 *with* the interrupt
 
 The blocker described below turned out to be a **modelling defect, not a firmware
