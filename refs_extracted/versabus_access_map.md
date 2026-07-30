@@ -14559,3 +14559,29 @@ definitions reads `$0000`, so `a3` at that point is some other structure.
 So the low byte of the state word is a **value field, not flags**, written from a runtime source
 this pass did not identify. Bounded, and left there rather than guessed at — the flag-bit census
 is the durable result, and it is complete.
+
+### Bit 12 named: the state word carries one bit per blocking reason
+
+Mapping each state-word bit site to the directive handler containing it (using the 77 handler
+addresses and the `TR1.EQ` names) identifies bit 12:
+
+| bit | sites | enclosing handler |
+|---:|---|---|
+| 9 | `bset` / `bclr` | `$11` SUSPND / `$12` RESUME |
+| **12** | `bset` `$F0285E`, `bclr` `$F0286C` | **both inside `$24` WTEVNT** |
+| 14 | `bset` / `bclr` | `$13` WAIT / `$16` WAKEUP |
+
+So three of the five flags are now named, and they form a coherent set: **one bit per reason a
+task can be blocked** — suspended (9), waiting on an event (12), waiting on a directive (14).
+Each is set by the directive that blocks and cleared by the one that releases.
+
+Bits 10 and 13 are **kernel-internal**. Their sites (`$F00718`, `$F007B6`, `$F00D9A`) lie below
+the lowest directive handler, so the enclosing-handler attribution reports the `$F003D0` stub for
+them and means nothing — an artifact of "greatest handler start ≤ address" when the address
+precedes them all. The one informative site is `$F0300E`, a **`btst` of bit 10 inside `$0F`
+TERM**, so bit 10 is set by kernel code and consulted during task termination.
+
+Consistency note: `WTEVNT` (36 = `$24`) is one of the ASQ directives this project records as
+appearing **nowhere in this firmware**. That remains true of *call sites* — the FPS application
+never issues it — while the kernel plainly implements it and manipulates a state bit for it. The
+two statements describe different layers, as with the earlier `GTASQ`/`RDEVNT`/`QEVNT` check.
