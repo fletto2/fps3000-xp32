@@ -348,6 +348,15 @@ else:
     check('$F096AC is a probe: read then 4 NOPs then rts, value discarded',
           d[0x96AC:0x96B8].hex().upper() == '30114E714E714E714E714E75')
 
+    # --- the channel transaction completes instead of timing out -----------
+    trk, _ = run({'FPS3K_XPIRQ': '1'}, 400_000_000)
+    trn2, _ = run({'FPS3K_XPIRQ': '1', 'FPS3K_NOACK': '1'}, 400_000_000)
+    check('REQUEST-TRANSFER is acknowledged: the ISR poll exits in a few passes',
+          trk.count('F07F2E\n') < 10 and trn2.count('F07F2E\n') == 1000)
+    check('the acknowledge roughly doubles XP1I coverage (116 -> 240)',
+          len({l for l in trk.split() if 'F07D00' <= l <= 'F086FF'}) > 200 and
+          len({l for l in trn2.split() if 'F07D00' <= l <= 'F086FF'}) < 130)
+
     # --- the RTOS scheduler control block ---------------------------------
     TCBP = {0x1E900: 'XP1I', 0x1EB00: 'XP2I', 0x1ED00: 'XP3I',
             0x1EF00: 'XP4I', 0x1F100: 'IO1I', 0x1F300: 'RDHC'}
@@ -385,9 +394,15 @@ else:
     GOLDEN = {
         'default (2-AC, no hooks)':
             ({}, '698be0397ed132d519d56cd629236238'),
+        # UPDATED 2026-07-29 with the REQUEST-TRANSFER acknowledge.  70 RAM
+        # bytes moved and the diff was inspected before this digest changed, per
+        # the rule above.  The change is progress, not regression: $00B91 now
+        # holds $F05102 (the 16-entry response jump table), $00E6E stages panel
+        # code $25C, $00BDB carries $FF0048, and XP1I's TCB and channel snapshot
+        # both advance.  Coverage went 116 -> 240 distinct XP1I PCs.
         'XP1I driven to the $8000 path':
             ({'FPS3K_XPIRQ': '1', 'FPS3K_CHCMD': 'C801'},
-             'a3f9384e3052d8e3cda8c9eb25664a6d'),
+             'dc7215ad5c2292d2082b75da1a9e171b'),
         'TCBIO1I reply path':
             ({'FPS3K_XPIRQ': '5', 'FPS3K_DMA10AA': '2',
               'FPS3K_MBOX': '00010000'},

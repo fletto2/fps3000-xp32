@@ -28,7 +28,8 @@ static struct {
     uint16_t cmd_status;       /* 0xFF0000 — bit 14 = ready, bit 13 = error */
     uint16_t cmd_arg_lo;
     uint16_t cmd_arg_hi;
-    uint16_t ch_data[4][2];    /* [chan][A=0,B=1] — channel data ports */
+    uint16_t ch_data[4][2];    /* [chan][0]=+$08 data HI, [1]=+$0E command */
+    uint16_t ch_lo[4];         /* +$0A data LOW */
     uint16_t last_opcode;
     uint64_t cmd_count;        /* count of commands issued */
 } apif;
@@ -97,6 +98,47 @@ static uint16_t vmod_ctrl;
 static int      chassis_irq_pending;
 static int      chassis_irq_vector;
 static int      chassis_irq_level = 4;
+
+/* REQUEST-TRANSFER acknowledge, per channel.
+ *
+ * The XP channel ISR writes $8004 to its command port and then polls that same
+ * port for bit 14, with a 1000-iteration timeout in d5 ($F07F26 loads $3E8).
+ * Measured, that poll ran EXACTLY 1000 times -- the full timeout, every time --
+ * because the model's command port returned a constant with bit 14 clear.  The
+ * chassis never acknowledged a transfer.
+ *
+ * Bit 14 is therefore the completion flag, inferred from the firmware's own
+ * poll rather than assumed: $F07F30 is btst #$E,d4 and $F07F3E is btst #$D,d4,
+ * so bit 14 is checked first and bit 13 second -- done and error.
+ *
+ * FPS3K_NOACK=1 restores the old always-timeout behaviour. */
+static int      ch_xfer_ack[4];
+static uint32_t ch_xfer_delay[4];
+
+static void ch_request_transfer(int c) {
+    if (c < 0 || c > 3) return;
+    if (getenv("FPS3K_DBGACK")) fprintf(stderr, "[DBG] request_transfer ch%d\n", c+1);
+    /* IMMEDIATE, not delayed.  A 40-cycle delay never elapsed: versabus_tick is
+     * called once per batch of interpreted instructions, and the ISR's entire
+     * 1000-iteration poll fits inside one batch, so ch_xfer_tick did not run
+     * until long after the poll had timed out.  The request fired and the
+     * acknowledge never did -- visible only once both ends were instrumented.
+     *
+     * Acknowledging at once is also the defensible model: the firmware polls
+     * with a 1000-iteration budget, so any chassis fast enough to answer within
+     * that budget is indistinguishable from one that answers immediately, and
+     * nothing here establishes the real latency. */
+    ch_xfer_ack[c]   = 1;
+    ch_xfer_delay[c] = 0;
+}
+
+static void ch_xfer_tick(uint32_t cycles) {
+    for (int c = 0; c < 4; c++)
+        if (ch_xfer_delay[c]) {
+            if (ch_xfer_delay[c] > cycles) ch_xfer_delay[c] -= cycles;
+            else { ch_xfer_delay[c] = 0; ch_xfer_ack[c] = 1; }
+        }
+}
 
 /* Unmapped-region accounting.  Counting these separately is what makes an
  * unmodelled card distinguishable from a card that answered zero. */
@@ -433,7 +475,20 @@ static uint16_t apif_read(uint32_t addr) {
          * FPS3K_CHANNELS=0 to model an empty chassis. */
         static int nch = -1;
         if (nch < 0) { const char *e = getenv("FPS3K_CHANNELS"); nch = e ? atoi(e) : 2; }
-        if (nch > 0 && (addr & 0x1F) == 0x0E && addr >= 0xFF0040 && addr <= 0xFF00AE) {
+        /* PRESENCE IS AN INITIAL VALUE, NOT A READ-TIME OVERRIDE.
+         *
+         * This stub used to intercept every command-port read and return the
+         * CHCMD constant, which shadowed both the value the firmware had just
+         * written and the REQUEST-TRANSFER acknowledge -- so the ISR's poll read
+         * $0001 forever and timed out no matter what the chassis did.  Three
+         * separate mechanisms were claiming this one register: the presence
+         * stub, the retracted host-byte block, and the per-channel handler.
+         *
+         * It now yields once the firmware has written the port, so presence
+         * describes the port's power-on state and the transaction owns it
+         * thereafter. */
+        if (nch > 0 && (addr & 0x1F) == 0x0E && addr >= 0xFF0040 && addr <= 0xFF00AE
+            && apif.ch_data[((addr - 0xFF0040) >> 5)][1] == 0) {
             int ch = ((addr - 0xFF0040) >> 5) + 1;
             /* FPS3K_CHCMD=<hex>: value the command port hands back.
              * The firmware's presence probe only tests nonzero, but the XP
@@ -496,24 +551,42 @@ static uint16_t apif_read(uint32_t addr) {
     }
     if (addr == APIF_CMD_ARG_LO) return apif.cmd_arg_lo;
     if (addr == APIF_CMD_ARG_HI) return apif.cmd_arg_hi;
-    /* CH1 status word at $FF004A — used by host_sim to flag "byte ready" */
-    if (addr == 0xFF004A) return apif_inj_status;
-    if (addr == APIF_CH1_DATA_A || addr == APIF_CH1_DATA_B) {
-        int bx = (addr - APIF_CH1_DATA_A) / 6;
-        uint16_t v = apif.ch_data[0][bx & 1];
-        /* SBC has consumed the byte — clear our queued byte and let
-         * host_sim post the next one. */
-        if (addr == APIF_CH1_DATA_A) {
-            panel_byte_queued = 0;
-            apif_notify_consumed();
+    /* RETRACTED MODEL, now behind FPS3K_APIF_LEGACY.
+     *
+     * This block special-cased channel 1: it returned an invented status at
+     * $FF004A and treated a read of $FF0048 as CONSUMING a host byte.  Both are
+     * from the disproven protocol -- $4F never appears at $FF004A in the
+     * firmware, and the host payload rides in the mailbox, not these ports.
+     *
+     * Worse, it SHADOWED the correct per-channel handler below, so channel 1's
+     * command port never reached the REQUEST-TRANSFER acknowledge and its ISR
+     * poll ran the full 1000-iteration timeout no matter what the chassis did.
+     * A retracted model left in place as dead-looking code was still changing
+     * behaviour. */
+    if (getenv("FPS3K_APIF_LEGACY")) {
+        if (addr == 0xFF004A) return apif_inj_status;
+        if (addr == APIF_CH1_DATA_A || addr == APIF_CH1_DATA_B) {
+            int bx = (addr - APIF_CH1_DATA_A) / 6;
+            uint16_t v = apif.ch_data[0][bx & 1];
+            if (addr == APIF_CH1_DATA_A) {
+                panel_byte_queued = 0;
+                apif_notify_consumed();
+            }
+            return v;
         }
-        return v;
     }
     /* Per-channel data ports */
     for (int c = 0; c < 4; c++) {
         uint32_t base = APIF_CH1_DATA_A + c * 0x20;
         if (addr == base) return apif.ch_data[c][0];
-        if (addr == base + 6) return apif.ch_data[c][1];
+        if (addr == base + 6) {
+            uint16_t v2 = apif.ch_data[c][1];
+            if (ch_xfer_ack[c] && !getenv("FPS3K_NOACK")) {
+                v2 |= 0x4000;
+                if (getenv("FPS3K_DBGACK")) fprintf(stderr, "[DBG] ack read ch%d -> %04X\n", c+1, v2);
+            }
+            return v2;
+        }
     }
     return 0;
 }
@@ -567,7 +640,28 @@ static void apif_write(uint32_t addr, uint16_t val) {
         return;
     }
     if (addr == APIF_CMD_ARG_HI) { apif.cmd_arg_hi = val; return; }
-    /* Per-channel data ports — writes ignored (these are read-only status from AP) */
+
+    /* Per-channel windows.
+     *
+     * These writes used to be DROPPED, with the comment "read-only status from
+     * AP" -- the superseded model in which +$08/+$0A/+$0E were a read port, a
+     * status word and a second read port.  They are a bidirectional 32-bit data
+     * pair plus a command/trigger register, and the firmware demonstrably writes
+     * all three: the channel ISR writes $0 to +$08, a value to +$0A, and $8004
+     * to +$0E, and the task body writes $0000001B across the pair followed by
+     * $8000.  Dropping those writes is why the ISR's poll for bit 14 ran the
+     * full 1000-iteration timeout every time -- nothing recorded the request. */
+    for (int c = 0; c < 4; c++) {
+        uint32_t base = APIF_CH1_DATA_A + c * 0x20;      /* +$08 */
+        if (addr == base)     { apif.ch_data[c][0] = val; return; }
+        if (addr == base + 2) { apif.ch_data[c][2 - 1] = apif.ch_data[c][1];
+                                apif.ch_lo[c] = val; return; }   /* +$0A */
+        if (addr == base + 6) {                                   /* +$0E */
+            apif.ch_data[c][1] = val;
+            if (val == 0x8004) ch_request_transfer(c);   /* REQUEST-TRANSFER */
+            return;
+        }
+    }
 }
 
 /* ============== XLTR handler ============== */
@@ -1436,6 +1530,7 @@ static uint64_t inject_countdown;
 static int      inject_done;
 
 void versabus_tick(uint32_t cycles) {
+    ch_xfer_tick(cycles);
     mc6840_tick(&ptm_dev, cycles);
     upd7201_tick(&sio_dev, cycles);
 

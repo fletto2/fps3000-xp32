@@ -1473,6 +1473,57 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### The chassis now acknowledges REQUEST-TRANSFER — XP1I coverage doubles
+
+The channel ISR writes `$8004` to its command port and polls that port for
+bit 14, with a 1000-iteration budget (`$F07F26` loads `$3E8`). Measured, the poll
+ran **exactly 1000 times, every time** — the full timeout. The chassis never
+acknowledged a transfer.
+
+Bit 14 is the completion flag, read off the firmware rather than assumed:
+`$F07F30` is `btst #$E,d4` and `$F07F3E` is `btst #$D,d4`, so bit 14 is tested
+first and bit 13 second — done, then error.
+
+Making the chassis set bit 14 on a `$8004` write took **three shadowing layers**
+off the same register, and each was a survival of a superseded model:
+
+1. **Channel-port writes were dropped entirely**, with the comment *"read-only
+   status from AP"* — the old model in which `+$08`/`+$0A`/`+$0E` were a read
+   port, a status word and a second read port. Nothing recorded the request.
+2. **A retracted host-byte block special-cased channel 1**, returning the
+   invented `$4F` at `$FF004A` and treating a read of `$FF0048` as *consuming a
+   host byte*. It also **shadowed the correct per-channel handler**, so channel 1
+   could never reach the acknowledge. A retracted model left in place as
+   dead-looking code was still changing behaviour.
+3. **The `FPS3K_CHANNELS` presence stub intercepted every command-port read** and
+   returned its constant, shadowing both the value the firmware had just written
+   and the acknowledge. Presence is now the port's *power-on* value and yields
+   once the firmware writes it.
+
+With all three resolved:
+
+| | poll iterations | XP1I distinct PCs |
+|---|---|---|
+| `FPS3K_NOACK=1` (old behaviour) | **1000** | 116 |
+| acknowledged | **2** | **240** |
+
+**Coverage on XP1I roughly doubles**, and the post-poll path at `$F07F56` is
+reached for the first time.
+
+Two notes on getting there. The acknowledge is **immediate**: a 40-cycle delay
+never elapsed, because `versabus_tick` runs once per batch of interpreted
+instructions and the entire 1000-iteration poll fits inside one batch — the
+request fired and the acknowledge never did, visible only once both ends were
+instrumented. Immediate is also defensible: any chassis fast enough to answer
+within the firmware's own 1000-iteration budget is indistinguishable from one
+that answers at once, and nothing here establishes the real latency.
+
+And the **golden master did its job**. The XP1I digest changed, the other two did
+not, so the effect was confined as expected. The diff was inspected before the
+digest was updated: `$00B91` now holds `$F05102`, the 16-entry response jump
+table; `$00E6E` stages panel code `$25C`; `$00BDB` carries `$FF0048`; and XP1I's
+TCB and channel snapshot both advance. Seventy bytes moved, all of it progress.
+
 ### The RTOS scheduler control block, found by differential state analysis
 
 Diffing the three golden masters against each other maps which RAM each
