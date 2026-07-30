@@ -348,6 +348,26 @@ else:
     check('$F096AC is a probe: read then 4 NOPs then rts, value discarded',
           d[0x96AC:0x96B8].hex().upper() == '30114E714E714E714E714E75')
 
+    # --- five copies of the 42-entry dispatch table ------------------------
+    def _pat(base):
+        hs, out = {}, ''
+        for i in range(42):
+            x = base + i*4
+            w1 = struct.unpack('>H', d[x:x+2])[0]
+            if w1 == 0x4E75: out += '.'; continue
+            if w1 != 0x4EFA: return None
+            w2 = struct.unpack('>H', d[x+2:x+4])[0]
+            tg2 = x + 2 + (w2 - 0x10000 if w2 >= 0x8000 else w2)
+            hs.setdefault(tg2, chr(ord('A') + len(hs)))
+            out += hs[tg2]
+        return out
+    _P = '.ABBBBBBCCA..BBBB...D.AACACACCCA..ACAC....'
+    check('five 42-entry dispatch tables share one handler pattern',
+          [0xF00000 + x for x in range(0x4488, 0xA600, 2) if _pat(x) == _P]
+          == [0xF05BA4, 0xF065E4, 0xF06FFC, 0xF079FC, 0xF083FC])
+    check("XP4I's copy is $18 off the $A00 grid, as the byte diff predicts",
+          (0xF083FC - 0xF065E4) == 0x1E18 and (0xF083FC - 0xF079FC) == 0x0A00)
+
     # --- the XP channel command dispatch table ----------------------------
     def _tbl42(base):
         out = []

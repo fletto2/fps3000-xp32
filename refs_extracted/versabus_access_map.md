@@ -1473,6 +1473,42 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### `PanelStatusDispatchTable` is not one table — there are five
+
+The 42-entry table is not a twin of RDHC's; it is a **copy of it**. Searching the
+whole ROM for any 42-entry table with the same index-to-handler pattern —
+`.ABBBBBBCCA..BBBB...D.AACACACCCA..ACAC....` — finds **five**, one per task:
+
+| address | task | offset from XP1I's |
+|---|---|---|
+| `$F05BA4` | RDHC | — (the documented `PanelStatusDispatchTable`) |
+| `$F065E4` | XP4I | `-$1E18` — **`$18` off the grid** |
+| `$F06FFC` | XP3I | `-$1400` |
+| `$F079FC` | XP2I | `-$0A00` |
+| `$F083FC` | XP1I | reference |
+
+168 bytes each, 840 bytes in total, byte-identical in structure. So this project's
+named `PanelStatusDispatchTable` is one instance of a **replicated library
+table**, and the "42 codes → 4 handlers" characterisation applies to all five.
+
+Three things fall out.
+
+**The 5-copy shape matches the dominant replication pattern** already measured —
+one in RDHC and one in each XP task, exactly like the 192-, 176-, 130-, 106- and
+88-byte blocks. The table was simply large enough, and data-like enough, that the
+duplicate-block sweep did not surface it as code.
+
+**XP4I's copy independently confirms the `$18` shift.** XP2I and XP3I sit on the
+clean `$A00` grid; XP4I's is at `-$1E18`, `$18` past where the grid predicts —
+which is precisely the offset established from the byte diff, arrived at here from
+completely different evidence.
+
+**And the documented one is the only copy that never runs.** RDHC's is reached
+from `$F0572C`, which no configuration has ever executed; the XP copies execute.
+That reframes a long-standing note: the table was correctly decoded but attributed
+to the one owner whose path is dead, while four live owners of the same table went
+unnoticed.
+
 ### XP1I has a 42-entry dispatch table — the twin of `PanelStatusDispatchTable`
 
 Making the transaction complete exposed 124 new XP1I instructions, and the
