@@ -16643,3 +16643,28 @@ converted to a code location by arithmetic — which is why this table had to be
 
 `$FF0204` on a stalled board now resolves to an instruction, and from there to one of the 42
 documented subroutines. That is the complete diagnostic path on hardware with no serial output.
+
+### The phase number marks a checkpoint, not the start of a test
+
+Following each broadcast to the next `bsr`/`jsr` gives, for 10 of 26 phases, **`$F0891C`** — the
+self-test checkpoint that polls board-status bits 4 and 5. The remainder call `$F0903C`, `$F09154`,
+`$F091C6`, `$F096AC` (twice), `$F098C4`, `$F089EE` (twice) or `$F08958`.
+
+So the sequence is **test → broadcast the phase → checkpoint handshake**, not *broadcast → test*.
+The number in `CHANNEL_SELECT` identifies the phase that has just **completed** and is being
+acknowledged, not the one being entered.
+
+That sharpens how a stalled board should be read:
+
+| what you see | what it means |
+|---|---|
+| `$FF0204` holds phase *N* | phase *N* finished and the machine is in, or past, its checkpoint |
+| the board is stuck there | either the checkpoint handshake never completed, or phase *N+1* hung before broadcasting |
+
+**It is not "phase *N* failed".** The documented ROM-checksum case fits this exactly: a bad
+checksum leaves `$0300` because phase `$300` retries forever *after* announcing itself — the phase
+number is the last thing successfully broadcast, and the failure is at or after that point.
+
+This also explains why `$F0891C` is where the `FPS3K_CHSEL_RD` hang was observed. That hook breaks
+the `CHANNEL_SELECT` read-back test, so the machine reaches a checkpoint with the failure flag set
+and stops there — in the handshake, one step past the test that actually failed.
