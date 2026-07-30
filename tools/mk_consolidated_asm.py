@@ -80,6 +80,26 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- the AP I/F is five identical windows; $FF0010 is invented ----
+ (0xF0450C,'THE AP I/F IS FIVE IDENTICAL 32-BYTE WINDOWS.  A basic-block-attributed'),
+ (0xF0450C,'  sweep of the BASE window $FF0000-$FF003F finds exactly four offsets --'),
+ (0xF0450C,'  +$00, +$04, +$08, +$0E -- the SAME FOUR as each channel window.  So the'),
+ (0xF0450C,'  card presents one window type five times: $FF0000 for the host/bulk link'),
+ (0xF0450C,'  and $FF0040 + $20N for the four XP channels.  An emulator should model'),
+ (0xF0450C,'  one window five times, not two unrelated register blocks.'),
+ (0xF0450C,'  $FF0010 (APIF_CMD_ARG_HI) IS NEVER ACCESSED: not as an absolute address,'),
+ (0xF0450C,'  not as an attributed displacement, and zero times at runtime across the'),
+ (0xF0450C,'  default, RDHC-driven and four-channel configurations, while $FF000E'),
+ (0xF0450C,'  reports three in the same runs.  The emulator defines and models it'),
+ (0xF0450C,'  anyway -- a register the MODEL invents, like the withdrawn $4F status'),
+ (0xF0450C,'  value.  And the emulator name APIF_CMD_ARG_LO for $FF000E is wrong:'),
+ (0xF0450C,'  that is the PANEL COMMAND port, written by all eight issuer copies and'),
+ (0xF0450C,'  read back as status, exactly like the channel +$0E.  There is no'),
+ (0xF0450C,'  command-argument pair; there is one command/status register per window.'),
+ (0xF0998E,'THIS IS A RAM-TEST DATA PATTERN, NOT AN ADDRESS.  #$00FF00FF looks like a'),
+ (0xF0998E,'  reference into the AP I/F block and is not -- the next instructions are'),
+ (0xF0998E,'  not.l d0 (giving $FF00FF00) and move.l #$55AA55AA,d0.  Hex that matches'),
+ (0xF0998E,'  an address range is not an address.'),
  # ---- the channel window is exactly four registers ----
  (0xF07EEE,'THE CHANNEL WINDOW IS EXACTLY FOUR REGISTERS -- a systematic sweep of every'),
  (0xF07EEE,'  access through a base register holding $FF0000 (the form absolute scans'),

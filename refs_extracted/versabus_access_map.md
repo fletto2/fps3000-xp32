@@ -1528,6 +1528,52 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### The AP I/F is five identical windows, and `$FF0010` is an emulator invention
+
+Repeating the sweep on the **base** window `$FF0000-$FF003F`, with a conservative
+basic-block attribution (register loaded with `#$FF0000`, used before any reload),
+gives exactly four offsets:
+
+| offset | sites | role |
+|---|---|---|
+| `+$00` | 11 | compared against 0 |
+| `+$04` | 10 | polled ready flag, bit 0 |
+| `+$08` | 11 | bulk data port |
+| `+$0E` | 7 | command on write / status on read |
+
+**The same four offsets as the channel windows.** So the AP I/F presents **five
+identical 32-byte windows** — one at `$FF0000` for the host/bulk link and four at
+`$FF0040 + $20N` for the XP channels — and an emulator can model one window type
+five times rather than two unrelated register blocks. This document already observed
+that `$FF0000-$FF001F` "has the same shape"; the sweep makes it exact and shows
+nothing else in either type is touched.
+
+#### `$FF0010` (`APIF_CMD_ARG_HI`) is never accessed
+
+`$FF0010` appears **nowhere**: not as an absolute address, not as an attributed
+displacement, and not at runtime — `FPS3K_PCLOG` reports **zero** accesses across
+the default, RDHC-driven and four-channel configurations, while `$FF000E` reports
+three in the same runs.
+
+The emulator nonetheless models it: `versabus.h:29` defines `APIF_CMD_ARG_HI
+0xFF0010` with read and write handling at `versabus.c:552` and `:642`. This document
+lists it in the memory map as "`0xFF0010` = CMD_ARG_HI … modelled in
+`emulator/versabus.{c,h}`, neither yet confirmed against hardware." The stronger and
+correct statement is that **the firmware never touches it**, so it is not awaiting
+hardware confirmation — it is a register the model invents, in the same class as the
+`$4F` status value that was withdrawn earlier.
+
+**And `APIF_CMD_ARG_LO` at `$FF000E` is misnamed.** That register is the **panel
+command port** — every one of the eight `PanelIOConfigure` copies writes the command
+code there — and it is read back as status, exactly like the channel `+$0E`. The
+disassembly's own symbol, `APIF_PANEL_CMD`, is right and the emulator's is not. There
+is no "command argument" pair here; there is one command/status register per window.
+
+*A third instance of the same trap in one sweep: `$FF00FF` also looked like an
+address until inspection showed `move.l #$ff00ff,d0` is loading a RAM-test **data
+pattern** — the next instructions are `not.l d0` and `move.l #$55aa55aa,d0`. Hex
+that matches an address range is not an address.*
+
 ### The channel window is exactly four registers, and the ISR snapshots three
 
 Applying the "revisit every claim that rested on a blind method" rule to the whole

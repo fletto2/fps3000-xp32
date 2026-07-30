@@ -550,6 +550,23 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- $FF0010 is never accessed; $FF000E is the panel command port --------
+    for _cfg in ({}, {'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6'},
+                 {'FPS3K_XPIRQ': '1,2,3,4', 'FPS3K_CHANNELS': '4'}):
+        _e = dict(_cfg); _e['FPS3K_PCLOG'] = '1'
+        check('$FF0010 (APIF_CMD_ARG_HI) is never accessed: %s'
+              % (','.join(f'{k}={v}' for k, v in _cfg.items()) or 'default'),
+              'FF0010' not in run_err(_e, CYC))
+    check('...while $FF000E IS accessed in the same run (the check can fire)',
+          'FF000E' in run_err({'FPS3K_PCLOG': '1'}, CYC))
+    check('$FF0010 appears nowhere in the ROM as an absolute address',
+          b'\x00\xff\x00\x10' not in d)
+    check('the emulator still defines APIF_CMD_ARG_HI -- a modelled non-register',
+          '0xFF0010' in open('emulator/versabus.h').read())
+    check('$FF00FF in the ROM is a RAM-test DATA pattern, not an address',
+          d[0xF0998E-0xF00000:0xF0999A-0xF00000]
+          == b'\x20\x3c\x00\xff\x00\xff\x61\x22\x46\x80\x61\x1e')
+
     # --- the channel window is exactly four registers ------------------------
     # Each ISR reads +$0E, +$08, +$0A in that order into a 6-byte record, and the
     # task body clears +$04.  No other offset in any 32-byte window is touched.

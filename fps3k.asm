@@ -174,6 +174,21 @@ loc_F044D6:
   f04500: 33 c0 00 00 0e 6e       move.w   d0, $e6e.l
 ;###   stash d0 at $E6E, cmd -> $FF000E, MODE1 b14 clr / b12 set, MODE0 b10 clr,
   f04506: 20 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a0
+;### THE AP I/F IS FIVE IDENTICAL 32-BYTE WINDOWS.  A basic-block-attributed
+;###   sweep of the BASE window $FF0000-$FF003F finds exactly four offsets --
+;###   +$00, +$04, +$08, +$0E -- the SAME FOUR as each channel window.  So the
+;###   card presents one window type five times: $FF0000 for the host/bulk link
+;###   and $FF0040 + $20N for the four XP channels.  An emulator should model
+;###   one window five times, not two unrelated register blocks.
+;###   $FF0010 (APIF_CMD_ARG_HI) IS NEVER ACCESSED: not as an absolute address,
+;###   not as an attributed displacement, and zero times at runtime across the
+;###   default, RDHC-driven and four-channel configurations, while $FF000E
+;###   reports three in the same runs.  The emulator defines and models it
+;###   anyway -- a register the MODEL invents, like the withdrawn $4F status
+;###   value.  And the emulator name APIF_CMD_ARG_LO for $FF000E is wrong:
+;###   that is the PANEL COMMAND port, written by all eight issuer copies and
+;###   read back as status, exactly like the channel +$0E.  There is no
+;###   command-argument pair; there is one command/status register per window.
   f0450c: 31 40 00 0e             move.w   d0, $e(a0)
   f04510: 32 28 02 02             move.w   $202(a0)  [XLTR_MODE1], d1
   f04514: 08 81 00 0e             bclr.b   #$e, d1
@@ -9657,6 +9672,10 @@ loc_F09986:
   f0998a: 42 06                   clr.b    d6
 ;>>>> [R7/BOTH] In `ROMChecksum_etc`, this instruction copies the address in `a0` to `a2`, setting up the base address for a memory pattern test subroutine that writes and verifies patterns like `0xFF00FF` and `0x55AA55AA` in the RAM addressing test.
   f0998c: 24 48                   movea.l  a0, a2
+;### THIS IS A RAM-TEST DATA PATTERN, NOT AN ADDRESS.  #$00FF00FF looks like a
+;###   reference into the AP I/F block and is not -- the next instructions are
+;###   not.l d0 (giving $FF00FF00) and move.l #$55AA55AA,d0.  Hex that matches
+;###   an address range is not an address.
   f0998e: 20 3c 00 ff 00 ff       move.l   #$ff00ff, d0
   f09994: 61 22                   bsr.b    loc_F099B8
   f09996: 46 80                   not.l    d0
