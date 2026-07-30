@@ -14188,3 +14188,45 @@ careful frame-by-frame model, not another inference.
 What *is* established and measured: the CCR sentinel selects this path, it walks `!IDV` on a
 14-byte stride to identify the finishing ISR, it wakes that record's TCB through `T0WAKEUP`, and
 it runs exactly once per exit — 219 times in lockstep with the stub across a level-7 run.
+
+## RESOLVED: the `-6` is a table-lookup key normalisation
+
+The open question — what `subq.l #$6,(a7)` at `$F00282` is for — is answered by dumping `!IDV`.
+
+Tracing the frame properly (rather than predicting from one instruction): after `$F00280`'s
+`addq.l #$4,a7` the stack pointer is at the PC field; `$F00284` then pushes 15 registers, 60
+bytes; so `$F00296`'s `movea.l $3c(a7),a4` — offset **60** — reads back **the adjusted PC**. It is
+not a return address at all. It is a **search key**.
+
+`!IDV` at `$1F800`, six live records on a 14-byte stride:
+
+```
++000  0045  0001E900  00F07EE6  00F07F08     XP1I
++00E  0046  0001EB00  00F074E6  00F07508     XP2I
++01C  0047  0001ED00  00F06AE6  00F06B08     XP3I
++02A  0048  0001EF00  00F060CE  00F060F0     XP4I
++038  004A  0001F100  00F05DD6  00F05E4C     IO1I
++046  0041  0001F300  00F04930  00F050FC     RDHC   <- $F050FC
+```
+
+Field map confirmed exactly as this project documented it, now with offsets:
+**`+0` vector (word), `+2` TCB (long), `+6` ISR entry (long), `+10` ISR exit (long)** = 14 bytes.
+
+The chain closes:
+
+1. `trap #1` from the exit stub stacks PC = `$F05102`.
+2. `subq.l #$6` makes it **`$F050FC`** — the value the record stores.
+3. `$F0029A`'s `cmpa.l $a(a5),a4` compares at **offset 10**, the ISR-exit field, and matches.
+4. `$F002AC`'s `movea.l -$c(a5),a6` takes the TCB at offset 2 — **`$1F300`**, the sixth TCB,
+   which is RDHC — and `$F002B2` wakes it via `T0WAKEUP`.
+5. `lea.l $4(a7),a7` then discards the trap frame so the `rte` unwinds through the *interrupt's*
+   frame, returning to whatever the interrupt interrupted.
+
+So the adjustment exists because **the stacked PC points past the trap and the table stores the
+address of the sentinel**. Six bytes is the distance from `move.w #$c,ccr` to the instruction
+after `trap #1` — `4 + 2`. Every task's exit stub is at a different address, which is exactly why
+the lookup is needed at all: one kernel routine serves six ISRs and identifies the caller by where
+it trapped from.
+
+This also independently re-derives the `!IDV` record layout from the code that consumes it,
+having previously been read off the structure that produces it.
