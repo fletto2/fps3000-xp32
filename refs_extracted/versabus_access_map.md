@@ -1473,6 +1473,43 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### Coverage after the acknowledge: 19% → 25%, XP tasks quadrupled
+
+Re-measuring the union across nine configurations, against the 19%/5-config
+baseline recorded earlier:
+
+| region | before | after |
+|---|---|---|
+| init / self-test | 52% | 51% |
+| RTOS init | 41% | 41% |
+| TCBIO1I | 30% | 29% |
+| **TCBRDHC** | 8% | **7%** |
+| **XP1I** | 6% | **20%** |
+| **XP2I / XP3I / XP4I** | 4% each | **18% / 18% / 19%** |
+| **overall** | **19%** | **25%** |
+
+**The four channel tasks roughly quadrupled** — the single acknowledge bit was
+what gated them. XP1I now reaches `$F08614`, and the channel service routines at
+`$F0810A`-`$F081A8` execute for the first time.
+
+The regions that did not move are the informative ones. `init/test` and `RTOS`
+are unchanged because they never depended on a channel transaction, and the 1%
+wobble is config-set noise rather than regression.
+
+**TCBRDHC is still 7%**, and it is now clearly the whole remaining problem: it is
+the largest region (5,888 bytes), it is the master task, and it is blocked on
+something different in kind. The XP tasks were blocked on a *bit* — one
+acknowledge the chassis never asserted. RDHC is blocked on a *conversation*: the
+scripted-sequence hook is a monologue, and RDHC's body sits behind a protocol
+exchange where each step depends on the previous response. Sweeping the 16
+response codes bought it one percentage point.
+
+So the remaining emulator-side headroom is concentrated in one place, and closing
+it needs either the chassis's real response protocol — a bus trace — or a
+reactive chassis model built on assumptions that nothing available can falsify.
+The first is a bench task; the second is the kind of self-consistent invention
+this session has spent most of its effort removing.
+
 ### The chassis now acknowledges REQUEST-TRANSFER — XP1I coverage doubles
 
 The channel ISR writes `$8004` to its command port and polls that port for
