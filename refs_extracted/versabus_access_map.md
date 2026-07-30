@@ -16586,3 +16586,32 @@ A negative result worth recording, since the opposite would have been more usefu
 per-phase failure code to read out of a dead board's registers.** A stalled machine tells you which
 phase it stopped in and nothing about why, so the 42 self-test subroutines already documented here
 remain the only route from a phase number to a cause.
+
+## The complete self-test phase list, measured
+
+`CHANNEL_SELECT` is the only diagnostic a stalled board offers, so the phase list is the lookup
+table someone with dead hardware needs. The phases are **computed in `d6`, not literal** — only two
+immediate writes exist in the whole self-test (`$0100` at `$F08A66`, `$0101` at `$F08A96`) — so the
+list has to be measured rather than extracted.
+
+Logging every `CHANNEL_SELECT` write across a clean boot gives **30 distinct phase markers** in
+three sequences:
+
+| sequence | phases | count |
+|---|---|---:|
+| **A** | `$0100` `$0200` `$0300` `$0400` `$0500` `$0600` `$0700` `$0800` `$0900` | 9 |
+| **B** | `$1000` `$1100` `$1200` `$1300` `$1400` `$1500` `$1600` `$1700` `$1800` `$1900` `$1A00` | 11 |
+| **C** | `$2000` `$2100` `$2200` `$2300` `$2400` `$2500` `$2600` `$2700` `$2800` `$2900` | 10 |
+
+Two updates to what this file records:
+
+- **Sequence A starts at `$0100`, not `$0200`.** The documented bases (`$200`/`$1000`/`$2000`)
+  are right for B and C and one step high for A.
+- **Sequence C now runs to `$2900`.** This file records "phases reached `$0100`-`$1A00`, `$2000`",
+  i.e. C barely starting. All ten of its phases now execute — the four chassis-stub fixes that made
+  the suite run went further than the note was updated to say.
+
+Combined with the 42 documented self-test subroutines, a phase number read from `$FF0204` on a
+stalled board now maps to a specific test. That is the entire diagnostic chain on hardware with no
+serial output: **`d7` says something failed, `$FF0204` says which of thirty phases, and the
+subroutine map says what that phase was testing.**
