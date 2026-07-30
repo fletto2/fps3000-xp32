@@ -1473,6 +1473,125 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### RTOS directives `$29` and `$2A` are ASQ name-lookup and post
+
+`$F05652`, the routine RDHC's command 1 calls with `'HXP1'`-`'HXP4'` in `d1`, uses
+two of the five directives this document lists as *"RDHC's alone"* and records as
+unmatched to any published Motorola name:
+
+```
+$F05652  move.l  a0,-(a7)
+$F05654  move.w  #$2,-(a7)        \
+$F05658  move.l  #$0,-(a7)         > a 10-byte parameter block on the stack
+$F0565E  move.l  d1,-(a7)         /   {name, longword 0, word 2}
+$F05660  movea.l a7,a0
+$F05662  moveq   #$29,d0
+$F05664  trap    #1               ; LOOK UP the queue by name -> handle in a0
+$F05666  move.l  a0,$4(a7)        ; store the handle into the block
+$F0566A  movea.l a7,a0
+$F0566C  moveq   #$2A,d0
+$F0566E  trap    #1               ; POST to it
+$F05670  lea     $a(a7),a7        ; discard the block
+```
+
+**`$29` resolves an ASQ name to a handle, returned in `a0`; `$2A` posts to that
+handle.** Two of the fourteen unidentified directives now have meanings, and they
+are the pair that makes RDHC a dispatcher.
+
+And the parameter block is **`{4-byte name, longword, word}` — exactly the 10-byte
+ASQ descriptor layout found at the base of every task's block at `TCB+$138`**. The
+in-RAM descriptor and the directive's argument block are the same structure, which
+is why the descriptors are 10 bytes and why `!ASQ` never needed a tag: the kernel
+addresses them by name through `$29`, not by scanning for a marker.
+
+### The S2/S3 address handler, and a third copy of the offset rule
+
+`$F055FC` selects address width from `d4` and rejects anything else:
+
+```
+$F055FC  cmpi.w  #$2,d4 / beq -> d5 = $0000     ; one address word
+$F05608  cmpi.w  #$3,d4 / beq -> d5 = $0010     ; two address words
+$F05614  move.w  #$260,d0 / jsr PanelIOConfigure / rts   ; neither -> reject
+$F05620  a1 = 0
+$F05626  read word, shift left by d5, accumulate into a1, d5 -= $10, repeat
+$F05640  adda.l  #$10000,a1                     ; the staging base
+$F05646  move.l  a1,$0E7E                       ; store the resolved address
+```
+
+So `d5` is the same shift-count mechanism as the S1 handler, and this is a **third
+implementation of the `+$10000` staging offset** — after `$F051A2` and `$F055A2`.
+Unlike the other two it does not store data; it resolves an address into `$E7E` for
+a later transfer, and it is the site that rejects an unsupported record type with
+panel `$260`.
+
+*Three independent implementations of the same offset arithmetic, in three code
+paths written for three record classes, is about as strong as static evidence for
+that rule gets without hardware.*
+
+### `BLK_XFR` decoded: the bulk mover, and its mode is the swapped high word of `d0`
+
+`$F05B0E` is the block-transfer primitive — 9 of the 42 operation slots reach it —
+and it is the only primitive that moves bulk data. Fully decoded:
+
+```
+$F05B0E  swap    d0                ; the HIGH word of d0 becomes the mode selector
+$F05B10  a4 = $FF0000
+$F05B16  a5 = $FF0008              ; the bulk data port
+$F05B1A  cmpa.l  a2,a5             ; is the DESTINATION the bulk port?
+$F05B1C  bne     -> $F05B28
+$F05B1E  move.w  $4(a4),d4         ;   then wait for $FF0004 bit 0 (ready)
+$F05B22  btst.b  #$0,d4
+$F05B26  beq     -> $F05B1E
+$F05B28  moveq   #$1,d1            ; d1 = iteration counter, 1..d2
+
+loop:
+$F05B2C  move.w  (a1),d6           ; channel data HIGH
+$F05B2E  move.w  d6,(a2)           ;   -> destination
+$F05B30  cmpi.w  #$0,d0            ; MODE
+$F05B36  move.w  $2(a1),d6         ; mode 0: data LOW -> the SAME address,
+$F05B3A  move.w  d6,(a2)           ;         a2 NOT advanced
+$F05B3E  move.w  $2(a1),d6         ; mode != 0: data LOW -> a2+2,
+$F05B42  move.w  d6,$2(a2)
+$F05B46  addq.l  #$4,a2            ;            a2 advanced by 4
+$F05B48  move.w  #$8004,(a0)       ; REQUEST-TRANSFER for the next pair
+$F05B50  d5 = 1000                 ; then poll bit 14 (done), bit 13 (error)
+$F05B76  move.w  #$26c,d0          ; on timeout: RELEASE
+$F05B80  addq.l  #$1,d1
+$F05B82  cmp.l   d2,d1 / ble -> loop
+```
+
+What an emulator needs from this:
+
+| register | role |
+|---|---|
+| `d2` | **transfer count** — the loop runs `d1 = 1..d2` inclusive |
+| `a1` | the **channel data pair**: `+$00` high, `+$02` low (e.g. `$FF0048`/`$FF004A`) |
+| `a2` | the **destination pointer** |
+| `a0` | the channel **command port**, written `$8004` once per iteration |
+| `d0` high word | **mode**: zero deposits both halves at one address; nonzero deposits them at `a2` and `a2+2` and advances by 4 |
+
+This document has described `BLK_XFR` as copying "word `(a1)`→`(a2)`, advance `a2` by
+4" and separately noted that it "deposits them at one address **or** at consecutive
+addresses". Both readings were right and they are the two *modes* — selected by the
+caller's `d0` **high** word, which the `swap` at entry brings into the test. Note the
+caller at `$F05422` loads `d0 = $FFFF000F`, so the high word is `$FFFF` and op `$14`
+runs in **consecutive-address mode**; the low word `$000F` is the dispatch index.
+*One register carries both the table index and the transfer mode, in different
+halves* — which is why the `swap` is the first instruction.
+
+Two details worth having:
+
+- **The destination may be the chassis bulk port itself.** The entry check compares
+  `a2` against `$FF0008` and, only in that case, waits for `$FF0004` bit 0. So
+  `BLK_XFR` is a **RAM→chassis** mover as well as chassis→RAM, and the ready
+  handshake is required only in the outbound direction. That makes `$FF0004` bit 0 an
+  *input-side* flow-control flag, consistent with its use in the polled bulk loop at
+  `$F04B22`.
+- **Every iteration re-arms.** `$8004` is written per word-pair, not once per
+  transfer, with a 1000-poll timeout each time and `$26C` RELEASE on expiry. So a
+  chassis model must acknowledge bit 14 once per pair; acknowledging once per
+  transfer stalls after the first.
+
 ### One operation per run: RDHC 36% → 47%, total 54%
 
 Acting on the truncation finding below — replacing the single long `FPS3K_SEQ` with

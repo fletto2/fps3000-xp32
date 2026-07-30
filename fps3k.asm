@@ -2232,6 +2232,11 @@ loc_F055EC:
   f055fa: 4e 75                   rts      
 
 loc_F055FC:
+;### S2/S3 ADDRESS HANDLER.  d4 = 2 -> one address word, d4 = 3 -> two; d5 is
+;###   the same shift-count mechanism as the S1 handler.  Anything else is
+;###   rejected with panel $260.  Applies the SAME +$10000 staging offset --
+;###   a THIRD implementation after $F051A2 and $F055A2 -- but stores the
+;###   resolved address at $E7E rather than moving data.
   f055fc: 0c 44 00 02             cmpi.w   #$2, d4
   f05600: 66 06                   bne.b    loc_F05608
   f05602: 3a 3c 00 00             move.w   #$0, d5
@@ -2282,11 +2287,18 @@ loc_F05652:
 ;>>>> [R4/BOTH] This instruction sets up the stack pointer (a7) as the argument register (a0) for a trap call, part of a parameter-passing sequence for RMS68K system calls (trap #$1 with d0=$29) used in the panel command dispatch or microcode upload path.
   f05660: 20 4f                   movea.l  a7, a0
 ;>>>> [R5/BOTH] Prepare abort command (0x29) via ROM monitor trap for panel interface
+;### DIRECTIVE $29 = LOOK UP AN ASQ BY NAME (handle returned in a0), and
   f05662: 70 29                   moveq    #$29, d0
 ;###   $0002, zero longword, d1). RDHC-exclusive; called twice; purpose still open.
   f05664: 4e 41                   trap     #$1
   f05666: 2f 48 00 04             move.l   a0, $4(a7)
   f0566a: 20 4f                   movea.l  a7, a0
+;### DIRECTIVE $2A = POST TO THAT HANDLE.  Two of the fourteen unidentified
+;###   TRAP #1 directives now have meanings, and they are the pair that makes
+;###   RDHC a dispatcher.  The parameter block is {4-byte name, longword,
+;###   word} -- EXACTLY the 10-byte ASQ descriptor layout at TCB+$138.  The
+;###   in-RAM descriptor and the directive argument block are one structure,
+;###   which is why !ASQ needs no tag: the kernel finds them by name.
   f0566c: 70 2a                   moveq    #$2a, d0
   f0566e: 4e 41                   trap     #$1
   f05670: 4f ef 00 0a             lea.l    $a(a7), a7
@@ -2807,10 +2819,22 @@ loc_F05AF0:
   f05b04: 39 40 02 1a             move.w   d0, $21a(a4)  [XLTR_IRQ_MASK]
   f05b08: 36 bc 00 5f             move.w   #$5f, (a3)
   f05b0c: 4e 75                   rts      
+;### BLK_XFR, THE BULK MOVER.  swap d0 first because ONE REGISTER CARRIES BOTH
+;###   the dispatch index (low word) and the TRANSFER MODE (high word).
+;###     d2 = transfer count, loop d1 = 1..d2 inclusive
+;###     a1 = channel data pair (+$00 high, +$02 low)
+;###     a2 = destination;  a0 = channel command port
+;###     mode 0  -> both halves to (a2), a2 NOT advanced
+;###     mode !=0 -> halves to (a2) and $2(a2), a2 += 4
+;###   The caller at $F05422 loads d0 = $FFFF000F, so op $14 runs in
+;###   consecutive-address mode with dispatch index $0F.
   f05b0e: 48 40                   swap     d0
   f05b10: 28 7c 00 ff 00 00       movea.l  #$ff0000  [APIF_CMD_STATUS], a4
 ;>>>> [R10/BOTH] Computes XLTR register address at FF0008 for comparison in the PanelSendAndWait_andDispatch polling routine.
   f05b16: 4b ec 00 08             lea.l    $8(a4), a5
+;### THE DESTINATION MAY BE THE CHASSIS BULK PORT: only when a2 == $FF0008
+;###   does it wait on $FF0004 bit 0.  So BLK_XFR is a RAM->chassis mover too,
+;###   and that ready flag is OUTBOUND flow control specifically.
   f05b1a: bb ca                   cmpa.l   a2, a5
   f05b1c: 66 0a                   bne.b    loc_F05B28
 
@@ -2839,6 +2863,9 @@ loc_F05B3E:
   f05b46: 58 8a                   addq.l   #$4, a2
 
 loc_F05B48:
+;### RE-ARMS ONCE PER WORD PAIR, not once per transfer, with a 1000-poll
+;###   timeout each time and $26C RELEASE on expiry.  A chassis model must
+;###   acknowledge bit 14 per pair; per transfer stalls after the first.
   f05b48: 30 bc 80 04             move.w   #$8004, (a0)
   f05b4c: b4 81                   cmp.l    d1, d2
   f05b4e: 67 30                   beq.b    loc_F05B80

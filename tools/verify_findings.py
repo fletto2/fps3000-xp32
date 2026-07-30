@@ -97,6 +97,44 @@ else:
     # bare default) are launched by a dozen different checks.  Keying on the
     # env delta plus cycle count is safe because the emulator is deterministic
     # -- three golden-master digests in this file assert exactly that.
+    class _PCs(collections.Counter):
+        """Counter of trace PCs that also answers .count(), so call sites which
+        did `trace.split('\n').count('F04930')` keep working unchanged."""
+        def count(self, x):
+            return self[x.rstrip('\n')]
+
+    class _Trace:
+        """Lazily-histogrammed PC trace.
+
+        A 400 M-cycle trace is 232 MB / 34.7 M lines.  Checks used it three
+        ways -- .split('\n') then .count(), .count('PC\n') on the raw string,
+        and `'PC\n' in trace` -- and each of those rescanned the whole thing:
+        ~1.1 s per split and ~0.3 s per count, which with ~60 configurations
+        was most of the suite's 10-minute runtime.  All three now resolve
+        against one histogram built once, on first use.
+
+        Iterating .split('\n') now yields DISTINCT PCs rather than every line.
+        The two call sites that iterate build a set of ints from it, so that is
+        the same answer and much cheaper -- but a future check that needs
+        execution ORDER must use .raw, not this."""
+        def __init__(self, raw):
+            self.raw = raw
+            self._pcs = None
+
+        def _hist(self):
+            if self._pcs is None:
+                self._pcs = _PCs(self.raw.split('\n'))
+            return self._pcs
+
+        def split(self, sep=None):
+            return self._hist()
+
+        def count(self, s):
+            return self._hist()[s.rstrip('\n')]
+
+        def __contains__(self, s):
+            return self._hist()[s.rstrip('\n')] > 0
+
     _run_cache = {}
 
     def run(env, cycles, extra=None):
@@ -108,9 +146,30 @@ else:
                '-trace', f'{tmp}/t', '-dump-ram', f'{tmp}/r']
         if extra: cmd += extra
         subprocess.run(cmd, env=e, capture_output=True, timeout=400)
-        out = (open(f'{tmp}/t').read(), open(f'{tmp}/r', 'rb').read())
+        out = (_Trace(open(f'{tmp}/t').read()), open(f'{tmp}/r', 'rb').read())
         _run_cache[key] = out
         return out
+
+    class _PCs(collections.Counter):
+        """Counter of trace PCs with a .count() shim, so call sites that used
+        `.split('\n')` on the raw trace keep working unchanged."""
+        def count(self, x):
+            return self[x]
+
+    _pc_cache = {}
+
+    def pcs(env, cycles):
+        """Cached PC histogram for a configuration.
+
+        The trace for a 400 M-cycle run is 232 MB / 34.7 M lines.  Every check
+        that split it paid ~1.1 s for the split and ~0.3 s per .count(), and
+        with ~60 configurations and several counts each that was most of the
+        suite's 10-minute runtime.  Building the histogram once per
+        configuration costs 1.65 s and makes every later lookup O(1)."""
+        key = (tuple(sorted(env.items())), cycles)
+        if key not in _pc_cache:
+            _pc_cache[key] = _PCs(run(env, cycles)[0].split('\n'))
+        return _pc_cache[key]
 
     def run_err(env, cycles):
         """Same, but returns the emulator's STDERR -- where the diagnostic
@@ -481,6 +540,47 @@ else:
             ASM_STARTS[int(_m.group(1), 16)] = len(_m.group(2).split())
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
+
+    # --- directives $29/$2A are ASQ name-lookup and post --------------------
+    check('$F05652 builds a 10-byte {name, longword, word} block on the stack',
+          d[0xF05654-0xF00000:0xF05660-0xF00000]
+          == b'\x3f\x3c\x00\x02\x2f\x3c\x00\x00\x00\x00\x2f\x01')
+    check('...then TRAP #1 directive $29 (look up by name) and $2A (post)',
+          d[0xF05662-0xF00000:0xF05666-0xF00000] == b'\x70\x29\x4e\x41'
+          and d[0xF0566C-0xF00000:0xF05670-0xF00000] == b'\x70\x2a\x4e\x41')
+    check('...storing the handle $29 returned in a0 back into the block at +$4',
+          d[0xF05666-0xF00000:0xF0566A-0xF00000] == b'\x2f\x48\x00\x04')
+    check('...and the block is discarded with lea $A(a7),a7 -- 10 bytes',
+          d[0xF05670-0xF00000:0xF05674-0xF00000] == b'\x4f\xef\x00\x0a')
+    check('the S2/S3 handler picks the address width from d4 (2 -> 1 word, 3 -> 2)',
+          d[0xF055FC-0xF00000:0xF05600-0xF00000] == b'\x0c\x44\x00\x02'
+          and d[0xF05608-0xF00000:0xF0560C-0xF00000] == b'\x0c\x44\x00\x03'
+          and d[0xF05602-0xF00000:0xF05606-0xF00000] == b'\x3a\x3c\x00\x00'
+          and d[0xF0560E-0xF00000:0xF05612-0xF00000] == b'\x3a\x3c\x00\x10')
+    check('...rejects other record types with panel $260',
+          struct.unpack('>H', d[0xF05614-0xF00000+2:0xF05614-0xF00000+4])[0] == 0x260)
+    check('...and applies the same +$10000 staging offset, storing to $E7E',
+          d[0xF05640-0xF00000:0xF05646-0xF00000] == b'\xd3\xfc\x00\x01\x00\x00'
+          and d[0xF05646-0xF00000:0xF0564C-0xF00000] == b'\x23\xc9\x00\x00\x0e\x7e')
+
+    # --- BLK_XFR: the bulk mover, mode from the swapped high word of d0 -----
+    check('BLK_XFR opens with swap d0 -- the HIGH word carries the mode',
+          d[0xF05B0E-0xF00000:0xF05B10-0xF00000] == b'\x48\x40')
+    check('...it checks whether the DESTINATION is the bulk port $FF0008',
+          d[0xF05B16-0xF00000:0xF05B1C-0xF00000] == b'\x4b\xec\x00\x08\xbb\xca')
+    check('...and only then waits on $FF0004 bit 0 (outbound flow control)',
+          d[0xF05B1E-0xF00000:0xF05B28-0xF00000]
+          == b'\x38\x2c\x00\x04\x08\x04\x00\x00\x67\xf6')
+    check('...mode 0 writes both halves to (a2); mode !=0 uses a2+2 and adds 4',
+          d[0xF05B36-0xF00000:0xF05B3C-0xF00000] == b'\x3c\x29\x00\x02\x34\x86'
+          and d[0xF05B3E-0xF00000:0xF05B48-0xF00000]
+              == b'\x3c\x29\x00\x02\x35\x46\x00\x02\x58\x8a')
+    check('...and re-arms $8004 once per WORD PAIR, not once per transfer',
+          d[0xF05B48-0xF00000:0xF05B4C-0xF00000] == b'\x30\xbc\x80\x04'
+          and d[0xF05B82-0xF00000:0xF05B86-0xF00000] == b'\xb2\x82\x6f\xa6')
+    check('the op-$14 caller loads d0 = $FFFF000F: mode $FFFF, dispatch index $0F',
+          d[0xF05422-0xF00000:0xF0542C-0xF00000]
+          == b'\x30\x3c\xff\xff\x48\x40\x30\x3c\x00\x0f')
 
     # --- op $5 is XPSEL: it WRITES $E60/$E62 --------------------------------
     check('op $5 stores CHANNEL_SELECT into $E60/$E62 (it is XPSEL, not just a check)',
