@@ -570,6 +570,21 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- PanelErrorMaskTable decodes XLTR_IRQ_MASK ----------------------------
+    check('PanelErrorMaskTable sits right after the 42-entry dispatch table',
+          0xF05BA4 + 42 * 4 == 0xF05C4C)
+    check('it maps channel 1-4 to IRQ-mask bits 5,4,3,2 (descending)',
+          list(d[0xF05C4C-0xF00000:0xF05C52-0xF00000]) == [0x00, 5, 4, 3, 2, 0x00])
+    check('the teardown looks it up by d4 and bclr\'s that bit in $FF021A',
+          d[0xF05924-0xF00000:0xF0593C-0xF00000]
+          == b'\x30\x2c\x02\x1a\x38\x1f\x4b\xf9\x00\xf0\x5c\x4c'
+             b'\x42\x85\x1a\x35\x40\x00\x0b\x80\x39\x40\x02\x1a')
+    check('...then restores the BIM control register to $5F',
+          d[0xF0593C-0xF00000:0xF05942-0xF00000] == b'\x36\xbc\x00\x5f\x4e\x75')
+    check('$26C RELEASE on count-zero, $26A TIMEOUT_ABORT on d4 bit 13',
+          d[0xF0590A-0xF00000:0xF0590E-0xF00000] == b'\x30\x3c\x02\x6c'
+          and d[0xF0591A-0xF00000:0xF0591E-0xF00000] == b'\x30\x3c\x02\x6a')
+
     # --- zero padding, and the TDTI boundary it confirms ----------------------
     check('$F05C54-$F05CFF is zero fill, not code',
           d[0xF05C54-0xF00000:0xF05D00-0xF00000] == b'\x00' * 0xAC)

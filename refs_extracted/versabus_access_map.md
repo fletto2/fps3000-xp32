@@ -1563,6 +1563,64 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### `PanelErrorMaskTable` decodes `XLTR_IRQ_MASK`: channel 1-4 are bits 5,4,3,2
+
+RDHC's largest undocumented run, `$F05900-$F0597A`, is the **transfer teardown path**, and
+decoding it gives `PanelErrorMaskTable` its first concrete role.
+
+```
+cmpi.l #$0,d5  ;  bne .not_done
+move.w #$26c,d0  ;  jsr PanelIOConfigure_25A     ; PCMD_RELEASE -- the D2_FIN finalize code
+.not_done:
+btst.b #$d,d4  ;  beq .normal
+move.w #$26a,d0  ;  jsr PanelIOConfigure_25A     ; PCMD_TIMEOUT_ABORT
+move.w $21a(a4),d0                               ; read XLTR_IRQ_MASK
+move.w (a7)+,d4                                  ; restore the operation/channel
+lea    PanelErrorMaskTable,a5                    ; = $F05C4C
+clr.l  d5
+move.b (a5,d4.w),d5                              ; TABLE LOOKUP -> a BIT NUMBER
+bclr.b d5,d0                                     ; clear that bit in the mask
+move.w d0,$21a(a4)                               ; write XLTR_IRQ_MASK back
+move.w #$5f,(a3)                                 ; BIM CR <- $5F, re-enabling the channel
+rts
+```
+
+**The table is five bytes and fully readable.** It sits immediately after
+`PanelStatusDispatchTable` (`$F05BA4` + 42x4 = `$F05C4C`), and holds:
+
+| index | value |
+|---|---|
+| 0 | `$00` — unused; channels are 1-based |
+| **1** | **`$05`** |
+| **2** | **`$04`** |
+| **3** | **`$03`** |
+| **4** | **`$02`** |
+| 5+ | `$00` |
+
+So `d4` is a **channel number 1-4**, and the value is the bit to clear in `XLTR_IRQ_MASK`.
+**This is the first bit-level decode of `$FF021A`**, which this project has only ever
+recorded as "written `$FFF`":
+
+```
+$FF021A  XLTR_IRQ_MASK   bit 5 = channel 1
+                         bit 4 = channel 2
+                         bit 3 = channel 3
+                         bit 2 = channel 4
+```
+
+**The order is descending, which is worth flagging** — channel 1 takes the *highest* of the
+four bits. Nothing else in the machine numbers channels that way: the AP I/F windows ascend
+(`ch1` at `$FF0040`, `ch4` at `$FF00A0`), and the BIM control registers ascend too
+(`$FF0244`, `$46`, `$50`, `$52`). Anyone inferring the mask layout by analogy would get it
+backwards, which is presumably why a table exists rather than arithmetic.
+
+The path as a whole reads cleanly: on completion, issue `$26C` RELEASE if the count reached
+zero; on timeout (bit 13 of `d4`), issue `$26A` TIMEOUT_ABORT, **disable that channel's
+interrupt** via the table, and restore its BIM control register to `$5F`. That `$5F` is the
+documented IRE-enabled value whose IRE-cleared partner `$4F` suppresses a channel during a
+transfer — so the teardown re-arms the channel it just finished with, while masking it at the
+XLTR level if it errored. Two independent disable mechanisms, used for different reasons.
+
 ### Where documentation actually stands: 59% covered, and the frontier is RDHC + RTOS init
 
 Counting in-place annotations alone gives 33% of instruction bytes, which understates things
