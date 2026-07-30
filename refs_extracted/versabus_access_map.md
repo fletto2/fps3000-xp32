@@ -1473,6 +1473,33 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### Coverage after the RDHC work: 38% of executable code
+
+Union over 11 configurations (default, scripted operations, XP-driven, IO1I-driven,
+RDHC commands 2/3/4, and command 1 at operations `$02`/`$03`/`$0A`/`$14`), measured
+against decoded instruction bytes:
+
+| region | bytes | before this work | now |
+|---|---|---|---|
+| pre-task `$F04488-$F045FF` | 376 | 0% | 0% |
+| **RDHC** | 5888 | **1%** | **34%** |
+| IO1I | 586 | 16% | 33% |
+| XP4I | 2560 | 6% | 13% |
+| XP1I / XP2I / XP3I | ~7700 | 5-9% | 7-10% |
+| self-test | 5298 | 85% | 85% |
+| RTOS init | 2560 | 70% | 70% |
+| **executable total** | **24952** | — | **38%** |
+
+**RDHC goes from 1% to 34%** — from the least-exercised region to better than the XP
+tasks. The figure excludes `$F0A600-$F0FFFF`, which is tables and data, not code.
+
+Two things this leaves pointing forward. The **XP tasks are now the laggards at
+7-13%**, and command 1's ASQ post (`'HXP0' + channel` → `$F05652`) is the obvious
+lever: RDHC hands work to `HXP1`-`HXP4` by name, and each XP task blocks on
+directive `$13` exactly as RDHC did. The same three-part unlock probably applies.
+And **`$F04488-$F045FF` is still 0%** — 376 bytes of pre-task code that no
+configuration reaches at all.
+
 ### Executing all 42 operation codes confirms the static census 13 for 13
 
 Sweeping command 1's operation code over `$00`-`$29`, one run each, counting which
