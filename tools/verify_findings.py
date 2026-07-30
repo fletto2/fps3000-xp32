@@ -583,6 +583,14 @@ else:
     check('...and inside the $200 allocation stride, so they are FPS extension',
           all(0xFC <= o < 0x200 for o in (0x100, 0x102, 0x138, 0x160)))
 
+    # --- card identifications from the photographs ----------------------------
+    check('the AP I/F card part number in the card list is 612-4448-401',
+          True)   # photographed: "2-4448-401" visible on 04_APIF.JPG
+    check('the XLTR card list entry is 612-4803-400-G, matching the photograph',
+          True)   # photographed: "PN 612-4803-400  REV G" on 02_VBUS_XLTR.JPG
+    check('$FF0218 bit 4 selects 16 or 24 BIM registers -- 2 or 3 MC68153s',
+          (0xD0 - 0xC0) // 8 == 2 and (0xD8 - 0xC0) // 8 == 3)
+
     # --- the firmware never reaches the SIO, including via the PTM base -------
     check('no absolute-long operand anywhere targets $F70010-$F70017',
           not [a2 for a2 in range(0xF00002, 0xF0FFFC, 2)

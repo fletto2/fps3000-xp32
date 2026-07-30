@@ -1598,6 +1598,42 @@ The pattern across all of this is the session's recurring one, one level up: **t
 itself a detector, and detectors need the same scrutiny as the findings they guard.** Nothing
 here changed what is known about the machine; it changed how much a passing suite is worth.
 
+### XLTR card photograph: part number confirmed, BIM count NOT yet settled
+
+Tiling `02_VBUS_XLTR.JPG` and examining three of twelve tiles establishes some things and
+leaves the interesting question open.
+
+**Confirmed:**
+
+| finding | |
+|---|---|
+| **`PN 612-4803-400 REV G`** | matches the card list exactly, **including the revision** |
+| `AM2927DCB` x4+ | AMD quad three-state bus transceivers, at the `PB` VERSAbus edge |
+| `AM29823DC` x2+ | 9-bit registers |
+| **`PE-21199 100NS`** | an FPS-labelled **100 ns delay line** — a timing element |
+| `AMP 53137-5` | connector component |
+| a ribbon-cable header | the XLTR carries one too, not only the AP I/F |
+| **extensive green-wire rework** | far more than the AP I/F card, across the whole board |
+
+The part-number match is worth having on its own: the card list came from the machine's owner,
+and the photograph independently confirms both the number and revision G.
+
+**Not settled: how many BIMs are physically fitted.** The card is described as "V-BUS XLTR **3
+BIMS**", and the firmware analysis raised a real question about this — `$FF0218` bit 4 selects a
+walk over **16 or 24 BIM registers**, i.e. two or three MC68153s, and our chassis model reads
+that bit clear, presenting a two-BIM machine. A photograph could settle which is physically
+present.
+
+**I have not found them.** Three tiles examined, no MC68153 visible. The parts seen so far are
+bus transceivers, buffers and registers — consistent with the XLTR's translator role but not
+the interrupter half. Nine tiles remain, and the BIMs are 20-pin DIPs that could be anywhere on
+a board this dense.
+
+*Recording the negative deliberately.* It would be easy to leave this out and mention only the
+confirmations, but the BIM count is the question worth answering here and a partial search that
+found nothing is a real result about where not to look. The remaining tiles are cheap; this is
+an unfinished search, not a failed one.
+
 ### The differential host link is on the AP I/F card: MC3487 drivers, MC3486 receivers
 
 The SIO is genuinely untouched by the firmware — but that is not the only serial-class interface
