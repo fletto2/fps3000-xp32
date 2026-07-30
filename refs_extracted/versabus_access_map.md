@@ -1528,6 +1528,42 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### "Panel command" is a project-invented name, and VERSAdos means something else by it
+
+The whole of this project calls the `$FF000E` protocol "panel commands" —
+`PanelIOCommand`, `PCMD_*`, `PanelStatusDispatch`, "the panel-command issuer". That name
+has no basis in either FPS or Motorola terminology.
+
+`SR10/U9995/PANEL.EQ` is fourteen lines and defines a **physical front panel**:
+
+```
+*         FRONT PANEL EQUATES
+FPDMPTST  DS.W 1    MEMORY DUMP, ENABLE, SYSTEM TEST
+FPTTO     DS.W 1    TEST TIME-OUT
+FPLEDST   DS.W 1    LED STATUS
+```
+
+Switches and lamps. So in this ecosystem "panel" means a front panel, and the `$FF000E`
+codes are not one — they are a **chassis command/status protocol** on the base AP I/F
+window's command register. The naming came from the prior disassembly passes, not from
+any document about this machine.
+
+*This matters for the same reason the `$4F` status value and `$FF0010 = CMD_ARG_HI`
+mattered: an invented name sitting in a document beside real findings starts to read like
+one.* Three cases now — a fabricated register value, a modelled non-register, and a
+borrowed word — and in each the tell was that no external source used it.
+
+The names are not worth churning across a thousand annotations, but the record should say
+plainly: **`PCMD_*`, `PanelIOCommand` and `PanelStatusDispatch` are this project's labels
+for the chassis command/status protocol at `$FF000E`, chosen before the protocol was
+understood, and imply nothing about a front panel.**
+
+And the machine does have a front panel — `refs/FPS-3000/fps-3000-fp.jpg` — but the ROM's
+front-panel-adjacent I/O is elsewhere: the **board status register** `$F70018`/`$F70019`
+(9 absolute references) and the **VERSAmodule control register** `$1FFF0`/`$1FFF1` (23),
+which is where the FAIL lamp the monitor drives actually lives. If any register in this
+machine deserves the name "panel", it is those, not `$FF000E`.
+
 ### The ring queue is the TRACE BUFFER, and `!IDV` is the only non-standard structure
 
 `INIT.SA` has a **seventh** build block after `BLDUDR`:

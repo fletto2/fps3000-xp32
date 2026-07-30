@@ -550,6 +550,13 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- "panel" is a project label, not FPS or Motorola terminology ----------
+    _am = open('refs_extracted/versabus_access_map.md').read()
+    check('the access map records that "panel command" is a project-invented name',
+          'project-invented name' in _am and 'FRONT PANEL EQUATES' in _am)
+    check('...and that $FF000E is the base window command/status register',
+          "chassis command/status protocol at `$FF000E`" in _am)
+
     # --- $0C30 is TRACEBEG, $0C34 trace flags, $0C9A TIAT --------------------
     check('$F0A04E writes $01010000 to $0C9A -- TIAT, "TRAP 0 and 1 used by exec"',
           d[0xF0A04E-0xF00000:0xF0A056-0xF00000]
