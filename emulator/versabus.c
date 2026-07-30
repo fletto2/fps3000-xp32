@@ -907,6 +907,27 @@ static void xltr_write(uint32_t addr, uint16_t val) {
             break;
         case XLTR_CHANNEL_SELECT:
             xltr.channel_select = val;
+            /* THE SBC'S REPLY.  Tracing the firmware's chassis protocol shows
+             * $FF0204 is not only a trigger and not only channel selection --
+             * it is the SBC's outbound word.  An op handler clears $0E74 on
+             * entry, stores its answer there, and $F04924 ships it here:
+             *
+             *   read op:   (a1) -> $E70 -> $E74 -> CHANNEL_SELECT
+             *   write op:  CHANNEL_SELECT -> $E70 -> (a1)
+             *
+             * So every READ-direction chassis op ($3, $6-read, $A, $B, $C)
+             * returns its DATA in this register.  The model stores val and
+             * never consumes it (the only other reference is a debug printf),
+             * and reads return scripted values unrelated to what the SBC
+             * wrote -- so the emulated chassis can command the SBC and write
+             * its memory, but cannot READ it: the return path is not wired.
+             *
+             * Capturing it here changes no behaviour and makes the reply
+             * visible, which is the prerequisite for ever wiring it. */
+            if (getenv("FPS3K_LOGCHASSIS") && !(xltr.mode0 & MODE0_RESP_ACK)
+                && (xltr.mode1 & 0x1000))
+                fprintf(stderr, "[REPLY] SBC -> chassis: $%04X (op $%X)\n",
+                        val, xltr.mode0 & 0xF);
             /* The SBC issues a panel command by clearing MODE0 bit 10,
              * writing the command code here, then parking in `bra .` at
              * F05E86.  The chassis answers with a status code and an

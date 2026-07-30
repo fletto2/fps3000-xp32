@@ -1563,6 +1563,43 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The emulated chassis is half-duplex: it never reads the SBC's replies
+
+The protocol mapping has a direct consequence for the model, and it is a real gap.
+
+`$FF0204` carries the SBC's answer — an op handler clears `$0E74`, stores its result there,
+and `$F04924` ships it to CHANNEL_SELECT. **Every read-direction chassis op (`$3`, `$6` read,
+`$A`, `$B`, `$C`) returns its data in that register.** In `versabus.c`:
+
+- the write handler does `xltr.channel_select = val` (line 909);
+- the only other reference to that field in the entire emulator is a **debug `printf`**
+  (line 1751);
+- and the *read* path returns a scripted value from `FPS3K_SEQ` or `FPS3K_CHSEL_RD`, unrelated
+  to whatever the SBC last wrote.
+
+So the two directions are disconnected. **The emulated chassis can command the SBC and write
+its memory, but cannot read it** — the return path is not wired at all. That is why the
+scripted-sequence work could program a transfer and verify it by dumping RAM, but never by
+reading back through the protocol: there was nothing to read back *with*.
+
+This is not a bug in the sense of producing wrong results — nothing currently asks for a
+reply, so nothing is wrong. It is a **missing half of a modelled interface**, and it bounds
+what the emulator can be used to demonstrate: any experiment of the form "ask the SBC for X
+and check the answer" is unavailable, which includes the natural test of ops `$3`, `$A`, `$B`
+and `$C`.
+
+**Made visible, not fixed.** `FPS3K_LOGCHASSIS` now reports `[REPLY] SBC -> chassis: $xxxx
+(op $N)` when a command is in flight, gated on the same MODE0-ACK and MODE1-bit-12 conditions
+the arming logic uses. Verified inert: the default RAM digest is byte-identical either side
+(`f72fb0a5…`). Wiring the value into a chassis model would be speculative while no consumer
+exists — but a reply that is captured and logged is the prerequisite for one, and the gap is
+now documented rather than latent.
+
+*This is what the protocol work was for.* Six entries ago the chassis conversation was a set of
+disconnected observations — a command byte, a jump table, some globals. Following it end to
+end produced a testable statement about the emulator, and the test failed. **A protocol you
+have fully traced tells you what your model is missing; one you have only sampled does not.**
+
 ### The chassis-protocol state model — `$E70` is the data register, `$E7A` is bounded 0..$C
 
 Enumerating every protocol global with the validated tool gives the state an emulator needs to

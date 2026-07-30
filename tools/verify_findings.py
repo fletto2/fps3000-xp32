@@ -570,6 +570,17 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the emulated chassis never consumes the SBC's reply ------------------
+    _vb = open('emulator/versabus.c').read()
+    check('the model stores CHANNEL_SELECT writes but consumes them nowhere',
+          'xltr.channel_select = val' in _vb
+          and _vb.count('xltr.channel_select') <= 3)   # store, printf, reply log
+    check('...and CHANNEL_SELECT reads come from a script, not from what was written',
+          'versabus_seq_chsel(&sv)' in _vb and 'FPS3K_CHSEL_RD' in _vb)
+    check('the reply is at least logged now, gated like the arming logic',
+          '[REPLY] SBC -> chassis' in _vb
+          and 'MODE0_RESP_ACK' in _vb.split('[REPLY]')[0][-400:])
+
     # --- $E70 is the data staging register; $E7A is bounded 0..$C -------------
     check('$E70 receives from memory and from CHANNEL_SELECT',
           d[0xF04DA0-0xF00000:0xF04DA6-0xF00000] == b'\x23\xd1\x00\x00\x0e\x70'
