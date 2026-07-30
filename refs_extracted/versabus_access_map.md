@@ -14031,3 +14031,39 @@ Three things follow, none of which needed hardware:
 which is above, but the *chassis's* — which command sequences the chassis actually drives, and in
 what order. The SBC's half of the conversation is now fully enumerated: 19 codes out, 16
 operations in, 42 issue points, and the continuation after every one of them.
+
+## RETRACTED: nothing "modifies the saved PC out of `bra .`"
+
+Two claims die together here.
+
+**Mine, from the previous section:** that the rescue "pops the caller's address rather than
+resuming the spin", inferred from the 18 inline continuations after `jsr $F05688`.
+
+**This project's, of long standing:** *"The IRQ handler that supplies `d0` and modifies the saved
+PC out of `bra .` is `$F04930`."* It appears in this file, in `CLAUDE.md`, and in
+`panel_status_dispatch_table.md`.
+
+Searching `$F04930`-`$F05160` — the ISR plus all sixteen dispatch handlers — for any `a7`-relative
+operand returns **two hits**, both of them op `$3` saving and restoring the page register:
+
+```
+$F04D4E  move.w  $210(a0),-(a7)
+$F04E22  move.w  (a7)+,$210(a0)
+```
+
+**There is no instruction that writes the stacked PC anywhere in that path.** The mechanism
+everyone has been describing does not exist in the code.
+
+What the code does do is symmetric and unremarkable: `$F04930` opens
+`movem.l d0-d7/a0-a7,-(a7)` — all sixteen registers, `a7` included — and the exit stub `$F050F8`
+closes `movem.l (a7)+,d0-d7/a0-a7`, then `move #$0C,ccr` and `trap #1`. It restores the
+interrupted context wholesale and leaves via an **RTOS directive**, not an `rte`.
+
+So the escape from a `bra .` — if there is one — is the RTOS scheduler's business, not a PC
+patch. That reopens a question this project treated as answered, and it explains why every
+attempt to make the rescue work by driving interrupts harder has failed: **there was never a
+rescue instruction to trigger.**
+
+Method note, since this is the second time today: the claim was reasonable, widely repeated, and
+never checked against a search for the operand form that would implement it. `a7`-relative writes
+are a small, enumerable class — the check took one query.
