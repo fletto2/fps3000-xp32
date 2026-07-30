@@ -16348,3 +16348,32 @@ before the ending, and the ending is where the machine stopped, not a corruption
 `$F056B8`" has been read in this project as evidence of the RDHC blocker, and with `$80` the same
 run ends at `$F00FC8` — so that particular ending is partly an artefact of the code chosen to
 drive it.
+
+## The absorbed `$14` default is what makes sequence delivery work
+
+Testing the driving code's effect on how far a 16-op script gets:
+
+| `FPS3K_RESP` | ops delivered | final PC |
+|---|---:|---|
+| **unset — defaults to `$14`** | **7/16** (`$0`-`$5`, `$F`) | `$F056B8` |
+| `0x00` | 3/16 | **`$000000`** — derailed |
+| `0x80` | 2/16 | `$F00510` |
+
+The unset case reproduces the 7/16 measured earlier, so those results stand. But the two explicit
+codes do **worse**, and `0x00` destroys the machine.
+
+The reason is the absorption found above. `FPS3K_SEQ` delivers its codes and then, once exhausted,
+the `FPS3K_RESP` value is presented **repeatedly** — 200-odd times. `$14` is discarded by the
+dispatcher at `$F0497A`, so it is a harmless filler. Any real operation code is *executed* every
+time, with whatever stale parameters `$E58`/`$E60` happen to hold, and op `$0` repeated ~200 times
+walks the machine into address zero.
+
+**So `$14` being the emulator's default is not an arbitrary choice — it is what allows a scripted
+sequence to run at all.** Earlier today I established that the 218 repetitions of `$14` were "the
+emulator's own default stamp" rather than the SBC's echo; this is why that default exists, and the
+absorption measured in the collect path is the mechanism.
+
+Practical rule for driving this model: **leave `FPS3K_RESP` unset when using `FPS3K_SEQ`.** Setting
+it to a real op code converts the post-script filler into a repeated live operation, and the damage
+that causes is silent — the run completes, produces plausible counts, and ends somewhere it should
+not.
