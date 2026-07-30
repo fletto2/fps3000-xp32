@@ -15527,3 +15527,34 @@ reads that address.
 and referenced nowhere else in the image. A byte counter shared among the XP tasks only — safe
 because the RTOS serialises them, which is worth noting as an assumption the emulator must not
 break by running tasks concurrently.
+
+## Sweeping for write-only / read-only RAM: two real channels, three artifact classes
+
+A location the CPU only writes is a candidate for off-board consumption; one it only reads is a
+candidate for off-board supply. Classifying every `$0400`-`$1FFF` operand in the application
+region by side-of-comma gives **65 distinct globals**, of which 27 look write-only and 2 read-only.
+
+**Most of that is artifact.** Three classes, all found by checking rather than assuming:
+
+| class | example | why it misleads |
+|---|---|---|
+| **byte within a word** | `$0E87` — 22 `btst` reads, "never written" | written by `move.w d0,$e86.l`, which the matcher records under `$0E86` |
+| **read-modify-write with two operands** | `$1064` — `and.w d2,$1064` | reads *and* writes, but the destination sits after the comma so it scores as a write |
+| **word read as half of a longword** | `$106A` — written once, "never read" | `$F07E20` does `move.l $1068.l,d1`, which reads `$1068` **and** `$106A` |
+
+That last one is a finding in itself: the task reads its channel data as **one 32-bit longword at
+`$1068`**, which is why the low word never appears as a read. It confirms from the consumer side
+what this project established from the ISR's write side — that `+$08` and `+$0A` are the halves of
+a single 32-bit data register, not two ports.
+
+**What survives verification is exactly two locations:**
+
+| location | direction | evidence |
+|---|---|---|
+| `$10AA` | **read-only** — the chassis supplies it | 1 read at `$F05E12`, no CPU write anywhere; already documented |
+| `$1062` | **write-only** — the SBC publishes it | 4 plain `move.w #imm` writes, one per XP task, no read in the image |
+
+So the sweep found one already-known channel and one new one, and the other 25 candidates
+dissolved on inspection. Worth stating the hit rate plainly: **two of four cases I checked by hand
+were artifacts**, so this technique produces leads, not conclusions, and every candidate needs its
+own look at the instruction.
