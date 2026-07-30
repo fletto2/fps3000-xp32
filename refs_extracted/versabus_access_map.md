@@ -16705,3 +16705,38 @@ the machine was *inside* this call at that instant, driven by a retry loop elsew
 a wait here. And the earlier description of `$F0891C` as polling board status "waiting" for a
 handshake is wrong: it *samples* bits 4 and 5 once and branches, with the abort path at `$F088F4`
 reached only when **both** are set.
+
+## The checkpoint's second branch is the exit into the RTOS
+
+`$F0891C`'s "both board-status bits set" branch goes to `$F088F4`, a bare `jmp $F09C06` — and
+`$F09C06` is **RTOS initialisation**:
+
+```
+F09C06  movea.l #$400,a7            ; supervisor stack
+F09C10  lea.l   $800.l,a0
+F09C16  move.l  #$10ee,d6 / sub / addi #$ff / clr.b d6   ; size, rounded to a page
+F09C26  bsr.w   $f0a336             ; MemoryClear
+F09C2A  movea.l $f0a4fe(pc),a7
+F09C2E  move.l  a7,$c08.w           ; -> $0C08
+F09C32  move.l  $f0a542(pc),$c36.w  ; -> $0C36
+F09C38  movea.l $f0a506(pc),a1 / move.l a1,$c3a.w        ; -> $0C3A
+```
+
+So the branch is not an abort, as I called it — it is the **normal exit from the self-test into
+the RTOS** when the chassis signals completion through board-status bits 4 and 5. That is the same
+early-exit this project records at `$F08732`/`$F0873A`, reached from the checkpoint instead of the
+suite's entry.
+
+**Three kernel globals traced to their ROM initialisers:**
+
+| global | ROM constant | value | note |
+|---|---|---|---|
+| `$0C08` | `$F0A4FE` | `$00000C00` | the ready-queue head, later holding the priority-ordered task list |
+| **`$0C36`** | **`$F0A542`** | **`$00F000BC`** | the dispatch pointer for the second `push`/`rts` site |
+| `$0C3A` | `$F0A506` | `$00000000` | reads `$800` after boot — the register-save area |
+
+**That closes an open item.** `$0C36` was found earlier to hold `$00F000BC`, pointing at zero fill,
+with its `push`/`rts` dispatch site executing zero times — "a dispatch vector initialised to a
+placeholder and never taken". The placeholder's origin is now located: a ROM constant at
+`$F0A542`, installed during RTOS init. It is not residue from a failed initialisation; the ROM
+ships that value deliberately.
