@@ -1528,6 +1528,62 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Sweeping for hidden registers: a negative result, and two ways the sweep lies
+
+Prompted by the `$1FFF0` miss, I re-ran every "never accessed" claim over **base-register**
+forms rather than absolute addresses. The outcome is a clean negative — no hidden registers
+— but getting there required fixing two opposite failure modes, and both are worth
+recording because this project keeps rediscovering them.
+
+**Failure mode 1 — false negatives, from absolute-only scanning.** Already known: it hid
+the `$FF0048` read at `$F07EF6` and all eight `$1FFF0` bit-manipulations.
+
+**Failure mode 2 — false negatives from a broken matcher.** My first base-register sweep
+reported `$FF0048` as *never accessed*, contradicting a known-true fact. Cause: the
+consolidated asm renders the operand as `movea.l #$ff0000  [APIF_CMD_STATUS], a5`, and my
+pattern required the comma to follow the hex immediately, so the symbol annotation broke
+it. **Every "confirmed" in that run was worthless**, and it would have read as a set of
+strong verifications. *The lesson is to run a tool against a known-positive case before
+believing any negative it produces* — `$FF0048` at `$F07EF6` is the natural ground truth
+here, and it now gates the sweep.
+
+**Failure mode 3 — false positives, from naive base tracking.** With the matcher fixed, the
+sweep reported four addresses outside the documented map, three of them inside the
+`$FF0100-$FF01FF` range this file had just declared unpopulated. All four are artifacts:
+
+| candidate | actual instruction | what it really is |
+|---|---|---|
+| `$FF010A` | `lea.l $10a(a0),a7` | **stack-pointer setup** |
+| `$FF0114` | `lea.l $114(a0),a7` | stack-pointer setup |
+| `$FF0116` | `lea.l $116(a0),a7` | stack-pointer setup |
+| `$FF0002` | `move.w $2(a2),d6` | real read, but `a2` is not `$FF0000` |
+
+Two distinct bugs. **`lea` and `pea` compute addresses and access nothing** — counting them
+as accesses invents registers out of stack arithmetic. And a base register's value must not
+be carried across unrelated code: all four inherited a stale `$FF0000` set in a different
+routine. A sweep of this kind is only sound within the basic block that sets the base.
+
+**The validated results.** With ground truth passing (13 sites for `$FF0048`, including
+`$F07EF6`), these claims **hold in both absolute and base-register form**:
+
+| address | claim | status |
+|---|---|---|
+| `$FF0010` | "CMD_ARG_HI", never accessed | **holds** — genuinely an emulator invention |
+| `$FF0020` | AP I/F window 1 | **holds** — the reserved window is real |
+| `$FF00C0`, `$FF00E0` | windows 6-7 | **holds** |
+| `$FF0100`+ | the unpopulated upper half | **holds** — the window-grid reading survives |
+| `$FF025E` | BIM2 VR3 | **holds** statically, consistent with its being reached only by a computed walk gated on `$FF0218` bit 4 |
+
+And one phrasing to tighten: `$FF004A` has **15 static sites**, all in the XP channel ISRs.
+That does not contradict the statement that it is "neither read nor written in a full boot"
+— those ISRs do not run without a channel interrupt — but the unqualified wording invites
+exactly the error that bit us on `$FF0048`. *Static absence and runtime absence are
+different claims and should never share a sentence.*
+
+**Net: the documented register map is complete for base-register forms.** That is a
+worthwhile negative — it converts "we haven't seen anything else" into "we looked properly
+and there is nothing else", which is what the emulator's device decode needs to rest on.
+
 ### `MemBusProbe` is a complete truth table, and `$1FFF0` IS bit-manipulated
 
 Phase `$1000` (`MemBusProbe`, `$F08F9A`) sets two VMOD_CTRL bits in all four combinations

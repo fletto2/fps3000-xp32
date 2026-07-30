@@ -550,6 +550,16 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- the hidden-register sweep: candidates were lea, not accesses ---------
+    check('$FF010A/$FF0114/$FF0116 candidates are lea (4fe8), not memory accesses',
+          all(d[a-0xF00000:a-0xF00000+2] == b'\x4f\xe8'
+              for a in (0xF05D50, 0xF05F64, 0xF0470A)))
+    check('the $FF0002 candidate is move.w $2(a2),d6 -- a2 is not $FF0000',
+          d[0xF06ED6-0xF00000:0xF06EDA-0xF00000] == b'\x3c\x2a\x00\x02')
+    check('ground truth for base-register sweeps: $F07EF6 reads $48(a5)',
+          d[0xF07EE8-0xF00000:0xF07EEE-0xF00000] == b'\x2a\x7c\x00\xff\x00\x00'
+          and d[0xF07EF6-0xF00000:0xF07EFA-0xF00000] == b'\x33\xed\x00\x48')
+
     # --- MemBusProbe is a 4-case truth table; $1FFF0 IS bit-manipulated -------
     check('the checker clears $1FFF1 bit 6 then polls $F70019 bit 3, 16 tries',
           d[0xF0903C-0xF00000:0xF09050-0xF00000]
