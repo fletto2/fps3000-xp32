@@ -15425,3 +15425,42 @@ Method note: the first three were found by assuming the `$A00` grid, and that as
 for XP4I at every offset tried (`0`, `−$18`, `−$1E`, `+$6`). Searching the ROM for the instruction
 encoding found it immediately. Grid arithmetic is a hypothesis about this firmware, not a property
 of it.
+
+## A systematic per-channel data map for the four XP tasks
+
+Sweeping every `$10xx.l` operand in the four task regions and grouping by owner separates shared
+globals from per-channel private state cleanly:
+
+| address | XP1I | XP2I | XP3I | XP4I | |
+|---|---:|---:|---:|---:|---|
+| `$105E` | 4 | 4 | 4 | 4 | **shared** — the AC-count gate |
+| `$1062` | 1 | 1 | 1 | 1 | shared |
+| `$1064` | 2 | 2 | 2 | 2 | shared |
+| `$107E` | 3 | 3 | 3 | 3 | shared |
+| `$1066` / `$106C` / `$1072` / `$1078` | 5 | 5 | 5 | **3** | private — channel status |
+| `$1068` / `$106E` / `$1074` / `$107A` | 2 | 2 | 2 | 2 | private — data high |
+| `$106A` / `$1070` / `$1076` / `$107C` | 1 | 1 | 1 | 1 | private — data low |
+
+Each task owns exactly **three words on a 6-byte stride** at `$1066 + (ch-1)*6`, referenced by
+nobody else, and the four shared globals are referenced an identical number of times by every
+task. That is the `{status, data-high, data-low}` record this project derived from the ISR's
+write side, now confirmed from the read side in all four copies.
+
+### The one asymmetry is XP4I's status word, and it is exactly the bit-11 difference
+
+XP4I references its status word **3 times against 5**. Counting the guards directly:
+
+| test | XP1I | XP2I | XP3I | XP4I |
+|---|---:|---:|---:|---:|
+| `btst #$b` (bit 11) | 2 | 2 | 2 | **0** |
+| `btst #$f` (bit 15) | 1 | 1 | 1 | 1 |
+
+**5 − 2 = 3.** The missing references are exactly the two bit-11 tests, and this project already
+records the behavioural consequence: *"`$C801` sets bit 11, which XP1I/2/3 test to take a short
+branch; XP4I (which never tests bit 11) is unaffected"* — measured then from coverage divergence
+under `FPS3K_CHCMD`, and now confirmed by a static count that arrives at the same place by
+arithmetic.
+
+So XP4I differs from its siblings in **five** measured ways: four inconsistent address offsets and
+one genuine behavioural omission. The offsets say it was hand-patched; the missing bit-11 tests say
+the patching was not merely mechanical.
