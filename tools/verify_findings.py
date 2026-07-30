@@ -550,6 +550,22 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- the device communications map stays in step with the machine --------
+    try:
+        _cm = open('refs_extracted/device_communications_map.md').read()
+        check('the comms map covers every device block the firmware touches',
+              all(k in _cm for k in ('$01FFF0', '$70001C', '$400000', '$F70000',
+                                     '$F70010', '$F70018', '$FF0000', '$FF0040',
+                                     '$FF0060', '$FF0080', '$FF00A0', '$FF0200',
+                                     '$FF0230')))
+        check('...records the SIO as never accessed (which is why the monitor has it)',
+              'Never accessed by this firmware' in _cm)
+        check('...and names what the ROM cannot show (EU/AU, UNIV FMT, MEM CTL, AP I/F)',
+              all(k in _cm for k in ('EU \u2194 AU', 'UNIV FMT', 'MEM CTL',
+                                     'AP I/F counterpart')))
+    except FileNotFoundError:
+        check('device communications map exists', False)
+
     # --- FPS3K_RESPSEQ: alternating wake/$14 gains a second wake -------------
     tseq = pcs({'FPS3K_RESPSEQ': '0x0B,0x94', 'FPS3K_XPIRQ': '6',
                 'FPS3K_CHASSIS_CMD': '1,14,1'}, CYC)
