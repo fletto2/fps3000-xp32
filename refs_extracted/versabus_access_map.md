@@ -16154,3 +16154,41 @@ The full op-`$3` picture, now entirely measured rather than decoded:
 | bit 4 auto-increments | **876 vs 4 distinct addresses** |
 | paged via `$FF0210` | `page = addr >> 20` in the decode |
 | 219 stores in one run | PC count, cross-checked by 876/4 |
+
+## Op `$3` has THREE sub-paths, and bit 6 means different things per direction
+
+Driving every combination of bits 5 and 6, with the op entry `$F04D4E` dispatching 219 times in
+all four:
+
+| code | bit 5 | bit 6 | path | site |
+|---|---|---|---|---|
+| `$03` | 0 | 0 | **write** chassis memory | `$F04E0A` ×219 |
+| `$23` | 1 | 0 | **alternate read** | `$F04DB2` ×219 |
+| `$63` | 1 | 1 | **paged chassis-memory read** | `$F04D96` ×219 |
+| `$73` | 1 | 1 | identical to `$63` | `$F04D96` ×219 |
+
+So the command byte's bit 6 is **not** a single "half select" as this file previously described.
+Its meaning depends on the direction bit:
+
+| bit 5 | bit 6 | effect |
+|---|---|---|
+| 0 (write) | selects which **16-bit half** of the 32-bit datum `CHANNEL_SELECT` supplies (`$F04DCA` vs `$F04DD6`) |
+| 1 (read) | selects **which read**: `$F04DB2` when clear, the paged `$400000` read at `$F04D96` when set |
+
+Bit 4 does not affect the branch — `$63` and `$73` are identical in path — consistent with it
+being purely the address auto-increment measured earlier.
+
+**A correction I nearly missed.** My first attempt at this probed `$F04D74` and found 0 executions
+for both `$23` and `$33`, which looked like "the read path never runs". `$F04D74` sits *inside* the
+bit-6-set branch, so a code without bit 6 legitimately never reaches it. The probe was wrong, not
+the firmware — and the 16,388 "addresses read" in that run were the self-test's SCM sweep, nothing
+to do with op `$3`.
+
+Full command-byte semantics for op `$3`, every bit now measured:
+
+```
+bits 0-3  operation (3)
+bit 4     auto-increment the transfer address
+bit 5     0 = write chassis memory, 1 = read
+bit 6     write: which 16-bit half     read: which of two read forms
+```
