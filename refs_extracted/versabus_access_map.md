@@ -1563,6 +1563,55 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The scheduler touches TCB state, not PCs — so no in-ROM escape from `bra .`
+
+`$F02C6C`, the routine the ISR exit hands a TCB to, opens by manipulating task state:
+
+```
+$F02C6C:  move    sr,-(a7)
+$F02C6E:  bset.b  #$7,$0c5b.w          ; a global flag
+$F02C74:  bclr.b  #$e,$2c(a0)          ; TCB+$2C -- flags (bit $E mod 8 = bit 6)
+$F02C7C:  move.l  $58(a0),d0           ; TCB+$58
+$F02C84:  clr.l   $4(a1)  ;  clr.l $58(a0)
+$F02C8C:  move.w  $5e(a0),$102(a0)     ; TCB+$5E -> TCB+$102
+$F02C94:  move.w  #$813,$100(a0)       ; TCB+$100 <- $813
+$F02C9A:  clr.w   $5e(a0)
+```
+
+**New TCB field offsets**, which this project's TCB map does not record (it has name `+$10`,
+entry `+$6C`, semaphore block `+$138`, `!TST` `+$160`):
+
+| offset | use |
+|---|---|
+| `+$2C` | flags — bit 6 cleared on this path |
+| `+$58` | a pointer, cleared along with `$4` of what it points to |
+| `+$5E` | a word moved to `+$102` then cleared |
+| `+$100` | set to **`$813`** |
+| `+$102` | receives `+$5E` |
+
+**And no PC arithmetic anywhere in it.** The routine adjusts flags, clears a pointer pair, and
+moves a word between two TCB fields. Nothing resembling a saved program counter is written.
+
+That eliminates the third and last in-ROM candidate. Collecting the eliminations:
+
+| candidate | verdict |
+|---|---|
+| panel-status responder `$F04930` | **no** — runs 966x during the spin; no stacked-PC write exists in RDHC |
+| kernel ISR-exit path | **no** — its only PC arithmetic is a fixed −6 on the ISR's *own* return |
+| scheduler `$F02C6C` | **no** — manipulates TCB state fields, not PCs |
+
+**So within this ROM there is no mechanism that rewrites a spinning task's program counter**,
+and the `bra .` at `$F056B8` is terminal. Combined with the earlier finding that
+`PanelIOConfigure_25A` is linear and returns on no path, the conclusion is that **the eight
+panel-command issuer copies are halt points** — reaching one ends that task.
+
+*Stated with its limits.* I have read the scheduler's first 26 bytes, not all of it, and the
+kernel region is 17.5 KB of generic RMS68K. A PC-manipulating path deeper in the scheduler
+would overturn this. What makes the conclusion worth stating anyway is that it agrees with the
+measurement — 182,124 spin iterations against 966 responder entries and a working scheduler —
+so any such path is at minimum not exercised here. **The firmware-side search is done; if an
+escape exists it is in hardware behaviour this emulator does not model.**
+
 ### The ISR exit is a RESCHEDULING POINT — the full kernel path decoded
 
 Following the sentinel branch to its end gives the complete ISR-exit mechanism:

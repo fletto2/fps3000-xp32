@@ -570,6 +570,17 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the scheduler manipulates TCB state fields, not PCs ------------------
+    check('$F02C6C clears a TCB flag bit and a pointer pair',
+          d[0xF02C74-0xF00000:0xF02C7C-0xF00000]
+          == b'\x08\xa8\x00\x0e\x00\x2c\x67\x28')
+    check('...moves TCB+$5E to TCB+$102 and sets TCB+$100 to $813',
+          d[0xF02C8C-0xF00000:0xF02C9A-0xF00000]
+          == b'\x31\x68\x00\x5e\x01\x02\x67\x0a'
+             b'\x31\x7c\x08\x13\x01\x00')
+    check('...and clears TCB+$5E afterwards',
+          d[0xF02C9A-0xF00000:0xF02C9E-0xF00000] == b'\x42\x68\x00\x5e')
+
     # --- the ISR exit hands a TCB to the scheduler and RTEs -------------------
     check('a match takes the record TCB at -$C(a5) and calls $F02C6C',
           d[0xF002AC-0xF00000:0xF002B6-0xF00000]
