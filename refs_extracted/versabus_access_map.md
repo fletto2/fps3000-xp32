@@ -16068,3 +16068,31 @@ map, which is a stronger check on the allocation census than either alone.
 The 12-vs-20 split between `$F0123E` and `$F01240` is the dual-entry convention in use once more:
 twelve of the twenty allocations come from internal `bsr` callers pushing SR themselves, eight
 from the TRAP path.
+
+### The allocator does not stamp every block — and that sharpens the `$BF` story
+
+I supposed the `bclr #$6,$2d(a6)` might stamp every allocated page. Checking `+$2D` across all
+allocations refutes it:
+
+| structure | `+$2D` | bit 6 |
+|---|---|---|
+| `!IDV` | `$E6` | **set** |
+| `!UST` | `$49` | **set** |
+| `!VCT` | `$BF` | clear |
+| `!UDR` `!PAT` `!IOV` `!GST`, the pool, all six TCBs | `$00` | clear |
+
+`!IDV` and `!UST` carry **record content** at that offset with bit 6 **set**, so the `bclr` plainly
+did not run against them. The twenty executions therefore act on a **varying `a6`**, not on every
+block handed out.
+
+What survives, and it is enough:
+
+- The `bclr` executes 20 times, in lockstep with T0PAGAL.
+- **One** of those executions targeted `$1FA2D`, measured by watchpoint.
+- On a freshly zeroed block, clearing a bit of `$00` leaves `$00` — **invisible**. The write is
+  observable at `!VCT` only because that byte had already been filled with `$FF`.
+
+So `!VCT[$2D]` reads `$BF` because a page-allocator operation with `a6` pointing at the `!VCT`
+page cleared bit 6 of a byte the fill loop had already set to `$FF`. Not a vector tag, not a
+uniform stamp, and visible only by coincidence of ordering — which is why it looked anomalous in a
+table where every other byte means something.
