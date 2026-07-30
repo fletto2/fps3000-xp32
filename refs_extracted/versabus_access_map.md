@@ -15884,3 +15884,38 @@ The conclusion is unchanged and slightly better supported: **four mutually incon
 across five fields**, where a relocated or compiled copy would show one. But "four fields, four
 offsets" overstated the independence of the measurements, since two of them were never going to
 disagree.
+
+## `!VCT` read out, with two corrections
+
+The vector-ownership table at `$1FA00`, one byte per exception vector:
+
+| vector | byte | owner |
+|---|---|---|
+| `$41` | 6 | RDHC |
+| `$45` `$46` `$47` `$48` | 1 2 3 4 | XP1I-XP4I |
+| `$4A` | 5 | IO1I |
+| `$42` `$43` `$44` `$49` | 0 | the four orphan BIM vectors, unowned |
+
+All exactly as documented. Two things are not:
+
+**1. My own misreading.** Index `$2D` holds `$BF`, which I first read as "task 191". It is not a
+task number — tasks run 1-6. `$BF` is **`$FF` with bit 6 cleared**, sitting in a run of `$FF`
+bytes:
+
+```
++20  ff ff ff ff ff ff ff ff ff ff ff ff ff bf ff ff
+```
+
+So it is an *unowned* entry carrying a flag, not an owned one. Vector `$2D` is 45 = **TRAP #13**,
+whose runtime vector reads `$00F00A8E` — a rung of the `bsr` fan-in ladder found earlier today.
+What clears bit 6 there, and why only for that one trap, is not established.
+
+**2. The `$FF` prefix is longer than recorded.** This project describes the table as built with
+*"ten `$FF` bytes for vectors 0-9, then one byte per vector"*. Measured, the `$FF` run extends to
+index **`$2F`** — 48 bytes — and `$30`-`$3F` are `$00`, with the task numbers only from `$40` on.
+So `$FF` is what an *unowned* entry reads in the low region and `$00` is what it reads from `$30`
+up, which the "ten bytes" description does not capture.
+
+Worth flagging that the anomaly was found only because I dumped the whole table rather than the
+six entries the documentation lists. Reading a structure to confirm what is expected finds
+nothing; reading all of it found a flagged entry nobody had noticed.
