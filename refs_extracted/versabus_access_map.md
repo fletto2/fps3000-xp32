@@ -13414,3 +13414,45 @@ occupies a slot in the pass count and reads as coverage. The pass totals quoted 
 (`542/542`, `658/668`, `670/670`) were each inflated by three.
 
 Guard for the future: `grep -n "or True" tools/verify_findings.py` should return only comments.
+
+## Static ∪ runtime device map: 68 addresses, and each method's blind spot (2026-07-30)
+
+`refs_extracted/device_communications_map.md` was built from runtime access logs over four
+driving configurations. Sweeping the disassembly *statically* with base-register tracking — the
+form absolute scans miss — gives an independent list. Combining them:
+
+| | count |
+|---|---|
+| static (application + kernel listings) | 49 |
+| runtime (four configurations) | 67 |
+| **union** | **68** |
+
+**Runtime-only: 19.** `$F70000`, `$F70001`, `$F70005`-`$F7000F` (the MC6840 `movep` registers),
+`$F70010`, `$F70018`, the four channel-window `+$00` registers `$FF0040`/`$60`/`$80`/`$A0`, and
+`$FF0212`/`$FF0214`/`$FF0216`, `$FF0240`, `$FF0248`. These are reached through base registers
+whose value the static pass cannot resolve at that point — exactly the limitation this project
+documented when it found that `$FF0204`, the hottest register on the board, has *zero*
+absolute-long references.
+
+**Static-only: 1 — `$FF0004`.** It is referenced in the disassembly (the polled ready flag at
+`$F04B22`/`$F05A22`) but appears in no runtime log, so **none of the four driving configurations
+ever executes that path.** That is a concrete, addressable gap in what the emulator exercises,
+not a modelling error.
+
+**Kernel static sweep: zero device addresses**, agreeing with the absolute-address result by a
+second method. Caveat kept explicit: the one real kernel access, `$F70030` at `$F00A3A`, sits in
+a routine nothing reaches statically, so it is absent from the kernel *listing* and therefore
+invisible to a listing-based sweep. It is in the runtime map's `$F70030` entry via the emulator.
+
+### A bug in the tool built to avoid exactly this
+
+`tools/refs.py` matched `[0-9a-f]{1,6}`, so a 32-bit immediate such as `#$21544342` (`!TCB`)
+was captured as `$215443` and treated as an address. The first kernel sweep therefore reported
+**15 "device addresses"** that were all truncated constants — `$4BAA7B` (the magic key),
+`$455845` (`EXE`), `$215443`, and so on.
+
+The tool exists because "six times in one session I hand-decoded 68000 opcodes to find
+references and six times the decoder was too narrow". It then carried a seventh instance of the
+same class of error in its own regex. Fixed to capture the full hex run and skip anything
+introduced by `#`; re-validated against the known positive `$FF0048` at `$F07EF6`, which still
+resolves through its `$48(a5)` base form.

@@ -47,8 +47,15 @@ def refs(target, asm=ASM):
             continue                                  # computes, accesses nothing
         # every operand form that can name `target`
         found = []
-        for mm in re.finditer(r'(-?)\$([0-9a-f]{1,6})(?:\.[lw])?(?:\((a[0-7])\))?', ops, re.I):
-            sign, hexv, reg = mm.group(1), mm.group(2), mm.group(3)
+        # Capture the FULL hex run, not {1,6}.  With a 6-digit cap a 32-bit
+        # immediate such as #$21544342 ('!TCB') matched as $215443 and was
+        # then treated as an address -- which manufactured 15 non-existent
+        # "device addresses" in the kernel.  An immediate is never a memory
+        # access, so skip anything introduced by '#'.
+        for mm in re.finditer(r'(#?)(-?)\$([0-9a-f]+)(?:\.[lw])?(?:\((a[0-7])\))?', ops, re.I):
+            imm, sign, hexv, reg = mm.group(1), mm.group(2), mm.group(3), mm.group(4)
+            if imm:
+                continue
             if reg:
                 rn = int(reg[1])
                 if rn not in base: continue
@@ -56,7 +63,6 @@ def refs(target, asm=ASM):
                 addr = base[rn] + off
             else:
                 addr = int(hexv, 16)
-                if addr < 0x400 and '#' in ops.split(',')[0]: continue   # immediate
             if addr == target:
                 found.append(mm.span()[0])
         if not found:
