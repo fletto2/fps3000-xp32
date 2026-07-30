@@ -14160,3 +14160,31 @@ The exit stub and the waker are the same event.
 So the corrected attribution is: the PC adjustment is real, it is `subq.l #$6,(a7)` at
 `$F00282`, it lives in the RMS68K kernel rather than the FPS panel handler, and it is reached
 only via a CCR sentinel. Everything said about `$F04930` doing it remains wrong.
+
+### What the `-6` adjustment does NOT do
+
+`subq.l #$6,(a7)` at `$F00282` acts on the stacked PC after `$F00280` has popped the SR copy and
+the SR. The `trap #1` at `$F05100` is two bytes, so the stacked PC is `$F05102` and the
+adjustment targets **`$F050FC`** — the `move.w #$c,ccr` immediately before the trap.
+
+That predicts the `rte` re-executes the sentinel and traps again, i.e. a loop in which `$F050FC`
+runs more often than `$F050F8`. **Measured, it does not:**
+
+```
+F050F8 x219    F050FC x219    F05100 x219
+F00280 x219    F00282 x219    F002BE x219   (the rte)
+```
+
+All equal — exactly one pass per ISR exit, no re-execution. The reason is two instructions before
+the `rte`: `$F002BA` does `lea.l $4(a7),a7`, which **skips the very PC slot `$F00282` just
+modified**. So the adjusted value is not what the `rte` consumes.
+
+What the adjustment is *for* therefore remains open. The candidates are that it prepares a frame
+consumed elsewhere (the `!IDV` record holds an "ISR exit" field this path could be maintaining),
+or that it fixes up a saved context belonging to the woken task rather than the interrupted one.
+**Not resolved, and stated as such** — the stack discipline across `$F00280`-`$F002BE` needs a
+careful frame-by-frame model, not another inference.
+
+What *is* established and measured: the CCR sentinel selects this path, it walks `!IDV` on a
+14-byte stride to identify the finishing ISR, it wakes that record's TCB through `T0WAKEUP`, and
+it runs exactly once per exit — 219 times in lockstep with the stub across a level-7 run.
