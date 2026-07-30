@@ -3298,6 +3298,24 @@ Sweeping the FPS application region `$F04488-$F0A5FF` for duplicated blocks
 **9,182 of 24,952 bytes — 36% — are a byte-identical copy of an earlier
 block.**
 
+**That is a lower bound, not the figure.** Byte-identical matching cannot see
+copies that differ only in their pc-relative displacements, and the five 42-entry
+dispatch tables are exactly that case: `$F05BA4`, `$F065E4`, `$F06FFC`,
+`$F079FC`, `$F083FC` are the same 168-byte table five times, and this sweep
+matched none of them because every `jmp d16(pc)` entry carries a different
+displacement. Adding those four extra copies alone takes the floor to **~38%**,
+and there is no reason to think they are the only such case.
+
+*An attempt to measure the real figure failed, and the failure is worth
+recording. Blanking the displacement word of every pc-relative form before
+comparing produced "264% duplication" — impossible on its face — with 3,000-byte
+groups claiming 9 copies inside 2,560-byte tasks. Two faults: the offsets were
+overlapping windows within one task counted as separate copies, and, more
+fundamentally, **the displacements are what distinguish the copies**, so blanking
+them made unrelated code compare equal. Normalising away the discriminating bytes
+does not generalise a measurement, it destroys it. The 36% figure stands as
+measured; the true value is above it by an amount this method cannot establish.*
+
 The dominant shape is **five copies: one in RDHC and one in each of the four
 XP tasks**. Read the first address of each 5-copy group and it is always in
 RDHC's range, with the other four landing at the same offset within each XP
