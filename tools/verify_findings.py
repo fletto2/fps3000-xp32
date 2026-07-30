@@ -550,6 +550,22 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- $1300: $1FFF1 bits 0-2 are an interrupt-request level field ----------
+    check('$1300 installs handlers at vectors $140 and $148 (numbers 80 and 82)',
+          d[0xF0935E-0xF00000:0xF0936A-0xF00000]
+          == b'\x23\xcb\x00\x00\x01\x48\x23\xcc\x00\x00\x01\x40'
+          and 0x140 // 4 == 80 and 0x148 // 4 == 82)
+    check('$1300 triggers by OR-ing d1 into the word at $1FFF0',
+          d[0xF0938A-0xF00000:0xF0938C-0xF00000] == b'\x83\x55')
+    check('...waits up to 256 iterations for a handler to set d2',
+          d[0xF0938C-0xF00000:0xF09396-0xF00000]
+          == b'\x16\x3c\x00\xff\x4a\x42\x56\xcb\xff\xfc')
+    check('...and HARD-asserts d2 nonzero, retrying forever on failure',
+          d[0xF09396-0xF00000:0xF0939A-0xF00000] == b'\x4a\x42\x66\x06'
+          and d[0xF093A6-0xF00000] == 0x66)
+    check('the loop walks d1 = 1..7, exactly the 68000 interrupt levels',
+          d[0xF093AA-0xF00000:0xF093B0-0xF00000] == b'\x52\x41\x0c\x41\x00\x08')
+
     # --- $1200: bit 5 self-clears; phases inherit VMOD state ------------------
     check('$1200 asserts board-status bit 1 follows $1FFF1 bit 5, set and clear',
           d[0xF0926E-0xF00000:0xF0927C-0xF00000]

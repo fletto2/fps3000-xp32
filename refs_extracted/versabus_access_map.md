@@ -1528,6 +1528,58 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Phase `$1300`: `$1FFF1` bits 0-2 are an interrupt-request LEVEL field
+
+`$F09338` is the self-test's interrupt-delivery stage, and it is the strongest hardware
+requirement in the whole suite.
+
+It installs two handlers and then loops:
+
+```
+move.l a3,$148.l            ; vector $148 = vector number 82
+move.l a4,$140.l            ; vector $140 = vector number 80
+moveq  #$1,d1
+loop:  clr.w d2                    ; the flag a handler sets
+       or.w  d1,(a5)               ; OR d1 into the WORD at $1FFF0   <- TRIGGER
+       move.b #$ff,d3
+       tst.w d2 ; dbne d3,.        ; wait up to 256 iterations
+       tst.w d2 ; bne ok           ; HARD: the interrupt MUST have fired
+       ...
+       addq.w #$1,d1 ; cmpi.w #$8,d1   ; seven iterations, d1 = 1..7
+```
+
+`(a5)` is the **word** at `$1FFF0`, so on a big-endian 68000 its low byte is `$1FFF1`, and
+`d1 = 1..7` sets **bits 0-2 of `$1FFF1`**. Seven distinct values, a three-bit field, walked
+exhaustively — that is the 68000's interrupt levels 1-7 and nothing else plausibly fits.
+
+**So `$1FFF1` bits 0-2 are the VERSAmodule's interrupt-request level field**, and writing a
+nonzero level asserts an interrupt at that level. This is the mechanism the board uses to
+interrupt *itself* — distinct from the BIM-supplied vectored interrupts from the chassis,
+which arrive on `$FF0230`-`$FF025E` and carry vectors `$41`/`$45`-`$4A`. The two vectors
+here, **80 (`$50`) and 82 (`$52`)**, are outside that documented set, so this stage exercises
+interrupt plumbing no other part of the ROM touches.
+
+**The assertion is hard, unlike `$1200`'s.** The 256-iteration `dbne` is only a timeout; what
+follows is `tst.w d2 / bne`, and on failure `d7` takes `$F0F0F0F0` and the code branches
+**back to the top of the same probe**. So a machine that does not deliver the interrupt does
+not fail gracefully — *it retries forever*. That is a meaningful difference from the bit-5
+poll in `$1200`, which tolerates a timeout: here delivery is mandatory.
+
+**Consequence for the emulator, and an open question.** VMOD_CTRL is plain RAM in the model
+with no interrupt generation, so `or.w d1,(a5)` should set no interrupt, `d2` should stay
+zero, and `$1300` should spin. Yet phases `$1000`-`$1A00` and `$2000` are all observed
+reached. Those two facts cannot both be right, and I have not run the experiment that
+settles it. **Either the emulator delivers these interrupts by some path I have not traced,
+or the phase beacon advances without `$1300` completing** — and which it is matters, because
+the second case means the "runs the full self-test suite" claim covers a stage that never
+passes. The check is cheap: instrument `$F093A8` (the post-success increment) and see
+whether it executes.
+
+`$1400` completes the sequence with the third board-status equation: it drives `$1FFF1` bit
+3 both ways against bit 1 of a value read into `d2`, matching the documented
+`bit 2 of $F70019 = NOT(bit 5) OR (bit 3 AND bit 0)`. With that, **all eleven sequence-B
+stages are accounted for.**
+
 ### Phase `$1200`: bit 5 is a self-clearing request, and the phases are STATEFUL
 
 `$F09236` is the busiest of the local-board stages and it yields three things.
