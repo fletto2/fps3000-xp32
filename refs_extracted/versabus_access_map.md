@@ -1563,6 +1563,48 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### Push delivery implemented, tested, and REVERTED — the specification was incomplete
+
+Having derived a specification for push-based delivery from the code, I implemented it:
+`FPS3K_SEQPUSH=<cycles>` arming the next scripted code on a timer regardless of SBC panel
+activity, additive and default-off. The default RAM digest was byte-identical with it present,
+so the baseline was safe.
+
+**It does not work, at any interval.**
+
+| `FPS3K_SEQPUSH` | op `$1` | op `$26` | acknowledge |
+|---|---|---|---|
+| 8,000,000 | **0** | **0** | **0** |
+| 60,000,000 | 1 | 1 | 1 |
+| 150,000,000 | 1 | 1 | 1 |
+
+At 8M cycles it **breaks dispatch entirely** — the machine boots, the self-test completes, the
+RTOS idle loop runs 3,661 times and the panel ISR fires 1,464 times, but **no op handler ever
+runs**. Pushing faster than the SBC can process leaves codes overwritten before dispatch. At
+60M and 150M it changes nothing: the same one operation each and the same single acknowledge as
+without the hook.
+
+**So the specification was necessary but not sufficient.** Push-arming the next code is not
+enough to produce a second acknowledge cycle; something else in the arm/dispatch interaction
+gates it, and I have not characterised that. The previous entry's confident *"what a fix
+requires is now clear and small"* was wrong — it was clear, and it was small, and it was not a
+fix.
+
+**Reverted.** `versabus.c` is back to its committed state and the digest re-verified
+(`f72fb0a5…`). A non-functional environment variable is worse than none: it would sit in the
+emulator looking like a capability, and the next person to set it and see nothing happen could
+not tell whether their scenario or the hook was at fault. **The honest artifact of a failed fix
+is the knowledge, not the code.**
+
+What the attempt did establish, which the earlier reasoning had not:
+
+- pushing codes faster than the SBC consumes them **destroys dispatch** rather than
+  accelerating it — the arm slot is single and gets overwritten;
+- the acknowledge count is insensitive to delivery timing across a 20x range, so whatever
+  limits it to one is **not a pacing problem** at all;
+- and therefore the remaining obstacle is in the arm/acknowledge state machine, not in when
+  codes arrive — which is a different place to look than where I had been looking.
+
 ### Why the two-phase conversation cannot be driven: delivery is pull-based
 
 Reading the delivery path rather than guessing at it settles why the collect never lands after
