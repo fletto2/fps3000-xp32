@@ -550,6 +550,27 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- MemBusProbe is a 4-case truth table; $1FFF0 IS bit-manipulated -------
+    check('the checker clears $1FFF1 bit 6 then polls $F70019 bit 3, 16 tries',
+          d[0xF0903C-0xF00000:0xF09050-0xF00000]
+          == b'\x08\xad\x00\x06\x00\x01\x30\x3c\x00\x0f'
+             b'\x08\x2c\x00\x03\x00\x01\x57\xc8\xff\xf8')
+    check('cases (0,0) (0,1) (1,0) all require bit 3 to stay set (bne = $66)',
+          all(d[a-0xF00000] == 0x66
+              for a in (0xF08FB0, 0xF08FD2, 0xF08FF4)))
+    check('case (1,1) alone requires bit 3 to go clear (beq = $67)',
+          d[0xF09016-0xF00000] == 0x67
+          and d[0xF0900A-0xF00000:0xF09016-0xF00000]
+              == b'\x08\xed\x00\x07\x00\x01\x08\xd5\x00\x01\x61\x2a')
+    check('$1FFF0 bit 1 is bset/bclr in five places, via (a5) not absolutely',
+          sum(1 for a in (0xF08FA8, 0xF08FCC, 0xF08FE8, 0xF09010, 0xF0902C)
+              if d[a-0xF00000:a-0xF00000+4] in (b'\x08\x95\x00\x01',
+                                                b'\x08\xd5\x00\x01')) == 5)
+    check('bclr.b #$8,(a5) is bit 8 mod 8 = bit 0, at three further sites',
+          all(d[a-0xF00000:a-0xF00000+4] in (b'\x08\x95\x00\x08',
+                                             b'\x08\xd5\x00\x08')
+              for a in (0xF092B2, 0xF092F8, 0xF09320)))
+
     # --- $1900: bit 4 muxes the low half; $FF0214 is the latch ----------------
     check('$1900 writes $55555555 to $400000 and reads it back as a longword',
           d[0xF0978E-0xF00000:0xF0979C-0xF00000]

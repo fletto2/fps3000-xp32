@@ -1528,6 +1528,62 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### `MemBusProbe` is a complete truth table, and `$1FFF0` IS bit-manipulated
+
+Phase `$1000` (`MemBusProbe`, `$F08F9A`) sets two VMOD_CTRL bits in all four combinations
+and calls a checker at `$F0903C` each time:
+
+```
+$F0903C:  bclr.b #$6,$1(a5)        ; clear $1FFF1 bit 6
+          move.w #$f,d0
+   loop:  btst.b #$3,$1(a4)        ; poll $F70019 bit 3
+          dbeq   d0,loop           ; until it reads CLEAR, or 16 tries
+          rts
+```
+
+| `$1FFF1` b7 | `$1FFF0` b1 | branch | requires |
+|---|---|---|---|
+| 0 | 0 | `bne` | bit 3 stays **set** |
+| 0 | 1 | `bne` | bit 3 stays **set** |
+| 1 | 0 | `bne` | bit 3 stays **set** |
+| **1** | **1** | **`beq`** | bit 3 goes **clear** |
+
+That is `bit3 = NOT(b7 AND b1)`, and since the checker clears bit 6 on entry it is exactly
+the equation the emulator already models: **`bit 3 of $F70019 = NOT(bit 6 OR (bit 7 AND bit
+1))`**. The equation was previously derived from observing phase `$800`; this is the
+firmware testing it as a **complete four-case truth table**, which is considerably stronger
+evidence than a spot-check — the AND is exercised on every input combination, so the
+emulator's boolean cannot be accidentally right.
+
+**Correction: `$1FFF0` is bit-manipulated, in eight places.** This file and `CLAUDE.md`
+state that `$1FFF0` — the control register byte carrying *VersaBus Transfer Request* and
+*Block Transfer Request* — "is written `$00` every time and never bit-manipulated", and use
+that to conclude **the firmware never asserts a transfer request**. The scan behind it
+found zero hits because there are **zero absolute-address forms**; every access is through
+`a5`:
+
+| site | operation | actual bit |
+|---|---|---|
+| `$F08FA8`, `$F08FCC`, `$F08FE8`, `$F09010`, `$F0902C` | `bclr`/`bset` `#$1,(a5)` | bit 1 |
+| `$F092B2`, `$F092F8`, `$F09320` | `bclr`/`bset` `#$8,(a5)` | **bit 0** |
+
+*Note the second row's reading trap:* `bclr.b #$8` on a byte operand is bit `8 mod 8` = **bit
+0**, not bit 8. Taking the disassembly literally would invent a nonexistent bit and miss a
+real one. Bit 0 is the same bit the phase-`$1200` equation refers to as "NOT bit 0 of
+`$1FFF0`", which is the independent corroboration that this reading is right.
+
+**This is the same blind spot that hid the `$FF0048` read** — an absolute-address sweep
+cannot see `d16(An)` forms, and this project has now been bitten by it twice on separate
+registers. Any claim of the form "X is never accessed" derived from an address scan should
+be treated as unproven until re-run over base-register forms.
+
+**What survives and what does not.** The narrow claim — that *service* code writes `$1FFF0`
+as a whole byte of `$00` — is untouched; all eight manipulation sites are inside the
+power-on self-test. The broad claim, that the firmware never asserts a transfer request, is
+**retracted**: the self-test asserts bit 1 deliberately, four times, as one input of a
+truth table. Whether bit 1 *is* the transfer-request line is a separate question the ROM
+cannot answer, but "the firmware never touches it" is no longer available as a premise.
+
 ### Phase `$1900` is the 16-to-32-bit width conversion, and `$FF0214` is the low-half latch
 
 This is the mechanism by which a **16-bit VersaBus SBC writes 32-bit words into a 32-bit
