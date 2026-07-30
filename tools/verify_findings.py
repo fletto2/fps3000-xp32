@@ -550,6 +550,55 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- no compiled C; the a6 idiom is a structure pointer -----------------
+    check('there is not one link/unlk pair in the entire 64 KB ROM',
+          not any(struct.unpack('>H', d[i:i+2])[0] in (0x4E56, 0x4E5E)
+                  for i in range(0, len(d) - 1, 2)))
+    check('RDHC command descriptor: +$08 -> d2 (count), +$0C -> d1 (payload), '
+          '+$10 -> d3, +$14 -> a2 (inline buffer)',
+          d[0xF05446-0xF00000:0xF0544A-0xF00000] == b'\x22\x2e\x00\x0c'
+          and d[0xF0544A-0xF00000:0xF0544E-0xF00000] == b'\x45\xee\x00\x14'
+          and d[0xF05460-0xF00000:0xF05464-0xF00000] == b'\x24\x2e\x00\x08'
+          and d[0xF05464-0xF00000:0xF05468-0xF00000] == b'\x26\x2e\x00\x10')
+    check('the four XP tasks share one a6 prologue-block layout',
+          all(d[a2-0xF00000:a2-0xF00000+2] == b'\x2c\x48'
+              for a2 in (0xF05F68, 0xF06968, 0xF07368, 0xF07D68)))
+
+    # --- $FF0212 IS a register: phase $1600 writes and reads it back --------
+    # Settled by FPS3K_ACCESSLOG (true CPU-level widths).  The static sweep said
+    # "not a register", the bus log said "undocumented register", and an
+    # adjacency argument said "longword-split artefact"; only the width log was
+    # right.  Phase $1600 walks $210-$216 with $10/$20/$40/$80 via INDEXED
+    # addressing, which is why no static search for $212(aN) found anything.
+    check('phase $1600 walks four registers from $210 with a walking-ones pattern',
+          d[0xF09558-0xF00000:0xF0956C-0xF00000]
+          == b'\x30\x3c\x00\x10\x30\x7c\x02\x10\x3d\x80\x80\x00'
+             b'\x41\xe8\x00\x02\xe3\x08\x64\xf4')
+    check('...and reads them back, failing to $F095E8 on mismatch',
+          d[0xF095C0-0xF00000:0xF095CE-0xF00000]
+          == b'\xb0\x76\x80\x00\x66\x22\x41\xe8\x00\x02\xe3\x08\x64\xf2')
+    check('phase $1600 checks MODE0 masked $FF and STATUS_IRQ masked $610 == $400',
+          d[0xF09594-0xF00000:0xF09598-0xF00000] == b'\x02\x40\x00\xff'
+          and d[0xF095A6-0xF00000:0xF095AE-0xF00000]
+              == b'\x02\x40\x06\x10\x0c\x40\x04\x00')
+    # Runtime evidence that $FF0212 has storage: a 2-byte write of $0020 followed
+    # by a 2-byte read-back of $0020, and no 32-bit access anywhere in the XLTR
+    # block (which is what refuted the longword-split explanation).
+    import tempfile as _tf
+    _al = _tf.mktemp()
+    run_err({'FPS3K_ACCESSLOG': _al}, CYC)
+    _lines = [l.split() for l in open(_al) if l[:1] in 'RW']
+    _x = [l for l in _lines if l[2] == 'FF0212']
+    check('$FF0212: a 2-byte write of $0020 and a 2-byte read-back of $0020',
+          [(l[0], l[1], l[3]) for l in _x]
+          == [('W', '2', '00000020'), ('R', '2', '00000020')])
+    check('...and NO 32-bit access anywhere in $FF0200-$FF025F',
+          not [l for l in _lines
+               if l[1] == '4' and 0xFF0200 <= int(l[2], 16) <= 0xFF025F])
+    check('the hottest address in the machine is $F70019, not $FF0204',
+          sum(1 for l in _lines if l[2] == 'F70019')
+          > 10 * sum(1 for l in _lines if l[2] == 'FF0204'))
+
     # --- the XLTR block: $FF0212 is a logging artefact, not a register -------
     check('the $F0A086 "$12(a3)" sites walk the TDTI table, not the XLTR',
           d[0xF0A06E-0xF00000:0xF0A074-0xF00000]

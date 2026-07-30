@@ -1905,6 +1905,17 @@ loc_F05358:
 loc_F05370:
 ;>>>> [R1/BOTH] Saves the current data pointer (a0) in a6 for S-record processing during microcode upload to the XP-32 staging buffer.
 ;>>>> [R1/DS] Loads a TCB field offset 4 into d4, defaulting to a word from $e62 if zero, then bounds-checks it against 1 and a limit at $105e.
+;### THERE IS NO COMPILED C ANYWHERE IN THIS ROM -- not one link/unlk pair in
+;###   the whole 64 KB, kernel or application.  Hand-written assembly
+;###   throughout, consistent with register-passed parameters, d7 hand-preserved
+;###   across a dispatch, swap d0 carrying two values in one register, and
+;###   byte-identical template copies no compiler would emit.
+;###   But the a6 idiom IS a usable heuristic: a6-relative accesses in the FPS
+;###   region are 150 POSITIVE and 0 NEGATIVE -- inverted from a C frame, which
+;###   needs negatives for locals.  So a6 is a pointer to a CALLER-SUPPLIED
+;###   STRUCTURE, and grouping those accesses by the instruction that loads a6
+;###   yields a field map per structure.  That is how the six fields above were
+;###   found after only three had been published.
 ;###   cmd 1: attach/configure a channel. Defaults d4 from $E62, validates
   f05370: 2c 48                   movea.l  a0, a6
 ;>>>> [R2/BOTH] This instruction loads a 32-bit value from offset 4 of the structure pointed to by a6, which is used as a channel number or index parameter; it is part of the validation logic that checks whether the channel index is within the valid range (1 to 0x105E) before proceeding with panel command dispatch.
@@ -2017,6 +2028,19 @@ loc_F0543C:
   f0543e: 48 40                   swap     d0
   f05440: 30 3c ff ff             move.w   #$ffff, d0
   f05444: 48 40                   swap     d0
+;### THE RDHC COMMAND DESCRIPTOR HAS SIX FIELDS, not the three published:
+;###     +$00 -> d0   operation code (the PanelStatusDispatch index)
+;###     +$04 -> d4   channel, defaulting to $E62
+;###     +$08 -> d2   TRANSFER COUNT (BLK_XFR/POLL loop bound d1 = 1..d2)
+;###     +$0C -> d1   32-BIT PAYLOAD (what D1_SEND pushes across)
+;###     +$10 -> d3   third parameter
+;###     +$14 -> a2   THE BUFFER, lea'd not loaded, so INLINE in the record
+;###   Every field lands where a primitive expects it, which is what makes the
+;###   layout convincing rather than merely consistent.  A host driving this
+;###   machine writes {1, op, channel, count, payload, param, data...} into
+;###   chassis memory at $400000.  The op-$14 path is the exception: $F0542C
+;###   sets a2 to the fixed ROM address $F0549E instead of the inline buffer,
+;###   which is why that operation needs no payload and made a good first probe.
   f05446: 22 2e 00 0c             move.l   $c(a6), d1
   f0544a: 45 ee 00 14             lea.l    $14(a6), a2
   f0544e: 0c 96 00 00 00 14       cmpi.l   #$14, (a6)
@@ -9186,6 +9210,20 @@ loc_F09536:
   f09546: 3d 7c 00 01 02 0c       move.w   #$1, $20c(a6)  [XLTR_COUNTER]
   f0954c: 3d 7c 04 00 02 18       move.w   #$400, $218(a6)  [XLTR_STATUS_IRQ]
   f09552: 3d 7c 0f ff 02 1a       move.w   #$fff, $21a(a6)  [XLTR_IRQ_MASK]
+;### PHASE $1600 IS AN XLTR REGISTER WRITE/READ-BACK TEST, and it settles what
+;###   $FF0212 is.  d0 = $10, a0 = $210, then write d0 to (a6,a0.w), a0 += 2,
+;###   lsl.b #1,d0 -- so $10 $20 $40 $80 and out on carry: EXACTLY FOUR
+;###   registers, $210 $212 $214 $216.  $F095C0 reads them back and branches to
+;###   $F095E8 on mismatch, so $FF0212 HAS REAL STORAGE.  The firmware never
+;###   uses it functionally, so the documented register table is INCOMPLETE
+;###   rather than wrong, and $210-$216 are a four-register group.
+;###   Three attempts got this wrong before FPS3K_ACCESSLOG (true CPU-level
+;###   widths, added at the user's suggestion): the static sweep said "not a
+;###   register" (right about use, wrong about existence), the bus log said
+;###   "undocumented register" (right, wrong reason), and an adjacency argument
+;###   said "longword-split artefact" (wrong -- there are NO 32-bit accesses
+;###   anywhere in $FF0200-$FF025F).  Indexed addressing is why no static
+;###   search for $212(aN) ever found anything.
   f09558: 30 3c 00 10             move.w   #$10, d0
   f0955c: 30 7c 02 10             movea.w  #$210, a0
 
@@ -9208,6 +9246,11 @@ loc_F09574:
   f09588: 0c 6e 20 00 02 02       cmpi.w   #$2000, $202(a6)  [XLTR_MODE1]
   f0958e: 66 58                   bne.b    loc_F095E8
   f09590: 30 2e 02 00             move.w   $200(a6)  [XLTR_MODE0], d0
+;### PHASE $1600 ALSO SPECIFIES WHICH BITS ARE REAL: MODE0 is checked MASKED
+;###   $FF (its high byte need not hold what was written) and STATUS_IRQ is
+;###   checked masked $610 == $400.  CHANNEL_SELECT, MODE1, COUNTER, IRQ_MASK
+;###   and $210-$216 must all read back exactly.  Per-bit rules a chassis model
+;###   needs and cannot get from usage patterns.
   f09594: 02 40 00 ff             andi.w   #$ff, d0
   f09598: 66 4e                   bne.b    loc_F095E8
   f0959a: 0c 6e 00 01 02 0c       cmpi.w   #$1, $20c(a6)  [XLTR_COUNTER]

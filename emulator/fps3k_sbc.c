@@ -435,10 +435,44 @@ static void bus_write8(uint32_t a, uint8_t v) {
  * bus_read8/bus_write8 except when the entire range is a single
  * device that benefits from atomic access (we keep the optimization
  * for fully-aligned device accesses). */
+/* FPS3K_ACCESSLOG=<file>: every data access at the CPU boundary, with its TRUE
+ * WIDTH and the PC that made it.
+ *
+ * The existing -bus log records accesses AFTER decomposition: m68k_*_memory_32
+ * fans out into four bus_*8 calls, and versabus_write() is only called with a
+ * width when the whole span happens to be device space.  So one 32-bit write to
+ * $FF0210 shows up as separate $FF0210 and $FF0212 entries -- which is exactly
+ * how a phantom register at $FF0212 came to be catalogued and then had to be
+ * argued away from log ordering.  Logging here, before any splitting, makes the
+ * width a recorded fact instead of an inference.
+ *
+ * Execution coverage comes from -trace (the PC list); this covers reads and
+ * writes across the WHOLE address space, RAM included, not just devices. */
+static FILE *acc_fp = NULL;
+
+static void acc_init(void) {
+    static int tried;
+    if (tried) return;
+    tried = 1;
+    const char *f = getenv("FPS3K_ACCESSLOG");
+    if (f) {
+        acc_fp = fopen(f, "w");
+        if (acc_fp) fprintf(acc_fp, "# op width addr value pc\n");
+    }
+}
+
+static void acc_log(char op, int width, uint32_t a, uint32_t v) {
+    if (!acc_fp) return;
+    fprintf(acc_fp, "%c %d %06X %08X %06X\n", op, width, a, v,
+            m68k_get_reg(NULL, M68K_REG_PPC));
+}
+
 unsigned int m68k_read_memory_8 (unsigned int a) {
+    acc_init();
+    if (acc_fp) { unsigned r = bus_read8(a); acc_log('R', 1, a, r); return r; }
     return bus_read8(a);
 }
-unsigned int m68k_read_memory_16(unsigned int a) {
+static unsigned int m68k_read_memory_16_impl(unsigned int a) {
     if (getenv("FPS3K_PCLOG") && a >= 0xFF0040 && a <= 0xFF00FF)
         fprintf(stderr, "[PCLOG] rd %06X from PC=%06X\n",
                 a, m68k_get_reg(NULL, M68K_REG_PPC));
@@ -460,7 +494,7 @@ unsigned int m68k_read_memory_16(unsigned int a) {
     }
     return ((unsigned)bus_read8(a) << 8) | bus_read8(a+1);
 }
-unsigned int m68k_read_memory_32(unsigned int a) {
+static unsigned int m68k_read_memory_32_impl(unsigned int a) {
     if (versabus_is_device(a) && versabus_is_device(a+1)
         && versabus_is_device(a+2) && versabus_is_device(a+3)) {
         return versabus_read(a, 4);
@@ -481,9 +515,10 @@ unsigned int m68k_read_disassembler_32(unsigned int a) {
          |  (unsigned)bus_read8(a+3);
 }
 void m68k_write_memory_8 (unsigned int a, unsigned int v) {
+    acc_init(); acc_log('W', 1, a, v);
     bus_write8(a, v);
 }
-void m68k_write_memory_16(unsigned int a, unsigned int v) {
+static void m68k_write_memory_16_impl(unsigned int a, unsigned int v) {
     /* With XLTR_DATA_HI=0, word writes to chassis-window word $400000
      * are ignored (long writes still go through).  Phase 0x1900 stage 2
      * verifies this. */
@@ -496,7 +531,7 @@ void m68k_write_memory_16(unsigned int a, unsigned int v) {
     bus_write8(a,   (v >> 8) & 0xFF);
     bus_write8(a+1, v & 0xFF);
 }
-void m68k_write_memory_32(unsigned int a, unsigned int v) {
+static void m68k_write_memory_32_impl(unsigned int a, unsigned int v) {
     if (versabus_is_device(a) && versabus_is_device(a+1)
         && versabus_is_device(a+2) && versabus_is_device(a+3)) {
         versabus_write(a, v, 4); return;
@@ -505,6 +540,31 @@ void m68k_write_memory_32(unsigned int a, unsigned int v) {
     bus_write8(a+1, (v >> 16) & 0xFF);
     bus_write8(a+2, (v >>  8) & 0xFF);
     bus_write8(a+3,  v        & 0xFF);
+}
+
+
+/* Width-aware wrappers.  The bodies above are untouched; these only record the
+ * access at its TRUE width before any decomposition.  The byte callbacks reach
+ * bus_*8 directly rather than through these, so nothing is logged twice. */
+unsigned int m68k_read_memory_16(unsigned int a) {
+    acc_init();
+    unsigned int r = m68k_read_memory_16_impl(a);
+    acc_log('R', 2, a, r);
+    return r;
+}
+unsigned int m68k_read_memory_32(unsigned int a) {
+    acc_init();
+    unsigned int r = m68k_read_memory_32_impl(a);
+    acc_log('R', 4, a, r);
+    return r;
+}
+void m68k_write_memory_16(unsigned int a, unsigned int v) {
+    acc_init(); acc_log('W', 2, a, v);
+    m68k_write_memory_16_impl(a, v);
+}
+void m68k_write_memory_32(unsigned int a, unsigned int v) {
+    acc_init(); acc_log('W', 4, a, v);
+    m68k_write_memory_32_impl(a, v);
 }
 
 /* ============== misc Musashi callbacks ============== */
@@ -880,6 +940,7 @@ int main(int argc, char **argv) {
             "FPS3K_CHASSIS_UNINIT","FPS3K_LOGCHASSIS","FPS3K_BUSPC",
             "FPS3K_BSTAT19_B5","FPS3K_PCLOG","FPS3K_REGLOG","FPS3K_APIF_LEGACY",
             "FPS3K_RTOSDUMP","FPS3K_CHASSIS_CMD","FPS3K_POKE_FROM_RESET",
+            "FPS3K_ACCESSLOG",
         };
         int any = 0;
         fprintf(stderr, "[done] hooks active:");

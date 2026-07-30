@@ -1528,6 +1528,159 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### No compiled C anywhere — but the a6 idiom maps every parameter structure
+
+*Prompted by a question about whether the application code is compiled C, and
+whether frame layout could be used as a block-identification heuristic.* Tested
+rather than assumed:
+
+| region | `link a6` | `unlk` | `rts` | `rte` |
+|---|---|---|---|---|
+| RMS68K kernel | **0** | **0** | 25 | 191 |
+| RDHC | **0** | **0** | 36 | 0 |
+| XP1I-XP4I | **0** | **0** | 112 | 0 |
+| self-test | **0** | **0** | 48 | 12 |
+| RTOS init | **0** | **0** | 9 | 0 |
+| **whole 64 KB** | **0** | **0** | 231 | 203 |
+
+**There is not one `link`/`unlk` pair in the entire ROM**, kernel or application. None
+of it is compiled C with a conventional stack frame — it is hand-written assembly
+throughout, which is consistent with everything else found here: parameters passed in
+registers, `d7` hand-preserved across a dispatch, `swap d0` carrying two values in
+one register's halves, and byte-identical template copies with patched constants that
+no compiler would emit.
+
+**But a variant of the heuristic works, and it is a better tool than the original.**
+The a6-relative accesses in the FPS region are **150 positive and 0 negative** —
+exactly inverted from a C frame, which needs negative displacements for locals.
+Positive-only means **a6 is a pointer to a caller-supplied structure**, so grouping
+those accesses by the instruction that loads a6 yields a field map per structure:
+
+| a6 set at | structure | fields |
+|---|---|---|
+| `$F05370` | **RDHC command descriptor** | `+$00 +$04 +$08 +$0C +$10 +$14` |
+| `$F05D54` | TCBIO1I prologue block | `+$00 +$0A` |
+| `$F05F68` / `$F06968` / `$F07368` / `$F07D68` | XP4I…XP1I prologue blocks | `+$00 +$0A +$14` |
+| `$F08B02` | the `$FF0000` window in the self-test | 11 offsets, 112 accesses |
+| `$F0A31A` | an RTOS-init structure | `+$00 +$08 +$38 +$3C` |
+
+The four XP tasks share one prologue-block layout and TCBIO1I a reduced form of it —
+which is the template relationship already established, now visible in the *data*
+rather than the code.
+
+#### The RDHC command descriptor has six fields, not three
+
+This document published it as `{command, operation, channel}`. The a6 map shows three
+more, and the sites decode them by where they go:
+
+| offset | loaded into | role |
+|---|---|---|
+| `+$00` | `d0` | **operation code** — the `PanelStatusDispatch` index |
+| `+$04` | `d4` | **channel**, defaulting to `$E62` |
+| `+$08` | `d2` | **transfer count** — `BLK_XFR`/`POLL` loop bound `d1 = 1..d2` |
+| `+$0C` | `d1` | **32-bit payload** — what `D1_SEND` pushes across |
+| `+$10` | `d3` | third parameter |
+| `+$14` | `a2` | **the buffer**, `lea $14(a6),a2` — *inline*, not a pointer |
+
+`$F05446` loads `d1` from `+$0C`, `$F05460` loads `d2` from `+$08`, `$F05464` loads
+`d3` from `+$10`, and `$F0544A` takes `a2` as `$14(a6)`. Cross-checking against the
+primitives decoded earlier: `D1_SEND` sends `d1`, `BLK_XFR` and `POLL` use `d2` as
+the count and `a2` as the other end, `D2_FIN` pushes `d2`. **Every field lands where
+a primitive expects it**, which is what makes the layout convincing rather than
+merely consistent.
+
+Because `a2` is `lea`'d rather than loaded, the buffer is **inline in the
+descriptor**: a command record is a `$14`-byte header followed by its data. So a host
+driving this machine writes `{1, operation, channel, count, payload, param, data…}`
+into chassis memory at `$400000` and lets RDHC pick it up — which is now a complete
+enough specification to synthesise real commands rather than probe with `1,14,1`.
+
+*The op-`$14` path is the exception: `$F0542C` sets `a2` to a fixed ROM address
+(`$F0549E`) instead of the inline buffer, which is why that operation works without
+any descriptor payload and made a convenient first probe.*
+
+### `FPS3K_ACCESSLOG`: true access widths settle it — `$FF0212` IS a register
+
+*Added at the user's suggestion, and it immediately overturned a conclusion reached
+one section below.* The `-bus` log records accesses **after** the emulator
+decomposes them: `m68k_write_memory_32` fans out into four `bus_write8` calls, and
+`versabus_write()` only receives a width when the whole span happens to be device
+space. `FPS3K_ACCESSLOG=<file>` logs at the **CPU boundary**, before any splitting,
+recording `op width addr value pc` for every data access across the whole address
+space. A 200 M-cycle run produces 32.8 M entries.
+
+**Result: there are no 32-bit accesses anywhere in `$FF0200-$FF025F`.** Every XLTR
+access is 2-byte. So the explanation given below — that `$FF0212` is the tail of a
+longword access to `$FF0210`, split by the logger — is **wrong**. It was a plausible
+story inferred from log adjacency, and the width data refutes it.
+
+`$FF0212` is accessed exactly twice, and the PCs identify the code:
+
+```
+W 2 FF0212 = 0020  from PC F09560
+R 2 FF0212 = 0020  from PC F095C0
+```
+
+`$F09560` is `move.w d0,(a6,a0.w)` and `$F095C0` is `cmp.w (a6,a0.w),d0` —
+**indexed addressing**, which is why every static search for `$212(aN)` came up
+empty. This is **self-test phase `$1600`** at `$F09536`, an XLTR register
+write-then-read-back test with two walking loops:
+
+```
+$F09558  move.w  #$10,d0
+$F0955C  movea.w #$210,a0
+$F09560  move.w  d0,(a6,a0.w)     ; write
+$F09564  lea     $2(a0),a0
+$F09568  lsl.b   #$1,d0           ; $10 -> $20 -> $40 -> $80 -> carry
+$F0956A  bcc     -> $F09560       ; so EXACTLY four registers
+
+$F0956C  move.w  #$c0,d0
+$F09570  movea.w #$230,a0         ; then the BIM block, ascending from $C0
+$F09574  move.w  d0,(a6,a0.w)
+$F0957C  addq.w  #$1,d0
+$F0957E  cmp.w   d1,d0 / bne
+```
+
+**So `$FF0212` is a real, writable, read-backable 16-bit register.** The test writes
+`$0020` and *requires* it to read back — `bne -> $F095E8` is the failure path. That
+is a hardware fact: there is storage there. The firmware simply never uses it
+functionally. **The documented register table is incomplete, not wrong**, and
+`$FF0210`-`$FF0216` form a **four-register group** the self-test walks with
+`$10/$20/$40/$80`.
+
+*Three attempts at this one address: the static sweep said "not a register" (right
+about functional use, wrong about existence), the bus log said "an undocumented
+register" (right, for the wrong reason), and my adjacency argument said "a logging
+artefact" (wrong). The width-aware log gave the answer in one read.*
+
+#### Phase `$1600` also states which bits of each XLTR register are real
+
+Its verification section is a specification of readback behaviour:
+
+| register | written | checked |
+|---|---|---|
+| `CHANNEL_SELECT` `$204` | `d6` | must read back exactly |
+| `MODE1` `$202` | `$2000` | must read back exactly |
+| `MODE0` `$200` | `$0000` | **masked `$FF`** must be 0 — the high byte is not checked |
+| `COUNTER` `$20C` | `$0001` | must read back exactly |
+| `STATUS_IRQ` `$218` | `$0400` | **masked `$610`** must equal `$400` |
+| `IRQ_MASK` `$21A` | `$0FFF` | must read back exactly |
+| `$210`-`$216` | `$10/$20/$40/$80` | each must read back exactly |
+| `$230`-`$23E`… | ascending from `$C0` | each must read back exactly |
+
+**`MODE0`'s high byte and `STATUS_IRQ`'s bits outside `$610` are not required to
+hold what was written** — which is exactly the sort of per-bit rule a chassis model
+needs and cannot get from usage patterns alone.
+
+#### And the hottest address in the machine is not what I said
+
+The previous section called `$FF0204` "by far the hottest register in the machine"
+at 32,968 writes. Across the *whole* address space the board status register
+**`$F70019` is read 590,333 times** — eighteen times more traffic. The earlier claim
+was scoped to the bus log's device subset without saying so. `$F70003` and `$F7000D`
+(PTM) are read ~1,850 times each; `$01FFF0` is the only address in the machine
+touched at all three widths, including genuine 32-bit accesses.
+
 ### The XLTR block by two methods, and why neither is authoritative alone
 
 Giving `$FF0200-$FF025F` the same treatment produced a **false positive from each
