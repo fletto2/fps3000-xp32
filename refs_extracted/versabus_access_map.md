@@ -1563,6 +1563,55 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The TCB layout derived empirically — and `+$FC` is the saved PC, which IS written
+
+Rather than trust a header from the wrong revision, diffing the six live TCBs gives a
+build-specific layout. **Only 13 of 128 longwords differ across the six**, and every one is
+interpretable:
+
+| offset | example values | reading |
+|---|---|---|
+| `+$004`, `+$00C` | `$0001EB00`, `$0001ED00` | **list links** — other TCB addresses |
+| `+$010` | `"XP1I"`, `"RDHC"`, `"IO1I"` | **task name** |
+| `+$028` | `$A0010000` / `$A0810000` | attributes — only RDHC differs |
+| `+$038` | `$1EA60`, `$1EC60` | per-task structure pointer |
+| **`+$06C`** | `$F046F0`, `$F05D36` | **entry point** (confirms this project's value) |
+| **`+$0FC`** | **`$F04740`**, `$F05DC2` | **a second code address** — see below |
+| `+$120` | `$F04600`, `$F05D00` | **TDTI region base** |
+| `+$138`, `+$13C` | `$1DD00` / `$1DE16` | semaphore/stack block and its end |
+
+**`+$0FC` is the saved PC, and it is written by the kernel.** For RDHC it holds **`$F04740`** —
+which is not its entry point (`$F046F0`, at `+$6C`) but its **main-loop `btst #7` instruction**,
+the documented "RDHC leaves the wait" PC. That is a *current* position, not a starting one.
+
+Searching the ROM for displacement `$00FC` finds **seven references, all in the kernel**:
+
+```
+writes: $F00610  $F0292E  $F02B1C  $F036A0
+reads:  $F02AF0  $F02B04  $F03638
+```
+
+`$F02B1C` (`move.l d6,$fc(a5)`) sits beside the scheduler at `$F02C6C`, which is exactly where
+a context save belongs.
+
+**This corrects a claim from two entries ago.** I wrote that "nothing in the firmware ever reads
+or writes a task's saved PC", based on finding no references to displacement `$D8` — the vendor
+header's `TCBPC`. **That offset is not the PC in this build.** The real field is `+$FC`, and it
+is written four times and read three times. The search was sound; it was pointed at the wrong
+address, because I took the offset from the header I had just shown to be mismatched.
+
+*What survives and what does not.* The **empirical** conclusion — RDHC never escapes, 182,124
+spin iterations, three eliminated candidates — is untouched. The **argument** that no mechanism
+could rewrite a task's PC is withdrawn: the mechanism plainly exists, since that is how any
+preemptive kernel resumes a task. What remains true is that nothing was observed to write an
+*altered* PC for a spinning task; a task parked at `bra .` has `$F056B8` saved and restored
+faithfully, which is a save/restore working correctly rather than an escape.
+
+**Two rounds, two corrections, one cause.** Both came from carrying a vendor offset past the
+point where the vendor layout was shown not to apply. Having flagged the header as mismatched,
+I then used one of its offsets in the very next search. *A source you have just discredited does
+not become reliable again for the next question.*
+
 ### CAUTION: the vendor `TCB.EQ` does NOT match this build — the field naming is tentative
 
 The previous entry named `+$2C`, `+$58` and `+$5E` from `SR10/U9995/TCB.EQ`, calibrated on

@@ -583,6 +583,16 @@ else:
     check('...and inside the $200 allocation stride, so they are FPS extension',
           all(0xFC <= o < 0x200 for o in (0x100, 0x102, 0x138, 0x160)))
 
+    # --- the saved PC is at TCB+$FC, and the kernel writes it -----------------
+    check('displacement $00FC has kernel writes -- the saved-PC field',
+          len([a2 for a2 in range(0xF00000, 0xF04488, 2)
+               if word(a2 + 2) == 0x00FC
+               and (word(a2) >> 12) in (1, 2, 3)
+               and ((word(a2) >> 6) & 7) == 5]) >= 3)
+    check('...unlike displacement $00D8, the vendor TCBPC, which has none',
+          not [a2 for a2 in range(0xF00000, 0xF0FFF0, 2)
+               if word(a2 + 2) == 0x00D8 and (word(a2) & 0x38) == 0x28])
+
     # --- the scheduler manipulates TCB state fields, not PCs ------------------
     check('$F02C6C clears a TCB flag bit and a pointer pair',
           d[0xF02C74-0xF00000:0xF02C7C-0xF00000]
