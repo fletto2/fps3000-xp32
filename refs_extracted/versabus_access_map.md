@@ -16249,3 +16249,46 @@ Two limits on what the audit proves, worth stating so it is not over-trusted:
 
 Reusable form: `grep -n "or True" tools/verify_findings.py` should match only comments, and the
 literal-only scan above should return only the `FileNotFoundError` guards.
+
+## The two dispatchers are structurally asymmetric
+
+`$F04930` picks between them on bit 7 of the command byte, and they are built differently:
+
+**Bit 7 clear — `$F04A6E`:** `(code & $F) << 2` into a **16-entry jump table** at `$F05102`. One
+operation per code, each a distinct handler. This is the path every measurement in this file has
+used.
+
+**Bit 7 set — `$F0495C`:** not a table at all. A **validator feeding one handler**:
+
+```
+F04962  andi.w #$1f,d0        ; 5-bit code, 0-31
+F0496E  cmpi.w #$14,d0 / bgt  ; above $14 -> reject
+F04976  cmpi.w #$14,d0 / beq  ; $14 itself -> absorbed, straight to the ISR exit stub
+F0497E  btst.b #$6,$e87       ; bit 6 set AND code $10 -> reject
+                              ; everything else -> $F04992
+```
+
+and `$F04992` computes an index rather than dispatching:
+
+```
+F04992  cmpi.w #$13,d0 / beq  ; code $13 -> result register = 0, exit
+F049A8  lsl.w  #$2,d0         ; index = code * 4
+F049AA  cmpi.w #$3c,d0 / ble
+F049B0  subq.w #$2,d0         ; codes above $F are shifted by -2 -- a GAP in the table
+F049B2  btst.b #$6,$e87       ; then bit 6, then bit 5
+```
+
+So the read-back path accepts **21 codes (`$00`-`$14`)**, indexes an array by `code * 4` with a
+two-byte discontinuity above code `$F`, and honours **the same bits 5 and 6** the operation path
+uses for direction and half-select. The command byte's upper bits mean the same thing on both
+sides; only the low nibble's interpretation changes.
+
+Two details this explains:
+
+- **`$14` is absorbed by the dispatcher itself.** This file records that `$14` "means two different
+  things — to RDHC's main loop a command record is waiting, to this dispatcher acknowledge and
+  return". `$F04976` is that instruction, and it is why a stream of `$14`s yields exactly one
+  command.
+- **The `subq.w #$2` implies the collected array is not uniform.** Entries below code `$10` are
+  four bytes apart and the run above starts two bytes earlier than `code * 4` would place it,
+  which is the signature of a longword array preceded by a word-sized field.
