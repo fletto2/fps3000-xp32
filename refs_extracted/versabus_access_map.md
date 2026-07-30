@@ -12949,3 +12949,48 @@ Two measurement notes, both the same failure mode this file has recorded before:
   not in the project's main disassembly at all.** So these 34 entry points were never "lost
   by the disassembler"; they are outside the file by construction. The distinction matters:
   the gap is a scope decision that was never revisited, not a tool failure.
+
+## The kernel region now has a disassembly (2026-07-30)
+
+`tools/disasm_kernel.py` covers `$F00000`-`$F04487`, which no project artifact did before:
+**45.1% of 17,544 bytes, 2,429 instructions, 461 labels.** For scale, `fps3k.asm` reaches
+49.6% on the application region, so the kernel is now documented to a comparable standard.
+
+Three seed tiers, in descending confidence:
+
+| tier | n | why it is trustworthy |
+|---|---|---|
+| TRAP #0 jump table + TRAP #0 handler | 35 | the kernel's own dispatch table |
+| `bsr`/`jsr`/`jmp` targets, whole ROM | 71 | a call target is code by construction |
+| longwords pointing at kernel code | 51 | weaker; each must decode before it is trusted |
+
+The call-target tier exists because of a false-negative this file has now recorded twice:
+**`bsr.w` stores no address anywhere, only a 16-bit displacement.** `$F02C6C` has three
+`bsr.w` callers and zero longword references, so a pointer scan calls it unreachable.
+
+### The ROM contains no exception vector table
+
+Measured, not assumed: `+$00` = `$00000000`, `+$04` = `$00F09C00`, and **`$08`-`$3FF` are
+zero**. The reset overlay aliases ROM at address 0 solely so the 68000 can fetch SSP and PC;
+everything above that is built in RAM by RMS68K at boot. Sweeping `2..255` as a vector table
+yields 2 plausible-looking hits out of 254, both coincidence.
+
+An earlier revision of the tool did exactly that sweep. It cost nothing in output quality —
+the two hits were harmless — but it is the same shape of error as the `$FF0010` register the
+emulator invented: a scan that *runs* and *returns results* is not evidence the thing it
+scans exists.
+
+### Static vector installs are all self-test, and they explain phase $600
+
+Scanning for `move.l #<kernel addr>,<low memory>` finds **eight** sites, all in the self-test:
+
+| vector | handler | sites |
+|---|---|---|
+| 2 (bus error), 3 (address error) | `$F08902` | `$F08706`, `$F0870E` |
+| 2 (bus error) | `$F098E0` | `$F0960A`, `$F096CC`, `$F0983A` |
+| 85 (`$154`) | `$F088FA` | `$F087B4`, `$F0883C`, `$F088D6` |
+
+This is the mechanism behind a phase already documented here: **`$600` requires a BERR in
+`$F80001`-`$F82001`**, and it can only survive provoking one because it installs `$F08902` on
+vectors 2 and 3 first. The DRAM phases install `$F098E0` on bus error for the same reason.
+Vector 85 is not a BIM vector (those are `$41`-`$4A`) and its role is unestablished.
