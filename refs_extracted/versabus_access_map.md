@@ -15982,3 +15982,35 @@ built: **default handler → `$00`, own handler → `$FF`, owned by a task → 1
 That leaves `$BF` at vector `$2D` as the single exception in 246 entries — TRAP #13, handler
 `$F00A8E`, a rung of the `bsr` fan-in ladder. Precisely isolated, still unexplained, and now known
 not to come from a `bclr` (none targets this table) nor from the one fill pass decoded here.
+
+## RESOLVED by measurement: `$BF` comes from `bclr #$6,$2d(a6)` with `a6` = the `!VCT` base
+
+Two inferences failed on this; one watchpoint settled it. `FPS3K_RAMWATCH=1FA2D` gives the write
+history of that byte, and the last two writes are:
+
+```
+$1FA2D <- FF from PC=$F09F26     the fill loop, as expected
+$1FA2D <- BF from PC=$F012E6     the final write
+```
+
+`$F012E6` is `bclr.b #$6,$2d(a6)` — **which was in my earlier list of all 24 bit-6 operations, and
+I dismissed it**, having written that "all 24 act on TCB flag bytes or self-test board registers".
+That was an assumption about `a6`, not an observation. Here `a6` holds `$1FA00`, so `$2d(a6)` is
+`!VCT[$2D]` and the instruction clears bit 6 of TRAP #13's ownership byte.
+
+**Two of my own claims fall:**
+
+1. *"No `bclr #$6` anywhere in the ROM targets this table."* One does. The instruction is
+   base-register-relative and I classified it by guessing the base.
+2. **The usage-derived TCB field map is an upper bound, not a census.** It counted every
+   `$xx(a6)` displacement as a TCB field, and at least one `+$2D` access is an `!VCT` access. The
+   map's shapes were corroborated independently for `+$26`, `+$2C` and `+$102`, so its conclusions
+   stand — but its *counts* include accesses to whatever else `a6` happens to point at.
+
+This is the hazard this project documents for devices — *"devices are addressed ONLY through base
+registers; absolute-address scanning misses essentially every access"* — appearing in the mirror.
+I applied the lesson to device addresses and not to RAM structures, where the same instruction
+reaches different objects depending on a register loaded elsewhere.
+
+What clearing bit 6 of TRAP #13's `!VCT` byte *means* is still open. But it is now a question about
+one identified instruction in one identified routine, rather than about an anomalous byte.
