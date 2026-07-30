@@ -9929,6 +9929,12 @@ loc_F09E58:
   f09e74: 20 42                   movea.l  d2, a0
   f09e76: 70 04                   moveq    #$4, d0
 ;>>>> [R8/BOTH] Executes trap #0 (d0=4) to register VCT during Phase2Init_VCTscan.
+;### ALLOCATOR SITE 1/8 -- TRAP #0 directive $04 is the RTOS PAGE ALLOCATOR.
+;###   Size (in 256-byte pages) goes in via a0; the block comes back in a0.
+;###   Each of the eight sites then: registers the pointer in a directory slot,
+;###   stamps the marker tag at +$00, and writes end = base + (size<<8) - 1 at +$04.
+;###   THIS IS WHY every RTOS structure sits at a $1Fx00 boundary and the TCBs
+;###   stride by $200: the allocation unit is 256 bytes.  -> $0C20, tag !GST
   f09e78: 4e 40                   trap     #$0
   f09e7a: 60 04                   bra.b    loc_F09E80
   f09e7c: 61 00 04 88             bsr.w    loc_F0A306
@@ -9959,6 +9965,7 @@ loc_F09EB0:
   f09eb8: 67 3c                   beq.b    loc_F09EF6
   f09eba: 20 42                   movea.l  d2, a0
   f09ebc: 70 04                   moveq    #$4, d0
+;### ALLOCATOR SITE 2/8 -> slot $0C24, tag !UST ($F09ECE), observed $1FB00
   f09ebe: 4e 40                   trap     #$0
   f09ec0: 60 04                   bra.b    loc_F09EC6
   f09ec2: 61 00 04 42             bsr.w    loc_F0A306
@@ -9987,6 +9994,7 @@ Init_UST_StoreTag:
 loc_F09EF6:
   f09ef6: 20 7c 00 00 00 01       movea.l  #$1, a0
   f09efc: 70 04                   moveq    #$4, d0
+;### ALLOCATOR SITE 3/8 -> slot $0C66, NO tag stamped, observed $1FA00
   f09efe: 4e 40                   trap     #$0
   f09f00: 60 04                   bra.b    loc_F09F06
   f09f02: 61 00 04 02             bsr.w    loc_F0A306
@@ -10015,10 +10023,14 @@ loc_F09F28:
   f09f32: 66 ee                   bne.b    loc_F09F22
   f09f34: 42 b8 0c 6a             clr.l    $c6a.w
   f09f38: 24 3a 05 fa             move.l   loc_F0A534(pc), d2
+;### The beq guard: a zero size means the structure is not created at all.
+;###   That is the configuration knob -- all eight sizes are pc-relative ROM
+;###   constants, so the structure inventory is fixed at build time.
   f09f3c: 67 24                   beq.b    loc_F09F62
   f09f3e: 20 42                   movea.l  d2, a0
 ;>>>> [R8/BOTH] This `moveq #4, d0` sets up the memory allocation size parameter for a `trap #0` RMS68K system call to allocate space for the IOV (I/O Vector) table during kernel initialization.
   f09f40: 70 04                   moveq    #$4, d0
+;### ALLOCATOR SITE 4/8 -> slot $0C6A, tag !IOV ($F09F52), observed $1F900
   f09f42: 4e 40                   trap     #$0
   f09f44: 60 04                   bra.b    loc_F09F4A
   f09f46: 61 00 03 be             bsr.w    loc_F0A306
@@ -10043,6 +10055,7 @@ loc_F09F62:
   f09f6a: 67 24                   beq.b    loc_F09F90
   f09f6c: 20 42                   movea.l  d2, a0
   f09f6e: 70 04                   moveq    #$4, d0
+;### ALLOCATOR SITE 5/8 -> slot $0C6E, tag !IDV ($F09F80), observed $1F800
   f09f70: 4e 40                   trap     #$0
   f09f72: 60 04                   bra.b    loc_F09F78
   f09f74: 61 00 03 90             bsr.w    loc_F0A306
@@ -10068,6 +10081,7 @@ loc_F09F90:
   f09f9c: 67 44                   beq.b    loc_F09FE2
   f09f9e: 20 42                   movea.l  d2, a0
   f09fa0: 70 04                   moveq    #$4, d0
+;### ALLOCATOR SITE 6/8 -> slot $0C2C, tag !PAT ($F09FB2), observed $1F700
   f09fa2: 4e 40                   trap     #$0
   f09fa4: 60 04                   bra.b    loc_F09FAA
   f09fa6: 61 00 03 5e             bsr.w    loc_F0A306
@@ -10107,6 +10121,7 @@ loc_F09FE2:
   f09fea: 67 26                   beq.b    loc_F0A012
   f09fec: 20 42                   movea.l  d2, a0
   f09fee: 70 04                   moveq    #$4, d0
+;### ALLOCATOR SITE 7/8 -> slot $0C28, tag !UDR ($F0A000), observed $1F600
   f09ff0: 4e 40                   trap     #$0
   f09ff2: 60 04                   bra.b    loc_F09FF8
   f09ff4: 61 00 03 10             bsr.w    loc_F0A306
@@ -10133,6 +10148,7 @@ loc_F0A012:
   f0a01c: 20 42                   movea.l  d2, a0
 ;>>>> [R8/BOTH] Initializes UDR (User Driver) tag size via trap with d0=4.
   f0a01e: 70 04                   moveq    #$4, d0
+;### ALLOCATOR SITE 8/8 -> slot $0C30, NO tag stamped, observed $1F500
   f0a020: 4e 40                   trap     #$0
   f0a022: 60 04                   bra.b    loc_F0A028
   f0a024: 61 00 02 e0             bsr.w    loc_F0A306

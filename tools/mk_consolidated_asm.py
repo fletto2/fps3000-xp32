@@ -80,6 +80,23 @@ REGIONS = [(0xF04488,0xF045FF,'pre-task init - outside every TDTI region; runs b
 
 # ---- sites worth a note, from this session's analysis --------------------
 _NOTE_PAIRS = [
+ # ---- the RTOS page allocator (TRAP #0 directive $04), 8 sites ----
+ (0xF09E78,'ALLOCATOR SITE 1/8 -- TRAP #0 directive $04 is the RTOS PAGE ALLOCATOR.'),
+ (0xF09E78,'  Size (in 256-byte pages) goes in via a0; the block comes back in a0.'),
+ (0xF09E78,'  Each of the eight sites then: registers the pointer in a directory slot,'),
+ (0xF09E78,'  stamps the marker tag at +$00, and writes end = base + (size<<8) - 1 at +$04.'),
+ (0xF09E78,'  THIS IS WHY every RTOS structure sits at a $1Fx00 boundary and the TCBs'),
+ (0xF09E78,'  stride by $200: the allocation unit is 256 bytes.  -> $0C20, tag !GST'),
+ (0xF09EBE,'ALLOCATOR SITE 2/8 -> slot $0C24, tag !UST ($F09ECE), observed $1FB00'),
+ (0xF09EFE,'ALLOCATOR SITE 3/8 -> slot $0C66, NO tag stamped, observed $1FA00'),
+ (0xF09F42,'ALLOCATOR SITE 4/8 -> slot $0C6A, tag !IOV ($F09F52), observed $1F900'),
+ (0xF09F70,'ALLOCATOR SITE 5/8 -> slot $0C6E, tag !IDV ($F09F80), observed $1F800'),
+ (0xF09FA2,'ALLOCATOR SITE 6/8 -> slot $0C2C, tag !PAT ($F09FB2), observed $1F700'),
+ (0xF09FF0,'ALLOCATOR SITE 7/8 -> slot $0C28, tag !UDR ($F0A000), observed $1F600'),
+ (0xF0A020,'ALLOCATOR SITE 8/8 -> slot $0C30, NO tag stamped, observed $1F500'),
+ (0xF09F3C,'The beq guard: a zero size means the structure is not created at all.'),
+ (0xF09F3C,'  That is the configuration knob -- all eight sizes are pc-relative ROM'),
+ (0xF09F3C,'  constants, so the structure inventory is fixed at build time.'),
  # ---- 2026-07-29 second pass: task structure, RTOS surface, channel path ----
  (0xF0A332,'BulkClear: zeroes (d2 << 8) bytes ending at a0, working downward. The loop'),
  (0xF0A33C,'  body is here -- this is the address CLAUDE.md cites for the $10AA zeros;'),

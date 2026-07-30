@@ -441,6 +441,20 @@ else:
           len({l for l in trk.split() if 'F07D00' <= l <= 'F086FF'}) > 200 and
           len({l for l in trn2.split() if 'F07D00' <= l <= 'F086FF'}) < 130)
 
+    # --- directive $04 is the page allocator ------------------------------
+    ALLOC = [(0xF09E78, 0x0C20), (0xF09EBE, 0x0C24), (0xF09EFE, 0x0C66),
+             (0xF09F42, 0x0C6A), (0xF09F70, 0x0C6E), (0xF09FA2, 0x0C2C),
+             (0xF09FF0, 0x0C28), (0xF0A020, 0x0C30)]
+    check('eight TRAP #0 $04 allocator calls, each storing to its own slot',
+          all(struct.unpack('>H', d[a2-0xF00000-2:a2-0xF00000])[0] == 0x7004 and
+              struct.unpack('>H', d[a2-0xF00000:a2-0xF00000+2])[0] == 0x4E40
+              for a2, _ in ALLOC))
+    _, ral = run({}, 400_000_000)
+    check('all eight directory slots hold $x00-aligned page addresses',
+          all(struct.unpack('>I', ral[g:g+4])[0] & 0xFF == 0 and
+              0x1F400 <= struct.unpack('>I', ral[g:g+4])[0] <= 0x1FE00
+              for _, g in ALLOC))
+
     # --- the RTOS scheduler control block ---------------------------------
     TCBP = {0x1E900: 'XP1I', 0x1EB00: 'XP2I', 0x1ED00: 'XP3I',
             0x1EF00: 'XP4I', 0x1F100: 'IO1I', 0x1F300: 'RDHC'}

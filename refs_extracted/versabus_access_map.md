@@ -1473,6 +1473,64 @@ a quiet boot is telling you something. It also means the panel port doubles as
 a fault beacon with a very low false-positive rate — Check 0b's exception codes
 sit on a channel that is otherwise silent.
 
+### Directive `$04` is the page allocator, and it explains every `$x00` address
+
+Working the backlog from the top, the largest genuinely distinct span —
+`$F09F0E-$F0A145`, 568 bytes of RTOS init — is the **RTOS structure allocator**.
+It is eight repetitions of one sequence:
+
+```
+clr.l   $0C6A(a0)          ; clear the directory slot
+move.l  <size>(pc),d2      ; size, in 256-byte pages
+beq     -> skip            ; zero size -> structure not created
+movea.l d2,a0
+moveq   #$04,d0
+TRAP    #0                 ; ALLOCATE -- block returned in a0
+bra     -> ok              ; (error path skipped)
+move.l  a0,$0C6A(a0)       ; register the pointer
+move.l  #'!IOV',(a0)       ; stamp the marker tag
+lsl.l   #8,d2
+add.l   a0,d2
+subq.l  #1,d2
+move.l  d2,$4(a0)          ; end = base + (size << 8) - 1
+```
+
+Eight calls, eight structures, eight directory slots:
+
+| site | tag stamped | slot | RAM |
+|---|---|---|---|
+| `$F09E78` | `!GST` | `$0C20` | `$1FD00` |
+| `$F09EBE` | `!UST` | `$0C24` | `$1FB00` |
+| `$F09EFE` | — | `$0C66` | `$1FA00` |
+| `$F09F42` | `!IOV` | `$0C6A` | `$1F900` |
+| `$F09F70` | `!IDV` | `$0C6E` | `$1F800` |
+| `$F09FA2` | `!PAT` | `$0C2C` | `$1F700` |
+| `$F09FF0` | `!UDR` | `$0C28` | `$1F600` |
+| `$F0A020` | — | `$0C30` | `$1F500` |
+
+Three things this settles.
+
+**Directive `$04` is the allocator.** The `$04` ×8 in the TRAP #0 census, whose
+purpose was recorded as "plausibly a segment or allocation call", is allocation:
+size in pages going in, block address coming back in `a0`.
+
+**It allocates in 256-byte pages.** The end address is computed `base + (size<<8)
+- 1`, so the unit is 256 bytes — and that is **why every RTOS structure sits at a
+`$1Fx00` boundary and why the TCBs stride by `$200`.** The strides that this
+project has been recording as bare facts for many iterations are a consequence of
+the allocator's page size.
+
+**And it confirms the differential-analysis result while extending it.** The five
+directory slots found by diffing golden masters — `$0C20`, `$0C24`, `$0C28`,
+`$0C2C`, `$0C30` — are exactly right, and the static decode adds **three more**:
+`$0C66`, `$0C6A`, `$0C6E`, holding `$1FA00`, `$1F900` (`!IOV`) and `$1F800`
+(`!IDV`). Differential analysis found the slots that *moved*; the code shows all
+eight.
+
+*That is the two methods checking each other, which is the point of having both.
+Neither would have given this alone: the diff could not see slots that never
+change, and the static read could not have told which of the eight are live.*
+
 ### What is actually left: ~3.6 KB of distinct, unannotated code
 
 With the replication mapped, the remaining work can be stated precisely. Marking
