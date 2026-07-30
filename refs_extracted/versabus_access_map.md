@@ -15919,3 +15919,32 @@ up, which the "ten bytes" description does not capture.
 Worth flagging that the anomaly was found only because I dumped the whole table rather than the
 six entries the documentation lists. Reading a structure to confirm what is expected finds
 nothing; reading all of it found a flagged entry nobody had noticed.
+
+### Correcting my correction: the "ten `$FF` bytes" description was right
+
+I wrote above that this project's description of `!VCT` — *"ten `$FF` bytes for vectors 0-9, then
+one byte per vector"* — understated the `$FF` run, which measures 48 bytes. **The description was
+accurate and my objection was not.** Reading the builder:
+
+```
+F09F0E  moveq  #$1,d2
+F09F10  bsr.w  MemoryClear      ; zero the page
+F09F14  moveq  #$ff,d2          ; sign-extends to $FFFFFFFF
+F09F16  move.l d2,(a0)+         ; 4
+F09F18  move.l d2,(a0)+         ; 4
+F09F1A  move.w d2,(a0)+         ; 2  -> exactly TEN bytes of $FF
+```
+
+Ten, as stated. The `$FF` values at indices 10-47 come from the **per-vector loop that follows**,
+which evidently writes `$FF` for vectors with no owner. Two mechanisms, one observed run — I saw
+the run, assumed one mechanism, and contradicted a description that was describing the other.
+
+That also reframes `$BF` at index `$2D`. It is not `$FF` with a bit cleared after the fact: **no
+`bclr #$6` anywhere in the ROM targets this table** — all 24 bit-6 operations act on TCB flag
+bytes (`$29`/`$2D` displacements) or self-test board registers (`$1(a5)`). So `$BF` is a value the
+fill loop *wrote*, meaning vector 45 — TRAP #13 — is classified differently from its neighbours by
+whatever that loop computes. Still unexplained, but now known to be deliberate rather than
+residual.
+
+The `!VCT` base is confirmed: slot `$0C66` reads `$0001FA00` at runtime, so the indexing above is
+sound.
