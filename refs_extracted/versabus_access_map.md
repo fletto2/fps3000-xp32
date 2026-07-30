@@ -15009,3 +15009,47 @@ A note on how this was nearly missed: comparing the marker's low byte to the bit
 gives 2/8 and looks like a coincidence in two cases. `$10` is BCD 10, not 16. Same class of base
 error as reading `$FF0044` as below `$400000` earlier today — worth flagging twice, because both
 produced a confident wrong count that a second glance at the numbers fixed.
+
+### The marker is a two-field encoding, and the ring uses the inline-parameter idiom
+
+The `dc.w` after each `bsr $F01688` is an **inline parameter**, and the writer handles it
+properly:
+
+```
+F016B6  movea.l $14(a7),a4       ; a4 = the return address, pointing AT the marker
+F016BA  move.w  (a4),(a5)        ; copy it into the record
+F016BC  addq.l  #$2,$14(a7)      ; advance the return address past it
+```
+
+Without that `addq` the `dc.w` would be executed on return — which is exactly why those words
+disassemble as nonsense (`addx.b -(a0),-(a6)`, `roxr.b #$7,d4`) in a linear listing. Any
+disassembler that does not know this idiom mis-decodes eight sites in the kernel.
+
+**The marker's two halves do different jobs:**
+
+- **low byte, BCD** — the hook number, 8 through 15
+- **high byte** — the record format, via `cmpi.w #$efff,(a5)` at `$F016CC`
+
+| marker | format |
+|---|---|
+| `$DD08`, `$EE09`, `$AA11`, `$AA12`, `$EE14` | ≤ `$EFFF` → **long**: also records `$20(a7)` at `+$08` |
+| `$FD10`, `$FF13`, `$FF15` | > `$EFFF` → **short**: skips `+$08` |
+
+So the high bytes are not decorative. Five hooks log an extra caller longword and three do not,
+selected by a single magnitude compare on the marker itself.
+
+**Full record layout** (26 bytes):
+
+| offset | content |
+|---|---|
+| `+$00` | marker — hook number and format |
+| `+$02` | caller's SR |
+| `+$04` | caller longword |
+| `+$08` | second caller longword, **long-format markers only** |
+| `+$0C` | `a6` — the TCB |
+| `+$10` | `d0` — the directive number on the TRAP #1 hook |
+| `+$14` | result of `$F00F96`, a directive `bsr` entry called per record |
+
+That last field is filled on every record from a kernel routine, which is what a timestamp or
+sequence number would look like; the routine is directive `$1C`'s handler and is not otherwise
+identified here.
