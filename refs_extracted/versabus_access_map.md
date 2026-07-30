@@ -15053,3 +15053,41 @@ selected by a single magnitude compare on the marker itself.
 That last field is filled on every record from a kernel routine, which is what a timestamp or
 sequence number would look like; the routine is directive `$1C`'s handler and is not otherwise
 identified here.
+
+## Directive `$1C` is the system clock read — and it explains `$F7000D`
+
+`$F00F98` (TRAP #0 directive `$1C`, 6 callers, one per trace record) is a **race-safe
+high-resolution clock read**:
+
+```
+F00F9A  movea.l $c4e.w,a0     ; device pointer
+F00FA0  clr.b   $c5a.w        ; arm the race guard
+F00FA4  movep.w $d(a0),d1     ; MOVEP -- the MC6840 byte-interleaved idiom
+F00FAA  lsr.w   #$8,d1
+F00FAC  neg.w   d1            ; the PTM counts DOWN
+F00FAE  add.w   $c58.w,d1
+F00FB2  lsr.w   #$2,d1
+F00FB4  add.l   $c42.w,d1     ; + the software tick base
+F00FB8  tst.b   $c5a.w        ; did the tick ISR fire mid-read?
+F00FBC  bne.b   $f00f9e       ; yes -> read it again
+```
+
+Measured at runtime: **`$0C4E` = `$00F70000`**, so `$D(a0)` is **`$F7000D`** — inside the MC6840
+PTM. `$0C42` holds the tick base (`$2A80` after a boot) and `$0C58` a counter.
+
+So the kernel composes time from **coarse software ticks plus the live hardware counter**, with a
+clear/test/retry guard against the tick ISR firing between the two reads. That is a
+high-resolution timestamp, not a tick count.
+
+Three things this connects:
+
+- **`$F7000D` gets a purpose.** It appears in the device map only as a runtime-only address
+  reached through `movep`; it is the **timer counter the clock routine samples**.
+- **The trace ring's `+$14` field is a timestamp** — established by mechanism rather than by its
+  looking like one, which is how it was first described.
+- **The PTM period matters for it.** The dual-8-bit fix earlier in this project corrected the
+  system tick from 12.73 ms to exactly 10.0000 ms; this routine is the consumer, so that fix
+  changes every timestamp the kernel produces, not just the tick rate.
+
+`neg.w` confirms the PTM counts **down**, which is what an MC6840 does and what the emulator must
+model for these timestamps to be monotonic.
