@@ -15091,3 +15091,32 @@ Three things this connects:
 
 `neg.w` confirms the PTM counts **down**, which is what an MC6840 does and what the emulator must
 model for these timestamps to be monotonic.
+
+## The kernel clock is a seqlock, and the PTM tick is the level-4 autovector
+
+Completing the timekeeping picture:
+
+| | |
+|---|---|
+| **tick ISR** | `$F00EC8`, reached from **vector `$070` (#28) — the level-4 autovector** |
+| **tick base** | `$0C42`, a longword advanced by `add.l d1,$c42.w` at `$F00EF2` |
+| **race guard** | `$0C5A` bit 7 — `bset #$7` by the ISR at `$F00EDA`, `clr.b` by the reader at `$F00FA0`, `tst.b` at `$F00FB8` |
+| **fine counter** | `$0C58`, added to the hardware counter before scaling |
+
+**That is a seqlock.** The reader clears the guard, samples the hardware counter and the tick
+base, then checks whether the ISR ran in between — and re-reads if it did. Composing a timestamp
+from a software tick and a live down-counter is otherwise racy at exactly the tick boundary, and
+this is the standard fix.
+
+Two corroborations:
+
+- **Vector #28 is the level-4 autovector** (autovectors occupy 25-31 for levels 1-7), and the
+  emulator already raises the PTM at level 4 (`m68k_set_irq(4)` in `fps3k_sbc.c`). The firmware's
+  vector table and the model agree — a choice that was made in the model and is now confirmed from
+  the ROM side.
+- **`$0C5A` reads `$80` after a boot** — bit 7 set, i.e. the last thing to touch it was the ISR,
+  which is exactly the resting state this protocol predicts.
+
+Emulation consequence: a model that delivers the PTM interrupt at any other level, or that lets a
+clock read complete without the guard being observable, breaks timestamp monotonicity in a way
+that only shows up in the trace ring — which is itself disabled by default, so it would be silent.
