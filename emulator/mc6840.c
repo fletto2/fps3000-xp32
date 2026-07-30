@@ -169,24 +169,35 @@ void mc6840_tick(mc6840_t *p, uint32_t cpu_cycles) {
                 if (t == 2 && (p->cr[2] & 0x01)) to_decr /= 8;
             }
         }
-        /* KNOWN DEFECT, flagged not fixed: dual 8-bit mode (CR bit 2) is not
-         * modelled.  The RTOS programs T3 with CR3 = $C6 -- bit 2 SET -- and
-         * latch $27C7, so the real period is (MSB+1)*(LSB+1) = 40*200 = 8000 E
-         * cycles = exactly 10.0000 ms at E = 800 kHz.  This 16-bit reload gives
-         * $27C7+1 = 10184 cycles = 12.73 ms, so the emulated system tick is 27%
-         * SLOW.  A correct fix counts the LSB half down each clock, decrements
-         * the MSB half on its underflow, and fires only when the MSB half
-         * underflows -- which also makes T3 counter reads meaningful, and the
-         * firmware does read T3 MSB 1852 times per run.  Left flagged because
-         * changing the tick moves every timing-dependent result and all three
-         * golden-master digests with it: a deliberate step, not a side effect. */
+        /* DUAL 8-BIT MODE (CR bit 2), fixed 2026-07-30.  The RTOS programs T3
+         * with CR3 = $C6 -- bit 2 SET -- and latch $27C7.  In dual 8-bit mode
+         * the latch is two independent 8-bit counters and the period is
+         * (MSB+1)*(LSB+1) = 40*200 = 8000 E cycles = exactly 10.0000 ms at
+         * E = 800 kHz, NOT latch+1 = 10184 = 12.73 ms.  Modelling it as 16-bit
+         * ran the system tick 27% slow.
+         *
+         * The reload uses the effective period; the write path still loads the
+         * raw latch, because the $1100 walking-ones test does movep.w write
+         * then movep.w read-back and requires equality.  Consequence: the first
+         * period after programming is the 16-bit one and every period after it
+         * is correct -- immaterial for a continuous tick, and it keeps the
+         * register test honest.  Counter reads stay meaningful enough: the
+         * firmware's 1836 reads of T3 MSB are the MC6840 interrupt-acknowledge
+         * sequence at $F00EE4/$F00EE8, where the second read overwrites d0 and
+         * neither value is ever used. */
         if (p->counter[t] >= to_decr) {
             p->counter[t] -= to_decr;
         } else {
             p->status |= (1u << t);              /* IRQ flag */
             p->status |= 0x80;                   /* composite IRQ */
-            /* Reload from latch (continuous mode) */
-            p->counter[t] = p->latch[t];
+            /* Reload (continuous mode) -- effective period in dual 8-bit mode */
+            if (p->cr[t] & 0x04) {
+                uint32_t msb = (p->latch[t] >> 8) & 0xFF;
+                uint32_t lsb =  p->latch[t]       & 0xFF;
+                p->counter[t] = (uint16_t)((msb + 1) * (lsb + 1) - 1);
+            } else {
+                p->counter[t] = p->latch[t];
+            }
             if (p->log_fp) fprintf(p->log_fp, "[PTM] T%d expired; status=%02X\n",
                                    t+1, p->status);
         }

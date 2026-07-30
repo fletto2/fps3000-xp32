@@ -2201,8 +2201,18 @@ else:
     # If the change is intended, update the digest AND record what moved and why.
     # Do not update it without looking at the diff; that is the whole point.
     GOLDEN = {
+        # UPDATED 2026-07-30 for the MC6840 dual-8-bit fix (mc6840.c).  The
+        # system tick went from 12.73 ms to 10.00 ms -- see the access map.
+        # THE DIFF WAS INSPECTED, per the rule above: exactly 19 of 131,072 RAM
+        # bytes moved, all inside $00BEC-$00C53, and they are RTOS tick
+        # counters.  $00C43 reads $00E0B0 = 57,520 before and $011D28 = 73,000
+        # after -- a ratio of 1.2691, which is precisely the measured tick-ISR
+        # ratio (2330/1836 = 1.2691) and the predicted 12.73/10.00 = 1.273.
+        # Reached-PC coverage is byte-identical either side (2756 PCs, none
+        # gained, none lost), so nothing executed differently; only the clock
+        # the RTOS counts by changed.
         'default (2-AC, no hooks)':
-            ({}, '698be0397ed132d519d56cd629236238'),
+            ({}, 'f72fb0a54d3bce8e90d8deff9050539a'),
         # UPDATED 2026-07-29 with the REQUEST-TRANSFER acknowledge.  70 RAM
         # bytes moved and the diff was inspected before this digest changed, per
         # the rule above.  The change is progress, not regression: $00B91 now
@@ -2211,11 +2221,11 @@ else:
         # both advance.  Coverage went 116 -> 240 distinct XP1I PCs.
         'XP1I driven to the $8000 path':
             ({'FPS3K_XPIRQ': '1', 'FPS3K_CHCMD': 'C801'},
-             'dc7215ad5c2292d2082b75da1a9e171b'),
+             '0443bb40eadbc2b9f7dadbd33c9a7b65'),
         'TCBIO1I reply path':
             ({'FPS3K_XPIRQ': '5', 'FPS3K_DMA10AA': '2',
               'FPS3K_MBOX': '00010000'},
-             '1eabc593413b4261a6b8bdf71f394813'),
+             '1ac7457dcd44044abc0460704eb32c4e'),
     }
     for _name, (_env, _want) in GOLDEN.items():
         _, _ram = run(_env, _GOLDEN_CYC)
