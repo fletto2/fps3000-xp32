@@ -16401,3 +16401,45 @@ But the practical rule was already in the model, and the reason I did not have i
 discarded the channel the model uses to say so. Every emulator run in this session that redirected
 stderr to `/dev/null` was throwing away exactly this class of information — and the harness spends
 a check confirming these warnings work.
+
+## `FPS3K_CHSEL_RD` is ungated and hangs the boot — the defect fixed twice already
+
+Measured, with nothing else set:
+
+| config | final PC |
+|---|---|
+| clean boot | `$F00FCC` — the RTOS rest scan |
+| **`FPS3K_CHSEL_RD=28`** | **`$F08920`** — inside the self-test |
+
+The hook forces `CHANNEL_SELECT` to read a constant **from reset**, and the self-test's register
+walks fail against a constant-reading register. This is precisely the defect `versabus.c` already
+documents for two other hooks:
+
+> *"Gate on boot completion, for exactly the reason `FPS3K_DMA10AA` is gated: the power-on
+> diagnostics walk all of RAM writing a pattern and reading it back, so ANY location forced to
+> read a constant fails a pattern test and the machine hangs in the diagnostics."*
+
+That gate was added for `FPS3K_POKE` and `FPS3K_DMA10AA`. **`FPS3K_CHSEL_RD` never got it.**
+
+### What this invalidates
+
+This project documents, as the first observation of the bulk data port:
+
+> *"Forcing it (`FPS3K_CHSEL_RD=28 FPS3K_RESP=0x00`) yields `[APIF] RD 2-byte FF0008`, the first
+> read of that port in any emulator run."*
+
+That configuration **does not boot**. Re-running it today gives zero `$FF0008` accesses and zero
+executions of the transfer loop — consistent with a machine still in its diagnostics. The reported
+read cannot have come from the firmware path described.
+
+### And the conflict warning is wrong about it
+
+The hook-conflict table says `FPS3K_CHSEL_RD` + `FPS3K_SEQ` means *"SEQ wins, CHSEL_RD is
+IGNORED"*. It is not ignored: with both set the machine ends at `$F0891C` instead of `$F056B8`.
+CHSEL_RD is overridden **for the readback value** — `versabus_seq_chsel()` is consulted first — but
+it still perturbs the self-test, because the override only applies once a sequence entry exists.
+
+**Fix**: gate the hook on boot completion, as `FPS3K_POKE` is. That needs a boot-done flag visible
+inside `versabus.c`, which currently has none — `fps3k_sbc.c` detects completion by watching vector
+`$128`. Deliberately not patched here: the two existing gates were added with measurements
+attached, and this deserves the same rather than a quick edit.
