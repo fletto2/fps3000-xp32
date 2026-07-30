@@ -1528,6 +1528,51 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Generalising the discriminator: every address the memory tests refuse to touch
+
+The `$1FFF0` skip is not a one-off. Scanning the whole ROM for `cmpa.l #imm,aN` followed by a
+short branch over a pointer bump — the "skip this address" idiom — finds **eight** such sites,
+and their targets are startlingly concentrated:
+
+| skipped address | sites | |
+|---|---|---|
+| **`$01FFF0`** | **7** | `$F098FE`, `$F09916`, `$F09946`, `$F09960`, `$F099BE`, `$F09A94`, `$F09ABC` |
+| `$01FFF4` | 1 | `$F099E0` |
+| `$000400` | 2 | `$F09D06`, `$F09F2C` — the top of the exception vector table |
+
+**Seven independent memory-test routines each hard-code an exclusion for `$1FFF0`.** Written
+once, that is a hint; written seven times across separate walkers, it is the firmware stating
+plainly that this longword must not be written with test patterns. Combined with the pattern
+test's `-$20` back-off, that is **eight independent exclusions of one address** — and this is
+now the best-evidenced fact in the whole VMOD discussion.
+
+**Equally telling is what is absent.** There is no skip anywhere in the ROM for `$1FFE2`,
+`$1FFE4` or `$1FFE6`. Seven routines took the trouble to special-case `$1FFF0`; not one
+mentions the others. That independently confirms the retraction above — had those been
+registers, the same authors who guarded `$1FFF0` seven times would have guarded them too.
+
+`$000400` being skipped twice is a nice confirmation of an unrelated boundary: it is the end
+of the 68000 exception vector table, and a memory test that clobbered vectors while running
+with interrupts enabled would destroy itself. `$01FFF4`'s single exclusion is weaker
+evidence and sits oddly against that address being walked by `$F098FC` and read-modify-written
+as a counter at `$F0897C` — most likely a different routine's boundary rather than a second
+register, and not something the ROM lets us settle.
+
+**The resulting RAM/register partition of the 128 KB**, derived entirely from the firmware's
+own behaviour rather than from any manual:
+
+```
+$000000-$0003FF   vector table    -- excluded by 2 routines (contents, not hardware)
+$000400-$01FFEF   ordinary RAM    -- walked and verified by every test
+$01FFF0-$01FFF3   REGISTER        -- excluded by 8 independent sites
+$01FFF4-$01FFFF   ordinary RAM    -- walked (one routine's boundary at $1FFF4)
+```
+
+*Method note:* this is the same technique that produced the earlier over-claim, applied
+correctly. The difference is that the question asked was "**where else** does this idiom
+appear?" rather than "does my hypothesis have support?" — the first enumerates and lets the
+distribution speak, the second stops at the first confirming instance.
+
 ### RESOLVED: the register block is `$1FFF0-$1FFF3`, and three of my four candidates are RAM
 
 The address-line walker settles this, because it contains a hard-coded special case:

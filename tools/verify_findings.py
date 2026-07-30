@@ -570,6 +570,22 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- eight independent exclusions of $1FFF0, none of $1FFE2/4/6 -----------
+    _SKIP = (0xF098FE, 0xF09916, 0xF09946, 0xF09960,
+             0xF099BE, 0xF09A94, 0xF09ABC)
+    check('seven memory-test routines each hard-code a skip of $1FFF0',
+          all(long_(a2 + 2) == 0x1FFF0 and word(a2 + 6) == 0x6604 for a2 in _SKIP))
+    check('...plus the pattern test back-off, giving eight independent exclusions',
+          len(_SKIP) + 1 == 8
+          and d[0xF089A4-0xF00000:0xF089AC-0xF00000]
+              == b'\xb3\xfc\x00\x01\xff\xf0\x6d\x20')
+    check('no routine anywhere skips $1FFE2, $1FFE4 or $1FFE6',
+          not [a2 for a2 in range(0xF00000, 0xF0FFF8, 2)
+               if (word(a2) & 0xF1FF) == 0xB1FC
+               and long_(a2 + 2) in (0x1FFE2, 0x1FFE4, 0x1FFE6)])
+    check('$000400 -- the vector table top -- is skipped by two routines',
+          all(long_(a2 + 2) == 0x400 for a2 in (0xF09D06, 0xF09F2C)))
+
     # --- the walker hard-codes a skip of $1FFF0 -------------------------------
     check('$F098FC writes each address its own value with post-increment',
           d[0xF098FC-0xF00000:0xF098FE-0xF00000] == b'\x20\xc8')
