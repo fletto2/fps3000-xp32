@@ -13708,3 +13708,42 @@ override is kept as a probe and is not the default.
 It does, however, make the level-7 reading considerably more attractive: at level 6 the machine
 deadlocks in its own ISR, and at level 7 it runs 219 chassis operations and writes to system
 common memory. One of those is what the hardware did for a decade.
+
+## The `bra .` deadlock is circular, not a level-ordering problem (2026-07-30)
+
+Raising the responder to level 7 releases the first spin but does not solve the class. With
+`FPS3K_BIM0LVL=7` and a 16-op script:
+
+| | ops dispatched in one run | final PC | SR |
+|---|---:|---|---|
+| level 6 | 3 of 16 (`$0 $4 $F`) | `$F056B8` | `$2600` (IPL 6) |
+| level 7 | **7 of 16** (`$0`-`$5`, `$F`) | `$F056B8` | `$2700` (IPL 7) |
+
+Delivery more than doubles and reaches op `$5` in order — a practical improvement over the
+"one operation per run" workaround this file recommends. But it then deadlocks again, **one
+level higher**, and the reason is not interrupt priority.
+
+**Musashi models level 7 correctly.** `m68k_set_irq(7)` sets `nmi_pending` on a transition from
+below 7 to 7, which is genuine edge-triggered non-maskable behaviour; `m68ki_check_interrupts`
+takes `nmi_pending` unconditionally. So an IPL-7 mask does not block a *fresh* level-7 edge.
+
+The blocker is that there is no fresh edge. The BIM request is **level-held**: `bim_assert` sets
+it and only `versabus_bim_clear(0,0)` — reached from `panel_resp_tick` **when the SBC
+acknowledges** — lowers it. A spinning SBC never acknowledges, so the line never drops, so no
+new edge is generated, so the NMI path is never armed again.
+
+**The escape requires an acknowledgement that only the escaped code could give.** That is
+circular at every interrupt level, which is why raising the level moved the deadlock rather than
+removing it.
+
+### What this predicts about the hardware
+
+A real chassis cannot be waiting for the SBC to acknowledge before re-asserting, or the machine
+could never have worked. It must **pulse a fresh interrupt per response** — assert, release,
+assert — generating an edge each time regardless of what the SBC is doing. Our model's
+ack-gated, level-held request is the divergence.
+
+That is a concrete, testable change: make the scripted chassis release the BIM between responses
+instead of holding it until acknowledged. If the `bra .` spins then unwind on their own, the
+"self-programmed deadlock" recorded throughout this file was our handshake all along, not the
+firmware's design.
