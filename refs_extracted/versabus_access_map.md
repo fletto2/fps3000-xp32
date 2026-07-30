@@ -1528,6 +1528,56 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Static map vs runtime: what each can see, and one claim it qualifies
+
+Diffing the 59-address scoped map against a runtime access log (`FPS3K_ACCESSLOG`,
+4-channel chassis) separates three things cleanly.
+
+**49 of 59 appear in both.** The static map's lower-bound nature is visible and modest.
+
+**10 are referenced in code but never touched at runtime** — and they are a single coherent
+group:
+
+```
+$FF0000  $FF0004                       base window
+$FF0048/$FF004A   $FF0068/$FF006A      channel 1, 2 data hi/lo
+$FF0088/$FF008A   $FF00A8/$FF00AA      channel 3, 4 data hi/lo
+```
+
+Every one is read only by a channel ISR, which needs a channel interrupt to run. **This is a
+coverage gap, not a modelling gap**, and it is exactly the earlier `$FF004A` observation
+generalised: 15 static sites, zero runtime accesses in a boot that raises no channel
+interrupt. Both numbers are right.
+
+**4,118 addresses are touched at runtime but absent from the static map.** Not a defect —
+these are *loop-generated*: the SCM address-line test alone sweeps 16 KB from one code site.
+A static map enumerates **code sites**; a runtime log enumerates **addresses**. Neither
+subsumes the other, and quoting one where the other is meant is how "`$FF0204` is the hottest
+register" (runtime, ~33k) and "`$FF0204` has 7 write sites" (static) can both be true.
+
+**A qualification to the protected-block argument.** I wrote earlier that the firmware
+"carves a hole in its own memory test to protect `$1FFE0-$1FFFF`", and used that to argue the
+block is registers rather than dead stores. Tracing which PCs touch it shows the picture is
+split:
+
+| test | treatment of `$1FFE0-$1FFFF` |
+|---|---|
+| pattern test (`$F08992`) | **excluded** — range end backed off by `$20` |
+| address-line test (`$F098FC`/`$F09912`) | **walked** — writes `$0001FFE0` to `$1FFE0`, reads it back |
+
+So one test protects the block and another writes arbitrary longwords into it. **That
+weakens the inference I drew.** The pattern test's exclusion is still evidence — it is
+deliberate and specific — but a block whose words are freely overwritten by a neighbouring
+diagnostic is harder to read as a live register file, particularly one containing an
+interrupt-request level field. The most that survives: `$1FFE0-$1FFFF` is treated
+*specially by at least one test*, the write-only access pattern is real, and the M68KVM02
+register map remains the thing that would settle it. **I should not have called it
+"corroboration" without checking whether any other test contradicted it.**
+
+*(This also explains the `FPS3K_POKE` / `FPS3K_DMA10AA` hangs recorded earlier at `$F098FC`
+and `$F09904`: that walker writes each address's own value and reads it back, so any location
+holding a constant — an injected value, or a hardware register — fails it.)*
+
 ### A scoped, base-register-aware device map — 59 addresses, 217 sites
 
 With the addressing model understood, the map can finally be built the way the ROM is

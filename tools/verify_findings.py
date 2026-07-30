@@ -570,6 +570,14 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the address-line walker DOES cover $1FFE0-$1FFFF ---------------------
+    check('$F098FC writes each address its own value (address-line idiom)',
+          d[0xF098FC-0xF00000:0xF09900-0xF00000][:2] in (b'\x20\x88', b'\x21\x88',
+                                                         b'\x20\xc0', b'\x2f\x08'))
+    check('the pattern test excludes $1FFE0+ while the walker does not -- both exist',
+          d[0xF089A4-0xF00000:0xF089AC-0xF00000]
+          == b'\xb3\xfc\x00\x01\xff\xf0\x6d\x20')
+
     # --- devices are reached through base registers, not absolute addresses ---
     _LEA = {0x41F9: 'a0', 0x43F9: 'a1', 0x45F9: 'a2', 0x47F9: 'a3',
             0x49F9: 'a4', 0x4BF9: 'a5', 0x4DF9: 'a6', 0x4FF9: 'a7'}
