@@ -1528,6 +1528,76 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Phase `$1600` is a written specification of the XLTR register file
+
+`$F09518` is the most informative single stage on the board: it writes known values to
+every XLTR register, then reads them back under explicit masks. **The masks are the
+specification** — they say exactly which bits the firmware requires the hardware to
+implement.
+
+*Write phase.* Six named registers get fixed values (`CHANNEL_SELECT <- d6`,
+`MODE1 <- $2000`, `MODE0 <- $0`, `COUNTER <- $1`, `STATUS_IRQ <- $400`,
+`IRQ_MASK <- $FFF`), then two walks:
+
+```
+d0=$10, a0=$210:  write (a6,a0.w); a0+=2; lsl.b #1,d0; bcc loop
+    -> $FF0210 <- $10   $FF0212 <- $20   $FF0214 <- $40   $FF0216 <- $80
+d0=$C0, a0=$230:  write (a6,a0.w); a0+=2; d0+=1; cmp d1,d0; bne loop
+    -> $FF0230 upward, one distinct value per register
+```
+
+*Read-back phase — the masks:*
+
+| register | mask | must read | consequence |
+|---|---|---|---|
+| `CHANNEL_SELECT` `$204` | `$FFFF` | `d6` | all 16 bits implemented |
+| `MODE1` `$202` | `$FFFF` | `$2000` | all 16 bits implemented |
+| **`MODE0` `$200`** | **`$00FF`** | `0` | **only the low byte is required** |
+| `COUNTER` `$20C` | `$FFFF` | `$1` | all 16 bits implemented |
+| **`STATUS_IRQ` `$218`** | **`$0610`** | `$400` | **only bits 4, 9, 10 are required** |
+
+MODE0's mask is the striking one, and it corroborates an independent finding: the chassis
+command byte is **the low byte of MODE0**, latched at `$E86`/`$E87`. The self-test checks
+exactly the half that carries the command and ignores the rest.
+
+**`$FF0218` bit 4 selects a two-BIM or three-BIM machine.** The second walk's bound comes
+from a test made at entry:
+
+```
+move.w $218(a6),d0 ; btst #4,d0
+    bit 4 clear -> d1 = $D0    bit 4 set -> d1 = $D8
+```
+
+and the walk runs while `d0 != d1` from `$C0`:
+
+| d1 | writes | range | = |
+|---|---|---|---|
+| `$D0` | 16 | `$FF0230`-`$FF024E` | **2 BIMs** |
+| `$D8` | 24 | `$FF0230`-`$FF025E` | **3 BIMs** |
+
+Landing exactly on BIM boundaries — 16 = 2x8, 24 = 3x8 — is what makes this more than
+arithmetic coincidence. The natural reading is a **presence/configuration strap for the
+third BIM**; the ROM alone cannot confirm the semantics, only the branch.
+
+*This resolves a standing oddity.* The register table records three BIMs with "23 of the 24
+used; only `$FF025E` (BIM2 VR3) is never touched". That is now explained rather than merely
+observed: **`$FF025E` is the last register of the third BIM, and it is written only when
+bit 4 is set.** Our configuration reads bit 4 clear, so the walk stops at `$FF024E` and the
+final register is never reached. The apparent 23-of-24 asymmetry is not an asymmetry in the
+firmware at all — it is our chassis model presenting a two-BIM machine.
+
+**Emulator consequence.** If the intent is to model the documented three-BIM chassis, the
+model must set `$FF0218` bit 4, and phase `$1600` will then write all 24 BIM registers. It
+currently does not, which is a defensible choice only if a two-BIM chassis is what is
+being modelled — and that should be a stated decision rather than an accident of a
+default.
+
+**And `$FF0212` is addressed as a standalone word here**, by `move.w d0,(a6,a0.w)` with
+`a0 = $212`. This file elsewhere says `$FF0212` "is not a register — its bus-log accesses
+are the second half of 32-bit accesses to `$FF0210`, split by the logger". That remains
+true of the *service* code it was derived from, but it cannot be stated unconditionally:
+the self-test writes `$FF0212` alone, so the hardware decodes it.
+
 ### Sequence B is an outward walk, and its last stage is an AP I/F data-line test
 
 Resolving the eleven sequence-B stages against their base registers (`a6 = $FF0000`,

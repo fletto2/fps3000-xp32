@@ -550,6 +550,25 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- phase $1600 specifies the XLTR register file --------------------------
+    check('$1600 reads STATUS_IRQ and branches on bit 4 to pick $D0 or $D8',
+          d[0xF09522-0xF00000:0xF09536-0xF00000]
+          == b'\x30\x2e\x02\x18\x08\x00\x00\x04\x66\x06'
+             b'\x32\x3c\x00\xd0\x60\x04\x32\x3c\x00\xd8')
+    check('...and $D0/$D8 from $C0 is exactly 16 or 24 BIM registers',
+          (0xD0 - 0xC0) == 16 and (0xD8 - 0xC0) == 24
+          and 0x230 + 2*15 == 0x24E and 0x230 + 2*23 == 0x25E)
+    check('the $210 walk writes $210/$212/$214/$216 as standalone words',
+          d[0xF09558-0xF00000:0xF0956C-0xF00000]
+          == b'\x30\x3c\x00\x10\x30\x7c\x02\x10\x3d\x80\x80\x00'
+             b'\x41\xe8\x00\x02\xe3\x08\x64\xf4')
+    check('MODE0 is read back under mask $00FF -- only the command byte',
+          d[0xF09590-0xF00000:0xF09598-0xF00000]
+          == b'\x30\x2e\x02\x00\x02\x40\x00\xff')
+    check('STATUS_IRQ is read back under mask $0610, required $400',
+          d[0xF095A2-0xF00000:0xF095AE-0xF00000]
+          == b'\x30\x2e\x02\x18\x02\x40\x06\x10\x0c\x40\x04\x00')
+
     # --- phase $1A00 is a bus-error-tolerant AP I/F data-line test -------------
     check('$1A00 saves the bus-error vector and installs its own at $F098E0',
           d[0xF09836-0xF00000:0xF09842-0xF00000]
