@@ -15684,3 +15684,41 @@ a log: with all hooks on it shows the last nine events, and reading a full histo
 RAM periodically rather than once at the end. With bit 15 alone the volume is low enough that the
 nine records are the whole story, which is why the directive traces earlier in this file are
 complete and these are not.
+
+## The RTOS "idle loop" is a tick-driven `!PAT` scan
+
+Every boot in this project ends at `$F00FCC`/`$F00FD0`, described throughout as "the RMS68K idle
+loop". It is not idle:
+
+```
+F00FC2  moveq   #$1,d1
+F00FC4  add.w   $c56.w,d1
+F00FC8  add.l   $c42.w,d1     ; + the TICK BASE -> a deadline
+F00FCC  movea.l $c2c.w,a1     ; directory slot $0C2C
+F00FD0  lea.l   $8(a1),a3     ; skip the 8-byte header
+F00FD4  movea.l (a3),a2       ; walk the list
+```
+
+`$0C2C` reads **`$01F700`** at runtime, and the marker there is **`!PAT`**. So what the machine
+does at rest is compute a deadline from the tick base and scan the `!PAT` structure against it —
+a timer-driven sweep, not a spin. That also explains hook 13 (`$F00F5E`, `subq.w #$1,$c52.w`)
+firing from `$F00FD0`/`$F00FC8`: it is a countdown maintained by this loop.
+
+### Marker census, corrected
+
+Searching the whole 128 KB RAM dump for all twelve tags:
+
+| marker | instances | |
+|---|---:|---|
+| `!TCB` | 6 | `$1E900` + `$200n` |
+| `!TST` | 6 | `$1EA60` + … |
+| `!GST` `!IDV` `!IOV` `!PAT` `!UDR` `!UST` | 1 each | `$1FD00`, `$1F800`, `$1F900`, `$1F700`, `$1F600`, `$1FB00` |
+| **`!CCB`** | **0** | absent |
+| **`!DLY`** | **0** | absent |
+| `!ASQ` | 0 | absent *as a tag* — the descriptors are untagged at `TCB+$138`, as documented |
+| `!VCT` | 0 | absent *as a tag* — the table at `$1FA00` is untagged, as documented |
+
+This project records *"Only **one** of `!CCB`/`!DLY` has no instance at all."* **Both have none.**
+The `!ASQ` and `!VCT` zeros are expected and already explained — those structures exist untagged —
+but `!CCB` and `!DLY` have neither a tag nor a documented untagged instance, so on this build the
+RTOS creates neither a Channel Control Block nor a Delay record.
