@@ -550,6 +550,11 @@ else:
     check('asm has ~6.5k instructions and ~12.5k DC.W data words',
           6300 <= len(ASM_STARTS) <= 6700)
 
+    # --- not Pascal either: zero CHK in the application ---------------------
+    check('zero CHK instructions in the FPS application (Pascal range checks)',
+          not any((struct.unpack('>H', d[i:i+2])[0] & 0xF1C0) == 0x4180
+                  for i in range(0xF04488-0xF00000, 0xF0A600-0xF00000, 2)))
+
     # --- no compiled C; the a6 idiom is a structure pointer -----------------
     check('there is not one link/unlk pair in the entire 64 KB ROM',
           not any(struct.unpack('>H', d[i:i+2])[0] in (0x4E56, 0x4E5E)

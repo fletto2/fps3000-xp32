@@ -1528,6 +1528,67 @@ panel `$260`.
 paths written for three record classes, is about as strong as static evidence for
 that rule gets without hardware.*
 
+### Nor Pascal — and the positive evidence for hand-authorship
+
+*Follow-up question: could it have been Pascal?* Pascal is a **harder** fit than C,
+not an easier one. `link a6,#-N` exists on the 68000 largely to serve Algol-family
+frames, and Pascal needs them more than C does — nested procedures with static links,
+and local variables in every scope. Tested anyway, against Pascal's own distinctive
+marks:
+
+| signature | RMS68K kernel | FPS application |
+|---|---|---|
+| `link`/`unlk` | 0 / 0 | **0 / 0** |
+| `CHK` (Pascal range/subrange checks) | 1 | **0** |
+| `DBcc` | 4 | 13 |
+| a7-relative positive displacements | — | **18 in 24 KB** |
+
+**Zero `CHK` in 24 KB of application code.** A Pascal compiler emits `CHK` for array
+indexing and subrange assignment; the ROM has a `CHK` *exception vector* (panel code
+`$2A2`) and never executes the instruction. Compiling with checks disabled would
+explain that — but not the missing frames.
+
+And the frameless-compiled-code escape is closed too. A leaf routine compiled without
+a frame reads parameters at small fixed `d(a7)` offsets after entry. There are only
+**18** such accesses in the whole application, and they are not parameter reads:
+
+```
+$F05666  move.l   a0,$4(a7)      ; writing INTO a stack-built RTOS parameter block
+$F05670  lea      $a(a7),a7      ; discarding that 10-byte block
+$F0677E  movea.l  $3c(a7),a3     ; reaching over a 96-byte scratch area
+                                 ;   allocated by lea -$60(a7),a7
+```
+
+That is hand-rolled stack scratch, not a calling convention.
+
+#### The positive evidence, which is stronger than any absence
+
+Absence of a signature can always be explained by a compiler setting. What cannot is
+**byte-identical replication with hand-patched constants**, and this ROM is full of it:
+
+- **8 panel-command issuers**, byte-identical over 48 bytes, each followed by its own
+  `bra .`
+- **5 copies of the whole `PanelStatusDispatch` subsystem** — the 42-entry table,
+  `PanelErrorMaskTable`, and all four primitives — where `POLL` and `BLK_XFR` are
+  byte-identical and the other two differ in **2 of 64 bytes**
+- **4 XP task bodies** at a `$A00` stride, differing in 77 bytes of patched constants
+
+The decisive detail is **XP4I's `$18` shift**. Three tasks sit on an exact `$A00`
+grid; the fourth's code is displaced by `$18`, and its dispatch table lands `$18` off
+the grid to match. A compiler emitting four instances of one routine produces a
+uniform stride. A person copying a working block, editing the constants, and having
+one copy end up eighteen bytes out does exactly this.
+
+So: **hand-written 68000 assembly, by a small team working from a template**, and the
+`$18` shift is the fingerprint. That also explains why `d7` is hand-preserved across a
+dispatch, why `swap d0` carries two values in one register's halves, and why the same
+`+$10000` staging arithmetic is implemented three separate times instead of once in a
+shared routine.
+
+*Useful consequence for the disassembly: template families can be diffed against each
+other. That is how the 42-slot census was corrected and how the XP4I divergences were
+found, and it only works because the copies are copies.*
+
 ### No compiled C anywhere — but the a6 idiom maps every parameter structure
 
 *Prompted by a question about whether the application code is compiled C, and
