@@ -570,6 +570,15 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- the two-phase conversation cannot yet be driven -----------------------
+    check('op $26 = op $6 with the read bit set',
+          (0x26 & 0x0F) == 0x6 and (0x26 & 0x20) and not (0x26 & 0x80))
+    check('a collect needs bit 7, which the op codes $0-$F never carry',
+          all(not (op & 0x80) for op in range(0x10)))
+    check('FPS3K_RESP is the only bit-7 carrier the model exposes',
+          'FPS3K_RESP' in open('emulator/versabus.c').read()
+          and 0x94 & 0x80)
+
     # --- bit 7 collects; bit 7 clear operates ---------------------------------
     check('RDHC dispatches on bit 7 of the command byte after its wait',
           d[0xF04740-0xF00000:0xF0474A-0xF00000]

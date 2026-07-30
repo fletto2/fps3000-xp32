@@ -1563,6 +1563,45 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The two-phase prediction is UNTESTED, not confirmed — and the missing hook is now named
+
+The two-phase model predicts: run op `$26` (which reads `$105E` = 2), then issue a bit-7
+collect, and the reply should be `$0002`. Attempting it with
+`FPS3K_SEQ="01:105E,26:0000,94:0000"` gives:
+
+| access-log line | event |
+|---|---|
+| 16,416,872 | reply shipped — **`$0000`** |
+| 16,428,354 | op `$26` reads `$105E` = **2** |
+| 16,428,356 | op `$26` stores **2** into `$0E74` |
+
+**The collect fired ~11,500 accesses *before* the operation.** The acknowledge path executed
+exactly once across the whole run, and the third sequence entry produced no second collect.
+
+So the prediction is **untested rather than confirmed**. What is established:
+
+- op `$26` reads the right value and stores it in the result register (confirmed twice now);
+- a collect ships whatever `$0E74` holds *at that instant*, and here it held zero;
+- `FPS3K_RESP` fires **once, at a time the model chooses**, not on demand.
+
+**The missing capability is now precisely named**, which is more useful than the earlier
+"half-duplex" framing: the model needs **a way to issue a bit-7 collect at a chosen point after
+an operation**. `FPS3K_SEQ` entries are delivered as operations and do not appear to carry bit 7
+into RDHC's dispatch; `FPS3K_RESP` carries bit 7 but fires on its own schedule. Neither can
+express "do this op, then collect its result", which is the shape of every real chassis
+transaction.
+
+*I am not implementing that hook here.* I do not have a confident reading of the SEQ delivery
+path, this session has already made several model changes, and a speculative edit to command
+delivery risks the 550-check baseline for a capability nothing yet consumes. **The gap is
+small, precisely bounded, and better left as a stated requirement than a guessed
+implementation.**
+
+*On the epistemics:* it would have been easy to report this as a confirmation — op `$26` did
+store `2`, and `2` is the predicted value. The reply that actually went out was `$0000`, and the
+ordering shows why. **A prediction is confirmed by the mechanism producing the value, not by the
+value existing somewhere in the machine at some point in the run.**
+
 ### The reply is a SEPARATE COMMAND: bit 7 collects, bit 7 clear operates
 
 The previous entry said one reply per run was firmware structure and predicted that **spacing
