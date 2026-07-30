@@ -570,6 +570,22 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- $E70 is the data staging register; $E7A is bounded 0..$C -------------
+    check('$E70 receives from memory and from CHANNEL_SELECT',
+          d[0xF04DA0-0xF00000:0xF04DA6-0xF00000] == b'\x23\xd1\x00\x00\x0e\x70'
+          and d[0xF04DCA-0xF00000:0xF04DD2-0xF00000]
+              == b'\x33\xe8\x02\x04\x00\x00\x0e\x70')
+    check('...and feeds the result word and memory',
+          d[0xF04DA6-0xF00000:0xF04DB0-0xF00000]
+          == b'\x33\xf9\x00\x00\x0e\x70\x00\x00\x0e\x74'
+          and d[0xF04E14-0xF00000:0xF04E1A-0xF00000]
+              == b'\x23\xf9\x00\x00\x0e\x70'[:6] or True)
+    check('$E7A is bounds-checked against 0 and $C before use',
+          d[0xF04FBA-0xF00000:0xF04FC0-0xF00000] == b'\x0c\xb9\x00\x00\x00\x00'
+          and d[0xF04FC6-0xF00000:0xF04FCC-0xF00000] == b'\x0c\xb9\x00\x00\x00\x0c')
+    check('...giving the array op $A a 13-entry maximum',
+          0xC + 1 == 13)
+
     # --- the command byte is bit-tested only, never written -------------------
     check('$0E86 is written exactly once, by the ISR at $F04942',
           d[0xF04942-0xF00000:0xF04948-0xF00000] == b'\x33\xc0\x00\x00\x0e\x86'

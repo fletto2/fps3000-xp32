@@ -1563,6 +1563,57 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### The chassis-protocol state model — `$E70` is the data register, `$E7A` is bounded 0..$C
+
+Enumerating every protocol global with the validated tool gives the state an emulator needs to
+carry between commands:
+
+| global | refs | role |
+|---|---|---|
+| `$E58`/`$E5A` | 11 / 1 | transfer address, set by op `$1` (halves via command bit 6) |
+| `$E5C` | 5 | CHANNEL_SELECT readback; tested for `$28` (the bulk gate) and `0` |
+| `$E60` | 6 | validated channel, written by op `$5` (`XPSEL`) |
+| `$E64`/`$E66` | 8 | transfer count, set by op `$2` |
+| `$E68` | 2 | third parameter, set by op `$9` |
+| **`$E70`** | **6** | **the data staging register — see below** |
+| `$E74` | 37 | the operation result, shipped out via CHANNEL_SELECT |
+| **`$E7A`** | **7** | **array index, bounds-checked `0..$C`** |
+| `$E7C` | 1 | validated selector, latched by op `$D` |
+| `$E86`/`$E87` | 8 / 22 | the command latch — one write in, then bit tests only |
+
+**`$E70` completes the memory-access data path.** Its six references split exactly two ways:
+
+```
+$F04D96  [W] move.l (a1,d1.l),$e70    ; memory -> $E70
+$F04DA0  [W] move.l (a1),$e70         ; memory -> $E70
+$F04DCA  [W] move.w $204(a0),$e70     ; CHANNEL_SELECT -> $E70
+$F04DA6  [R] move.w $e70,$e74         ; $E70 -> the result word
+$F04E0A  [R] move.l $e70,(a1,d1.l)    ; $E70 -> memory
+$F04E14  [R] move.l $e70,(a1)         ; $E70 -> memory
+```
+
+So ops `$3` (read chassis memory) and `$6` (read/write SBC RAM) move data through one
+staging register, in whichever direction command bit 5 selects:
+
+| direction | path |
+|---|---|
+| **read** | `(a1)` → `$E70` → `$E74` → `CHANNEL_SELECT` (out to the chassis) |
+| **write** | `CHANNEL_SELECT` → `$E70` → `(a1)` (into memory) |
+
+That is the whole mechanism by which the chassis reads and writes SBC memory, and it explains
+why `$E74` is a *result* rather than a mailbox: on a read the datum passes through it on its
+way out. The retraction two entries ago now has a positive account behind it.
+
+**`$E7A` is bounded to `0..$C`.** `$F04FBA` and `$F04FC6` check `cmpi.l #$0` and `cmpi.l #$C`
+before use, so the array op `$A` walks **13 entries maximum**. That is a concrete limit on a
+structure whose extent was previously unrecorded — and it is checked on every access, not just
+at reset, so a chassis that over-runs the index is rejected rather than allowed to walk off the
+array.
+
+The two `addq.l #$1,$e7a` sites are the auto-increment gated on command bit 4, and the single
+`clr.w` is op `$D` resetting the walk — matching the bit-4 census above, where exactly four
+ops test that bit.
+
 ### The command byte `$0E87`: 22 references, every one a bit test, and never written
 
 Enumerating the latch with the validated tool gives a complete account of the chassis command
