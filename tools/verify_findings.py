@@ -593,7 +593,7 @@ else:
           d[0xF09BB6-0xF00000:0xF09BC6-0xF00000]
           == b'\x00\x00\x00\x00\xff\xff\xff\xff'
              b'\x55\x55\x55\x55\xaa\xaa\xaa\xaa')
-    check('both SCM stages run at page 0 (XLTR_MODE2 cleared)',
+    check('both SCM stages are coded for page 0 (XLTR_MODE2 cleared)',
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
@@ -1261,7 +1261,7 @@ else:
           d[0xF08F36-0xF00000:0xF08F48-0xF00000]
           == b'\x41\xf9\x00\xf8\x20\x01\x41\xe8\xff\xfe'
              b'\x10\x10\x4e\x71\x4e\x71\x4e\x71')
-    check('$600 EXITS on a fault and FAILS if the sweep completes cleanly',
+    check('$600 is CODED to exit on a fault (static; a fault at runtime is separate)',
           d[0xF08F4C-0xF00000:0xF08F5E-0xF00000]
           == b'\x4a\x81\x66\x0e\xb1\xfc\x00\xf8\x00\x01'
              b'\x66\xe4\x2e\x3c\xf0\xf0\xf0\xf0')
@@ -1339,7 +1339,7 @@ else:
     check('$1200 polls $1FFF1 bit 5 for SELF-CLEARING, bounded to 16 tries',
           d[0xF092C2-0xF00000:0xF092D0-0xF00000]
           == b'\x30\x3c\x00\x0f\x08\x2d\x00\x05\x00\x01\x57\xc8\xff\xf8')
-    check('$1200 runs with interrupts enabled at IPL 2 (SR <- $2200)',
+    check('$1200 is coded to set SR <- $2200, i.e. IPL 2 with interrupts on',
           d[0xF09246-0xF00000:0xF0924A-0xF00000] == b'\x46\xfc\x22\x00')
     # NOTE: an earlier version of this check asserted "VMOD_CTRL is plain RAM",
     # which was FALSE -- it grepped for the literal 0x1FFF1 while the model
