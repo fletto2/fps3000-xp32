@@ -1563,6 +1563,50 @@ because it shows the rest of the firmware treating the field the same way.
 every sequence has a decoded purpose, and each is tied to the board or device it exercises —
 which was the request that started this work.
 
+### TCB fields named from the vendor source — and where the FPS extension begins
+
+`SR10/U9995/TCB.EQ` declares the TCB as 51 sequential `DS` fields rather than numeric equates,
+so offsets have to be accumulated. Doing that lands `TCBNAME` at **`+$10`**, which is exactly
+the offset this project already documents for the task name — so the accumulation is validated
+against a known value before anything is read off it.
+
+The offsets the scheduler touches then resolve authoritatively:
+
+| offset | vendor name | vendor comment |
+|---|---|---|
+| `+$2C` | **`TCBSTATE`** | current task state |
+| `+$58` | **`TCBISRS`** | **error code — save for wakeup** |
+| `+$5E` | **`TCBUSER`** | number associated with task |
+
+That makes the scheduler's opening read plainly: clear a bit in **`TCBSTATE`**, clear the saved
+**error code** and the pointer that carries it, move **`TCBUSER`** out to `+$102`, stamp `$813`
+at `+$100`, and clear `TCBUSER`. All state hygiene on a task being rescheduled — and it
+confirms from the other side that nothing here touches a PC.
+
+**The vendor TCB is `$FC` = 252 bytes, and that boundary explains several documented offsets:**
+
+| offset | | |
+|---|---|---|
+| `+$10`, `+$2C`, `+$58`, `+$5E`, `+$6C` | inside | vendor fields |
+| **`+$100`, `+$102`** | **beyond** | the scheduler's write targets |
+| **`+$138`** | **beyond** | the semaphore block this project documents |
+| **`+$160`** | **beyond** | `!TST`, likewise documented |
+
+TCBs are allocated on a **`$200` stride**, so **`$FC`-`$1FF` is FPS extension space** — 260
+bytes appended past the vendor structure. The semaphore descriptors at `+$138` and the `!TST`
+tag at `+$160` were both found empirically and recorded without reference to a boundary; they
+sit in that extension, as do `+$100`/`+$102`. *One boundary explains all four.*
+
+That also answers a question the `$200` stride raised but never settled: the TCBs are not
+`$200` bytes because the allocator rounds to pages — 252 would round to `$100`. They are `$200`
+because **the FPS layer appends its own fields**, and the extension is over half the block.
+
+*Method note:* the offsets came from computing a running total over a vendor header, which is
+error-prone in exactly the way this session has been catalogueing. The guard was checking the
+computation against `TCBNAME` at `+$10` — a value derived independently, long before, by
+inspecting live TCBs in RAM. **A parser of someone else's header needs a known answer to
+calibrate against just as much as a scanner of someone else's binary does.**
+
 ### The scheduler touches TCB state, not PCs — so no in-ROM escape from `bra .`
 
 `$F02C6C`, the routine the ISR exit hands a TCB to, opens by manipulating task state:

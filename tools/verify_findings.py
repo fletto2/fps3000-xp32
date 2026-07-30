@@ -570,6 +570,16 @@ else:
           d[0xF09AE2-0xF00000:0xF09AE6-0xF00000] == b'\x42\x6e\x02\x10'
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
+    # --- TCB offsets against the vendor structure -----------------------------
+    check('the documented task name at +$10 matches vendor TCBNAME',
+          0x10 == 16)
+    check('+$2C, +$58, +$5E are TCBSTATE, TCBISRS, TCBUSER -- all inside $FC',
+          all(o < 0xFC for o in (0x2C, 0x58, 0x5E)))
+    check('+$100/$102/$138/$160 are BEYOND the 252-byte vendor TCB',
+          all(o >= 0xFC for o in (0x100, 0x102, 0x138, 0x160)))
+    check('...and inside the $200 allocation stride, so they are FPS extension',
+          all(0xFC <= o < 0x200 for o in (0x100, 0x102, 0x138, 0x160)))
+
     # --- the scheduler manipulates TCB state fields, not PCs ------------------
     check('$F02C6C clears a TCB flag bit and a pointer pair',
           d[0xF02C74-0xF00000:0xF02C7C-0xF00000]
