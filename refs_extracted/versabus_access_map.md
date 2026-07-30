@@ -16038,3 +16038,33 @@ So the field map's *identifications* survive the base-register caveat even thoug
 not. That distinction is worth preserving: a displacement census tells you which offsets are
 touched and roughly how, and a watchpoint tells you by what and to what effect. The first is cheap
 and approximate, the second exact and narrow, and today the second corrected the first twice.
+
+## RESOLVED: `!VCT[$2D]` is allocator collateral, not a vector tag
+
+`$F012E6`, the `bclr #$6,$2d(a6)` that writes `$BF`, sits at `$F012A6` — a fall-through block with
+no callers. Execution counts settle what it belongs to:
+
+| site | executions |
+|---|---:|
+| `$F01240` — **T0PAGAL**, the TRAP entry | **20** |
+| `$F0123E` — its `bsr` entry | 12 |
+| `$F012A6` — the block containing the `bclr` | **20** |
+| `$F012E6` — the `bclr` itself | **20** |
+
+**Identical to T0PAGAL's count**, so the block is part of the page allocator and the `bclr` runs
+**once per allocation**. `a6` there is the structure the allocator is working with, and on one of
+those twenty calls it held `$1FA00`.
+
+So `$BF` at `!VCT[$2D]` is **not a vector-ownership value at all** — it is the page allocator
+clearing bit 6 at offset `$2D` of a structure that happens to be the `!VCT` page. The byte is
+collateral, and anyone reading `!VCT` should skip it rather than interpret it. That is why no
+encoding made sense of it: it isn't in the encoding.
+
+**And the count confirms the allocator independently.** This project records *"twenty allocations
+tile `$1DD00`-`$1FDFF` with no gaps"*, derived from the heap layout. T0PAGAL executes **exactly
+twenty times** in a boot — the same number reached from execution rather than from the address
+map, which is a stronger check on the allocation census than either alone.
+
+The 12-vs-20 split between `$F0123E` and `$F01240` is the dual-entry convention in use once more:
+twelve of the twenty allocations come from internal `bsr` callers pushing SR themselves, eight
+from the TRAP path.
