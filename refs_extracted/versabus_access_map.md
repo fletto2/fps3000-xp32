@@ -15558,3 +15558,36 @@ So the sweep found one already-known channel and one new one, and the other 25 c
 dissolved on inspection. Worth stating the hit rate plainly: **two of four cases I checked by hand
 were artifacts**, so this technique produces leads, not conclusions, and every candidate needs its
 own look at the instruction.
+
+### Corrected: the sweep must be whole-ROM, and it yields a ninth instrumentation flag
+
+The region-limited sweeps above were wrong in both directions. Run over the kernel alone, **22**
+locations look read-only — but `$0C20`, `$0C24`, `$0C28`, `$0C2C`, `$0C30`, `$0C66`, `$0C6A` and
+`$0C6E` are the documented RTOS **directory slots**, written by the init code in the *application*
+region. That is a fourth artifact class: **cross-region writes**.
+
+Whole-ROM, `$0400`-`$1FFF`, 86 distinct globals, the read-only set collapses from 22 to **five**:
+
+| location | verdict |
+|---|---|
+| `$10AA` | **genuine** — the chassis supplies it, 1 read at `$F05E12` |
+| `$0880` | **genuine candidate** — one read at `$F004FC` (`move.w $880.w,(a1)`), no write anywhere |
+| `$0E87` | artifact — low byte of the word written at `$0E86` |
+| `$0C40` | artifact — low word of the **longword** at `$0C3E` (`move.l d0,$c3e.w`) |
+| `$0C35` | artifact **and a finding** — see below |
+
+### `$0C34` has a ninth flag, in its low byte
+
+`$0C35` is read twice, by `btst.b #$7,$c35.w` at `$F022C0` and `$F022D0`. Since `$0C35` is the low
+byte of the word at `$0C34`, that is **bit 7 of the instrumentation word** — a flag outside the
+eight hooks documented above, which occupy the high byte (`btst.b #$f,$c34.w` is bit 7 *of that
+byte*, since `btst` on memory is byte-sized and the immediate is taken mod 8).
+
+So the mask is **at least nine flags**: eight trace hooks in the high byte, plus one in the low
+byte tested at two sites in `$F022xx` — the region containing the connect-interrupt-vector
+directive. It is `$0000` in the shipped build like the rest.
+
+**Net effect of doing the sweep properly:** the write-only list drops from 27 to 25, the read-only
+list from 22 (kernel) or 2 (application) to 5, and of those only `$10AA` and `$0880` survive as
+one-sided. The technique is sound; the region limits were not, and every intermediate number this
+sweep produced before being run whole-ROM was wrong.
