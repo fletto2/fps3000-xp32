@@ -15494,3 +15494,36 @@ So the per-channel data area is now fully accounted for: **four shared globals**
 count, `$1062` a per-task flag, `$1064` the nibble status word, `$107E` a byte counter) and
 **three private words per task** on a 6-byte stride. Every `$10xx` reference in all four XP task
 regions falls into one of those seven slots.
+
+### `$1062` is written by every XP task and read by nothing
+
+Sweeping the whole image, not just the task regions:
+
+```
+$F06068 [XP4I]  move.w #$4,$1062.l
+$F06A66 [XP3I]  move.w #$3,$1062.l
+$F07466 [XP2I]  move.w #$2,$1062.l
+$F07E66 [XP1I]  move.w #$1,$1062.l
+```
+
+Four writes, each task stamping **its own channel number**, and **no read anywhere in the ROM** —
+not in RDHC, not in the RTOS, not in the self-test.
+
+That makes `$1062` the exact mirror of `$10AA`, which this project established is *read* by
+TCBIO1I and written by nothing the CPU executes. One is inbound, one outbound:
+
+| location | CPU writes | CPU reads | reading |
+|---|---|---|---|
+| `$10AA` | never | `$F05E12` | a value the **chassis** supplies |
+| `$1062` | four sites | **never** | a value the SBC publishes for **something off-board** |
+
+**Inference, not fact:** a write-only global holding "which channel last ran" is what you would
+provide for a bus master reading SBC RAM, and this chassis is a bus master. It could equally be
+debug residue — a field someone watched with an emulator and never removed. Nothing in the ROM
+distinguishes those, and a bus trace would settle it immediately by showing whether anything ever
+reads that address.
+
+`$107E` by contrast is entirely internal: read, `addq.b #$1`, `clr.b` in each of the four tasks
+and referenced nowhere else in the image. A byte counter shared among the XP tasks only — safe
+because the RTOS serialises them, which is worth noting as an assumption the emulator must not
+break by running tasks concurrently.
