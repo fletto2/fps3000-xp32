@@ -1217,6 +1217,56 @@ for _a, _t in _NOTE_PAIRS:
 src = open(IN).read().split('\n')
 
 # ---------------------------------------------------------------------------
+# Propagate annotations across the XP task template copies.
+#
+# 83% of the undocumented bytes in the XP regions have an ANNOTATED SIBLING at
+# an $A00 offset -- the same code, already understood, simply not annotated on
+# every copy.  Propagating is mechanical and needs no new analysis.
+#
+# XP1I $F07D00, XP2I $F07300, XP3I $F06900 -- $A00 apart at ZERO shift, which
+# is the measured alignment (XP2I/XP3I align with XP1I at zero, 71/72 differing
+# bytes of 2304, all patched constants inside instructions -- so instruction
+# BOUNDARIES coincide even though bytes differ).
+#
+# XP4I IS DELIBERATELY EXCLUDED.  Its alignment is recorded as -$1E in one place
+# and $18 in the region table above, and the two disagree.  Propagating on a
+# wrong shift would attach notes to the middle of instructions -- worse than no
+# notes at all.  Left for whoever resolves that discrepancy.
+#
+# Guarded: a note is only copied if the target address is itself a decoded
+# instruction line in the source, so a misalignment drops the note instead of
+# misplacing it.
+_XP_BASES = (0xF07D00, 0xF07300, 0xF06900)
+_decoded = set()
+for _l in src:
+    _m = re.match(r'\s+f0([0-9a-f]{4}): ', _l)
+    if _m:
+        _decoded.add(0xF00000 | int(_m.group(1), 16))
+
+_prop, _dropped = {}, 0
+for _a, _ts in list(NOTES.items()):
+    for _b in _XP_BASES:
+        if not (_b <= _a < _b + 0xA00):
+            continue
+        for _o in _XP_BASES:
+            if _o == _b:
+                continue
+            _tgt = _a - _b + _o
+            if _tgt in NOTES:
+                continue
+            if _tgt not in _decoded:
+                _dropped += 1
+                continue
+            _prop.setdefault(_tgt, []).extend(
+                '[template copy of $%06X] %s' % (_a, _x) for _x in _ts)
+        break
+for _a, _ts in _prop.items():
+    NOTES.setdefault(_a, []).extend(_ts)
+if _prop:
+    print('propagated %d notes to %d XP sites (%d dropped as non-instruction)'
+          % (sum(len(v) for v in _prop.values()), len(_prop), _dropped))
+
+# ---------------------------------------------------------------------------
 # Label corrections applied to the frozen input.  fps3k_custom_annotated.asm
 # is not regenerable (its own input was a temp file), so wrong labels have to
 # be fixed here by substitution rather than at the source.
