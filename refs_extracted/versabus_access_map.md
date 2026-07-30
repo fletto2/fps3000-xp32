@@ -1625,11 +1625,18 @@ divided between the two processors — not two independent streams. Two streams 
 sequencers or a partitioned store, and the card shows one sequencer and one PROM bank of the
 right width. *So a dump would hold one stream, and the assembly order is the PROM order.*
 
-**Held at the confidence the evidence supports.** My count is "approximately ten" — the column
-is interrupted by a `74F245N` and several labels are illegible at this resolution, so it could
-be nine or eleven, and 80/9 and 80/11 are not integers. **The fit at exactly ten is what makes
-the reading persuasive, and a recount is what would make it solid.** The five `225-0071-00N`
-parts are a separate group whose function is unidentified; they are not part of this store.
+**RECOUNTED AND CONFIRMED: exactly ten.** Cropping the column tightly and splitting it in two
+gives an unambiguous tally — **seven** complete devices in the upper half, **one** straddling the
+split, and **two** below the interrupting `74F245N`. Ten. At that magnification the package is
+also legible: **24-pin DIPs carrying the AMD arrow logo**, the form factor of AMD's 2K x 8
+bipolar PROMs. So `10 x 8 = 80` is a **counted** fit, not an estimated one, and the `74F245N`
+mid-column is an output buffer — where one would expect it. The five `225-0071-00N` parts remain
+a separate group whose function is unidentified.
+
+*The caveat that remains is the right one to be left with:* the individual handwritten labels are
+still illegible, so the **order** of the devices within the word is unknown. A dump can be
+assembled in board order and the bit-lane assignment corrected afterwards — a tractable problem,
+where a wrong device count would not have been.
 
 *This is as far as photographs can take the EU.* The next step is a physical dump, and the
 finding that matters for planning one is that it should be read as **ten 8-bit devices forming a
