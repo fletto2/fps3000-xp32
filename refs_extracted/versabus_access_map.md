@@ -14832,3 +14832,57 @@ exception paths — `$F002E4` in the TRAP #1 supervisor route, gated on `btst #$
 `$F00ABE` in the TRAP #2-#15 fan-in handler. Nothing traps abnormally, so nothing is logged, and
 the pool stays at its 6 initialised header bytes. **The structure is not unused; it is a
 diagnostic buffer on a machine with no faults to report.**
+
+## `$0C34` is a kernel trace-enable mask — and turning it on works
+
+Eight `btst` sites read `$0C34`, one per bit of its high byte, and nothing ever writes it:
+
+| bit | site | gates |
+|---:|---|---|
+| 15 | `$F002DC` | the trace ring at `$F01688` |
+| 14 | `$F00896` | the generic handler serving 37 vectors |
+| 13 | `$F00F5E` | |
+| 12 | `$F00AB4` | the TRAP #2-#15 fan-in path |
+| 11 | `$F00B52` | |
+| 10 | `$F0059A` | |
+| 9 | `$F008FC` | |
+| 8 | `$F006D8` | |
+
+The word reads **`$0000`** after boot, so **all eight kernel instrumentation hooks are disabled**
+in this build. That is why so much of this kernel looks dormant.
+
+**Enabling bit 15 works.** With `FPS3K_POKE="0C34=8000"` the boot still completes normally
+(final PC `$F00FCC`, the RTOS idle loop) and the ring writer runs **4 times** against 0:
+
+```
+$F002DC (the test)        27
+$F002E4 (the gated bsr)    4
+$F01688 (the ring writer)  4
+```
+
+### What it logged
+
+Reading the records back gives a **system-call trace**, and `d0` is the directive number:
+
+| | task | `a0` (parameter block) | `d0` |
+|---|---|---|---|
+| [0] | IO1I | `$F05D00` | **`$13` WAIT** |
+| [1] | RDHC | `$F046B0` | **`$01` GTSEG** |
+| [2] | RDHC | `$F04600` | **`$4C` CNCTIRQ** |
+| [3] | RDHC | `$F04600` | **`$13` WAIT** |
+
+`$FF15` in every record is the constant at `$F002E8`, the word following the `bsr`, fetched via
+`$14(a7)` — a **trace-point identifier**, so different call sites tag their entries differently.
+
+**This independently confirms the documented task lifecycle.** This project records that
+"`$01`/`$0F`/`$13`/`$4C` are a common lifecycle every task calls once — `$01` task+stack setup,
+`$4C` connect interrupt vector, `$13` the blocking wait". The trace shows exactly that sequence,
+in that order, produced by the kernel's own instrumentation rather than by our analysis.
+
+Only four entries appear because `FPS3K_POKE` is gated on boot completion, so the trace catches
+only late calls. Ungating it would capture the full boot — at the cost of the diagnostics hang
+that gating exists to avoid.
+
+**New diagnostic channel:** `FPS3K_POKE="0C34=8000"` gives a per-task, per-directive system-call
+log with parameter-block pointers, straight out of a RAM dump, with no tracing infrastructure of
+our own.
