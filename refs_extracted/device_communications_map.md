@@ -344,3 +344,51 @@ Everything addressable is modelled. The missing piece is the **counterparty**: t
 partner card in the host chassis, and the CP program that fills `$10AE`. Neither is a device
 the ROM talks to — they are the other ends of conversations 2 and 4. No amount of further ROM
 reading produces them.
+
+## Update 2026-07-31: two register roles closed, and a fifth conversation
+
+### `$FF0000` — window 0's `+$00` now has a mechanism
+
+Listed above without a role. It is a **remaining-word count** that the chassis maintains and the
+SBC polls: both S-record error paths (`$F04C22` invalid type, `$F05212` address out of range)
+spin `while ($FF0000 > 0) read (a0)` to **drain the rejected record** before issuing their panel
+code. The stream read has no post-increment, so `(a0)` is a FIFO port whose reads pop.
+
+Window 0 is therefore complete: `+$00` remaining count, `+$04` ready flag (bit 0), `+$08` data,
+`+$0E` command/status.
+
+**Model requirement**: a chassis that streams records must decrement `$FF0000`. Returning a
+constant non-zero value hangs the firmware, but *only* on a malformed record — the case least
+likely to be exercised.
+
+### A fifth conversation: remote register access
+
+The four conversations listed earlier are joined by one that had been catalogued only by its
+dispatch shape:
+
+| # | conversation | initiator | carrier |
+|---|---|---|---|
+| 5 | **remote register access** | chassis | `$E87` bit 7 = 1 -> `$F0495C`; code `& $1F` indexes the saved frame |
+
+The panel-status ISR saves `movem.l d0-d7/a0-a7` (16 longwords). `$F0495C` scales the chassis's
+code by 4 into a byte offset in that frame, uses `$E87` bit 6 as half-select and bit 5 as
+direction, and reads or writes through `$FF0204` / `$E74`. Codes 0-15 reach **d0-d7 and a0-a7**;
+beyond `$44` the arms reach the **USP** with `move usp,aN` / `move aN,usp`. The exit stub's
+`movem.l (a7)+,d0-d7/a0-a7` then loads whatever was poked into the real registers — **including
+a7**.
+
+So the chassis's total capability over the SBC is:
+
+- arbitrary memory read/write (chassis op `$6`, no bounds check of any kind)
+- chassis memory read/write (op `$3`, `$400000` window)
+- **full CPU register read/write including the stack pointer** (conversation 5)
+- resume (op `$F`)
+
+**That is a complete remote debugger**, and it answers a question this document raises in "What
+this ROM cannot show": how the machine was diagnosed with no console. It was diagnosed from the
+host, through the AP I/F, using this protocol.
+
+**Security/modelling note**: there is no validation on this path beyond `0 <= code <= $14`. The
+chassis must be modelled as fully trusted, and any emulator asserting these codes must reproduce
+the interrupt frame exactly — 16 longwords in `movem.l d0-d7/a0-a7` order followed by the 68000
+group-1 exception frame — or it will corrupt the resumed program.
