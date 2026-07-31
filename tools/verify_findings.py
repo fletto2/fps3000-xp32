@@ -5001,6 +5001,26 @@ check('CRSEM and ATSEM share one routine, six bytes apart',
       _t1[0x2D][0] == 0xF0314A and _t1[0x29][0] == 0xF03150
       and insn(0xF0314A) == 'moveq #$1, d7' and insn(0xF03150) == 'clr.l d7'
       and insn(0xF0314E) == 'bra.b $f03152')
+
+# ---- the TRAP #0 table names nine "shared helpers" (2026-07-31) ----
+_t0 = {}
+for _n in range(35):
+    _t0[_n] = _bst.unpack('>I', _rom[0xF001D6 - 0xF00000 + _n * 4:][:4])[0] & 0xFFFFFF
+check('TRAP #0 entry 0 is the error address $F00182', _t0[0] == 0xF00182)
+_t0dead = [n for n, h in _t0.items() if h == _t0[0] and n]
+check('only directive $20 points at it -- 33 of 35 live',
+      _t0dead == [0x20] and 35 - len(_t0dead) - 1 == 33, _t0dead)
+_t0rev = {h - 2: n for n, h in _t0.items() if n}
+for _addr, _dv in ((0xF00824, 0x15), (0xF017F4, 0x09), (0xF01876, 0x0C), (0xF015BC, 0x0B),
+                   (0xF015D8, 0x17), (0xF016FE, 0x0D), (0xF010F0, 0x21),
+                   (0xF026A8, 0x0A), (0xF02764, 0x19)):
+    check('$%06X is TRAP #0 directive $%02X (handler at +2)' % (_addr, _dv),
+          _t0rev.get(_addr) == _dv, hex(_t0.get(_dv, 0)))
+check('the EXEC tagger is a DIRECTIVE, not an internal helper', _t0rev[0xF00824] == 0x15)
+check('T0FNDSEM ($0C) searches directory slot $0C24 -- assigning it to !UST',
+      _t0rev[0xF01876] == 0x0C and insn(0xF0187E) == 'movea.l $c24.w, a1')
+check('four of the thirteen are genuine internal helpers, not directives',
+      all(a not in _t0rev for a in (0xF007FC, 0xF00D58, 0xF0110C, 0xF029F4)))
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

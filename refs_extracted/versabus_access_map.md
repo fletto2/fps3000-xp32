@@ -23127,3 +23127,56 @@ firmware's usage: they are pairs in the kernel too.
 
 Note the asymmetry: SGSEM/WTSEM flag with a **word** (0 / 1); CRSEM/ATSEM flag with a
 **longword** whose bit 16 is set (`$00010000` / 0). Two authors, or one author on two days.
+
+## The TRAP #0 table names nine of the thirteen "shared kernel helpers" (2026-07-31)
+
+Reading all 35 slots of the TRAP #0 table at `$F001D6`:
+
+- **entry 0 = `$F00182`, the error address**
+- **only one slot, `$20`, points at it** — so **33 of 35 directives are live**, a far higher
+  proportion than TRAP #1's 60 of 77
+- every handler address is **exactly two bytes past** a routine start, the documented dual-entry
+  convention (`move.w sr,-(a7)` for internal `bsr` callers, the TRAP path entering past it)
+
+Applying that `-2` and cross-referencing against the thirteen routines characterised earlier as
+"shared kernel helpers":
+
+| routine | TRAP #0 directive |
+|---|---|
+| `$F00824` | **`$15`** — the `'EXEC'` termination tagger |
+| `$F017F4` | **`$09`** — searches directory slot `$0C20` |
+| `$F01876` | **`$0C` `T0FNDSEM`** — searches directory slot `$0C24` |
+| `$F015BC` | `$0B` |
+| `$F015D8` | `$17` — validates `!TCB` then `!ASQ` via `TCB+$40` |
+| `$F016FE` | `$0D` |
+| `$F010F0` | `$21` — the interrupt-masked list insert |
+| `$F026A8` | `$0A` — driver dispatch via `+$1E` |
+| `$F02764` | `$19` — buffer setup via `+$1E`/`+$22` |
+| `$F007FC`, `$F00D58`, `$F0110C`, `$F029F4` | not TRAP #0 handlers — genuine internal helpers |
+
+**Nine of thirteen are directives, not anonymous routines.** They looked shared because they are
+reachable both through the trap and by internal `bsr` — which is precisely what the two-byte dual
+entry exists for.
+
+### A directory slot gets assigned
+
+`$F01876` is **`$0C` = `T0FNDSEM`, "find entry in the User Semaphore Table"**, and it was
+characterised independently — before its identity was known — as *"structure-table search on
+`$0C24`"*. Those two facts together **assign `$0C24` as the `!UST` directory slot**.
+
+That is a new assignment. This project lists the eight directory slots (`$0C20`, `$0C24`,
+`$0C66`, `$0C6A`, `$0C6E`, `$0C2C`, `$0C28`, `$0C30`) and the eight structures they register, but
+not which slot holds which. One is now pinned, from two directions that did not know about each
+other.
+
+By the same reasoning `$F017F4` = directive `$09` searches `$0C20`, and given `$07` is
+`T0FNDSEG` and `$0C` is `T0FNDSEM`, a `T0FND*` sibling is the natural reading for `$09` — but the
+name is not in the equate files this project has, so **the slot's structure is left unassigned**
+rather than guessed.
+
+### And the `'EXEC'` tagger is a directive, not a helper
+
+`$F00824` being **TRAP #0 `$15`** reframes it. It is not an internal routine that happens to tag a
+TCB; it is a supervisor-only directive the kernel invokes on the termination path, and its three
+call sites (`$0F` TERM, `$25`, and the dead `$4B` stub) are its *internal* callers reaching it
+through the pre-trap entry point at `$F00824` rather than the trap.
