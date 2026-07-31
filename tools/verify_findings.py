@@ -8270,6 +8270,17 @@ check('...and timestamps via $F00F96, the same routine TRAP #0 $1C uses',
       _w(0xF016D8) == 0x6100 and _bsrw(0xF016D8) == 0xF00F96
       and _w(0xF016DC) == 0x2B41 and _w(0xF016DE) == 0x0014)
 
+check('T0RDTIM reads the live T3 counter and interpolates against $0C58 and $0C42',
+      _w(0xF00F96) == 0x40E7
+      and _w(0xF00F9A) == 0x2078 and _w(0xF00F9C) == 0x0C4E
+      and _w(0xF00FA0) == 0x4238 and _w(0xF00FA2) == 0x0C5A
+      and _w(0xF00FA4) == 0x0308 and _w(0xF00FA6) == 0x000D
+      and _w(0xF00FAC) == 0x4441
+      and _w(0xF00FAE) == 0xD278 and _w(0xF00FB0) == 0x0C58
+      and _w(0xF00FB2) == 0xE449
+      and _w(0xF00FB4) == 0xD2B8 and _w(0xF00FB6) == 0x0C42
+      and _w(0xF00FB8) == 0x4A38 and _w(0xF00FBA) == 0x0C5A)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

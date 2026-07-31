@@ -35725,3 +35725,42 @@ writes it.
    high-resolution clock; the trace writer calls the same routine to timestamp every entry. One
    implementation, two callers — the directive and the tracer — which is why the sub-tick
    interpolation has to be lock-free: it runs from inside a hook that is itself called at level 7.
+
+## TRAP #0 `$1C` is `T0RDTIM`, and its PTM requirement is UNEXERCISED (2026-07-31)
+
+Reachability checked first: **`$F00F96` does not execute, and neither does `$F01688`.** Both callers
+of the high-resolution clock — directive `$1C` and the trace writer — are dormant in a default boot,
+so everything below is static.
+
+The kernel listing's own label, seeded from the TRAP #0 table, names it: **`TRAP0_T0RDTIM`**. This
+project describes `$1C` functionally ("the lock-free sub-tick interpolation") without naming it;
+`T0RDTIM` — read time — is the name.
+
+```
+$F00F96  move.w  sr,-(a7)          ; the dual-entry convention, exactly 2 bytes ahead
+TRAP0_T0RDTIM:
+$F00F9A  movea.l $c4e.w,a0         ; the PTM base
+$F00FA0  clr.b   $c5a.w            ; clear the race flag
+$F00FA4  movep.w $d(a0),d1         ; READ THE LIVE T3 COUNTER
+$F00FAA  lsr.w   #$8,d1            ; the MSB half
+$F00FAC  neg.w   d1
+$F00FAE  add.w   $c58.w,d1         ; + the MSB reload (39)
+$F00FB2  lsr.w   #$2,d1            ; /4, undoing the mulu #$4 that built the latch
+$F00FB4  add.l   $c42.w,d1         ; + milliseconds since midnight
+$F00FB8  tst.b   $c5a.w            ; did a tick fire mid-read? -> retry
+```
+
+Every step of the recorded description is confirmed, including the `$0C58` = 39 reload and the
+divide-by-4 that undoes the latch composition — and the dual entry sits exactly two bytes before the
+directive entry, as the convention predicts.
+
+**The point worth recording is the reachability.** This project states the modelling requirement
+plainly — "the counter must be READABLE and RUNNING mid-period... a model whose counter is a reload
+latch rather than a running value makes this return garbage". That is right, and **nothing in a
+default boot tests it**: the only two callers never run. It sits in the same category as the
+self-test failure paths did before fault injection — a real requirement with no live witness.
+
+A model could return a frozen T3 counter and pass every test this project runs. The requirement
+becomes live only when host software issues `$1C`, or when the trace mask at `$F0A52A` is made
+non-zero — and the latter is a one-word change that would exercise it nine times per relevant kernel
+event.
