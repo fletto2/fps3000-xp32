@@ -5222,6 +5222,11 @@ _brados = [0xF00000 + o for o in range(len(_rom) - 1)
 check('the ROM contains exactly 9 `bra .` sites', len(_brados) == 9, len(_brados))
 check('...eight of them the issuers, the ninth $F001AA in the kernel',
       sorted(_brados) == sorted([a + 48 for a in _iss] + [0xF001AA]))
+check('the 80 bytes between the last issuer and the TDTI table are all zero',
+      set(_rom[0xF0A5B0 - 0xF00000:0xF0A600 - 0xF00000]) == {0})
+check('...and that is exactly the page-alignment rounding from $F0A57E',
+      ((0xF0A57E + 0xFF) & ~0xFF) == 0xF0A600
+      and 0xF0A600 - (0xF0A57E + 48 + 2) == 80)
 
 
 # ---------------------------------------------------------------------------

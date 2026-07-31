@@ -22417,3 +22417,27 @@ Combined with `$0E6E` (the last panel command), `$FF0204` (the self-test phase) 
 `TCB+$2C`/`+$FC`/`+$B0` (per-task state, park PC, and the `'EXEC'` termination tag), the
 no-serial-port post-mortem procedure is now five independent readouts, every one verified against
 the code that writes it.
+
+### The 80-byte gap before the TDTI table is deliberate page alignment (2026-07-31)
+
+The eighth panel-command issuer ends at `$F0A5AE` (`bra .`), and the TDTI `!TCB` definition table
+begins at `$F0A600`. The 80 bytes between, `$F0A5B0`-`$F0A5FF`, are **entirely zero**.
+
+That is not slack — it is the alignment the firmware's own arithmetic requires. Init reaches the
+table by *rounding up*:
+
+```
+lea     $F0A57E,a3
+move.l  a3,d1
+addi.l  #$FF,d1        $F0A57E + $FF = $F0A67D
+clr.b   d1             -> $F0A600
+```
+
+So the author placed the table on a 256-byte page boundary and let the code find it by rounding
+the address of the preceding routine. **The padding is what makes that rounding land on real
+data**, and its size is fully determined: `$F0A600 - ($F0A57E + 48 + 2)` = 80.
+
+This closes the last unattributed stretch in the application region. It also explains why the
+mislabel `TCBDefinitionTable` on `$F0A57E` survived so long: the search *base* and the table are
+genuinely related — one is rounded up to the other — so a label placed on the base is wrong but
+not arbitrary.
