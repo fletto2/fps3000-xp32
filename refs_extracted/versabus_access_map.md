@@ -27835,3 +27835,33 @@ extrapolated.
 readable/writable word registers; supply the programmed vector during the IACK cycle for the
 corresponding source; and note that a RAM pattern test walks over four of them harmlessly
 because they read back what was written.
+
+### The five vectors and what each handler does
+
+Decoding every handler installed at `$140`-`$150` gives the interrupt-source map. The
+vectors are **reused across test phases** with different handlers, so the table is by
+(vector, phase):
+
+| vector | handler | what it does |
+|---|---|---|
+| `$50` | `$F093BE` | clears the request level, sets **`d2 = $F0F0`** — a *fault* marker: this vector firing is a failure |
+| `$50` | `$F094CC` | the nested-delivery test: set `d2` bit 0, wait inside itself for bit 1, disarm, `rte` |
+| `$51` | `$F09052` | `bset.b #$6,$1(a5)` then `rte` — sets VMOD bit 6 |
+| `$52` | `$F093C8` | clears the request level and `rte`s — a benign acknowledge |
+| `$52` | `$F094E4` | sets `d2` bit 1, disarms, `rte` |
+| `$53` | `$F09330` | `bclr.b #$5,$1(a5)` then `rte` — clears VMOD bit 5 |
+| `$54` | `$F0911E` | reads `$2(a0)` with `a0 = $F70001` — the **MC6840 status register** — and masks the low three bits |
+
+So vector **`$54` is the PTM timer interrupt** during the self-test: `$F70003` read with
+`a0` at the PTM base is register address 1, which on read is the status register, and
+masking `#$7` takes the three timer interrupt flags.
+
+Two of the handlers are *negative* tests — `$F093BE` sets a fault marker simply by running,
+so the suite verifies that vector `$50` does **not** fire under conditions where it should be
+masked. A model that delivers interrupts too eagerly fails there rather than at an obvious
+place.
+
+**This also completes the `$F09052` story.** It was one of the ten sites whose `a5`
+provenance was disputed; it is vector `$51`'s handler, installed by a test that sets
+`a5 = $1FFF0` and then lowers the CPU mask so it fires. Both the count of 52 and the
+"bit 6 is set exactly once" claim rest on that.

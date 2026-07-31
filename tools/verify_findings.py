@@ -6037,6 +6037,15 @@ check('...covering vectors $50-$54, five interrupt sources',
       [_v // 4 for _, _, _v in _vecf] == [0x51, 0x52, 0x53, 0x54]
       and 0x140 // 4 == 0x50)
 
+check('vector $50 has a NEGATIVE-test handler that flags a fault by running',
+      insn(0xF093BE) == 'andi.w #$fff8, (a5)' and insn(0xF093C2) == 'move.w #$f0f0, d2'
+      and insn(0xF093C6) == 'rte')
+check('vector $54 is the PTM interrupt: it reads the status register and masks 3 flags',
+      insn(0xF0905E) == 'lea.l $f70001.l, a0' and insn(0xF0911E) == 'move.b #$7, d1'
+      and insn(0xF09122) == 'and.b $2(a0), d1')
+check('vector $53 clears VMOD bit 5 and returns',
+      insn(0xF09330) == 'bclr.b #$5, $1(a5)' and insn(0xF09336) == 'rte')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
