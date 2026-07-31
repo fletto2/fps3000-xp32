@@ -19027,3 +19027,51 @@ behaviour, which is not in this ROM.
 *Method note:* the `FPS3K_ACCESSLOG` file is not a device list — a regex for six-hex-digit
 tokens over it returns ~120,000 "addresses" because it logs RAM as well. The authoritative
 signal is the emulator's own unmapped counter, which is what the line above reports.
+
+## `d0` is a PAIR: `{mode word, operation code}` — which names the addressing selector
+
+Both `POLL` (`$F0826A`) and `BLK_XFR` (`$F08366`) begin with **`swap d0`**. This file has
+long recorded that they share a "`swap d0` mode trick" without saying what the swapped half
+selects. It is now decoded, and it also accounts for the `$FFFF` in `d0 = $FFFF0010` at
+`$F08500` that had no explanation:
+
+**`d0`'s low word is the operation code** (what the 42-slot table dispatches on, before the
+swap) **and its high word is a mode selector** (what the handlers test, after the swap).
+
+In `BLK_XFR` the mode picks the addressing:
+
+```
+$F08384  move.w (a1),d6   / move.w d6,(a2)      ; first word -> destination
+$F08388  cmpi.w #$0,d0                          ; the MODE word
+  mode == 0 :  move.w $2(a1),d6 / move.w d6,(a2)          ; SAME address, no advance
+  mode != 0 :  move.w $2(a1),d6 / move.w d6,$2(a2)
+               addq.l #$4,a2                              ; CONSECUTIVE, post-increment
+$F083A0  move.w #$8004,(a0)  ; REQUEST-TRANSFER
+$F083A4  cmp.l d1,d2         ; loop counter against limit
+```
+
+So the "one-address-vs-consecutive split" this file documents for `BLK_XFR` is **selected by
+the high word of `d0`**, `$0000` for same-address and non-zero for consecutive. `POLL` uses
+the same word the same way on its own copy direction.
+
+### The bulk-port special case, and why only `POLL` sets `$FF020C`
+
+Both handlers start by testing whether the memory pointer `a2` is **`$FF0008`**, the bulk
+data port:
+
+```
+lea $8(a4),a5 / cmpa.l a2,a5 / bne ...
+   -> poll $FF0004 bit 0 until ready
+POLL only:  move.w #$4,$20c(a4)      ; XLTR_COUNTER
+```
+
+`BLK_XFR` does the ready-poll but **not** the `$FF020C` write. That is exactly the asymmetry
+this file records ("`POLL` also sets `XLTR_COUNTER = $04` only for a bulk-port source"), now
+seen in both handlers side by side: the counter is written when the bulk port is the
+**source**, not when it is the destination — which fits a burst/width parameter that the
+sending side has to declare.
+
+With this, **all four handlers are decoded**: `D1_SEND` (send `d1`, then `d2`, with `$04`
+returning early), `D2_FIN` (send `d2`, `$8005`, panel `$26C`), `POLL` (memory → channel) and
+`BLK_XFR` (channel → memory), plus the `{mode, opcode}` pair that parameterises them and the
+`$FF0008` source/destination asymmetry.
