@@ -7249,6 +7249,18 @@ check('btst.b #$f and #$7 on $28(a6) are the SAME bit (memory bit numbers are mo
       and _w(0xF0171A) == 0x082E and _w(0xF0171C) == 0x000F
       and _w(0xF04186) == 0x082E and _w(0xF04188) == 0x0007)
 
+check('the $F00B74 handler tables are registered from saved a0 with matching enable bits',
+      _w(0xF0312E) == 0x2D6E and _w(0xF03130) == 0x0120 and _w(0xF03132) == 0x0048
+      and _w(0xF03134) == 0x08EE and _w(0xF03136) == 0x0004
+      and _w(0xF0313C) == 0x2D6E and _w(0xF0313E) == 0x0120 and _w(0xF03140) == 0x004C
+      and _w(0xF03142) == 0x08EE and _w(0xF03144) == 0x0003)
+check('...pairing bit 4 with TCB+$48 and bit 3 with TCB+$4C, as the descriptors say',
+      _w(0xF00AD2) == 3 and _w(0xF00AD4) == 0x004C
+      and _w(0xF00B6E) == 4 and _w(0xF00B70) == 0x0048)
+check("the termination path writes 'EXEC' to +$B0 AND four spaces to +$B4",
+      _l(0xF0083A) == 0x45584543 and _w(0xF0083E) == 0x00B0
+      and _l(0xF00842) == 0x20202020 and _w(0xF00846) == 0x00B4)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

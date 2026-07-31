@@ -32089,3 +32089,49 @@ FPS layer checks something the kernel does not.
 This is the same rule that makes `btst.b #$c,$c34.w` test bit 4 of the trace mask rather than bit
 12 — already recorded here for that case, and worth stating as general: **on memory, only the low
 three bits of an immediate bit number matter.**
+
+## The `$F00B74` dispatch is fully closed: registration found (2026-07-31)
+
+The two remaining flags-word bits turn out to be the registration half of the mechanism decoded
+earlier. Two adjacent TRAP handlers, each ending in `rte`:
+
+```
+$F0312E  move.l $120(a6),$48(a6)   ; the task's saved a0 -> TCB+$48
+$F03134  bset.b #$4,$29(a6)        ;    ... and set enable bit 4
+$F0313A  rte
+
+$F0313C  move.l $120(a6),$4c(a6)   ; the task's saved a0 -> TCB+$4C
+$F03142  bset.b #$3,$29(a6)        ;    ... and set enable bit 3
+$F03148  rte
+```
+
+**That matches the descriptors exactly.** The two inline descriptors at `$F00ACE` and `$F00B6A`
+carry `{bit 3, TCB offset $4C}` and `{bit 4, TCB offset $48}` — and here bit 4 pairs with `+$48`
+and bit 3 with `+$4C`, the same two pairings, derived from the opposite end.
+
+So the complete mechanism is: **a task passes a handler-table address in `a0`; the directive stores
+it at `TCB+$48` or `+$4C` and sets the matching enable bit; later, a kernel site with an inline
+descriptor computes an index from its own call site, checks that bit, and dispatches through the
+table.** Registration, enable, descriptor and consumer — all four parts now identified. And the
+pointer's source being `$120(a6)` is a further use of the register-frame result: `+$120` is the
+task's saved `a0`, so "passed in `a0`" and "read from `+$120`" are the same statement.
+
+## `'EXEC'` is conclusively a rename: the session gets four spaces
+
+The termination path does not write one longword, it writes **two**:
+
+```
+$F00832  bset.b #$1,$29(a0)                    ; a termination flag
+$F00838  move.l #$45584543,$b0(a0)             ; 'EXEC'
+$F00840  move.l #$20202020,$b4(a0)             ; '    '  -- FOUR SPACES
+```
+
+`+$B4` is the **session** half of the `{name, session}` pair, and it receives four ASCII spaces.
+**A marker interpretation cannot account for that.** A blank session beside the name `EXEC` is
+exactly how one denotes a system-wide identity belonging to no session — and it is written in the
+same instruction pair, to the same field pair that `$F02F7C`/`$F02F82` fill from `TCB+$10`/`+$14`.
+
+This closes the correction made earlier today. `CLAUDE.md` recorded `'EXEC'` as "a thirteenth
+marker ... written and never read"; it is a **rename to `{EXEC, blank session}`** on the
+termination path, and the RAM-dump test now has a second discriminator: a renamed TCB reads
+`45 58 45 43` at `+$B0` **and `20 20 20 20` at `+$B4`**.
