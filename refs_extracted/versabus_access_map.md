@@ -22381,3 +22381,39 @@ Everything about the arm is now accounted for except these two constants. What c
 the target address can be observed — and XP4I gates itself off on Lovett's 2-AC machine
 (`$105E` = 2), so the second route requires `FPS3K_CHANNELS=4`, which is a reading aid rather than
 a model of that chassis.
+
+## The exception reporters verified: nine uniform 8-byte stubs (2026-07-31)
+
+`$F0A23A` is described in this project as "a 9-entry table". It is more specific than that — it
+is **nine identical 8-byte code stubs**, not a data table:
+
+```
+$F0A23A  move.w #$29E,d0 / bra.w $F0A57E    bus error
+$F0A242  move.w #$29F,d0 / bra.w $F0A57E    address error
+$F0A24A  move.w #$2A0,d0 / bra.w $F0A57E    illegal instruction
+$F0A252  move.w #$2A1,d0 / bra.w $F0A57E    divide by zero
+$F0A25A  move.w #$2A2,d0 / bra.w $F0A57E    CHK
+$F0A262  move.w #$2A3,d0 / bra.w $F0A57E    TRAPV
+$F0A26A  move.w #$2A4,d0 / bra.w $F0A57E    privilege violation
+$F0A272  move.w #$2A5,d0 / bra.w $F0A57E    uninitialised interrupt
+$F0A27A  move.w #$2A6,d0 / bra.w $F0A57E    the catch-all
+```
+
+Every entry is `303C xxxx 6000 yyyy` — verified byte-exact — the codes are **contiguous
+`$29E`-`$2A6`**, the stride is **8**, and **all nine branch to the same address, `$F0A57E`**.
+
+Three things this pins down:
+
+- **`$F0A57E` is the eighth panel-command issuer**, and this is why the label it once carried,
+  `TCBDefinitionTable`, "appeared on four code sites including the nine exception handlers'
+  `bra.w` target". Nine stubs converging on one issuer is the whole explanation.
+- **`$F0A27A`, the catch-all installed on 182 unused user vectors**, is simply the ninth stub —
+  not a special panic routine, just the last member of a uniform family.
+- The subsystem is **structurally regular**, so a dead board's last `$FF000E` value maps to an
+  exception class with certainty rather than by inference: `code - $29E` is the index into the
+  list above.
+
+Combined with `$0E6E` (the last panel command), `$FF0204` (the self-test phase) and
+`TCB+$2C`/`+$FC`/`+$B0` (per-task state, park PC, and the `'EXEC'` termination tag), the
+no-serial-port post-mortem procedure is now five independent readouts, every one verified against
+the code that writes it.

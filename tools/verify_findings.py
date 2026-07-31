@@ -5201,6 +5201,16 @@ check('$263 is the channel-number reject, guarded on $105E',
 check('$264 is a BASE: addi.w #$264,d1 with d1 = the channel gives $265-$268',
       insn(0xF066C2) == 'addi.w #$264, d1' and insn(0xF066B6) == 'moveq #$10, d0')
 
+# ---- the nine exception reporters are uniform 8-byte stubs (2026-07-31) ----
+_exc = [_bst.unpack('>HHHH', _rom[0xF0A23A - 0xF00000 + n * 8:][:8]) for n in range(9)]
+check('all nine exception reporters are {move.w #imm,d0; bra.w} stubs of 8 bytes',
+      all(e[0] == 0x303C and e[2] == 0x6000 for e in _exc))
+check('...with contiguous codes $29E..$2A6',
+      [e[1] for e in _exc] == list(range(0x29E, 0x2A7)), [hex(e[1]) for e in _exc])
+check('...all branching to the same issuer, $F0A57E',
+      all((0xF0A23A + n * 8 + 6 + _exc[n][3]) & 0xFFFFFF == 0xF0A57E for n in range(9)))
+check('the catch-all $F0A27A is simply the ninth stub', 0xF0A23A + 8 * 8 == 0xF0A27A)
+
 
 # ---------------------------------------------------------------------------
 # STOP.  ADD NEW check() CALLS *ABOVE* THIS LINE.
