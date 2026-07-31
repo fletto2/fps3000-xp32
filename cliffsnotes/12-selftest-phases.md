@@ -63,3 +63,48 @@ gets a requirement backwards **hangs in that phase** — the symptom is a stuck 
 
 A failed suite still **continues into RTOS initialisation** — `$F088F4` jumps to `$F09C06`
 either way — so reaching the RTOS is not evidence the self-test passed.
+
+---
+
+## How the suite handles a failure — read this before interpreting any phase
+
+Added 2026-07-31, after decoding `PollBoardStatus` (`$F0891C`). It changes how every phase
+below should be read.
+
+**There is no failure exit.** Each test arm, on a mismatch, loads `d7 = $F0F0F0F0`, calls
+`PollBoardStatus`, then `tst.l d7` / `bne` back to the top of the arm. `PollBoardStatus` **never
+clears `d7`**. So a failing test re-runs forever. No counter, no timeout, no "record it and move
+on" anywhere in the suite.
+
+What the poller does on a fault is *announce* it — clear `$1FFF1` bit 6 and write **MODE1 =
+`$1000`** — and then check whether the chassis has authorised giving up:
+
+```
+board bit 4 set AND board bit 5 set  ->  jmp Phase2Init   ; abandon diagnostics, boot anyway
+```
+
+So the fault policy is **retry indefinitely while signalling, until the chassis says stop**.
+That is a service-mode design: a technician can hold the machine inside the failing test with a
+scope on the failing line, then release it.
+
+Three practical consequences:
+
+1. **A stalled board is diagnosable.** `CHANNEL_SELECT` holds the two-level phase code of the
+   looping test — major byte = which test, minor byte = which stage. That is what the counter is
+   for, and it is the only diagnostic an unpowered-serial board offers.
+2. **In an emulator, a modelling shortcut presents as a hang, not an error.** Anything the
+   tests require — SCM being real memory, `$400000` faulting when `$FF0216` bit 5 is set, the
+   VMOD interrupter delivering — turns into a silent infinite loop if unmodelled.
+3. **A model that cannot raise board bit 5 can never reach the abort**, so it has no way to
+   skip a test it fails. The escape hatch is the chassis's, not the SBC's.
+
+### The idioms every phase shares
+
+| idiom | meaning |
+|---|---|
+| `d7 = $F0F0F0F0` | the fault flag; set on failure, never cleared |
+| `d2` / `d1` set by a handler | ISR-to-mainline signalling — an interrupt or bus-error handler deliberately clobbers a register so the interrupted code can see it happened |
+| `dbne d3` with `d3 = $F`/`$FF` | a **bounded** wait for that signal (16 or 256 iterations) — a missing event never hangs *here*, it falls through and the arm records a fault |
+| trailing `nop` padding | absorbs the 68000's imprecise bus-error PC; the handler blindly does `addq.w #$4,$4(a7)` and lands in the padding |
+| `[$8]` saved and restored | a temporary bus-error handler is installed for the duration of a guarded probe |
+| `addi.w #$100,d6` / `addq.b #$1,d6` | step the major / minor phase, then broadcast `d6` to `CHANNEL_SELECT` |
