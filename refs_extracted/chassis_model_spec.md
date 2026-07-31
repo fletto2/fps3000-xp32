@@ -534,3 +534,91 @@ What survives from that investigation, and is independently useful, is the fault
 `PollBoardStatus` never clears `d7`, so a genuinely failing arm retries forever while
 announcing itself, and the only exit is the chassis raising board-status bit 5. A model that
 cannot raise bit 5 turns any real diagnostic failure into a silent hang.
+
+---
+
+# Consolidated conformance suite, self-test derived (2026-07-31)
+
+Every item below is a behaviour the firmware's own diagnostics **require**. Each cites the site
+that demands it. Because `PollBoardStatus` never clears `d7`, **failing any of these presents as
+an infinite loop parked on the phase code in `CHANNEL_SELECT`, not as an error** — so a model
+that is silently wrong here looks identical to a model that is hung for some other reason.
+
+## A. The escape hatch
+
+**A1.** Board-status bits 4 **and** 5 both set must be reachable, and must cause `PollBoardStatus`
+(`$F0891C`) to `jmp Phase2Init`. This is the *only* exit from a failing test. `$D0` written to
+`$1FFF1` sets bits 7 and 6, which is what drives board bit 5 in the current model — but note the
+fault path itself **clears** `$1FFF1` bit 6, so a bit-5 derivation that depends on bit 6 makes
+the abort unreachable exactly when it is needed. Bit 5 should be an independent chassis line.
+
+## B. The VMOD interrupter (`$1FFF0`-`$1FFF3`)
+
+**B1.** The register block is **four bytes**, `$1FFF0`-`$1FFF3`. `$1FFF4`-`$1FFFF` is ordinary
+RAM — the DRAM fill and verify loops (`$F09A92`, `$F099CE`) pattern-test it and skip only the
+longword at `$1FFF0`.
+**B2.** `$1FFF1` bits 0-2 are the interrupt **request level**, walked 1..7 by phase `$1300`;
+delivery is mandatory at every level.
+**B3.** `$1FFF2` is the **vector register** — the vector number is written there before the
+request is raised.
+**B4.** `$1FFF1` **bit 3 selects the vector**: clear routes to `$50`, set routes to `$52`
+(phase `$1400`, whose two handlers set different bits of `d2` so a wrong vector is
+indistinguishable from no delivery).
+**B5.** The handler acknowledges in **software** by clearing `$1FFF1` bits 0-2 — there is no
+IACK-driven clear.
+**B6.** `$1FFF1` bit 7 must be set for a request to be armed.
+
+## C. The `$400000` chassis window
+
+**C1.** `$400000`-`$403FFF` at page 0 must be **real read/write longword storage**, no aliasing,
+no read side effects (address-line test `$F09AD6`, march test `$F09B20`).
+**C2.** The page comes from `$FF0210`; `page = addr >> 20`, `offset = (addr & $FFFFF) << 2`, so
+the window is **longword-granular** — the chassis names longwords, not bytes.
+**C3.** `$FF0216` **bit 5 set ⇒ accesses to the window BUS-ERROR**; clear ⇒ they complete
+(`$F09626` requires the fault, `$F09648` forbids it).
+**C4.** `$FF0216` **bit 6 must have no effect on faulting**, in either state, for both a read and
+a `clr.w` — all four arms of `$F096C4` require no fault.
+**C5.** The width mux, `$FF0216` bit 4, is a full 2x2 (phase `$1900`):
+
+| bit 4 | 16-bit write to the window | write to `$FF0214` |
+|:-:|---|---|
+| set | lands in the addressed half | **inert** |
+| clear | **discarded** | supplies the **low half** |
+
+**C6.** Op `$3`'s 32-bit protocol: the bus cycle happens on the **high** half for reads and the
+**low** half for writes; the other half is cached in `$E70`/`$E72` with no bus access.
+
+## D. The XLTR register file
+
+**D1.** `$FF0204` is a **readable latch** — six write/read-back iterations at `$F094F0`.
+**D2.** `$FF0210`, `$FF0212`, `$FF0214`, `$FF0216` are four **independent** registers, each
+written one walking bit (`$10`/`$20`/`$40`/`$80`) and read back (`$F09558`).
+**D3.** The BIM block is walked from `$FF0230` with **distinct** ascending values `$C0`+, for
+**16 registers if `$FF0218` bit 4 is clear, 24 if set** (`$F0956C`). Distinct values are what
+make the read-back detect aliasing rather than mere presence.
+
+## E. The AP I/F
+
+**E1.** `$FF000E` must latch and return `$AAAA` (`$F0987C`/`$F09882`) — with `$FF0218 = 0`.
+**E2.** With the XLTR armed as `$F098C4` arms it (`$FF020C = $FF`, `$FF0218 = $400`), `$FF0216`
+bit 7 **set** must make `$FF000E` bus-error and **clear** must not. Bit 7 alone must *not*
+disable the port: it is set at rest (`$FF0216` reads `$C0`) while every panel command writes
+`$FF000E`.
+**E3.** Nothing else in the AP I/F is exercised by the self-test — no channel window, no data
+port, no ready flag. The channel windows are constrained only by the operational paths.
+
+## F. Bus errors
+
+**F1.** The group-0 frame must be **14 bytes** — required by the self-test handler
+(`lea $8(a7),a7` + `rte`) and by the seven guarded sites in the kernel.
+**F2.** The stacked PC may be imprecise; the handler blindly adds 4 and relies on `nop` padding,
+so a model stacking either the faulting address or that plus two is acceptable.
+**F3.** A byte read at an odd address in `$F80001`-`$F82001` must fault (watchdog test
+`$F08F1C`); one fault suffices, and failure re-probes forever.
+
+## G. What is NOT specified anywhere
+
+No self-test touches **XP-32 EXEC, XP-32 ARITH or UNIV FMT**, and there is **no MEM CTL register
+interface** — System Common Memory is reached purely as paged memory through the window. The
+mux's **read**-side behaviour is never exercised. These are gaps only hardware can close, and
+they are the same boundary the machine's own diagnostics draw.
