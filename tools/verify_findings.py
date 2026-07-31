@@ -5932,6 +5932,19 @@ check('small displacements are NOT distinctive: $4(aN) occurs all over the firmw
       len([x for x in range(0xF00000, 0xF10000, 2)
            if _mre.search(r'(?<!-)\$4\(a\d\)', (insn(x) or '').lower())]) > 100)
 
+check('chassis op $3 computes page = addr >> 20 and offset = (addr & $FFFFF) << 2',
+      insn(0xF04D70) == 'moveq #$14, d2' and insn(0xF04D72) == 'lsr.l d2, d1'
+      and insn(0xF04D7E) == 'andi.l #$fffff, d1' and insn(0xF04D84) == 'lsl.l #$2, d1')
+check('...accesses the window 32 bits at a time, both directions',
+      insn(0xF04D96) == 'move.l (a1, d1.l), $e70.l'
+      and insn(0xF04E0A) == 'move.l $e70.l, (a1, d1.l)')
+check('...rebases addresses below $400000 into the window',
+      insn(0xF04D88) == 'cmpa.l #$400000, a1' and insn(0xF04D90) == 'move.l #$400000, d1')
+check('...saves the page on entry and restores it on exit',
+      insn(0xF04D4E) == 'move.w $210(a0), -(a7)' and insn(0xF04E22) == 'move.w (a7)+, $210(a0)')
+check('...and auto-increments by ONE, so the address counts longwords',
+      insn(0xF04E26) == 'btst.b #$4, $e87.l' and insn(0xF04E30) == 'addq.l #$1, $e58.l')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

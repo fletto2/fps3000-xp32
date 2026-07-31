@@ -746,3 +746,44 @@ Two results worth stating plainly:
 Combined with the PTM's three addressing paths and the earlier cached-pointer census, the
 `$F7xxxx` device space is now completely mapped: **eight live addresses, one of them
 dormant** (`$F70030`, zero executions in a full boot), and nothing else decoded.
+
+## Chassis operation `$3` — the chassis-memory access primitive, fully specified (2026-07-31)
+
+`$F04D4E`-`$F04E36` is the complete read/write path into chassis memory through the paged
+window, and it is emulatable as stated:
+
+```
+move.w $210(a0),-(a7)          ; SAVE the current page
+btst.b #$5,$e87                ; DIRECTION: set = read, clear = write
+btst.b #$6,$e87                ; HALF SELECT: which 16 bits the chassis is exchanging
+
+; address computation, identical on both paths:
+move.l $e58,d1 / moveq #$14,d2 / lsr.l d2,d1
+move.w d1,$210(a0)             ; PAGE  = addr >> 20
+move.l $e58,d1 / andi.l #$fffff,d1 / lsl.l #$2,d1
+exg.l  d1,a1                   ; OFFSET = (addr & $FFFFF) << 2
+cmpa.l #$400000,a1 / bge .
+move.l #$400000,d1             ; ...rebased into the window if it is not already
+move.l (a1,d1.l),$e70          ; READ  -- a 32-BIT access
+move.l $e70,(a1,d1.l)          ; WRITE -- likewise
+
+move.w (a7)+,$210(a0)          ; RESTORE the page
+btst.b #$4,$e87 / addq.l #$1,$e58   ; bit 4 auto-increments, by ONE
+bra $f050f8                    ; the ISR exit stub
+```
+
+Points that matter for a model:
+
+- **The window really is accessed 32 bits at a time.** This is the contrast with the XLTR
+  register block, where no `.l` operation exists anywhere: the *registers* are word-only,
+  the *memory window* is longword. A model may not treat them the same way.
+- **The address is in longword units.** The `<<2` on the offset and the `addq.l #$1` on the
+  auto-increment agree: `$0E58` counts longwords, not bytes.
+- **Addresses below `$400000` are rebased** by adding the window base, so the chassis may
+  name a location either way and get the same result.
+- **The page register is saved on entry and restored on exit** — the same discipline as
+  RDHC's `$400000` accesses and TCBIO1I's mailbox paging, here with the save and restore
+  eleven instructions apart around a single access.
+- **The 32-bit value crosses the boundary as two 16-bit halves** in `$0E70`/`$0E72`, selected
+  by `$E87` bit 6, with `$0E74` returning the selected half to the chassis. So a full
+  longword transfer takes **two** chassis operations, one per half.
