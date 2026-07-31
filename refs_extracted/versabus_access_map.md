@@ -36632,3 +36632,39 @@ interleaved across both connectors. Sixteen plus sixteen is the most direct evid
 **32-bit host transfers**, and it does not depend on counting 16x4 RAMs or on deciding whether they
 are a register file or a FIFO. The recorded inference ("eight Am29705 = 32 bits wide, so the host was
 a 32-bit machine such as a VAX") now has a much better-grounded companion argument.
+
+## The AP I/F bus inventory — five 16-bit buses (2026-07-31)
+
+Counted from the connection list:
+
+| bus | width | pins | identification |
+|---|---:|---|---|
+| **`DMA00*`-`DMA15*`** | 16 | A62-68 even, B10-16 even, B39-45 odd, B79-85 odd | **= APMA**, the AP memory address — sheet 16's counter outputs feed exactly these |
+| **`HST00`-`HST15`** | 16 | A61-69 odd, B9-17 odd, B47-55 odd, B87-95 odd | **= HSTBUS, "to host adapter"** |
+| **`HD00`-`HD15`** | 16 | A74-80 even, B24-30 even, B36-42 even, B58-64 even | = HDBUS |
+| **`DPMBS12*`-`DPMBS27*`** | 16 | A51-57 odd, A81-91 odd, B67-77 odd | = DPBUS `<12:27>` |
+| **`IO24*`-`IO39*`** | 16 | A52-58 even, A82-90 even, A7-9, A47, B68, B70, B84 | = IOBUS |
+| `PNL08*`-`PNL15*` | 8 | A11-29 odd | panel |
+| `DA08*`-`DA15*` | 8 | A12-30 even | device address |
+| `SP+DP08*`-`SP+DP15*` | 8 | A19-22, A31-34 | S-Pad + Data Pad |
+| `REGSEL00`-`REGSEL05` | 6 | B54-65 | host register select |
+
+**`DMA00*`-`DMA15*` is the APMA counter's output**, which closes a loop with sheet 16: the four
+`74S169`s there drive buffers to pins A-62 onward, and the connection list confirms the whole 16-bit
+run. So "DMA" in these pin names means *DMA address*, not DMA data.
+
+### Correction: my "16 + 16 = 32-bit host" reading was wrong
+
+Last entry I wrote that `HST00`-`HST15` and `HD00`-`HD15` are "two full 16-bit **host-side** buses",
+and offered that as the most direct evidence for 32-bit host transfers. That over-reached. The block
+diagram draws `HDBUS<00:15>` alongside `DPBUS` and `IOBUS` as **AP-side** buses, while the host link
+is labelled separately as **`HSTBUS -> TO HOST ADAPTER HSTNN`**. On that reading `HST` is the host
+path at **16 bits**, and `HD` belongs to the AP side.
+
+So the connector does **not** independently establish a 32-bit host path, and the recorded inference
+from eight 16x4 devices stands on its own merits rather than gaining a companion argument. I have
+withdrawn the companion.
+
+What the inventory does establish is the *scale* of the interface: **five 16-bit buses plus three
+8-bit groups**, which is why the card needs 200 pins and two ribbon cables, and why no part of this
+link can be reproduced without the counterpart adapter.
