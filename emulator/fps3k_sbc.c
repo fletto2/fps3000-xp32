@@ -88,11 +88,23 @@ uint8_t *host_sim_get_ram_ptr(void) { return ram; }
  *   $F04D72  lsr.l  #$14,d1        ; page  = index >> 20      -> MODE2
  *   $F04D7E  andi.l #$fffff,d1     ; offset = index & $FFFFF   (LONGWORDS)
  *   $F04D84  lsl.l  #$2,d1         ;        -> byte offset, up to $3FFFFC
- *   $F04D88  cmpa.l #$400000,a1    ; offsets at or beyond 4 MB are NOT windowed
+ *   $F04D88  cmpa.l #$400000,a1    ; DEAD -- can never be true, see below
  *   $F04D96  move.l (a1,d1.l),...  ; else read $400000 + offset
  *
  * So $E58 holds a LONGWORD INDEX, not a byte address: bits 0-19 index within a
  * page and bits 20+ select the page written to MODE2.
+ *
+ * THE COMPARISON IS UNREACHABLE (2026-07-30).  Note this very comment already says
+ * the byte offset runs "up to $3FFFFC" -- which is four bytes SHORT of $400000, so the
+ * bge can never fire.  The absolute, un-windowed access it guards is dead code on both
+ * arms: $F04DA0 on the read, $F04E14 on the write.  The contradiction was sitting inside
+ * a single comment block; nobody drew the conclusion.
+ *
+ * Consequences: the comparison establishes NOTHING about the window extent, so the
+ * reasoning below stands only on its own terms; and the reachable range is
+ * $400000-$7FFFFC, which CONTAINS the host mailbox at $70001C.  A chassis model has to
+ * decide whether a large-offset access aliases the mailbox, is decoded elsewhere, or
+ * faults -- the firmware never issues an index that large, so it does not say.
  *
  * That bound does NOT establish a 4 MB window.  It bounds the computed OFFSET;
  * whether the hardware answers across the whole range is a separate question, and
