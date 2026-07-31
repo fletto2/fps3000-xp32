@@ -30194,3 +30194,24 @@ Immediately after it, `$F09154` is the **`movep.w` walking-ones test** — `move
 `movep.w $0(a1),d1` / compare / `asl.w #$1,d0` — which is why the PTM model's write path must
 load the raw latch and read it back verbatim, the constraint that forced the split between raw
 latch and effective period when the dual-8-bit mode was fixed.
+
+### Corroboration: the emulator has already experienced this failure mode
+
+Checking the model against the three PTM requirements above, it satisfies all of them — per-timer
+flags in bits 0-2, a composite bit 7, and flag-clear on counter-MSB read. So this is a
+*specification* of what the phase demands, not a newly-found gap.
+
+But the source carries a comment that is worth quoting, because it is an **observed instance of
+the fault policy** derived here from `PollBoardStatus`:
+
+> "... status flags faster than the phase-$900 interrupt handler (F0911E) could clear them, so
+> its `tst.b` on the status register never read 0 and the test span forever."
+
+That is exactly the predicted shape: a requirement the model did not meet produced **an infinite
+loop, not an error** — the test retried forever because `d7` is never cleared. The fix was making
+the PTM's internal reset clear the interrupt flags. So the policy is not merely inferred from the
+code; this project has already been bitten by it once, before the mechanism was understood.
+
+It also independently identifies `$F0911E` as an interrupt handler, which the emulator reached
+empirically and this analysis reaches from the vector table — the two agreeing, and the vector
+number (`$54`) being the piece neither had on its own.
