@@ -18701,3 +18701,38 @@ work at all. And the leak must be **real**, or a plain `rts` would have sufficed
 
 For emulation this is a concrete deliverable: a chassis model that wants to exercise the XP
 channels needs those sixteen bytes plus a four-byte branch, and the machine runs.
+
+### Caveat on that result, and a second unchecked-error finding
+
+The 1466 cycles above are real — the firmware path runs end to end and rejoins cleanly —
+but the configuration is **partly synthetic and should not be read as full fidelity**. It
+installs a trampoline **without** a `USER` task, because TDTI never creates one. Inspecting
+the arrays after the run shows what that means:
+
+```
+ch1 arg1 ($10BE) = $08430003     <- an RSTATE ERROR return, not a task state
+ch1 arg2 ($10CE) = $00000000
+ch1 result       = $00000000
+```
+
+`$0843` reads as "directive `$43`" with error `$0003`: `RSTATE` failed because `'USER'` does
+not exist. **And the firmware does not check it.** `$F08590` is the `trap #1`; the next
+instructions are `lea $c(a7),a7` and `movea.l $3c(a7),a3` — no test of `d0`, no branch. So
+`a3` is taken from an uninitialised stack buffer and the argument frame is pushed through it.
+
+Measured by diffing RAM with and against the handler: **77 bytes differ, all in
+`$00BA8`-`$00BED`** — the frame written through the garbage pointer, into low kernel-global
+space. It happens to be harmless here (the machine still reaches the idle loop), but it is
+writing where it has no business.
+
+So there are **two** unchecked hazards on this path, not one: the 96-byte leak, and a
+`RSTATE` return that is never tested. On a real machine both arms of the guard would hold —
+a CP program that installs a trampoline also exists as a task, so `RSTATE` would succeed and
+`a3` would be valid — which is presumably why neither was caught. The guard the firmware
+*does* apply is `tst.l $10AE`, i.e. "is a handler installed", and it assumes the task
+follows from that.
+
+**What this means for a faithful chassis model:** installing the trampoline alone reproduces
+the control flow but not the data. A model that wants the arguments to be meaningful must
+also create a task named `USER` — which the ROM itself can do, via the `CPRUN` path
+(chassis operation `$8`) documented above.
