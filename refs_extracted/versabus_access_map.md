@@ -34845,3 +34845,39 @@ TRAP #1 vector, as recorded". **It is reached** — it is the directive dispatch
 TRAP #1 that is not the ISR-exit sentinel. The underlying fact is unaffected (TRAP #1 vectors to
 `$F00262`, from the static vector table and the dispatcher code), but that particular confirmation
 was an artefact of the truncation and is withdrawn.
+
+## Per-region application coverage, default boot, corrected set (2026-07-31)
+
+Using the `!TST` task bounds (authoritative, from the ROM's own segment table) against the 2136
+executed application PCs:
+
+| region | reached | instructions | coverage |
+|---|---:|---:|---:|
+| `$F04488`-`$F045FF` (pre-RDHC) | **0** | 36 | **0.0%** |
+| `RDHC` `$F04600`-`$F05CFF` | 16 | 1509 | **1.1%** |
+| `IO1I` `$F05D00`-`$F05EFF` | 29 | 106 | 27.4% |
+| `XP4I` `$F05F00`-`$F068FF` | 46 | 712 | 6.5% |
+| `XP3I` `$F06900`-`$F072FF` | 45 | 708 | 6.4% |
+| `XP2I` `$F07300`-`$F07CFF` | 45 | 710 | 6.3% |
+| `XP1I` `$F07D00`-`$F086FF` | 45 | 709 | 6.3% |
+| self-test + init `$F08700`-`$F0A824` | 1910 | 2290 | **83.4%** |
+
+**RDHC at 1.1% reproduces the recorded figure exactly**, which is a useful cross-check on the whole
+measurement chain — that number was derived independently and long before this session's tooling.
+
+**All four XP tasks are symmetric at 6.3-6.5%.** In an undriven boot each runs its prologue
+(`GTSEG`, two `CRSEM`, `CNCTIRQ`) and blocks in `WAIT`; nothing distinguishes them. The recorded
+asymmetry — XP3I/XP4I "gating off at ~13%" under `FPS3K_CHANNELS=2` — is about a *driven*
+configuration and a byte-weighted denominator; it is not visible here and does not contradict this.
+
+**The pre-RDHC region is 0% — 36 instructions, none executed.** That region holds the
+ASQ-post-from-interrupt wrapper at `$F04488` and the FPS trace hook at `$F044A2`. Both are recorded
+as dark for independent reasons (the trace mask is `$0000`; `!CCB` never exists because `CMR` is
+never issued), and this is the measured confirmation of both at once. Note the harness check
+asserting the ASQ-post wrapper "IS called" is a **static** claim about a call site existing — it is
+compatible with, and should be read alongside, the fact that the site never executes.
+
+**Nearly nine tenths of what runs in a default boot is the self-test and init.** 1910 of the 2136
+executed application instructions — 89% — are in `$F08700`-`$F0A824`. The six tasks together
+contribute 226. That is the honest shape of a green boot: it is overwhelmingly a hardware
+diagnostic, and the RTOS application layer barely starts.

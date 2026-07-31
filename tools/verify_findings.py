@@ -8043,6 +8043,21 @@ check('SGSEM ($2B) and WAIT ($13) resolve to distinct TRAP #1 handlers',
 check('CNCTIRQ ($4C) resolves into the $F02216 region that contains $F0226A',
       0xF02210 <= _t1h(0x4C) <= 0xF0226A)
 
+check('the six !TST task regions tile $F04600-$F086FF without gaps',
+      [(0xF04600, 0xF05CFF), (0xF05D00, 0xF05EFF), (0xF05F00, 0xF068FF),
+       (0xF06900, 0xF072FF), (0xF07300, 0xF07CFF), (0xF07D00, 0xF086FF)]
+      == sorted([(0xF04600, 0xF05CFF), (0xF05D00, 0xF05EFF), (0xF05F00, 0xF068FF),
+                 (0xF06900, 0xF072FF), (0xF07300, 0xF07CFF), (0xF07D00, 0xF086FF)])
+      and all(_b[0] == _a[1] + 1 for _a, _b in zip(
+          [(0xF04600, 0xF05CFF), (0xF05D00, 0xF05EFF), (0xF05F00, 0xF068FF),
+           (0xF06900, 0xF072FF), (0xF07300, 0xF07CFF)],
+          [(0xF05D00, 0xF05EFF), (0xF05F00, 0xF068FF), (0xF06900, 0xF072FF),
+           (0xF07300, 0xF07CFF), (0xF07D00, 0xF086FF)])))
+check('...and the four XP task regions are each exactly $A00 bytes',
+      all(_hi - _lo + 1 == 0xA00 for _lo, _hi in
+          ((0xF05F00, 0xF068FF), (0xF06900, 0xF072FF),
+           (0xF07300, 0xF07CFF), (0xF07D00, 0xF086FF))))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
