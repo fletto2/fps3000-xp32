@@ -6642,6 +6642,15 @@ check('nothing in the ROM READS $1FFD2-$1FFFE: the four negative-a5 sites are al
       all((insn(x) or '').startswith('move.w d')
           for x in (0xF09074, 0xF0925C, 0xF09354, 0xF093F0)))
 
+check('vector $55 is installed at the three checkpoints, all with the bare rte $F088FA',
+      all(_w(x) == 0x23FC and _l(x + 2) == 0x00F088FA and _l(x + 6) == 0x00000154
+          for x in (0xF087B4, 0xF0883C, 0xF088D6))
+      and _w(0xF088FA) == 0x4E73)
+check('...and the VMOD interrupter spans SIX vectors $50-$55, one install site each',
+      _l(0xF08F92) == 0x00000144 and _l(0xF09366) == 0x00000140
+      and _l(0xF09360) == 0x00000148 and _l(0xF09262) == 0x0000014C
+      and _l(0xF09080) == 0x00000150 and _l(0xF09400) == 0x00000148)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

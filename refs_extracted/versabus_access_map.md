@@ -30023,3 +30023,48 @@ phase `$1400` selects vector `$50` from **`$1FFF2`** (block 0, slot 0) and `$52`
 bit 3 is not simply "pick the other block at the same slot". Recorded as open rather than
 guessed; a bus trace that raises each level in turn and reads the delivered vector settles it in
 one pass.
+
+## Every vector the firmware installs, and the VMOD interrupter's is `$50`-`$55` (2026-07-31)
+
+Sweeping all absolute writes into the vector table gives **37 writes at 18 distinct vectors** —
+the complete set of vectors this firmware ever points anywhere:
+
+| vector | installed by | note |
+|---|---|---|
+| `$00`, `$01` | `$F08A5C`, `$F08E44`, `$F08E48` | reset SP/PC, rewritten during the RAM tests |
+| **`$02`** | **14 sites** | bus error — installed and restored around every guarded probe |
+| `$03`-`$08`, `$0F`, `$18` | `$F0A102`-`$F0A142`, one `a1` store each | the FPS exception reporters |
+| **`$50`** | `$F09364`, `$F09404` | phases `$1300` / `$1400` |
+| **`$51`** | `$F08F90` | |
+| **`$52`** | `$F0935E`, `$F093FE` | phases `$1300` / `$1400` |
+| **`$53`** | `$F09260` | |
+| **`$54`** | `$F0907E` | |
+| **`$55`** | `$F087B4`, `$F0883C`, `$F088D6` — all three with **`#$F088FA`** | **the three checkpoints** |
+| `$FF` | `$F09C0C` | |
+
+**So the VERSAmodule interrupter's vector space is `$50`-`$55` — six vectors, not the two the
+phase-`$1400` analysis exposed.** Each is installed by a different diagnostic, which is why only
+`$50` and `$52` showed up while reading that one phase. Any model of the interrupter must be
+prepared to deliver all six; the vector registers at `$1FFD2`-`$1FFFE` can hold any of them.
+
+### Vector `$55` is the checkpoint's interrupt sink
+
+The three installs of `$55` are the **only** vector writes with a literal handler address, and
+all three point at **`$F088FA`, a bare `rte`**. Their sites are exactly the three `$D0` checkpoint
+handshakes. So during a checkpoint the SBC arms a vector that does nothing at all: an interrupt
+raised by the chassis at that moment is **absorbed and discarded**.
+
+That is a deliberate design, not a stub. The checkpoint is where the SBC hands the chassis a
+synchronisation point, and the chassis is evidently permitted to interrupt there; the firmware
+guarantees the interrupt is harmless rather than forbidding it. **For a model this means raising
+an interrupt during the checkpoint must be safe and must not disturb the handshake** — a
+behaviour no other part of the suite tolerates.
+
+### Vector `$02` is installed at 14 sites, which measures the guarded-probe count
+
+Every diagnostic that may deliberately fault saves `[$8]`, installs its own handler, probes, and
+restores. Fourteen writes across the suite and the init — the pairs cover the window/mux tests
+(`$F0960A`/`$F096A2`, `$F096CC`, `$F0976C`, `$F0983A`/`$F098BA`), the bus-timeout watchdog
+(`$F08EC4`, `$F08EFC`, `$F08F32`, `$F08F66`), the early `$F08706`, and the post-suite init
+(`$F09C46`, `$F09C88`, `$F0A102`). **A model that cannot raise a bus error breaks all of them**,
+and per the fault policy each failure is an infinite retry rather than an error.
