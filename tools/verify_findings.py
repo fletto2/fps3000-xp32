@@ -6228,6 +6228,15 @@ check('phase $0400 is a DRAM address-line test: each address written at itself',
 check('...the same technique the SCM test uses on the chassis window',
       insn(0xF09AF6) == 'move.l d1, (a0, d1.l)')
 
+check('phase $0800 uses vector $51 at CPU mask 0',
+      insn(0xF08F74) == 'lea.l $f09052.l, a3' and insn(0xF08F90) == 'move.l a3, $144.l'
+      and insn(0xF08F96) == 'andi.w #$f8ff, sr')
+check('phase $1200 uses vector $53 at CPU mask 2',
+      insn(0xF09250) == 'lea.l $f09330.l, a3' and insn(0xF09260) == 'move.l a3, $14c.l'
+      and insn(0xF09246) == 'move.w #$2200, sr' and (0x2200 >> 8) & 7 == 2)
+check('...and the PTM phase uses mask 4, so three distinct mask levels are tested',
+      insn(0xF0908A) == 'move.w #$2400, sr' and (0x2400 >> 8) & 7 == 4)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

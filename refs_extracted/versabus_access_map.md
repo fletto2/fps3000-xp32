@@ -28634,3 +28634,33 @@ window.
 So the suite tests address-line integrity **twice**, on both memories, using the same
 technique. A model whose RAM aliases (for instance by masking an address too narrowly) fails
 at phase `$0400` rather than somewhere subtle.
+
+### Phases `$0800` and `$1200`, and the CPU-mask dimension
+
+**Phase `$0800` — `$F08F70`** installs `$F09052` (which sets VMOD bit 6, then `rte`) at
+**vector `$51`** via vector register `$1FFE2`, lowers the CPU mask to **0**
+(`andi.w #$f8ff,sr`), and clears VMOD bit 7.
+
+**Phase `$1200` — `$F09236`** installs `$F09330` (which clears VMOD bit 5, then `rte`) at
+**vector `$53`** via vector register `$1FFE6`, sets the CPU mask to **level 2**
+(`move.w #$2200,sr`), and clears VMOD bit 7.
+
+So the interrupt tests are a family, each pairing a different vector with a different CPU
+mask:
+
+| phase | vector | vector register | CPU mask |
+|---|---|---|---|
+| `$0800` | `$51` | `$1FFE2` | **0** |
+| `$0900` | `$54` | `$1FFEA` | **4** |
+| `$1200` | `$53` | `$1FFE6` | **2** |
+| `$1400` | `$50`, `$52` | `$1FFF2`, `$1FFE4` | **0**, with nesting |
+
+**That adds a requirement I had not stated.** The interrupter's request level lives in
+`$1FFF1` bits 0-2, and the suite exercises delivery against CPU masks of **0, 2 and 4**. So
+a model must compare the programmed request level against the SR mask properly — asserting
+unconditionally, or ignoring the mask, passes the mask-0 phases and fails at `$0900` or
+`$1200`.
+
+Combined with the nesting requirement at `$1400`, the interrupt contract is: **assert at the
+programmed level; the CPU takes it only when that level exceeds the current mask; a
+higher-level request must preempt a running handler.**
