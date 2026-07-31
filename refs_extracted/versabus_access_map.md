@@ -24898,7 +24898,7 @@ runs in the image:
 - **103 are single nops**, every one following a `bra`, `bsr`, `rts` or `beq` — alignment padding
   after a control transfer, including the 65 `rts`/`nop` pairs that are the 13 no-op slots of the
   42-entry dispatch table times its five copies.
-- **6 are multi-nop runs, and every one follows a memory access.**
+- **7 are multi-nop runs, of which 6 follow a memory access.** (Corrected 2026-07-31 after a regression check asserting six failed at seven. The seventh, `$F00AEA`, is **alignment padding inside the exception fan-in table** so that the TRACE entry lands at `$F00AEE`; it follows a `bsr`. The six that follow memory accesses are still exactly the six deliberate-fault probe sites, so the technique found them all — the claim of *no false positives* was the part that was wrong.)
 
 | run | length | preceded by | what |
 |---|---:|---|---|
@@ -24909,8 +24909,8 @@ runs in the image:
 | `$F0986A` | 2 | `move.w d6,$204(a6)` | a device settling delay, not a landing zone |
 | `$F098D4` | 4 | `tst.w $e(a6)` | the `$FF000E` probe |
 
-**Six multi-nop runs, six probe sites, no false positives and no misses.** The technique is worth
-keeping: a landing zone cannot be optimised away, so it marks its site permanently.
+**Six of the seven multi-nop runs are probe sites, and no probe site is missed.** The one
+non-probe run is fan-in alignment padding. The technique is worth keeping: a landing zone cannot be optimised away, so it marks its site permanently.
 
 ## The sixth site: an unmapped-space sweep from `$20000` to `$F00000`
 

@@ -5506,10 +5506,22 @@ check('$18 checks the TARGET\'s flag too, a two-sided permission model',
       insn(0xF02DBE) == 'btst.b #$f, $28(a6)' and insn(0xF02DC6) == 'btst.b #$f, $28(a0)')
 check('...all failing with status +9',
       insn(0xF02DCE) == 'addi.w #$9, $102(a6)' and insn(0xF03CCA) == 'addi.w #$9, $102(a6)')
-check('no task in this firmware issues any of the seven',
-      not any(_mre.search(r'#\$%x, d0' % n, o) and 0xF04600 <= a < 0xF08700
-              for n in (0x0E, 0x16, 0x18, 0x1C, 0x33, 0x49)
-              for a, (_, o, _) in _mins.items()))
+# A directive is ISSUED only if #$N,d0 is followed by trap #1 within a few
+# instructions.  An earlier draft matched the immediate alone and produced a
+# false positive on any unrelated `#$e,d0`.
+_dadr = sorted(_mins)
+_issued = []
+for _ix, _a in enumerate(_dadr):
+    _m, _o, _ = _mins[_a]
+    _mm = _mre.match(r'#\$([0-9a-f]+), d0$', _o)
+    if not (_mm and _m.split('.')[0] in ('move', 'moveq')): continue
+    if int(_mm.group(1), 16) not in (0x0E, 0x16, 0x18, 0x1C, 0x33, 0x49): continue
+    for _k in range(_ix + 1, min(_ix + 7, len(_dadr))):
+        if _mins[_dadr[_k]][0] == 'trap':
+            if _mins[_dadr[_k]][1] == '#$1': _issued.append(_a)
+            break
+check('no code anywhere issues the six unnamed privileged directives',
+      _issued == [], [hex(a) for a in _issued])
 
 # ---- the RTOS status-code vocabulary (2026-07-31) ----
 _st = _mcol.Counter(); _stmove = 0
@@ -5584,10 +5596,19 @@ while _k < len(_na):
         _nruns.append((_na[_k], _j - _k, _na[_k - 1] if _k else 0)); _k = _j
     else: _k += 1
 _multi = [(a, n, p) for a, n, p in _nruns if n >= 2]
-check('exactly six multi-nop runs exist in the ROM', len(_multi) == 6, len(_multi))
-check('...and every one follows a MEMORY ACCESS, not a branch',
-      all(_mre.search(r'\(a\d\)', _mins[p][1]) for _, _, p in _multi),
+# CORRECTED 2026-07-31: there are SEVEN multi-nop runs, not six.  The seventh,
+# $F00AEA, is alignment padding inside the exception fan-in table so that the
+# TRACE entry lands at $F00AEE -- it follows a bsr, not a memory access.  The
+# six that follow memory accesses are still exactly the six deliberate-fault
+# probe sites, so the technique found them all; the claim of "no false
+# positives" was the part that was wrong.
+check('seven multi-nop runs exist in the ROM', len(_multi) == 7, len(_multi))
+check('...six of them follow a MEMORY ACCESS -- the deliberate-fault probes',
+      sum(1 for _, _, p in _multi if _mre.search(r'\(a\d\)', _mins[p][1])) == 6,
       [(hex(a), _mins[p][1]) for a, _, p in _multi])
+check('...and the seventh is alignment padding in the exception fan-in',
+      [a for a, _, p in _multi if not _mre.search(r'\(a\d\)', _mins[p][1])] == [0xF00AEA]
+      and insn(0xF00AEE) == 'bsr.b $f00af2')
 check('...while all the single nops follow a control transfer',
       all(_mins[p][0].split('.')[0] in ('bra', 'bsr', 'rts', 'beq', 'bne', 'rte')
           for a, n, p in _nruns if n == 1 and p))
