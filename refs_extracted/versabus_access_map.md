@@ -34445,3 +34445,46 @@ than the model.
 by three different pieces of code (`PollBoardStatus`'s failure arm, phase `$1600`'s own setup, and
 the shared reporter). Combined with the phase counter it separates *which handler* is running from
 *which stage* failed — two independent facts from two registers, on hardware with no console.
+
+## CORRECTION: `$F089EE` is a retry-with-verify helper, not a "fault reporter" (2026-07-31)
+
+I called `$F089EE` "the fault reporter, the `bsr` target of every failing stage" and attributed the
+`MODE1 = $FFFF` signature to it as though that were a fixed code. Reading it settles both:
+
+```
+$F089EE  movem.l d0/d2/a4-a5,-(a7)
+$F089F2  a5 = $1FFF0 ; a4 = $F70018
+$F089FE  bclr.b #$6,$1(a5)
+$F08A04  move.w #$1000,$202(a6)      ; MODE1 <- $1000, a LITERAL
+$F08A0A  d2 = (a4) ; btst #$4 / btst #$5    ; the board-status escape
+$F08A18  move.l d0,(a0)              ; RE-WRITE the failing location
+$F08A1A  cmp.l  (a0),d0              ; RE-VERIFY it
+$F08A1C  beq    $F08A2E              ; recovered -> carry on
+$F08A1E  move.l #$f0f0f0f0,d7        ; still bad
+$F08A24  move.w d1,$202(a6)          ; MODE1 <- d1, THE CALLER'S PATTERN
+```
+
+**It is called with `(a0, d0, d1)` and retries the failing address**, re-writing and re-reading the
+pattern; only if the retry also fails does it raise `d7`. So it is a **soft-error retry**, and its
+existence says the designers expected transient memory failures to be worth one more attempt.
+
+Two corrections follow:
+
+1. **The name is wrong.** It reports nothing; it retries. The measured final PC under `scm_bitrot`
+   was `$F08A18` — inside the re-write/re-verify pair, looping on the corrupted address — which is
+   exactly what this routine does, and I read that as "the reporter ran".
+2. **`MODE1 = $FFFF` is data, not a signature.** `$F08A24` writes **`d1`**, the caller's pattern
+   word. In the SCM test `d1` is `$FFFFFFFF` for the first pattern pair, which is precisely the
+   `$FFFF` observed. A different failing pattern publishes a different value, so MODE1 after this
+   path is **not** a stable identifier and must not be used as one. The literal signatures `$1000`
+   (`$F08946`, `$F08A04`) and `$2000` (`$F0953A`) stand; the third row of that table does not.
+
+**But the underlying fact is better than the one I claimed.** MODE1 is not carrying a handler ID —
+**it is carrying the pattern that failed**, published to the chassis at the moment of a confirmed
+memory error. That is a real outbound diagnostic channel on a board with no console, and it is more
+useful than a handler code: it says *what* was wrong, not merely *who* noticed.
+
+A static check that would have caught the error immediately: there is **no `move.w #$ffff,$202`
+anywhere in the image**. Every literal MODE1 write is `$8020`, `$8000`, `$2000` or `$1000`. An
+observed value with no literal behind it is necessarily register-sourced, and that is worth checking
+before attributing any observed register value to a specific instruction.

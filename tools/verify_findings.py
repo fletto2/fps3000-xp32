@@ -7930,6 +7930,14 @@ check('all three FPS3K_FAULT modes are present and opt-in',
                  + open('/home/fletto/ext/src/claude/fps3000/emulator/fps3k_sbc.c').read()
           for _m in ('apif_berr', 'xltr_alias', 'scm_bitrot')))
 
+check('$F089EE retries the failing location before raising d7',
+      _w(0xF08A18) == 0x2080 and _w(0xF08A1A) == 0xB090
+      and _w(0xF08A1C) >> 8 == 0x67
+      and _w(0xF08A1E) == 0x2E3C and _l(0xF08A20) == 0xF0F0F0F0
+      and _w(0xF08A24) == 0x3D41 and _w(0xF08A26) == 0x0202)
+check('...and no literal $FFFF is ever written to MODE1',
+      len(_re21a.findall(r'move\.w\s+#\$ffff,\s*\$202\(a[0-7]\)', _asm21a)) == 0)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
