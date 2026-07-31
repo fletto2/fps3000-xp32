@@ -19974,3 +19974,47 @@ tick scheduling" conclusion above would be too pessimistic.
 
 Flagged rather than claimed: **the arithmetic says a delay should work; it has not been
 retested here.**
+
+## `$F0A502`-`$F0A552` is the RTOS configuration block
+
+Tracing what `RTOSKernelInit` reads pc-relative reveals a single ROM block that parameterises
+the whole RTOS. It is read ~30 times from `$F09C32` to `$F0A4A0`, and its fields map onto
+kernel globals and allocator calls:
+
+| field | value | goes to |
+|---|---|---|
+| `$F0A52A` | **`$0000`** | `$0C34` — the **trace mask**, which is why the trace table stays empty |
+| `$F0A52C` | **`$00F70000`** | `a0`/`a1` — the **board device base**; `$18(a0)` is `$F70018`, the status register |
+| `$F0A550` | **`$00020000`** | the **RAM top**, used by the top-of-RAM initialiser |
+| `$F0A532` | `$0002` | `$0C54` |
+| `$F0A542` | `$00BC0000` | `$0C36` |
+| `$F0A53C`/`$F0A53D` | bytes | `$0C72`/`$0C73` |
+| `$F0A53E`/`$F0A540` | words | `$0C74`/`$0C76` |
+| `$F0A502`, `$F0A506`, `$F0A512`, `$F0A546` | | `$0C1C`, pointers, pushed args |
+
+### And seven of its fields are allocator page counts
+
+Pairing each `move.l $f0a5xx(pc),d2` with the `trap` that follows:
+
+| constant | value | allocator site |
+|---|---:|---|
+| `$F0A516` | 1 | `$F09E78` |
+| **`$F0A51A`** | **2** | `$F09EBE` |
+| `$F0A534` | 1 | `$F09F42` |
+| `$F0A538` | 1 | `$F09F70` |
+| `$F0A522` | 1 | `$F09FA2` |
+| `$F0A51E` | 1 | `$F09FF0` |
+| `$F0A526` | 1 | `$F0A020` |
+
+They are **page counts**, not byte sizes — consistent with `T0PAGAL` being a 256-byte page
+allocator. And one is independently confirmed: the two-page entry `$F0A51A` allocates the
+structure whose live header reports **`USTNPAGE = 2`** — the ROM constant and the runtime
+field agree, having been read from opposite ends.
+
+(Seven of the eight allocator sites take their size this way; `$F09EFE` gets its count
+elsewhere.)
+
+**For emulation this is the machine's configuration in one place.** Changing the RAM top,
+the device base, the trace mask or any structure's page count means changing one longword
+here — and it is the natural place to look when asking "what does this firmware believe about
+the board it is running on".
