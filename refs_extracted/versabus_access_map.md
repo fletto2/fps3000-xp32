@@ -35117,3 +35117,41 @@ That is right, but **it identifies the command, not the issuer** — and with ei
 one word, attributing it to a particular task needs corroboration. Here the breakpoint supplied it;
 on hardware, the panel code itself is the only discriminator, which is precisely why the per-task
 code families (`$265`-`$268`, `$26D`-`$271`) exist.
+
+## The normal channel request, traced end to end on a present channel (2026-07-31)
+
+`FPS3K_XPIRQ=1` takes XP1I from 45 instructions to **240** — 33.8% of its 709, matching the recorded
+"XP tasks 34-40% when driven" — and runs the complete request path:
+
+```
+$F08500  move.w d0,d4                     ; the channel number
+$F08502  d0 = $FFFF0010                   ; mode $FFFF, OPERATION $10
+$F0850C  moveq #$10,d1 ; d2 = 1
+$F0850E  d2 = (d4-1) << 2                 ; channel index x4
+$F08516  movea.l $1080(a2),a2             ; the per-channel pointer into the $101E file
+$F0851C  jsr $F07F12                      ; TRANSACTION 1
+$F08522  d0 = $FFFF000E                   ; OPERATION $0E
+$F0852C  move.l -(a2),d1                  ; the PRE-DECREMENTED longword
+$F0852E  moveq #$10,d2
+$F08530  jsr $F07F12                      ; TRANSACTION 2
+$F0853C  move.l #$0,$1080(a2)             ; release the pointer
+$F08544  lsr.w #$1,d4                     ; halve the index: x4 -> x2
+$F08548  move.w #$0,$1098(a2)             ; clear the per-channel word
+$F0854E  rts
+```
+
+Four recorded facts confirmed with their instructions:
+
+1. **A normal request is two back-to-back transactions**, `$10` then `$0E`, both through `$F07F12`.
+2. **The second carries a longword pre-decremented out of the `$101E` file** through the per-channel
+   pointer at `$1080` — `move.l -(a2),d1`, the pre-decrement visible.
+3. **`$1098` is stride 2 while `$1080` is stride 4**, and the mechanism is exactly as recorded: the
+   same index is built as `(ch-1)*4` for `$1080` and then **halved** (`lsr.w #$1,d4`) for `$1098`.
+   This project notes that subtlety as a hazard ("the clearing routine halves the index"); here is
+   the instruction that does it.
+4. **Teardown releases both** per-channel structures before returning.
+
+Together with the absent-channel run, both arms of the bit-15-clear dispatch are now traced: a valid
+channel performs the two-transaction cycle and tears down; an invalid one rejects with panel `$263`
+and spins. That is the whole of the SBC→AC conversation this firmware can conduct unaided, observed
+rather than inferred.

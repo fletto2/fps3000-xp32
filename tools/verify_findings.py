@@ -8124,6 +8124,13 @@ check('...then extracts the class selector as the high byte via a 24-bit shift',
       _w(0xF070C2) == 0x7418 and _w(0xF070C4) == 0xE4A9
       and _w(0xF070C6) == 0x0C01 and _w(0xF070C8) == 0x0000)
 
+check('teardown releases $1080 at stride 4 and $1098 at stride 2 (index halved)',
+      _w(0xF08536) == 0x5344 and _w(0xF08538) == 0xE54C      # (ch-1) << 2
+      and _w(0xF0853C) == 0x257C and _w(0xF08542) == 0x1080
+      and _w(0xF08544) == 0xE24C                              # >> 1  -> stride 2
+      and _w(0xF08546) == 0x3444
+      and _w(0xF08548) == 0x357C and _w(0xF0854C) == 0x1098)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
