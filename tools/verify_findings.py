@@ -5113,6 +5113,19 @@ check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
       0xF03D0C < 0xF043E8 < 0xF04488 and _t1[0x3C][0] == 0xF03D0C)
 check('so BOTH FPS kernel extensions belong to CMR, which is never issued',
       _t1[0x3C][0] == 0xF03D0C)
+
+# ---- SGSEM leaves a0 pointing at a UST entry + $10 (2026-07-31) ----
+check('the SGSEM/WTSEM body walks the !UST through slot $0C24',
+      insn(0xF03304) == 'movea.l $c24.w, a1')
+check('...matching the semaphore name at +$8 of the entry',
+      insn(0xF03314) == 'cmp.l $8(a1, d3.w), d4')
+check('...and leaves a0 = entry + $10 on both arms',
+      insn(0xF03340) == 'lea.l $10(a1, d3.w), a0'
+      and insn(0xF0334A) == 'lea.l $10(a1, d3.w), a0')
+check('...before T0P ($01) and T0V ($02) respectively',
+      _t0rev.get(0xF006E8) == 0x01 and _t0rev.get(0xF00788) == 0x02)
+check('so XP4I writes $1F41/$1F45 into a UST entry field, not arbitrary memory',
+      insn(0xF060AA) == 'move.w (a0), d0' and insn(0xF060B2) == 'move.w #$1f41, (a0)')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

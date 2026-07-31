@@ -23467,3 +23467,50 @@ firmware talks to its channels through the AP I/F windows directly rather than t
 a statement already in this file, derived from `!CCB` having no instance. Here is the code that
 would have been used had it gone the other way, sitting unused in the join between the two halves
 of the firmware.
+
+## `$1F41`/`$1F45` narrowed: XP4I writes into a SEMAPHORE field, not arbitrary memory (2026-07-31)
+
+The last unidentified constant in the XP task family is the `$1F41`/`$1F45` pair XP4I writes
+"through whatever pointer the trap left in `a0`". Tracing the `$2B` SGSEM handler identifies the
+pointer.
+
+The shared SGSEM/WTSEM body at `$F03300`:
+
+```
+$F03304  movea.l $C24.w,a1              <- the !UST directory slot
+$F03308  move.w  d3,d0 / lsr.w #$8,d0
+$F0330C  cmp.w   $A(a1),d0 / bge        bounds-check the entry index
+$F03314  cmp.l   $8(a1,d3.w),d4         match the semaphore NAME
+$F0331A  tst.w   $C(a1,d3.w)            the entry's type/flags word
+$F03320  cmpi.b  #$1,$F(a1,d3.w)
+$F03340  lea     $10(a1,d3.w),a0        <- a0 = UST ENTRY + $10
+$F03344  bsr.w   $F006E8                TRAP #0 $01 = T0P  (wait)
+$F03348  rte
+$F0334A  lea     $10(a1,d3.w),a0        <- the same, other arm
+$F0334E  bsr.w   $F00788                TRAP #0 $02 = T0V  (signal)
+$F03352  rte
+```
+
+**`rte` restores SR and PC but not the address registers**, so `a0` survives the trap and the
+caller sees it. XP4I's `move.w (a0),d0` therefore reads the **word at UST entry + `$10`**, tests
+bit 11 of it, and writes `$1F41` or `$1F45` back into that same field.
+
+So the write is **into a semaphore's `+$10` field in the User Semaphore Table**, not into
+arbitrary memory. That is a substantial narrowing of "whatever pointer the trap left in `a0`" —
+the target is a named RTOS structure at a known offset, and the operation is a
+read-modify-write of one semaphore field with a two-state value.
+
+What `$1F41`/`$1F45` *mean* in that field is still unresolved: they differ by bit 2, the branch
+selects on bit 11 of the current value, and `UST.EQ`'s documented fields (`users`, `type`,
+`session` — live values 1, 2, 0) do not obviously accommodate either constant. The remaining
+step needs the `+$10` field's definition, which is not in the equate files this project has.
+
+### And a third confirmation that `$0C24` is `!UST`
+
+SGSEM loads `movea.l $C24.w,a1` and then walks entries by name, bounds-checked against `$A(a1)`.
+That is the User Semaphore Table, reached through slot `$0C24`.
+
+The slot was assigned earlier today from two directions — `T0FNDSEM` (directive `$0C`) being the
+routine at `$F01876`, and that routine having been characterised independently as "structure-table
+search on `$0C24`". **This is a third, from a completely different directive.** Three routines
+that do not call each other all treat `$0C24` as the semaphore registry.
