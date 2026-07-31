@@ -4702,3 +4702,24 @@ check('$C0 at $F0A22A is the exception path, not a resting value',
       insn(0xF0A22A) == 'move.w #$c0, $216(a0)'
       and insn(0xF0A230) == 'move.w #$8000, $202(a0)')
 check('...and $C0 leaves the window gate and width mux OFF', not (0xC0 & 0x30))
+
+# ---- $FF0204 is four registers at one address (2026-07-31) ----
+import re as _cre
+_c204w = [a for a, (m, o, _) in _mins.items() if _cre.search(r', \$204\(a\d\)$', o)]
+_c204r = [a for a, (m, o, _) in _mins.items()
+          if '$204(a' in o and not _cre.search(r', \$204\(a\d\)$', o)]
+check('the self-test broadcasts the phase counter d6 to $FF0204 ~70 times',
+      sum(1 for a in _c204w if insn(a).startswith('move.w d6,')) >= 65,
+      sum(1 for a in _c204w if insn(a).startswith('move.w d6,')))
+check('...and every one of those is inside the self-test region',
+      all(0xF08A00 <= a <= 0xF09C00 for a in _c204w if insn(a).startswith('move.w d6,')))
+check('exactly 8 sites write d0 to $FF0204 -- the panel-command issuer copies',
+      sorted(a for a in _c204w if insn(a).startswith('move.w d0,'))
+      == [0xF0452C, 0xF056B4, 0xF05E82, 0xF068D4, 0xF072EC, 0xF07CEC, 0xF086EC, 0xF0A5AA])
+check('the panel-status ISR returns the result through $FF0204',
+      insn(0xF04924) == 'move.w $e74.l, $204(a5)')
+check('nine CHANSEL reads latch into private globals',
+      sum(1 for a in _c204r if _cre.search(r'\$204\(a\d\), \$e[0-9a-f]{2}\.l', insn(a))) == 9,
+      sum(1 for a in _c204r if _cre.search(r'\$204\(a\d\), \$e[0-9a-f]{2}\.l', insn(a))))
+check('the ONLY places the firmware reads back its own $FF0204 write are the self-test compares',
+      insn(0xF094FE) == 'cmp.w $204(a6), d6' and insn(0xF09582) == 'cmp.w $204(a6), d6')

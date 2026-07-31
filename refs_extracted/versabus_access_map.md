@@ -20996,3 +20996,50 @@ controls over what happens *beyond* the XLTR — the chassis memory window and t
 conversion the UNIV FMT performs. Neither addresses the EU or the AU. The register confirms the
 boundary rather than crossing it: the SBC can open a path and set its width, and cannot see what
 consumes it.
+
+## `$FF0204` CHANNEL_SELECT is four registers at one address (2026-07-31)
+
+A complete site census — 81 write sites, 20 read sites — replaces the earlier "8 literal writes,
+3 reads" figure, which counted only the immediate form.
+
+### The write side has three distinct users
+
+| writer | sites | what it puts there |
+|---|---:|---|
+| **the self-test phase broadcast** | **~70** | `move.w d6,$204(a6)`, one before every stage, `$F08AC2`-`$F09B6C` |
+| **the eight panel-command issuers** | **8** | `move.w d0,$204(aN)` — the command word, a second time |
+| the panel-status ISR | 1 | `move.w $E74,$204(a5)` at `$F04924` — the operation result |
+
+The ~70 `d6` writes are the mechanism behind two things this project already knew separately:
+why `$FF0204` shows ~33,000 writes in a full run, and why a stalled board leaves a readable
+phase number there (`$0300` = the ROM checksum test). **The eight command writes are exactly the
+eight byte-identical issuer copies**, independently re-deriving that census from the register
+side.
+
+### The read side is the chassis's argument-supply port
+
+All 20 reads take a value the *chassis* placed there:
+
+- **nine CHANSEL captures** into private globals — `$E58`, `$E5A`, `$E64`, `$E66`, `$E62`,
+  `$E6A`, `$E70`, `$E72`, `$E7C`
+- **two register-file writes** — `$101E(a1)` / `$1020(a1)`, chassis op `$C`
+- **one arbitrary-address store** — `(a1)` at `$F04EC0`, chassis op `$6`
+- **four dispatch reads** — `$F04A84`, `$F04EE4`, `$F04A40`, `$F049E0`
+- **two ISR stack stores** — `$F049D0`, `$F04A2E`
+- **two self-test compares** — `cmp.w $204(a6),d6`, the write/read-back check
+
+### The emulation consequence
+
+**Reads and writes of `$FF0204` must be modelled as two independent registers sharing an
+address**, exactly like `$FF0202`. Nothing the SBC writes is ever read back except by the
+self-test's deliberate write/compare pair at `$F094FE`/`$F09582` — every operational read
+expects a chassis-supplied value. A model that echoes writes back on read will feed the phase
+counter into the transfer-address decoder; a model that returns a constant will make all nine
+captures identical.
+
+The two self-test compares are the exception that proves it: they are the *only* places the
+firmware expects its own write back, and they are a register-existence test, not a use.
+
+This also settles the shape of `FPS3K_CHSEL_RD`. Supplying a read value is not "overriding a
+register" — it is standing in for the chassis, and it is the single most load-bearing input the
+chassis model provides, since nine separate pieces of transfer state are latched from it.
