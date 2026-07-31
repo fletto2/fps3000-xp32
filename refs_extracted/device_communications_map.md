@@ -969,3 +969,58 @@ storage**. This is precisely the test that would catch the aliasing introduced b
 `XLTR_MODE2` — though only if the walked offsets exceed the window's low bits, which for this
 16 KB region they do not. So the current model passes, and would stop passing if the test
 were extended.
+
+## The complete device register map (2026-07-31)
+
+Closed on both axes — every addressing mode swept, every provenance route checked.
+
+### VERSAmodule board — `$1FFE2`-`$1FFF3`
+
+| address | role |
+|---|---|
+| `$1FFE2` | interrupter vector register → vector `$51` |
+| `$1FFE4` | interrupter vector register → vector `$52` |
+| `$1FFE6` | interrupter vector register → vector `$53` |
+| `$1FFEA` | interrupter vector register → vector `$54` |
+| `$1FFF0` | control, high byte — 8 bit operations; **image-only**, reads are chassis-mediated |
+| `$1FFF1` | control, low byte — 44 bit operations; bits 0-2 = **interrupt request level**, bit 3 = second request line, bit 7 = arm |
+| `$1FFF2` | interrupter vector register → vector `$50` |
+| `$1FFF3` | part of the four-byte block, exercised by the `rol(not(x))` walk |
+
+### MC6840 PTM — `$F70001`-`$F7000D`, odd bytes
+
+| address | role |
+|---|---|
+| `$F70001` | CR1 / CR3 (selected by CR2 bit 0) |
+| `$F70003` | CR2; **on read, the status register** — the interrupt handler masks its low 3 bits |
+| `$F70005` | T1 latch/counter — loaded `$0100` |
+| `$F70009` | T2 latch/counter — **self-test only** |
+| `$F7000D` | T3 latch/counter — `$27C7`, the 10 ms system tick; **must read live mid-period** |
+
+Interrupt reaches the CPU **through the VMOD interrupter**, vector `$54`.
+
+### Board status — `$F70018`/`$F70019`
+
+**Read-only.** 16 read sites, 16 `btst` sites, zero writes by any path. `$F7001A` is never
+referenced. Bit 2 reflects the VMOD interrupt level; bits 4+5 together abort the SCM test.
+
+### AP I/F — `$FF0000`-`$FF00BF`
+
+| window | offsets |
+|---|---|
+| 0 (host/bulk) | `+$00` remaining count, `+$04` ready, `+$08` data, `+$0E` command/status |
+| 2-5 (XP channels) | `+$04` arm, `+$08` data high, `+$0A` data low, `+$0E` command/status |
+| 1, 6, 7 | **untouched** |
+
+`$FF0010` never accessed; `$FF0100`-`$FF01FF` never accessed.
+
+### XLTR — `$FF0200`-`$FF025F`
+
+MODE0/MODE1/CHANNEL_SELECT/COUNTER/MODE2/DATA/control/STATUS/IRQ-MASK, plus 21 of 24 BIM
+registers. `$206`, `$208`, `$20A`, `$20E`, `$212`, `$240`, `$248`, `$25E` never referenced.
+**No 32-bit operation touches any of them.**
+
+### Chassis window — `$400000`-`$7FFFFC`
+
+Paged by `MODE2`, which is **independent** of the CPU address's high bits. 32-bit accesses,
+longword-addressed. The host mailbox is page `$F`, aperture offset `$30001C`.
