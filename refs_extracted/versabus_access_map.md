@@ -27107,3 +27107,47 @@ relocator, the display-device probe's positive arm, and the nine trace hook site
 That is a useful list in its own right: **none of it needs modelling**, and any emulator
 observation that appears to involve it is a bug in the model rather than a finding about
 the machine.
+
+## A static unreachability sweep is not sound on this firmware (2026-07-31)
+
+After documenting a dead handler as live, I tried to answer the question systematically:
+find every block jumped over by an unconditional branch with no other entry. **The attempt
+is worth recording because it failed in both directions**, and the reason is a property of
+this firmware rather than of the method.
+
+| calibration stage | candidates | control (`$F0A492`, known dead) |
+|---|---:|---|
+| branch operands only | 68 | **not found** |
+| + vector table, + skip-return arms excluded | 25 | not found |
+| + TRAP #0/#1 tables, `'BE'` continuations, dispatch tables | 72 | **found** |
+
+Even at the last stage it flags `$F0A23A` — the nine `PCMD_EXCEPTION_*` stubs, which are
+demonstrably live — because they are entered through vectors the FPS layer **installs at
+runtime**, not through any branch.
+
+**This firmware has at least seven ways to enter code**: branch/call operands, the static
+vector table, runtime-installed vectors, the TRAP #0 and TRAP #1 dispatch tables, the
+skip-return convention (a callee adding 2 or 4 to the stacked PC), bus-error continuations
+recovered via the `'BE'` marker, and computed jumps through the 42-entry dispatch tables.
+A sweep that models six of them still gets the answer wrong.
+
+**So dead-code claims here need per-case evidence.** That is also why this project's
+disassembler needed executed-PC seeding: no static analysis of this image is complete.
+
+### One candidate that survives every check
+
+`$F04230`-`$F042A1` — 114 bytes, jumped over by `bra.b` at `$F0422E`, rendered as real
+instructions in `fps3k_kernel.asm`:
+
+- **no branch or call** anywhere in the image references any address inside it;
+- **no longword** anywhere in the image points into it;
+- **no TRAP #0 or TRAP #1 table slot** resolves into it;
+- it is not preceded by a `bsr`, so it is not a skip-return arm.
+
+It contains a privilege check (`btst.b #$7,$28(a6)`) and structure manipulation, so it looks
+like a directive arm this build never selects.
+
+**Stated as a candidate, not a finding.** Given that the sweep is provably unsound in both
+directions, "no discoverable entry" is weaker than "unreachable". It is recorded here as the
+one place worth a targeted look, and as an honest counterpart to the 72 candidates that are
+not worth reporting.

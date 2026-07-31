@@ -5723,6 +5723,13 @@ check('vector $8D ($F00A58) is dead but vector $8E ($F00186) is NOT -- 22 bsr ca
       and not [x for x in range(0xF00000, 0xF10000, 2)
                if 'f00a58' in (insn(x) or '') and (insn(x) or '')[0] in 'bjd'])
 
+check('$F0422E jumps over $F04230-$F042A1, which decodes as real instructions',
+      insn(0xF0422E) == 'bra.b $f042a2' and insn(0xF04230) == 'lea.l $44(a6), a0'
+      and insn(0xF0426A) == 'btst.b #$7, $28(a6)')
+check('...and no longword anywhere in the image points into that block',
+      sum(1 for _o in range(0, len(_rom) - 3)
+          if 0xF04230 <= struct.unpack('>I', _rom[_o:_o + 4])[0] <= 0xF042A1) == 0)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
