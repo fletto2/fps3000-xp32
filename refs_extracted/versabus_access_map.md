@@ -20018,3 +20018,44 @@ elsewhere.)
 the device base, the trace mask or any structure's page count means changing one longword
 here — and it is the natural place to look when asking "what does this firmware believe about
 the board it is running on".
+
+## The RTOS time slice is 2 ticks = 20 ms, and it comes from the config block
+
+Chasing `$0C54` — one of the config-block destinations — identifies the scheduler's
+round-robin quantum, which this project had not established.
+
+```
+$F00562  move.w $c54.w,$c52.w      ; RELOAD, in the task-dispatch path
+$F00F6C  subq.w #$1,$c52.w         ; DECREMENT, in the timer-tick ISR tail
+$F00F70  bgt $F00F82               ;   still positive -> rte, keep running
+$F00F72  bset.b #$7,$c5b.w         ;   expired -> set the reschedule flag
+$F00F78  ...test the stacked SR's supervisor bit...
+$F00F84  andi.w #$f8ff,sr / bsr $F006B0    ; reschedule
+```
+
+So:
+
+| | |
+|---|---|
+| `$0C52` | the **running quantum counter**, decremented once per tick |
+| `$0C54` | its **reload value**, loaded from config `$F0A532` = **2** |
+| `$0C5B` bit 7 | the **reschedule-pending flag**, set on expiry (and `$0C5B` is cleared at dispatch, `$F0055A`) |
+
+The tick is the MC6840 T3 period, which this project measured as **exactly 10.0000 ms** (the
+dual-8-bit fix: `(MSB+1)*(LSB+1)` = 40×200 = 8000 E cycles at 800 kHz). Two ticks therefore
+means **the RTOS round-robin time slice is 20 ms**.
+
+Three things follow.
+
+**It is configurable in one word.** `$F0A532` in the config block is the quantum; nothing
+else sets `$0C54`. A different scheduling period is a single ROM constant.
+
+**It explains the tick's importance.** This project already records that modelling T3 as a
+16-bit reload made the tick run 27% slow. That error did not merely skew a counter — it
+skewed the **scheduler's time slice by the same 27%**, since the quantum is counted in ticks.
+
+**The expiry path checks the interrupted mode.** `$F00F78`-`$F00F80` examines the stacked SR
+before rescheduling, so a quantum that expires inside supervisor code sets the flag and
+`rte`s rather than switching — the switch happens on the way out to user mode. That is why a
+task spinning in a supervisor-level ISR (the `bra .` panel-command issuers) can never be
+preempted by the quantum, which is an independent route to the deadlock this file documents.
