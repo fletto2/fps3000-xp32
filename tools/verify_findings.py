@@ -6651,6 +6651,16 @@ check('...and the VMOD interrupter spans SIX vectors $50-$55, one install site e
       and _l(0xF09360) == 0x00000148 and _l(0xF09262) == 0x0000014C
       and _l(0xF09080) == 0x00000150 and _l(0xF09400) == 0x00000148)
 
+check('the config block extends back to $F0A4F2 with four more longword fields',
+      _l(0xF0A4F2) == 0x00F08700 and _l(0xF0A4F6) == 0x00F00100
+      and _l(0xF0A4FA) == 0x00F04600 and _l(0xF0A4FE) == 0x00000C00)
+check('...and $F0A4FA is exactly RDHC\'s code base, the start of the FPS region',
+      _l(0xF0A4FA) == 0x00F04600)
+check('...each is read pc-relative, and the displacements resolve exactly',
+      all(site + 2 + disp == want for site, disp, want in
+          ((0xF09C2A, 0x8D2, 0xF0A4FE), (0xF09C6C, 0x888, 0xF0A4F6),
+           (0xF09D26, 0x7D2, 0xF0A4FA), (0xF09E3C, 0x6B4, 0xF0A4F2))))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

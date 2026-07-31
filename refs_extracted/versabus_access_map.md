@@ -30068,3 +30068,33 @@ restores. Fourteen writes across the suite and the init — the pairs cover the 
 (`$F08EC4`, `$F08EFC`, `$F08F32`, `$F08F66`), the early `$F08706`, and the post-suite init
 (`$F09C46`, `$F09C88`, `$F0A102`). **A model that cannot raise a bus error breaks all of them**,
 and per the fault policy each failure is an infinite retry rather than an error.
+
+## The RTOS configuration block starts at `$F0A4F2`, not `$F0A502` (2026-07-31)
+
+`CLAUDE.md` documents `$F0A502`-`$F0A552` as "the RTOS configuration block ... for emulation this
+is the machine's configuration in one place". Auditing the remaining non-zero data in the
+application region turns up **four more longword fields immediately before it**, each read
+pc-relative by the boot:
+
+| address | value | read at | role |
+|---|---|---|---|
+| `$F0A4F2` | `$00F08700` | `$F09E3C` | **the self-test entry** (`MainInit`) — stored into `$0C14` |
+| `$F0A4F6` | `$00F00100` | `$F09C6C`, `$F09C96` | relocation destination / `!VCT` scan base (already documented) |
+| `$F0A4FA` | `$00F04600` | `$F09D26` | **the FPS application code base** — exactly where RDHC's segment starts |
+| `$F0A4FE` | `$00000C00` | `$F09C2A` | **the early supervisor stack**, loaded straight into `a7` |
+
+All five pc-relative displacements resolve exactly, so the attribution is arithmetic rather than
+proximity. That makes the block **`$F0A4F2`-`$F0A552`, 97 bytes**, and it now carries the three
+things an emulator most wants stated by the firmware itself: where the code starts, where the
+stack starts, and where the diagnostics start.
+
+`$F0A4FE` = `$00000C00` is the same value the scheduler control block holds at `$0C08`, so the
+config supplies the stack base to both the early boot and the RTOS.
+
+**One tension worth recording rather than smoothing over.** `$F09E3C` writes the self-test entry
+into **`$0C14`**, which this project identifies as the RMS68K **ready-list head** (cleared once at
+`$F0A062`, pushed six times thereafter). Both readings cannot hold simultaneously; the likeliest
+resolution is that `$0C14` carries an early boot value which `$F0A062` discards when the
+scheduler takes over, so the slot is reused rather than shared. That is consistent with the
+measured "cleared once" — but it is an inference, and a RAM watch on `$0C14` across the boot
+would settle it directly.
