@@ -36261,3 +36261,39 @@ first direct evidence for how the two halves of the link divide the addressing w
 the card in this chassis, and no register addresses appear on this sheet. It is a structural
 reference, not a register map — but it is the first schematic-level source this project has had for
 the AP I/F at all.
+
+## The block diagram is an INDEX into the 18-sheet set (2026-07-31)
+
+Every block on `512-3448-010` carries its sheet number in parentheses, so the block diagram doubles
+as a function-to-sheet map for the `GE_RDCP_APIF.pdf` schematics:
+
+| sheet | blocks |
+|---:|---|
+| 3 | `AP IDENT` |
+| 4 | `AP INTR`, `I/O HANDSHAKE & TIMING` (4,5) |
+| 5 | `REG` (regsel), `DECODE`, `READY LOGIC`, `PNL CTL CLKS & ENBS` (5,6) |
+| 6 | `PNL CTL CLKS & ENBS` |
+| 7 | `REG`, `DEVICE ADDER DECODE`, `DECODE` in/out, `I/O CTL` |
+| 8, 9, 10 | `AP DMA CTL`, `FMT & DMA CONTROL` (8,9,10,11) |
+| 11 | `TEMP REG`, `FMT & DMA CONTROL` |
+| 12, 13 | `FIFO CONTROL`, `DMA HANDSHAKE` |
+| **14** | **`FIFO IN REG`, `DMA FIFO`** |
+| 15 | `CTL REG` |
+| **16** | **`WC CNT`, `APMA CNTR`** |
+| 17 | `HMA EXT`, `HMA REG` |
+
+**Two sheets answer this project's two hardest AP I/F modelling questions.**
+
+- **Sheet 16** holds `WC CNT`. The firmware requires that reads of `$FF0000` **decrement** it — derived
+  from the S-record error paths, which spin `while ($FF0000 > 0) read (a0)` to drain a rejected
+  record, and which hang against a constant value. Sheet 16 should show whether the decrement is on
+  read, on transfer, or on a separate clock.
+- **Sheet 14** holds `FIFO IN REG` and `DMA FIFO`. The firmware requires that reads of `$FF0008`
+  **pop** — derived from the same drain loops having no post-increment on `(a0)`. Sheet 14 should
+  show the FIFO depth and what advances the read pointer.
+
+Both behaviours are currently modelled from firmware inference alone. They are the two places where a
+wrong guess produces a hang rather than an error, and they are now checkable against a drawing.
+
+**Caveat unchanged:** `512-3448-010` is not this chassis's `612-4448`, so the sheets describe a close
+relative. Structure should transfer; pin-level and address-level detail should not be assumed to.
