@@ -3933,7 +3933,6 @@ check('$10A0 bit 0 = a completion with no USER task, set by the XP task',
       insn(0xF0860E) == 'bset.b #$0, $10a1(a2)')
 check("RDHC computes the semaphore name as 'HXP0' + channel",
       insn(0xF053B6) == 'move.l #$48585030, d1'
-      and _rom[0:0].join([]) == b''
       and (0x48585030).to_bytes(4, 'big') == b'HXP0')
 check('cmd 1 stores $101E into the per-channel pointer $1080+(ch-1)*4',
       insn(0xF053DA) == 'move.l a2, $1080(a1)')
