@@ -23214,3 +23214,38 @@ And the two tables were sitting in the image the whole time. The lesson is the s
 table taught when it supplied three task entry points the disassembler had rendered as
 `DC.W 0x7001`: **this firmware documents itself in its own tables, and reading a table is worth
 more than reading a hundred instructions.**
+
+## The self-test phase counter is TWO-LEVEL (2026-07-31)
+
+`d6` is the phase counter broadcast to `CHANNEL_SELECT`, and every instruction that modifies it in
+`$F08700`-`$F09C00`:
+
+| instruction | count | role |
+|---|---:|---|
+| `move.l #$200,d6` | 1 (`$F08764`) | **sequence A base** |
+| `move.w #$1000,d6` | 1 (`$F087DA`) | **sequence B base** |
+| `move.w #$2000,d6` | 1 (`$F08862`) | **sequence C base** |
+| **`addi.w #$100,d6`** | **23** | **MAJOR phase step** — `$200` -> `$300` -> `$400` ... |
+| **`addq.b #$1,d6`** | **33** | **MINOR sub-phase step**, low byte only |
+| `addq.w #$1,d6` | 9 | minor step, word-sized |
+| `add.b d1,d6` | 4 | variable sub-phase |
+| `addq.b #$2,d6` | 1 | |
+| `move.l #$F0F0F0F0,d6` | 1 | the failure marker — `d6` doubles as the fail flag in the register test |
+| `moveq #$FF,d6`, `move.w #$102,d6`, `move.l d5,d6` | 1 each | the CPU-register test's own use of `d6` |
+
+**So `CHANNEL_SELECT` carries a two-field value: the high byte is the major phase (which test) and
+the low byte is a minor sub-phase (which stage within it).** The documented phase list —
+`$0300` ROM checksum, `$0600` bus watchdog, `$1600` XLTR register file, `$1900` width mux — is
+the major series; values like `$0303` or `$1904` are those tests part-way through.
+
+That sharpens the "readable beacon on a board with no serial output" procedure considerably.
+`$0300` means the ROM-checksum test is running; **`$0307` means it is running and has completed
+seven sub-stages**, which localises a hang to a specific stage rather than a whole test.
+
+**A caution, recorded because it cost time.** Simulating `d6` by walking the self-test region
+linearly and applying each modification in address order produces `$0102`, `$0103`, ... `$012C` —
+a plausible-looking sequence that contradicts every measured phase value. It is wrong because the
+self-test is heavily branched (`$F0873A` alone skips the entire suite on a board-status bit), so
+address order is not execution order, and because it conflates the major and minor increments.
+**The measured phase values from emulator runs remain the authority**; this table explains *how*
+those values are produced, and should not be used to predict them.

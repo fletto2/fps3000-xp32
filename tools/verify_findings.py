@@ -5021,6 +5021,24 @@ check('T0FNDSEM ($0C) searches directory slot $0C24 -- assigning it to !UST',
       _t0rev[0xF01876] == 0x0C and insn(0xF0187E) == 'movea.l $c24.w, a1')
 check('four of the thirteen are genuine internal helpers, not directives',
       all(a not in _t0rev for a in (0xF007FC, 0xF00D58, 0xF0110C, 0xF029F4)))
+
+# ---- the self-test phase counter is two-level (2026-07-31) ----
+_d6 = _mcol.Counter()
+for _a in range(0xF08700, 0xF09C00, 2):
+    if _a not in _mins: continue
+    _m, _o, _ = _mins[_a]
+    if _mre.search(r', d6$', _o) and _m.split('.')[0] in ('addi', 'addq', 'move', 'moveq'):
+        _d6[(_m, _o)] += 1
+check('sequence bases $200 / $1000 / $2000 are each loaded once',
+      _d6[('move.l', '#$200, d6')] == 1 and _d6[('move.w', '#$1000, d6')] == 1
+      and _d6[('move.w', '#$2000, d6')] == 1)
+check('the MAJOR phase step is addi.w #$100,d6, used 23 times',
+      _d6[('addi.w', '#$100, d6')] == 23, _d6[('addi.w', '#$100, d6')])
+check('the MINOR sub-phase step is addq.b #$1,d6, used 33 times',
+      _d6[('addq.b', '#$1, d6')] == 33, _d6[('addq.b', '#$1, d6')])
+check('...so CHANNEL_SELECT carries {major phase, minor sub-phase}',
+      _d6[('addi.w', '#$100, d6')] > 0 and _d6[('addq.b', '#$1, d6')] > 0)
+check('the sequence A base is loaded at $F08764', insn(0xF08764) == 'move.l #$200, d6')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
