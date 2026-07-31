@@ -295,3 +295,33 @@ driving it with a paged address is mismodelled.
 The two together give the fix: index the window as `page * $100000 + offset` and size the
 array accordingly, or explicitly document the model as single-page and reject non-zero
 pages rather than silently aliasing.
+
+### The two window divergences have one root cause
+
+The model carries a **separate mailbox device** answering `$70001C`/`$700020`
+unconditionally, recorded as a divergence because the mailbox is really inside the paged
+chassis window. That special case exists *because* of the sizing problem above:
+
+```
+mailbox CPU address        $70001C
+window CPU extent          $400000-$7FFFFF   (4 MB)
+offset within the window   $30001C            (3.0 MB in)
+emulator window backing    1 MB               -> the mailbox falls outside it
+```
+
+With a 1 MB array the mailbox simply is not in the window, so it needed a handler of its
+own. Size the window to its real 4 MB CPU extent and index it by the page `XLTR_MODE2`
+selects, and **the mailbox stops being a special case**: it is page `$F`, offset `$30001C`,
+which is exactly what TCBIO1I's save-set-`$F`-restore sequence says it is.
+
+So one fix retires two divergences — the undersized window and the invented mailbox device
+— and makes the model match the firmware's own description of the hardware rather than
+working around it.
+
+**Caveat on the page semantics.** That `$70001C` is reached by *direct CPU addressing*
+while op `$3` reaches its target by *computed* `page`/`offset` means the two paths index the
+window differently, and the ROM alone does not settle how the XLTR combines `MODE2` with the
+CPU address lines. The safe reading — and the one both paths are consistent with — is that
+`MODE2` supplies the high page bits and the CPU address supplies the offset within the
+window's 4 MB aperture. A schematic or a bus trace would settle it; until then a model
+should keep the two paths behaviourally identical rather than assuming either.
