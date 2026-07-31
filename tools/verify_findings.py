@@ -5954,6 +5954,9 @@ check('...saves the page on entry and restores it on exit',
 check('...and auto-increments by ONE, so the address counts longwords',
       insn(0xF04E26) == 'btst.b #$4, $e87.l' and insn(0xF04E30) == 'addq.l #$1, $e58.l')
 
+check('btst/tst/cmp put their memory operand last but do NOT write',
+      insn(0xF08926) == 'btst.b #$4, $1(a2)' and insn(0xF0892E) == 'btst.b #$5, $1(a2)')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

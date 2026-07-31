@@ -27536,3 +27536,39 @@ at all for the count.
 The harness caught this because the check was written against the *new* figure, so the next
 run compared it to the ROM rather than to my reasoning. That is the whole value of asserting
 findings mechanically rather than recording them in prose.
+
+## Which sweep variant to use, and for what (2026-07-31)
+
+The two provenance variants are wrong in **known, opposite** directions, and that makes each
+of them the right tool for one kind of claim:
+
+| claim | use | why |
+|---|---|---|
+| **"X is never accessed"** | the **permissive** variant (no flow stop) | it over-detects, so an absence it reports is strong |
+| **"X is accessed at least N times"** | the **strict** variant (stops at `bra`/`jmp`/`rts`/`rte`) | it under-detects, so its count is a floor |
+| **an exact count** | neither, unless they agree | agreement between variants is the only warrant |
+| **any distinctive displacement (`$200`+)** | operand-form matching | exhaustive by construction; provenance unnecessary |
+
+Applying the rule re-establishes two negatives properly:
+
+- **`$F7001A` is never referenced** — zero hits even under the permissive sweep, so the
+  earlier claim (made from absolute-form matching alone, which could not have seen a
+  `$1A(aN)` displacement) is now supported by the right test.
+- **`$F70018`/`$F70019` are never written** — 14 accesses, all reads or bit-tests, **zero
+  true writes**, again under the permissive sweep.
+
+### A sixth hazard: destination position is not direction
+
+Re-checking that second claim, a quick classifier reported **14 writes** where there are
+none. The cause: `btst.b #$4,$1(a2)`, `tst.b`, `cmpi.w` and friends put their memory operand
+in the **last** position, which a "destination = last operand" rule reads as a write. They
+only read.
+
+So the direction classifier needs an explicit read-only set — `btst`, `tst`, `cmp`, `cmpi`,
+`cmpa`, `cmpm`, `pea`, `lea` — and not merely operand position. The earlier board-status
+analysis happened to use a whitelist of writing mnemonics and so got the right answer; the
+quick re-check used the looser rule and got 14 phantom writes.
+
+This is the sixth distinct mechanism recorded here for a sweep producing a confident wrong
+answer, after absolute-only scanning, literal-versus-computed operands, branch-path
+provenance, the lookahead cap, and crossing control transfers.
