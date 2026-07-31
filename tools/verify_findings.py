@@ -5991,6 +5991,15 @@ check('...verifying the VMOD bit reads back, then that the board bit responds',
 check('capstone prints memory btst as .l, but the 68000 form is byte-sized',
       insn(0xF091CA) == 'btst.l d0, $1(a5)')
 
+check('the board-bit-2 test lowers the CPU mask and clears the VMOD level field',
+      insn(0xF0940A) == 'bset.b #$7, $1(a5)' and insn(0xF09410) == 'andi.w #$f8ff, sr'
+      and insn(0xF0941C) == 'andi.w #$fff8, (a5)')
+check('...then requires board bit 2 CLEAR at level zero',
+      insn(0xF09420) == 'btst.b #$2, $1(a4)' and insn(0xF09426) == 'beq.b $f0942e')
+check('...and SET once a non-zero level is programmed',
+      insn(0xF0945E) == 'bset.b #$3, $1(a5)' and insn(0xF09482) == 'btst.b #$2, $1(a4)'
+      and insn(0xF09488) == 'bne.b $f09490')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

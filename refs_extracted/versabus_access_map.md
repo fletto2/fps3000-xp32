@@ -27654,3 +27654,46 @@ With that caveat, the table is consistent with the documented equations on the v
 share (board bit 3 ← VMOD bits 6/7/1; board bit 1 ← VMOD bits 4/5), and it raises one lead:
 **VMOD bit 7 immediately precedes tests of board bits 1 *and* 2**, and the documented equation
 for board bit 2 does not mention bit 7. Anyone refining the chassis model should start there.
+
+### The "VMOD bit 7" lead resolves: it is the interrupter, not a status association
+
+Decoding the two board-bit-2 sites properly retires the lead I raised above. Neither is a
+"bit 7 → board bit 2" mapping; both are **interrupt-delivery tests**:
+
+```
+; test A -- $F0940A
+bset.b #$7,$1(a5)        ; VMOD $1FFF1 bit 7
+andi.w #$f8ff,sr         ; ...and LOWER THE CPU INTERRUPT MASK to 0
+andi.w #$fff8,(a5)       ; clear $1FFF1 bits 0-2 -- the REQUEST LEVEL field
+btst.b #$2,$1(a4)        ; board $F70019 bit 2 must then be CLEAR (level 0 = no request)
+
+; test B -- $F0945E
+bset.b #$3,$1(a5)        ; a request level with bit 3
+bsr    $f094ae           ; the level walker
+btst.b #$2,$1(a4)        ; ...and now board bit 2 must be SET
+```
+
+So the pieces are:
+
+| element | role |
+|---|---|
+| `$1FFF1` bits 0-2 | the **VERSAbus interrupt request level**, 0 = none |
+| `$1FFF1` bit 7 | the interrupter's arm/enable |
+| `$F70019` bit 2 | **interrupt pending/asserted**, reflecting the level field |
+| `andi.w #$f8ff,sr` | the test lowers the **CPU** mask so a request can be delivered |
+
+This is the phase-`$1300` interrupter test this project records as "`$1FFF1` bits 0-2 are an
+interrupt-request level field, walked 1..7 with delivery mandatory" — now with the
+board-status side attached: **level zero ⇒ board bit 2 clear; a non-zero level ⇒ board bit 2
+set**, with the CPU mask lowered so delivery can actually happen.
+
+**And it corrects my own lead from a few paragraphs above.** "Nearest preceding `bset`"
+associated board bit 2 with VMOD bit 7 because bit 7 happened to be the last bit written
+before the test. The operative write is the `andi.w` on the level field two instructions
+later, which that heuristic could not see because it is not a `bset`/`bclr` at all. A
+weak-link heuristic produced a plausible wrong lead, which is exactly what I flagged it might
+do — worth having followed up rather than left standing.
+
+**Emulator consequence.** A model must derive `$F70019` bit 2 from the `$1FFF1` bits 0-2
+level field, not from any single control bit, and must let a non-zero level actually assert
+an interrupt once the CPU mask permits it.
