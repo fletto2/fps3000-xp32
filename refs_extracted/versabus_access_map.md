@@ -36961,3 +36961,40 @@ and `$0E6E` ends at **`$25F`** — the type-not-recognised code. So the run load
 rejected something: either the loader processes one record per chassis operation and my stimulus did
 not re-arm it, or the ASCII stream desynchronised after the first record. **A single-record load is
 demonstrated; a multi-record session is not.**
+
+## The SLC ASCII stream is UNFRAMED, and a multi-record load works (2026-07-31)
+
+The single-record limit in the previous entry was my stimulus, not the firmware. My file had a
+newline after each record; the loader reads **two ASCII characters per 16-bit word** with no framing
+tolerance, so after `S1070000DEADBEEFC0` (18 characters = 9 words) the next word read was `"\nS"` =
+`$0A53` instead of `$5331`, and the dispatcher rejected it.
+
+**Stripping the newlines loads both records:**
+
+```
+S1070000DEADBEEFC0S1070004CAFEBABEB4S9030000FC
+->  $10010: DE AD BE EF CA FE BA BE
+```
+
+| record | S-record address | lands at | `$10 + addr + $10000` |
+|---|---|---|---|
+| 1 | `$0000` | **`$10010`** | ✓ |
+| 2 | `$0004` | **`$10014`** | ✓ |
+
+**Two different addresses, both correct** — a considerably stronger test of the recorded offset
+arithmetic than the single record, and it exercises the dispatcher's record-to-record loop
+(`$F04BAA`: continue while `$E74` is zero).
+
+**The finding worth carrying: the SLC wire format has no delimiters.** Records run back to back as a
+continuous ASCII character stream. This project records the format as "two ASCII hex characters per
+16-bit word = one data byte" — correct, and now with the corollary that **anything between records
+desynchronises the stream permanently**, because the loader never resynchronises on a record-start
+character. A host feeding this port must send bare records with no line terminators.
+
+That also explains the earlier `$25F`: not a malformed record, but a correctly-formed one read at the
+wrong offset. **A framing error and a bad record type are indistinguishable to this loader**, which is
+worth knowing before diagnosing a real transfer from the panel code alone.
+
+(`$0E6E` still ends at `$25F` in this run, from the trailing `S9` terminator — the SLC dispatcher
+handles `S0`/`S1` inline and passes other types onward, and I have not traced where the terminator is
+accepted. The data load is unaffected.)
