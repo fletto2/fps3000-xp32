@@ -6530,6 +6530,24 @@ check('...and bit 5 uses the SAME two access routines as the bit-6 test',
       _w(0xF0962C) == 0x617E and _w(0xF0964C) == 0x615E      # -> $F096AC read
       and _w(0xF0966E) == 0x6148 and _w(0xF0968E) == 0x6128)  # -> $F096B8 write
 
+check('$FF0218 is only ever written $400 or $0, across all 44 write sites',
+      _w(0xF0954C) == 0x3D7C and _w(0xF0954E) == 0x0400
+      and _w(0xF04AE2) == 0x3D7C and _w(0xF04AE4) == 0x0400
+      and _w(0xF04AF2) == 0x3D7C and _w(0xF04AF4) == 0x0000)
+check('phase $1600 samples $FF0218 bit 4 to choose a 16- or 24-register BIM walk',
+      _w(0xF09522) == 0x302E and _w(0xF09524) == 0x0218
+      and _w(0xF09526) == 0x0800 and _w(0xF09528) == 0x0004)
+check('...then REQUIRES ($FF0218 & $610) == $400, i.e. bits 9 and 4 read back ZERO',
+      _w(0xF095A2) == 0x302E and _w(0xF095A4) == 0x0218
+      and _w(0xF095A6) == 0x0240 and _w(0xF095A8) == 0x0610
+      and _w(0xF095AA) == 0x0C40 and _w(0xF095AC) == 0x0400)
+check('...and verifies the whole XLTR setup: $204, $202, $200, $20C, $218, $21A',
+      _w(0xF09582) == 0xBC6E and _w(0xF09584) == 0x0204
+      and _w(0xF09588) == 0x0C6E and _w(0xF0958A) == 0x2000 and _w(0xF0958C) == 0x0202
+      and _w(0xF09590) == 0x302E and _w(0xF09592) == 0x0200
+      and _w(0xF0959A) == 0x0C6E and _w(0xF0959C) == 0x0001 and _w(0xF0959E) == 0x020C
+      and _w(0xF095B0) == 0x0C6E and _w(0xF095B2) == 0x0FFF and _w(0xF095B4) == 0x021A)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

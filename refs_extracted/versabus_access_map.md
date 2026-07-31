@@ -29776,3 +29776,63 @@ leave it alone in both. **Bit 6's inertness is therefore an assertion the firmwa
 gap in coverage** — the same harness was pointed at it and the expected result inverted. A model
 that implements "bits 5 or 6 gate the window" passes two of bit 6's four arms and hangs on the
 first arm that sets it.
+
+## `$FF0218` decoded completely — and it explains the three-BIM derailment (2026-07-31)
+
+A census of all **66** accesses gives a small, sharp picture:
+
+| | count |
+|---|---:|
+| writes | 44 — and **only ever `$400` or `$0`** |
+| reads | 22 — **20** followed by `btst.b #$f` (bit 15), 1 by `btst.b #$4`, 1 by `andi.w #$610` |
+
+So operationally the register is a strict three-instruction idiom, repeated 20 times across RDHC,
+the SLC loader and the four XP tasks:
+
+```
+move.w #$400,$218(aN)     ; ARM   -- bit 10, the only bit the firmware ever sets
+move.w $218(aN),dN        ; POLL
+btst.b #$f,dN             ; bit 15 = ready/done
+move.w #$0,$218(aN)       ; CLEAR
+```
+
+**The bit map, complete:**
+
+| bit | role | evidence |
+|---:|---|---|
+| 15 | ready / done | 20 polls, `btst #$f` on a data register |
+| 10 | **arm** | the only bit ever written; `$400` x22, `$0` x22 |
+| 9 | must read **0** after arming | phase `$1600`'s mask |
+| 4 | 2-BIM vs 3-BIM selector | `$F09522`, and phase `$1600`'s mask |
+
+### The contradiction that derails `FPS3K_BIMS=3`
+
+Phase `$1600` uses `$FF0218` twice, and the two uses are inconsistent under any static model of
+bit 4:
+
+```
+$F09522  move.w $218(a6),d0 ; btst #$4,d0    ; bit 4 SET   -> walk 24 BIM registers
+$F0952C                                       ; bit 4 CLEAR -> walk 16
+$F0954C  move.w #$400,$218(a6)               ; ARM
+   ...   the four-register walk, then the BIM walk ...
+$F095A2  move.w $218(a6),d0
+$F095A6  andi.w #$610,d0
+$F095AA  cmpi.w #$400,d0                     ; REQUIRES bits 9 and 4 to read ZERO
+$F095AE  bne.b  $F095E8                      ; ... or the phase fails
+```
+
+**The firmware samples bit 4 as a configuration selector, then demands it read back as 0.** On a
+machine where bit 4 is a stable hardware input — a strap, or "a third BIM is fitted" — the
+read-back yields `$410`, the compare fails, and the phase takes its fault arm. That is precisely
+the behaviour recorded for `FPS3K_BIMS=3`: the boot derails and never completes.
+
+So this pins down the retraction this project already made ("bit 4 is NOT simply *a third BIM is
+fitted*; the card really does carry three, and the model of that bit is what is wrong"). The
+constraint is now explicit: **bit 4 must read 1 before the `$400` write and 0 after it.** It
+behaves as a latch that the arm write clears, not as a persistent status line. Whatever sets it
+does so before phase `$1600` samples it, and the arming write is expected to take it down.
+
+Note this also means the readback is a **verification of the whole XLTR setup in one place** —
+`$F09582`-`$F095B6` re-reads `$FF0204`, `$FF0202`, `$FF0200`, `$FF020C`, `$FF0218` and `$FF021A`
+and requires each to hold what phase `$1600` wrote (`d6`, `$2000`, low byte 0, `$1`, `$400` under
+mask, `$FFF`). A model that makes any of those six write-only fails here.
