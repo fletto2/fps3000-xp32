@@ -33244,3 +33244,44 @@ enable that no task ever exercises.
 RDHC's `$A001` versus the others' `$A081` is likewise not a special case: it is the same initial
 value, differing only because RDHC declares no semaphores and so never reaches the bit-7 setter.
 Every apparent difference between RDHC and the worker tasks in this word reduces to that one fact.
+
+## The live `!TST` is the merge of both ROM tables — verified end to end (2026-07-31)
+
+XP1I's `!TST` at `TCB+$160` reads:
+
+```
++$00  "!TST"
++$04  $04020024     TSTNSEGS=4, TSTCSEGS=2
++$0C  $F07DF086     PROG  first page $F07D, last page $F086
++$14  $01E701E8     STCK  first page $01E7, last page $01E8
++$2C  "PROG"  +$30 $80000000
++$34  "STCK"  +$38 $8000FF00
+```
+
+Every field traces to a source:
+
+| `!TST` field | comes from |
+|---|---|
+| `PROG` pages `$F07D`-`$F086` | **the TDTI record's `+$20`**, byte for byte |
+| `PROG` name and attributes `$80000000` | **the TDTI record's `+$40`/`+$44`** |
+| `STCK` name | **the region head's `CRTCB` block** (`+$20` of that block) |
+| `STCK` pages `$01E7`-`$01E8` | **the allocator**, rounding the block's `$190` request up to two 256-byte pages |
+| `TSTNSEGS=4, TSTCSEGS=2` | the RTOS |
+
+And the STCK extent `$1E700`-`$1E8FF` is exactly **`TCB+$138`** — the saved `a6` — confirming from
+a fourth direction that `+$138` holds the task's segment base rather than an ASQ pointer.
+
+**So the chain is complete and every link is verified against live data:**
+
+```
+TDTI record ($F0A600)  --PROG name, attrs, pages-->  !TST
+region head ($F07D14)  --STCK name, $190 request-->  allocator --pages--> !TST
+allocator                                          --base--> TCB+$138 (saved a6)
+region head ($F07D00)  --vector, ISR entry/exit-->  !IDV
+region head ($F07D2C)  --"AXP1"/"HXP1"----------->  !UST
+```
+
+Nothing in that chain is computed from anything but ROM constants and the allocator's page
+rounding. **A model can predict `!TST`, `!IDV`, `!UST`, the six TCBs and their saved registers
+before executing a single instruction** — and this session checked each of those predictions
+against a dump.
