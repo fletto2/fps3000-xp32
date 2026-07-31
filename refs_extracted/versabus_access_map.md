@@ -18427,3 +18427,34 @@ beyond it is the one already known, not a new one.
 For emulation this is a concrete recipe rather than an inference: **to carry an XP channel
 past the notify arm, the model needs executable code at `$10AE + (ch-1)*4`**, and a bare
 `rts` suffices to get through the call.
+
+### `RSTATE` names the `$3C` offset: it is the target task's `a7`
+
+`$43` `RSTATE`'s handler is `$F03620`, and it builds a **`$60` = 96-byte** block — exactly
+the frame the caller reserves with `lea -$60(a7),a7`:
+
+```
+$F03622  d5 = $60                       ; the block size
+$F0362E  move.w #$10,d0                 ; SIXTEEN longwords
+$F03632  move.l (a1)+,(a4)+             ; copied from $100(a5)
+$F03638  then $FC(a5)  (long)           ; the saved PC
+$F0363C  then $FA(a5)  (word)
+$F03640  then $148(a5) masked $1FFFFFF
+$F0364C  then $2C(a5)                   ; the task STATE word
+$F03650  then $148(a5) masked $F800
+$F0365A  then $150, $154, $14C, $158
+```
+
+Sixteen longwords is `d0-d7` + `a0-a7`, so the block's offset `$3C` is the **sixteenth**
+longword — **`a7`, the target task's stack pointer**. That is what `movea.l $3C(a7),a3` in
+the callback picks up, which independently confirms the reading that the XP task builds its
+argument frame **on the `USER` task's own stack** before calling the trampoline. The
+inference and the kernel agree without either being used to derive the other.
+
+*A tension worth flagging rather than papering over:* if `TCB+$100` begins a 64-byte
+register-save area, it overlaps `TCB+$102`, which this file identifies as the directive
+status/return code on the strength of 119 accesses. Both cannot be right about the same
+TCB. The likely resolution is that `a5` here is the **target** task's control block located
+by the preceding `bsr $F035E0`, and that the two offsets are being read in different
+structures — but that is not established, and until it is, `TCB+$100` should not be added
+to the field map.
