@@ -20191,3 +20191,42 @@ The **structure** is definite: a 2×2 table, config-supplied, selected exactly t
 With that, every destination of the configuration block is accounted for: the trace mask, the
 device base, the RAM top, seven allocator page counts, the scheduler quantum, two
 indirect-jump pointers, and this table.
+
+### `$0C72` is an allocator class byte — and it explains `!ASQ`'s absence from the code side
+
+The last config destination, `$0C72` (from `$F0A53C`), is read at exactly one site,
+`$F0239E`, inside `GTASQ` (directive `$1F`, handler `$F02384`):
+
+```
+$F02390  d3 = $a(a4)              ; the requested size
+$F02394  addi.l #$ff,d3
+$F0239A  lsr.l  #$8,d3            ; round UP to whole 256-byte pages
+$F0239C  swap   d3                ; page count into the HIGH word
+$F0239E  move.b $c72.w,d3         ; the config byte into the LOW byte
+$F023A2  swap   d3 / movea.l d3,a0
+$F023A6  bsr.w  $F0123E           ; allocate
+$F023B4  move.l #$21415351,(a3)   ; write the '!ASQ' marker
+```
+
+So `$0C72` is a **class/flags byte packed alongside the page count** in the allocator's
+parameter, and the surrounding arithmetic is the documented round-up-to-pages.
+
+It also settles `!ASQ` from a direction this file had not used. The marker's absence is
+recorded here as following from the ASQ directives never being issued; now the *single write
+site* is located, and everything agrees:
+
+| | |
+|---|---|
+| `GTASQ` handler `$F02384` | executes **0** times |
+| the `!ASQ` tag write `$F023B4` | **0** |
+| the `$0C72` read `$F0239E` | **0** |
+| `!ASQ` tags in a RAM dump | **0** |
+
+**`$21415351` appears in the ROM exactly once, inside a routine that never runs** — which is
+why a marker that plainly exists in the image has no instance in memory. That is a cleaner
+statement than "the directives are never issued", because it identifies the one instruction
+whose absence produces the observation.
+
+With this every field of the configuration block has both a destination and a consumer, and
+the two that are never consumed (`$0C72`, and `$0C36`'s continuation) are dormant for reasons
+now traced to specific unexecuted routines rather than assumed.
