@@ -27866,9 +27866,18 @@ provenance was disputed; it is vector `$51`'s handler, installed by a test that 
 `a5 = $1FFF0` and then lowers the CPU mask so it fires. Both the count of 52 and the
 "bit 6 is set exactly once" claim rest on that.
 
-### The VMOD block is verified as four bytes, transformed and read back
+### A four-byte transform routine — but it belongs to the DRAM test, not the VMOD block
 
-`$F08958`-`$F0896E`, reached with `a5` at the VMOD base, walks **four consecutive bytes**:
+> **CORRECTED 2026-07-31, same day.** I attributed this routine to the VMOD base because a
+> provenance sweep reached it from a `lea.l $1fff0.l,a5`. Its **only caller is `$F09A0A`,
+> inside the DRAM test**, and `a5` there is whatever that test set — the routine never saves
+> or loads `a5` itself. So it is a *generic* four-byte transform helper, and it does **not**
+> demonstrate that `$1FFF3` is accessed. The linear-walk provenance flaw again.
+>
+> `$1FFF3` *is* touched, but by the longword pattern test documented below
+> (`move.l d0,(a5)` with `a5 = $1FFF0`), which covers all four bytes at once.
+
+`$F08958`-`$F0896E` walks **four consecutive bytes** of whatever `a5` points at:
 
 ```
 move.l a5,-(a7)
@@ -27880,9 +27889,8 @@ $F08970:  clr.l d0 / move.b (a5),d0 / not.b d0 / rol.b #$1,d0
 ```
 
 Each byte is read, **inverted and rotated left one bit**, and written back; then the block is
-read as a longword. So all four bytes of `$1FFF0`-`$1FFF3` are exercised as read/write
-storage, which independently supports the documented register extent — and shows `$1FFF3` is
-touched, which no displacement census had recorded.
+read as a longword and returned to the caller for checking. The transform is chosen so no
+byte can pass by accident: `rol(not(x))` maps every value to a different one.
 
 The transform is chosen so no byte can pass by accident: `rol(not(x))` maps every value to a
 different one, so a stuck or aliased byte fails on the read-back.
@@ -28080,3 +28088,36 @@ Both cannot be fully true. The test is unambiguous about what the firmware requi
 model that latches the block passes; whether real hardware would is a question only a bus
 trace or the board manual can settle. Recorded as a conflict rather than resolved, because
 the ROM cannot resolve it.
+
+
+## Vector `$55`: a sixth vector, armed at every checkpoint (2026-07-31)
+
+Three sites install a **bare `rte`** at vector `$55`:
+
+```
+$F087B4  move.l #$f088fa,$154.l
+$F0883C  move.l #$f088fa,$154.l
+$F088D6  move.l #$f088fa,$154.l
+```
+
+`$F088FA` is a single `rte` and nothing else. All three sites sit at **checkpoint
+handshakes** — the sequence that writes the `$D0` marker:
+
+```
+addi.w #$100,d6              ; step the MAJOR phase
+bsr    <the test just finished>
+move.w #$d0,(a5)             ; the $D0 CHECKPOINT MARKER into $1FFF0/$1FFF1
+move.w #$8000,$202(a6)       ; MODE1 <- $8000
+move.l #$f088fa,$154.l       ; arm vector $55 with a do-nothing handler
+move.w (a4),d3               ; ...then poll board status
+btst.l d4,d3 / btst.l d5,d3
+```
+
+So the interrupt vector set is **`$50`-`$55`, six vectors**, not the five with programmable
+registers. `$55` has no entry in the vector-register file — no write to `-$8(a5)` exists —
+so it is presumably a fixed or autovectored source that the checkpoint simply needs to
+absorb harmlessly while it polls.
+
+This also confirms the documented `$D0` checkpoint mechanism from the code side, and shows
+the marker is written as a **word to `$1FFF0`** (`$00` high, `$D0` low), i.e. it lands in
+`$1FFF1` — consistent with the emulator's model of counting `$D0` markers there.
