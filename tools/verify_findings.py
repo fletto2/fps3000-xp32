@@ -5142,6 +5142,28 @@ check('exactly two callers of the transaction primitive in XP1I',
       sorted(a for a, (m, o, _) in _mins.items()
              if m.split('.')[0] in ('jsr', 'bsr') and 'f07f12' in o) == [0xF0851C, 0xF08530])
 
+# ---- directive-failure codes, derived by ADJACENCY not counts (2026-07-31) ----
+import re as _dre
+_dadj = _mcol.Counter()
+_daddrs = sorted(_mins)
+for _idx, _a in enumerate(_daddrs):
+    _m, _o, _ = _mins[_a]
+    _mm = _dre.match(r'#\$(26[d-f]|27[01]), d0$', _o)
+    if not (_m.startswith('move') and _mm): continue
+    for _k in range(_idx - 1, max(0, _idx - 14), -1):
+        _m2, _o2, _ = _mins[_daddrs[_k]]
+        _d2 = _dre.match(r'#\$([0-9a-f]+), d0$', _o2)
+        if _d2 and _m2.split('.')[0] in ('moveq', 'move'):
+            _dadj[(_mm.group(1), _d2.group(1))] += 1
+            break
+check('$26E reports directive $2D CRSEM, 8 times', _dadj[('26e', '2d')] == 8, dict(_dadj))
+check('$270 reports directive $4C CNCTIRQ, 4 times', _dadj[('270', '4c')] == 4)
+check('$271 reports directive $2B SGSEM -- NOT $29 ATSEM', _dadj[('271', '2b')] == 8)
+check('...and $271 is never preceded by $29', _dadj[('271', '29')] == 0)
+check('XP4I emits $271 right after its two $2B SGSEM traps',
+      insn(0xF06070) == 'moveq #$2b, d0' and insn(0xF0607A) == 'move.w #$271, d0'
+      and insn(0xF06098) == 'moveq #$2b, d0' and insn(0xF060A0) == 'move.w #$271, d0')
+
 
 # ---------------------------------------------------------------------------
 # STOP.  ADD NEW check() CALLS *ABOVE* THIS LINE.
