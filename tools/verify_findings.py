@@ -4326,6 +4326,26 @@ check('...with the 1..$10 arm validating the channel and using ((ch+1)<<5)',
       insn(0xF04C94) == 'cmp.w $105e.l, d3'
       and insn(0xF04CAC) == 'lsl.l #$5, d3')
 
+# --- the TDTI definition table gives the task map statically -------------
+# Six 96-byte !TCB records: name at +$04, entry at +$1C, PROG pages +$20/+$22.
+# These reproduce the runtime !TST table exactly, from the ROM alone.
+_tdti = []
+for _k in range(6):
+    _r = 0xF0A600 + 96 * _k
+    _tdti.append((_rom[_r - _B + 4:_r - _B + 8].decode('latin1'),
+                  struct.unpack('>I', _rom[_r - _B + 0x1C:_r - _B + 0x20])[0],
+                  struct.unpack('>H', _rom[_r - _B + 0x20:_r - _B + 0x22])[0] << 8,
+                  (struct.unpack('>H', _rom[_r - _B + 0x22:_r - _B + 0x24])[0] << 8) + 0xFF))
+check('the TDTI table names six tasks with entry points and segment bounds',
+      [t[0] for t in _tdti] == ['RDHC', 'IO1I', 'XP4I', 'XP3I', 'XP2I', 'XP1I'])
+check('...and its entry points match the runtime !TST values exactly',
+      [t[1] for t in _tdti]
+      == [0xF046F0, 0xF05D36, 0xF05F4A, 0xF0694A, 0xF0734A, 0xF07D4A])
+check('...as do its PROG segment bounds, tiling $F04600-$F086FF',
+      [(t[2], t[3]) for t in _tdti]
+      == [(0xF04600, 0xF05CFF), (0xF05D00, 0xF05EFF), (0xF05F00, 0xF068FF),
+          (0xF06900, 0xF072FF), (0xF07300, 0xF07CFF), (0xF07D00, 0xF086FF)])
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
