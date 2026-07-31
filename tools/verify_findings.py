@@ -4413,6 +4413,27 @@ check('...and under contention it is, so the encoder runs and $1064 reads $0005'
       _c1[0]['F08616'] >= 1
       and struct.unpack('>H', _c1[1][0x1064:0x1066])[0] == 0x0005)
 
+# --- the two return-stack indirect jumps, both through config pointers ---
+check('the FPS->RTOS handoff pushes $F00100 from the config block and rts-es',
+      insn(0xF0A300) == 'move.l $f0a512(pc), -(a7)'
+      and insn(0xF0A304) == 'rts'
+      and struct.unpack('>I', _rom[0xF0A512 - _B:0xF0A516 - _B])[0] == 0xF00100)
+check('...$F00100 is a one-instruction trampoline into the scheduler',
+      insn(0xF00100) == 'jmp $f0050c.l'
+      and insn(0xF0050C) == 'movea.l $c08.w, a7')
+check('...and the scheduler stack is loaded from $0C08 just before the jump',
+      insn(0xF0A2F4) == 'movea.l $c08.w, a7')
+# The other indirect jump is dormant: its pointer aims at zero-filled ROM.
+# The "dormant" vector is not aimed at nothing: $F000BC-$F000FF is 68 bytes of
+# zero -- a NOP slide (ori.b #$0,d0) -- ending EXACTLY on $F00100, the same
+# trampoline the live handoff uses.  So both indirect jumps reach the scheduler.
+check('the exception-monitor exit jumps through $0C36, config $F000BC',
+      insn(0xF00D52) == 'move.l $c36.w, -(a7)'
+      and struct.unpack('>I', _rom[0xF0A542 - _B:0xF0A546 - _B])[0] == 0x00F000BC)
+check('...and $F000BC-$F000FF is zero-fill landing exactly on the $F00100 trampoline',
+      not any(_rom[0xF000BC - _B:0xF00100 - _B])
+      and _rom[0xF00100 - _B] != 0)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.

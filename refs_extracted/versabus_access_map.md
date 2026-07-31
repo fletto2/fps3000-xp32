@@ -20149,7 +20149,17 @@ continuation pointer `$0C36` is initialised from the config block to **`$F000BC`
 zero-filled ROM**, and nothing else ever writes it. Measured: `$F00D14`, `$F00D52`, `$F000BC`
 and `$F00114` all execute **zero** times in a clean boot.
 
-So the exception-monitor exit is a configured-but-unused vector pointing at a NOP slide.
-Consistent with everything else known about that subsystem — `EXMON`, `DEMON` and `EXMMSK`
+**But it is not aimed at nothing.** `$F000BC`-`$F000FF` is **68 bytes of zero** — which the
+68000 executes as `ori.b #$0,d0`, a NOP slide — and it ends **exactly on `$F00100`**, the
+same one-instruction trampoline the live handoff uses. So the dormant vector, if ever taken,
+slides into the scheduler by the same door.
+
+That reframes it: the exception-monitor exit is not a broken pointer but a **default
+continuation into the scheduler**, reached the long way. Whether the 68 bytes are deliberate
+padding or a place reserved for a monitor that was never written, the effect is defined
+rather than accidental — and it is checkable: the zero run stops on the first byte of
+`$F00100` and nowhere else.
+
+Otherwise it is consistent with everything else known about that subsystem — `EXMON`, `DEMON` and `EXMMSK`
 are named directives this firmware never issues, and `TCBEMMSK` and friends sit unused in
 every TCB.
