@@ -6910,7 +6910,7 @@ check('...and $10A8 is a DEAD STORE: exactly two references, both writes',
       _asm21a.count('$10a8') == 2)
 check('$FF0216 <- $C0 at $F0A22A is the init tail, which branches AWAY from $F0A23A',
       _w(0xF0A22A) == 0x317C and _w(0xF0A22C) == 0x00C0 and _w(0xF0A22E) == 0x0216
-      and _w(0xF0A236) == 0x6000 and 0xF0A238 + _w(0xF0A238) == 0xF0A282)
+      and _w(0xF0A236) == 0x6000 and _bsrw(0xF0A236) == 0xF0A282)
 
 check('the XP tasks establish channel bases with movea.l #$imm, not lea',
       _w(0xF07E26) == 0x207C and _l(0xF07E28) == 0x00FF004E
@@ -7895,7 +7895,7 @@ check('$F08732 bit 5 set branches past the entire self-test suite',
       _w(0xF08732) == 0x0839 and _w(0xF08734) == 0x0005
       and _l(0xF08736) == 0x00F70019
       and _w(0xF0873A) == 0x6600
-      and 0xF0873E + _w(0xF0873C) == 0xF088F6
+      and _bsrw(0xF0873A) == 0xF088F6
       and _w(0xF088F4) == 0x4EF9 and _l(0xF088F6) == 0x00F09C06)
 
 check('sequence C tests low RAM and $1F000 as each other\'s save area',
@@ -7909,20 +7909,20 @@ check('...and restores the fault counter at $0400 from its parking slot $1F800',
       _w(0xF0888A) == 0x21F9 and _l(0xF0888C) == 0x0001F800
       and _w(0xF08890) == 0x0400)
 check('the SCM test is the last sequence-C stage before the $D0 checkpoint',
-      _w(0xF088C8) == 0x6100 and 0xF088CA + _w(0xF088CA) == 0xF09B20
+      _w(0xF088C8) == 0x6100 and _bsrw(0xF088C8) == 0xF09B20
       and _w(0xF088CC) == 0x3ABC and _w(0xF088CE) == 0x00D0)
 
 check('the bit-7 stage sets d7 INLINE, it does not call the fault reporter',
       _w(0xF09856) == 0x2E3C and _l(0xF09858) == 0xF0F0F0F0
       # ...whereas the SCM test reaches the reporter by bsr
-      and _w(0xF09B62) == 0x6100 and 0xF09B64 + _w(0xF09B64) == 0xF089EE)
+      and _w(0xF09B62) == 0x6100 and _bsrw(0xF09B62) == 0xF089EE)
 check('the FPS3K_FAULT hook exists and is opt-in',
       'FPS3K_FAULT' in open('/home/fletto/ext/src/claude/fps3000/emulator/versabus.c').read())
 
 check('phase $1600 failure epilogue raises d7, polls, and retries the whole stage',
       _w(0xF095E8) == 0x2E3C and _l(0xF095EA) == 0xF0F0F0F0
       and _w(0xF095F2) == 0x4A87
-      and _w(0xF095F4) == 0x6600 and 0xF095F6 + _w(0xF095F6) == 0xF09536
+      and _w(0xF095F4) == 0x6600 and _bsrw(0xF095F4) == 0xF09536
       and _w(0xF095F8) == 0x426E and _w(0xF095FA) == 0x0210)
 
 check('all three FPS3K_FAULT modes are present and opt-in',
