@@ -31796,3 +31796,48 @@ Read at `$F0054E` inside the dispatch path, written `#$FA` at `$F006A8` and from
 **Taken together with the register-frame result, the TCB's context area is now fully mapped**:
 registers at `+$74` (full) and `+$100`-`$13F` (normal, including `a6` and `a7`), the exception
 frame at `+$FA`-`+$FF`, and the stack-pointer arithmetic that reserves room for both.
+
+## `$F02F64` is the deferred / periodic-activation path — and `TCB+$B0` is a NAME field (2026-07-31)
+
+The dispatch exit selected by state bit 7 branches to `$F02F64`, which turns out to be both the
+consumer *and* the setter of that bit:
+
+```
+$F02F64  btst.b #$1,$29(a6)        ; a flags-word bit
+$F02F6C  move.w a0,$2a(a6)         ; TCB+$2A <- a0
+$F02F70  move.w $2c(a6),$2e(a6)    ; stash the STATE WORD at +$2E
+$F02F76  bset.b #$7,$2d(a6)        ; SET the bit the dispatcher tests
+$F02F7C  move.l $10(a6),$b0(a6)    ; copy the task NAME    to +$B0
+$F02F82  move.l $14(a6),$b4(a6)    ; copy the task SESSION to +$B4
+$F02F8A  movea.l $c2c.w,a1         ; $0C2C = the !PAT slot
+$F02F8E  lea    $8(a1),a2          ; ... walk the Periodic Activation Table
+```
+
+So the mechanism is: set state bit 7, stash the current state at `+$2E` and the identity at
+`+$B0`/`+$B4`, then work through the **Periodic Activation Table**. The dispatcher sees bit 7 on
+the next schedule and routes back here. This project records `!PAT` as having "8 free slots, active
+list null, so directive `$1D` `RQSTPA` is never issued" — so the subsystem is **dormant**, but its
+entry point, its state bit and its per-task save fields are now mapped.
+
+### `TCB+$B0`/`+$B4` is a saved {name, session} pair — so `'EXEC'` is a RENAME
+
+This project records `'EXEC'` as "a thirteenth marker", written to `TCB+$B0` by `$F00838`
+(`move.l #$45584543,$B0(a0)`), and notes it is "written and never read", like `!DLY` and `!CCB`.
+
+**`+$B0` is not a marker slot.** It is where the task's **name** (`TCB+$10`) is copied, with the
+**session** (`TCB+$14`) alongside at `+$B4` — the same `{name, session}` pair that `T0GETTCB` uses
+as its lookup key and that `RSTATE` compares at `+$140`/`+$144`. So writing `'EXEC'` there is
+**renaming the task to `EXEC`**, not tagging it with a marker.
+
+That reading explains what the marker reading could not:
+
+- **Why nothing tests for it.** A rename does not need a reader; the name is consumed by
+  `T0GETTCB`'s comparison against `TCB+$10`/`+$14`, and by whatever later looks the task up.
+- **Why it is a longword at a specific offset** rather than a tagged structure header like the
+  twelve `!`-prefixed markers, which live at the *base* of their structures.
+- **Why `$F00838` is on the termination path** — a terminating task being renamed `EXEC` is a
+  recognisable idiom for handing its identity to a reaper or executive.
+
+The RAM-dump prediction stands but changes meaning: a TCB that has passed through `$F00824` reads
+`45 58 45 43` at `+$B0` — **and its `+$B4` should hold that task's session**, which a marker
+reading does not predict at all. That is the discriminating test, in one dump.

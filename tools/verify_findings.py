@@ -7192,6 +7192,16 @@ check('TCB+$5E is a staged status moved into saved d0 then cleared',
       _w(0xF02C54) == 0x3D6E and _w(0xF02C56) == 0x005E and _w(0xF02C58) == 0x0102
       and _w(0xF02C5A) == 0x426E and _w(0xF02C5C) == 0x005E)
 
+check('$F02F64 sets state bit 7 and stashes state, name and session',
+      _w(0xF02F70) == 0x3D6E and _w(0xF02F72) == 0x002C and _w(0xF02F74) == 0x002E
+      and _w(0xF02F76) == 0x08EE and _w(0xF02F78) == 0x0007 and _w(0xF02F7A) == 0x002D
+      and _w(0xF02F7C) == 0x2D6E and _w(0xF02F7E) == 0x0010 and _w(0xF02F80) == 0x00B0
+      and _w(0xF02F82) == 0x2D6E and _w(0xF02F84) == 0x0014 and _w(0xF02F86) == 0x00B4)
+check('...then walks the !PAT structure through slot $0C2C',
+      _w(0xF02F8A) == 0x2278 and _w(0xF02F8C) == 0x0C2C)
+check("...so TCB+$B0 is a NAME copy, and 'EXEC' written there is a rename",
+      _l(0xF00838 + 2) == 0x45584543 or _l(0xF00838) == 0x2D7C)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
