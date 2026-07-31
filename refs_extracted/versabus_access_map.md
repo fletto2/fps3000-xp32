@@ -24792,3 +24792,54 @@ scope without any firmware cooperation.
 why the kernel-fatal handler's snapshot of `$8.w` at `$084C` distinguishes a fault during this
 test from one anywhere else: during phase `$600` that vector reads `$F08F06`, a value it holds
 nowhere else in the machine's life.
+
+## Every deliberate fault in the firmware, and the three handlers that catch them (2026-07-31)
+
+Sixteen sites write the bus-error (`$8`) or address-error (`$C`) vector. All sixteen are in the
+self-test or the init code — **the RTOS and the tasks never touch them** — and they install three
+distinct handlers with three distinct policies:
+
+| handler | installed at | policy |
+|---|---|---|
+| **`$F08902`** | `$F08706`, `$F0870E` (both vectors, at self-test entry) | **COUNT** — increment `$1F800` or `$400`, discard 8, `rte` |
+| **`$F08F06`** | `$F08F32`, restored `$F08F66` | **FLAG** — `addi.l #$1,d1`, discard 8, `rte` |
+| **`$F098E0`** | `$F0960A`, `$F096CC`, `$F0983A`, each restored | **SKIP** — flag *and advance the PC* |
+
+### `$F098E0` steps over the faulting instruction
+
+```
+$F098E0  moveq  #$1,d1
+$F098E2  lea    $8(a7),a7        discard function code (2) + address (4) + IR (2)
+$F098E6  addq.w #$4,$4(a7)       ADD 4 TO THE STACKED PC
+$F098EA  rte
+```
+
+After the `lea`, the remaining frame is `{SR word, PC longword}`, so `$4(a7)` is the **low word of
+the stacked PC** and `addq.w #$4` advances it by four bytes — skipping a 4-byte faulting
+instruction and resuming after it.
+
+**That is a hard requirement on the exception frame.** A model whose group-0 frame places the PC
+anywhere else makes this handler resume **mid-instruction**, and the three sites that use it are
+the `$FF0216` gate probes of phases `$1700`, `$1800` and `$1900` — the tests that establish the
+`$400000` window gate and the 16->32 width mux. Getting the frame layout wrong corrupts exactly
+the tests that document the chassis data path.
+
+It also confirms the Musashi 68000-frame patch a third time: `$F08902` needs the 14-byte frame to
+balance its `lea $8(a7),a7` + `rte`, `$F08F06` the same, and `$F098E0` needs the PC at a known
+offset *within* that frame.
+
+### The complete list of places this firmware faults on purpose
+
+| phase | fault | caught by |
+|---|---|---|
+| `$600` | byte reads at odd addresses `$F82001` down to `$F80001` | `$F08F06` |
+| `$1700`/`$1800` | the `$400000` window with `$FF0216` bit 5 set | `$F098E0` |
+| `$1900` | the width-mux probe | `$F098E0` |
+| everywhere else in the self-test | anything unexpected | `$F08902`, counted |
+| init | the display probe at `$4(a1)` | `$F09C46`'s guard |
+| init | the kernel relocator's copy loop | `$F09C88`'s guard |
+
+**Six deliberate-fault regions, every one bracketed by an install/restore pair.** So a model must
+tolerate the bus-error vector changing 16 times during boot and must never assume the value it
+read earlier is still current — which is precisely what makes the kernel-fatal snapshot of `$8.w`
+at `$084C` informative rather than redundant.

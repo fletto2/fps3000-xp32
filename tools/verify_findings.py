@@ -5542,6 +5542,22 @@ check('...exiting as soon as ONE probe faults',
       insn(0xF08F4C) == 'tst.l d1' and insn(0xF08F4E) == 'bne.b $f08f5e')
 check('...and RETRYING the whole sweep on failure -- an infinite re-probe, not a halt',
       insn(0xF08F58) == 'move.l #$f0f0f0f0, d7' and insn(0xF08F64) == 'bne.b $f08f36')
+
+# ---- three deliberate-fault handlers with three policies (2026-07-31) ----
+_bev = [a for a, (m, o, _) in _mins.items()
+        if _mre.search(r', \$(8|c)\.w$', o) and m.startswith('move')]
+check('exactly 16 sites write the bus/address error vectors', len(_bev) == 16, len(_bev))
+check('...none of them in the RTOS or the tasks',
+      not any(0xF00000 <= a < 0xF08700 and a not in (0xF08706, 0xF0870E) for a in _bev))
+check('$F098E0 flags AND advances the stacked PC by four',
+      insn(0xF098E0) == 'moveq #$1, d1' and insn(0xF098E2) == 'lea.l $8(a7), a7'
+      and insn(0xF098E6) == 'addq.w #$4, $4(a7)' and insn(0xF098EA) == 'rte')
+check('$F08F06 only flags -- no PC adjustment',
+      insn(0xF08F06) == 'addi.l #$1, d1' and insn(0xF08F16) == 'lea.l $8(a7), a7'
+      and insn(0xF08F1A) == 'rte')
+check('$F08902 counts rather than flagging', insn(0xF0890A) == 'addq.l #$1, $1f800.l')
+check('the skip handler is installed three times, each with a restore',
+      all(insn(a) == 'move.l #$f098e0, $8.w' for a in (0xF0960A, 0xF096CC, 0xF0983A)))
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
