@@ -4839,6 +4839,26 @@ check('no $FF0218 access appears inside the outbound loop',
               if a in _mins))
 check('the per-channel arm validates the channel and reports $25C',
       insn(0xF04C94) == 'cmp.w $105e.l, d3' and insn(0xF04C9C) == 'move.w #$25c, d0')
+
+# ---- modifier-bit map over the 16 chassis operations (2026-07-31) ----
+_opbase = [0xF04A84, 0xF04CF2, 0xF04D20, 0xF04D4E, 0xF04E3A, 0xF04EE4, 0xF04F30, 0xF04F3A,
+           0xF04F52, 0xF04FA0, 0xF04FBA, 0xF05002, 0xF0502C, 0xF05092, 0xF050CA, 0xF050F8]
+def _opbits(n):
+    _lo = _opbase[n]; _hi = _opbase[n + 1] if n + 1 < 16 else 0xF05102
+    _b = set()
+    for _a in range(_lo, _hi, 2):
+        if _a in _mins and '$e87' in _mins[_a][1] and _mins[_a][0].split('.')[0] == 'btst':
+            _m = _mre.match(r'#\$([0-9a-f]+), \$e87', _mins[_a][1])
+            if _m: _b.add(int(_m.group(1), 16))
+    return sorted(_b)
+check('op $0 honours only bit 5 (the direction/transport selector)', _opbits(0) == [5])
+check('ops $1 and $2 honour only bit 6 (half-select)',
+      _opbits(1) == [6] and _opbits(2) == [6])
+check('op $3 honours the full set 4/5/6', _opbits(3) == [4, 5, 6])
+check('op $A honours only bit 4 (auto-increment)', _opbits(10) == [4])
+check('op $C honours the full set 4/5/6', _opbits(12) == [4, 5, 6])
+check('the pure commands $5,$7,$8,$9,$D,$E,$F honour NO modifier bits',
+      all(_opbits(n) == [] for n in (5, 7, 8, 9, 13, 14, 15)))
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

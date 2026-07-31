@@ -22612,3 +22612,44 @@ interface, the capability list is now:
 SBC validates *structure* — channel numbers, array indices, record framing, register indices —
 and validates *addresses* essentially nowhere. For emulation that means address faults on these
 paths are not a modelling concern; the hardware would simply perform them.
+
+## Which chassis operations honour which modifier bits (2026-07-31)
+
+The command byte's bits 4 (auto-increment), 5 (direction) and 6 (half-select) are documented as
+general modifiers. They are not general — each operation tests only the ones it uses, and seven
+of the sixteen test none at all:
+
+| op | bits tested | meaning |
+|---:|---|---|
+| `$0` | **5** | direction: clear = chassis->SBC (S-record or raw), **set = SBC->chassis readback** |
+| `$1` | 6 | which half of the 32-bit transfer address |
+| `$2` | 6 | which half of the 32-bit count |
+| `$3` | **4, 5, 6** | auto-increment, read/write, half — the fully-modified chassis-memory access |
+| `$4` | (4, 5, 6 — see caveat) | |
+| `$5` | none | pure command (`XPSEL`) |
+| `$6` | none in its own body — see caveat | |
+| `$7` | none | pure command (mask BIM0 ch0) |
+| `$8` | none | pure command (`CPRUN` / CH1 reset) |
+| `$9` | none | pure command (set third parameter) |
+| `$A` | **4** | auto-increment the status-file index |
+| `$B` | 6 | which half of the returned staging base |
+| `$C` | **4, 5, 6** | the fully-modified register-file access |
+| `$D` | none | pure command (range check) |
+| `$E` | none | pure command (`XPRUN`, clear busy) |
+| `$F` | none | pure command (end of conversation) |
+
+**Caveat on ops `$4` and `$6`, stated so the table is not misread.** The bits attributed to `$4`
+by an address-range sweep actually belong to **`$F04EA0`**, the shared peek/poke routine, which
+happens to lie inside `$F04E3A`-`$F04EE4`. Op `$6`'s own body merely sets up and jumps there,
+which is why it shows "none". Both readings agree with the documented behaviour — op `$6` *does*
+honour bits 4 and 5 — but they do so through shared code, so an operation's modifier set cannot
+be read off its address range alone.
+
+**For a chassis model this is directly usable**: for the seven pure commands the modifier bits
+are **don't-care**, and a model need not vary them. For `$1`, `$2` and `$B` only bit 6 matters.
+Only `$3` and `$C` (and `$6` via the shared routine) honour the full set, and only `$0` uses
+bit 5 to select between two structurally different transports rather than two directions of one.
+
+That last distinction is the useful one: **on `$3`, `$C` and `$6`, bit 5 reverses the same
+operation; on `$0` it selects a different protocol entirely** — S-record parsing one way, an
+unhandshaken raw copy the other.
