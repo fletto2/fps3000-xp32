@@ -392,3 +392,22 @@ host, through the AP I/F, using this protocol.
 chassis must be modelled as fully trusted, and any emulator asserting these codes must reproduce
 the interrupt frame exactly — 16 longwords in `movem.l d0-d7/a0-a7` order followed by the 68000
 group-1 exception frame — or it will corrupt the resumed program.
+
+## Update 2026-07-31: the SLC stream port identified
+
+The three upload transports are now all addressed:
+
+| transport | port | framing | encoding |
+|---|---|---|---|
+| SLC S-records (chassis op `$0`, `$E5C = 0`) | **`$FF0008`** | S-records | **ASCII hex, 2 chars per 16-bit word** |
+| raw bulk (chassis op `$0`, `$E5C = $28`) | **`$FF0008`** | none | raw binary words |
+| CPLOAD (RDHC command 4) | **`$400000`** page 0 | S-records | binary words |
+
+SLC and raw bulk **share `$FF0008`** and differ in framing and preamble: SLC polls `$FF0004`
+bit 0 and declares `$FF020C = 4` before entering the parser, then performs one `$FF0218`
+arm/poll-bit-15/clear handshake **per word**. The raw path skips the framing entirely and writes
+words straight to the chassis-programmed address in `$E58`, with no bound check.
+
+`$FF0010` remains **never referenced** in any form — an earlier trace appeared to reach it by
+chaining two `lea $8(...)` instructions that lie on mutually exclusive branches. The register the
+emulator models there has no counterpart in the firmware.
