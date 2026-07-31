@@ -35477,3 +35477,34 @@ omitted, and the two are 32 bytes apart in the same routine.
 
 With `D1_SEND` and `D2_FIN` already documented, **all four handlers of the dispatch subsystem are now
 read end to end**, and no claim recorded about them has needed correction.
+
+## `D1_SEND` read directly — four more recorded facts confirmed (2026-07-31)
+
+```
+$F0810A  swap d1 / move.w d1,(a1)          ; the HIGH word -> +$08
+$F0810E  swap d1 / move.w d1,$2(a1)        ; the LOW word  -> +$0A
+$F08114  move.w #$8004,(a0)                ; REQUEST-TRANSFER
+$F08118  cmpi.w #$4,d0 / bne $F0813C       ; *** code $04 returns WITHOUT waiting ***
+$F0811E  move.w $21a(a4),d0                ; the IRQ mask
+$F08122  move.w (a7)+,d4                   ; the channel number, popped
+$F08124  lea $F084A4.l,a5 / move.b (a5,d4.w),d5
+$F08130  bclr.b d5,d0 / move.w d0,$21a(a4) ; clear this channel's bit
+$F08136  move.w #$5f,(a3) / rts            ; restore the BIM CR
+$F0813C  move.l #$3e8,d5 ... btst #$e      ; otherwise poll 1000x for DONE
+```
+
+Confirms, with instructions: the **longword split into two halves, high first**; **`$04` as the
+special case that returns without waiting**; the **`$FF021A` teardown via the `$F084A4` map**; and the
+**1000-iteration bit-14 poll**.
+
+And the map itself reads exactly as recorded:
+
+```
+$F084A4:  00 05 04 03 02      ->   1->5, 2->4, 3->3, 4->2
+```
+
+five bytes, index 0 unused. Every value matches.
+
+**All four dispatch handlers have now been read end to end** — `D1_SEND`, `D2_FIN`, `POLL`,
+`BLK_XFR` — and not one recorded claim about them has required correction. The only corrections this
+session produced in this area were to my own additions.

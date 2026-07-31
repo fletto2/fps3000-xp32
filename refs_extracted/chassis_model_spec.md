@@ -929,3 +929,25 @@ rather than retrying, so a non-delivering model fails later and elsewhere.
 | `$1FFF1` bits 0-2 non-zero (bit 7 enabling) | `$F70019` bit 2 = 1 |
 
 Bit 3's test repeats its first condition after toggling, so the response must **follow**, not latch.
+
+## Channel-transaction contract, measured (2026-07-31)
+
+**A driven channel touches exactly five registers**: `+$08`, `+$0A`, `+$0E`, `$FF0202` (MODE1) and
+its own BIM control register. Nothing else in the AP I/F or XLTR moves during a transaction.
+
+| requirement | detail |
+|---|---|
+| `+$0E` accepts | **`$8004`** REQUEST-TRANSFER (all handlers) and **`$8005`** CONTINUE-TRANSFER (`D2_FIN` only) |
+| `+$0E` returns | bit **14** = DONE, bit **13** = ERROR; polled 1000 times |
+| `+$08`/`+$0A` | one 32-bit register, written high half first; the operation code goes to `+$0A` |
+| BIM CR | driven to **`$4F`** for the transaction and restored to **`$5F`** |
+| `$FF021A` | the channel's bit is cleared on teardown — map `1->5, 2->4, 3->3, 4->2` |
+
+**The bulk-port path needs BOTH ready mechanisms.** When the source or destination is `$FF0008`,
+`POLL` and `BLK_XFR` first spin on **`$FF0004` bit 0**, and `POLL` additionally arms **`$FF0218` with
+`$400`, waits for bit 15, and clears it**. A model implementing only one hangs in the other; the two
+sit 32 bytes apart in the same routine.
+
+**Operation code `$04` is a special case**: `D1_SEND` issues the transfer and returns *without*
+polling for DONE, going straight to teardown. A model that expects every `$8004` to be followed by a
+DONE poll will see one that never comes.
