@@ -7898,6 +7898,20 @@ check('$F08732 bit 5 set branches past the entire self-test suite',
       and 0xF0873E + _w(0xF0873C) == 0xF088F6
       and _w(0xF088F4) == 0x4EF9 and _l(0xF088F6) == 0x00F09C06)
 
+check('sequence C tests low RAM and $1F000 as each other\'s save area',
+      _w(0xF08866) == 0x207C and _l(0xF08868) == 0x00000000
+      and _w(0xF0886C) == 0x227C and _l(0xF0886E) == 0x00000400
+      and _w(0xF08872) == 0x247C and _l(0xF08874) == 0x0001F000
+      and _w(0xF08892) == 0x207C and _l(0xF08894) == 0x0001F000
+      and _w(0xF08898) == 0x227C and _l(0xF0889A) == 0x0001F400
+      and _w(0xF0889E) == 0x247C and _l(0xF088A0) == 0x00000000)
+check('...and restores the fault counter at $0400 from its parking slot $1F800',
+      _w(0xF0888A) == 0x21F9 and _l(0xF0888C) == 0x0001F800
+      and _w(0xF08890) == 0x0400)
+check('the SCM test is the last sequence-C stage before the $D0 checkpoint',
+      _w(0xF088C8) == 0x6100 and 0xF088CA + _w(0xF088CA) == 0xF09B20
+      and _w(0xF088CC) == 0x3ABC and _w(0xF088CE) == 0x00D0)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

@@ -34280,3 +34280,42 @@ What is needed is a one-line hook that corrupts a single named requirement — a
 code change, and it is the highest-value one outstanding for this area: it would convert every
 contract derived this session from "the model satisfies it" to "the model is *required* to satisfy
 it", which are different claims and only the second is a test.
+
+## Sequence C's driver: a non-destructive RAM test, and why there are TWO fault counters (2026-07-31)
+
+`$F08862`-`$F088CC`:
+
+```
+d6 = $2000
+a0=$00000, a1=$00400, a2=$1F000 : bsr $F08A4C     ; test low RAM, saving to $1F000
+a1=$10000                       : bsr $F08992
+$400.w <- $1F800                                   ; RESTORE THE FAULT COUNTER
+a0=$1F000, a1=$1F400, a2=$00000 : bsr $F08A4C     ; test $1F000, saving to LOW RAM
+a0=$10000, a1=$20000            : d6 += $100 ; bsr $F08992
+                                  d6 += $100 ; bsr $F09AD6
+                                  d6 += $100 ; bsr $F09B20   ; THE SCM TEST -- last
+(a5) <- $D0                                        ; the checkpoint marker
+```
+
+**`$F08A4C` is a save-test-restore RAM tester** taking `(start, end, save-area)`, and the two calls
+are complementary: the first tests `$00000`-`$003FF` saving into `$1F000`, the second tests
+`$1F000`-`$1F3FF` saving into low RAM. Each is the other's scratch space, so the pair covers both
+regions with **no third buffer and nothing permanently lost** — which is how a diagnostic tests the
+memory it is itself using.
+
+**That explains the `$0400`/`$1F800` pair.** This project records both as "the self-test fault
+counts" without saying why there are two. `$F0888A` is the answer: `move.l $1f800.l,$400.w` restores
+the counter *after* the low-RAM test has overwritten it. `$0400` is the live counter; **`$1F800` is
+where it is parked while the test destroys the region it lives in**. They are one counter and its
+backup, not two counters.
+
+**And the phase counter accumulates through nested calls.** The driver performs only four top-level
+stages, at majors `$2000`, `$2100`, `$2200`, `$2300` — yet a clean boot rests at **`$2903`**. The
+called routines advance `d6` themselves (`$F08996`, `$F089A0`, `$F089E4` each carry
+`addi.w #$100,d6`). So a phase value cannot be mapped to a stage by counting the driver's steps: the
+major byte is a running total across the call tree, not an index into it. Anyone converting a stalled
+board's `CHANNEL_SELECT` into "which test" must walk the call tree, which is exactly the caution this
+project records against reading the region linearly — it applies to the counter too.
+
+`$F09B20`, the SCM test, is the **last** thing sequence C does before the `$D0` checkpoint, which is
+consistent with its measured position at 91% of the boot.
