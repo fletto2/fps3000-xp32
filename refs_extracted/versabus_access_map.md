@@ -19242,3 +19242,38 @@ kernel scheduler, rather than the `$F00FD6` idle loop — unsurprising for a per
 chassis, but it means this configuration should not be treated as a healthy steady state the
 way the CP-handler run can be. The default boot is unaffected (`$F00FD6`), which is what the
 gating is for.
+
+### The status readback chain, demonstrated end to end
+
+With the busy bit available, the whole SBC→chassis status path can be driven for the first
+time:
+
+```
+FPS3K_XPIRQ=1,6 FPS3K_CHCMD=C000 FPS3K_RESP=0x0A FPS3K_MODE1_BUSY=1
+```
+
+— channel 1 raised so an XP task services it, BIM0 ch0 raised so RDHC's ISR runs, response
+code `$0A` so the operation dispatched is the status read, and the busy bit so the encoder
+populates the array.
+
+| | encoder off (`$1064` empty) | encoder on |
+|---|---|---|
+| op-`$A` handler `$F04FBA` | 1466 | 1468 |
+| the `$1064` read `$F04FE6` | 1466 | 1468 |
+| `$1064` | `$0000` | **`$000A`** |
+| `$E74` — what the chassis receives | `$0000` | **`$000A`** |
+
+So the chain runs: **XP task classifies the channel and packs a nibble into `$1064` → chassis
+issues operation `$A` → the handler reads `$1064` into `$E74` → the chassis receives `$000A`.**
+Both halves were decoded separately — the encoder from `$F08616`, the reader from `$F04FBA` —
+and they meet on the same value without either having been tuned to the other.
+
+Note the readback path was *always* executing (1466 times even with an empty array); what was
+missing was anything to read. That is why the gap was invisible until MODE1 bit 7 was decoded:
+the symptom of a never-written status file is not an error, it is a stream of zeros that looks
+like a working poll.
+
+**With this and the CP-handler result, both directions of the SBC↔chassis conversation are
+now demonstrated running, not merely described** — commands in through MODE0 and the three
+dispatch layers, status out through `$1064` and operation `$A`, and a complete channel cycle
+including a call into host-loaded code in between.
