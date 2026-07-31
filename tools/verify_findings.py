@@ -6944,6 +6944,21 @@ check('the record TYPE arrives as one word holding two ASCII chars ($5330 = "S0"
       _w(0xF04B8A) == 0x0C41 and _w(0xF04B8C) == 0x5330
       and _w(0xF04B9A) == 0x0C41 and _w(0xF04B9C) == 0x5331)
 
+check('the S-record data loop is one handshake -> one word -> one byte',
+      _w(0xF051E2) == 0x3B7C and _w(0xF051E4) == 0x0400
+      and _w(0xF051EC) == 0x0807 and _w(0xF051EE) == 0x000F
+      and _w(0xF051F8) == 0x3410 and _w(0xF051FA) == 0x4EBA
+      and _w(0xF0520E) == 0x12C2)
+check('...with the $10000-$1FFFF bound checked on BOTH sides before each store',
+      _w(0xF051FE) == 0xB3FC and _l(0xF05200) == 0x00010000
+      and _w(0xF05206) == 0xB3FC and _l(0xF05208) == 0x0001FFFF)
+check('...and the reject path drains via the $FF0000 remaining-word count',
+      _w(0xF05212) == 0x227C and _l(0xF05214) == 0x00FF0000
+      and _w(0xF05218) == 0x0C69 and (insn(0xF0521E) or '').startswith('ble'))
+check('the checksum word is read through a full handshake and then discarded',
+      _w(0xF0523A) == 0x3B7C and _w(0xF0523C) == 0x0400
+      and _w(0xF05250) == 0x3410 and _w(0xF05254) == 0x4E75)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

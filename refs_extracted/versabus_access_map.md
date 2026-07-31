@@ -30913,3 +30913,45 @@ firmware provides for neither, which argues for the former.
 
 It also means the outbound direction cannot be modelled as the mirror of the inbound one. Inbound,
 `$FF0218` bit 15 is the chassis saying "a word is ready"; outbound, nothing plays that role.
+
+## The SLC upload path, end to end and handshake-exact (2026-07-31)
+
+With the packing corrected (one 16-bit word = two ASCII characters), the whole path resolves into
+an exact handshake accounting. Every read of the stream port `$FF0008` is preceded by the same
+three-instruction ritual — arm `$FF0218 ← $400`, poll bit 15, clear — so **handshakes and words
+are the same count**.
+
+| stage | words | what |
+|---|---:|---|
+| record header | **2** | word 1 = `'S'` + type digit (`$5330`/`$5331`/…); word 2 = two hex digits → the byte count `d4` |
+| data | **1 per byte** | `$F051E2`-`$F05210`: handshake, read word, `jsr $F05150`, bounds-check, `move.b d2,(a1)+` |
+| checksum | **1** | `$F0523A`-`$F05250`: a full handshake, `move.w (a0),d2` — **and `rts` without examining it** |
+
+So a 55 KB microcode bank costs ~56,600 handshakes, not the ~113,000 I stated before correcting
+the packing.
+
+**The data loop confirms three documented facts at once:**
+
+```
+$F051F8  move.w (a0),d2           ; one word ...
+$F051FA  jsr    $F05150           ; ... = two hex chars = ONE byte
+$F051FE  cmpa.l #$10000,a1 / blt  ; bound checked BEFORE the store ...
+$F05206  cmpa.l #$1ffff,a1 / bgt  ; ... on BOTH sides ...
+$F0520E  move.b d2,(a1)+          ; ... so an over-long record truncates exactly at $1FFFF
+$F05212  movea.l #$ff0000,a1      ; reject path
+$F05218  cmpi.w #$0,$0(a1) / ble  ; drain: while the remaining-word count > 0, read
+```
+
+— the per-byte bound enforcement, the drain-on-reject using `$FF0000` as a **remaining-word
+count**, and the checksum being consumed and discarded.
+
+### What this pins down for a host implementation
+
+1. **Send uppercase hex only.** `$F05150` has no validation; `'a'`-`'f'` silently become `$2A`-`$2F`.
+2. **Every character pair costs a ready handshake.** The chassis must raise `$FF0218` bit 15 once
+   per word; the SBC clears it and reads. There is no burst mode on this path.
+3. **`$FF0000` must decrement as the stream is consumed**, or a rejected record hangs the drain
+   loop forever — the firmware's only exit from `$F05218` is that count reaching zero.
+4. **Nothing validates the payload.** No checksum, no character range check, no length
+   cross-check. The only guard is the `$10000`-`$1FFFF` address bound, and that truncates silently
+   rather than erroring.
