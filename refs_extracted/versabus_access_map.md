@@ -31645,3 +31645,54 @@ task's ASQ/semaphore block (Motorola's `TCBECNT`). Both readings cannot be simul
 one longword; the likeliest resolution is that `+$138` holds the task's saved `a6`, which for these
 tasks *is* a pointer into their own block — but that is an inference, and a RAM dump comparing
 `TCB+$138` against each task's `a6` at a breakpoint would settle it directly.
+
+## `TCB+$100`-`$13F` is ONE 16-register save area — which resolves `+$138` (2026-07-31)
+
+Censusing reads and writes settles the `+$138` question and unifies a group of "fields":
+
+```
+TCB+$100  d0     +$104 d1   +$108 d2   +$10C d3
+    +$110 d4     +$114 d5   +$118 d6   +$11C d7
+    +$120 a0     +$124 a1   +$128 a2   +$12C a3
+    +$130 a4     +$134 a5   +$138 a6   +$13C a7
+```
+
+The dispatch path restores `movem.l $100(a6),d0-d7/a0-a5` — fourteen registers, `$100`-`$137` —
+and then handles the last two separately, because it must: **`a6` is the TCB pointer itself** (it
+cannot be clobbered mid-restore) and **`a7` is the USP** (it needs `move a0,usp`).
+
+```
+$F00594  movem.l $100(a6),d0-d7/a0-a5   ; 14 registers
+$F0058E  movea.l $13c(a6),a0 / move a0,usp   ; a7 -- the USP
+$F005B0  movea.l $138(a6),a6            ; a6 -- last, since it is the base
+```
+
+**So `TCB+$138` is a6's slot in the register frame, not an ASQ block pointer.** The census
+confirms it: `+$138` has **one** write — `move.l (a7)+,$138(a6)`, popping a saved register — and
+**two** reads, both `movea.l $138(a6),a6`. Nothing treats it as a structure pointer.
+
+This project describes `+$138` as "a longword pair: 2-page base + an in-block pointer". The
+*values* were observed correctly — a task's `a6` is its block base and its `a7` points inside that
+block — but the **role** was mis-attributed. It is `{saved a6, saved a7}`, a register pair, and the
+values follow from what those registers hold.
+
+### It also explains the busiest field in the kernel
+
+`TCB+$102` — 124 accesses, "the directive status/return code", cleared at TRAP #1 entry — is
+**the low word of saved `d0`**. Every directive that adds its status there is writing into the
+register the task will resume with, which is why the return convention is "status in `d0`" and why
+the field is cleared on entry. One structural fact accounts for the convention, the clearing, and
+the access count.
+
+Several other documented "fields" are likewise register slots: **`+$114`** is saved `d5`,
+**`+$120`/`+$123`** are saved `a0` and a byte within it. That does not make the observations wrong
+— code genuinely reads and writes those addresses — but it changes what they *are*, and a model
+that treats them as independent fields rather than as parts of a saved register frame will
+mispredict what happens when a task is resumed.
+
+### Two save areas, used by different paths
+
+`TCB+$74` (`d0-d7/a0-a6`, 60 bytes, one write at `$F0074C`, read at `$F005C0` and `$F00D88`) is
+the **full-context** area used by the bit-6 dispatch exit. `TCB+$100`-`$13F` is the **normal** one.
+Two areas, two paths, and the state-word bit that chooses between them is bit 6 — "context saved",
+exactly as documented.

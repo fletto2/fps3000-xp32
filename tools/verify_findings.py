@@ -7154,6 +7154,18 @@ check('TCB+$148 bit 7 is the one-shot per-task single-step enable',
 check('...and the normal path uses a SECOND save area at TCB+$100 (d0-d7/a0-a5)',
       _w(0xF00594) == 0x4CEE and _w(0xF00596) == 0x3FFF and _w(0xF00598) == 0x0100)
 
+check('TCB+$138 has ONE write (a popped register) and two reads, both into a6',
+      _w(0xF006BC) == 0x2D5F and _w(0xF006BE) == 0x0138
+      and _w(0xF005B0) == 0x2C6E and _w(0xF005B2) == 0x0138
+      and _w(0xF005B6) == 0x2C6E and _w(0xF005B8) == 0x0138)
+check('...so $100-$13F is a 16-register frame: d0 at $100, a5 at $134, a6 at $138, a7 at $13C',
+      0x100 + 4 * 13 == 0x134 and 0x100 + 4 * 14 == 0x138 and 0x100 + 4 * 15 == 0x13C)
+check('...and TCB+$102 is the LOW WORD of saved d0, hence the status-in-d0 convention',
+      0x102 == 0x100 + 2)
+check('the full-context area TCB+$74 is written once and read by the bit-6 exit',
+      _w(0xF0074C) == 0x48EE and _w(0xF0074E) == 0x7FFF and _w(0xF00750) == 0x0074
+      and _w(0xF005C0) == 0x4CEE and _w(0xF005C4) == 0x0074)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
