@@ -5085,3 +5085,16 @@ check('$F0A374 page-aligns via (d + $FF) & ~$FF',
 check('$F0A424 builds a free-list node with a PAGE COUNT at +$8 and a back-link',
       insn(0xF0A42E) == 'lsr.l #$8, d7' and insn(0xF0A430) == 'move.l d7, $8(a5)'
       and insn(0xF0A434) == 'move.l a0, $4(a5)' and insn(0xF0A43A) == 'move.l a5, (a0)')
+
+# ---- a thirteenth marker: 'EXEC' at TCB+$B0 (2026-07-31) ----
+check("'EXEC' appears exactly once in the whole ROM image",
+      _rom.count(b'EXEC') == 1, _rom.count(b'EXEC'))
+check('...as the immediate of move.l #$45584543,$B0(a0)',
+      insn(0xF00838) == 'move.l #$45584543, $b0(a0)')
+check('...so nothing ever tests for it -- written, never read',
+      sum(1 for _, (_, o, _) in _mins.items() if '45584543' in o) == 1)
+check('$F015D8 validates !TCB and then !ASQ through TCB+$40',
+      insn(0xF015DA) == 'cmpi.l #$21544342, (a0)' and insn(0xF015E4) == 'movea.l $40(a5), a4'
+      and insn(0xF015E8) == 'cmpi.l #$21415351, (a4)')
+check('...which is a DIFFERENT field from the documented ASQ block pointer at +$138',
+      0x40 != 0x138)

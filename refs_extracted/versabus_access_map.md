@@ -22036,3 +22036,56 @@ been read.
 - Combined with the byte accounting (43,047 bytes of content, nothing unexplained), the
   computed-dispatch census (25 of 25 identified) and the executed-PC boundary property, **the
   FPS-specific half of this ROM is closed at every level examined**.
+
+## A thirteenth marker: `'EXEC'` at `TCB+$B0` (2026-07-31)
+
+This project's marker inventory lists **twelve** tags, all `!`-prefixed: `!TCB`, `!CCB`, `!ASQ`,
+`!TST`, `!DLY`, `!GST`, `!IDV`, `!IOV`, `!PAT`, `!UDR`, `!UST`, `!VCT`. Reading the kernel's
+shared helpers turns up a thirteenth that the census could not have found, because it does not
+start with `!`:
+
+```
+$F00824  move.w  sr,-(a7)
+$F00826  bset.b  #$f,d7
+$F0082A  move.w  d7,$2A(a0)
+$F0082E  clr.w   $5C(a0)
+$F00832  bset.b  #$1,$29(a0)
+$F00838  move.l  #$45584543,$B0(a0)      <- 'EXEC'
+```
+
+`$45584543` is **`'EXEC'`**, and a byte scan of the whole 64 KB finds the literal **exactly once**
+— at `$F0083A`, the immediate of that instruction. So nothing in this firmware ever *tests* for
+it; like `!DLY` and `!CCB`, it is written and never read, which is why no amount of
+marker-matching would surface it.
+
+**`TCB+$B0` therefore holds a tag**, and the TCB field map gains an entry alongside `+$2C` (state
+word), `+$FC` (saved resume PC), `+$102` (directive status), `+$13C` (saved SP) and `+$140`/`+$144`
+(name/session copy).
+
+**Hardware/RAM-dump prediction, checkable in one dump**: any TCB that has passed through
+`$F00824` reads `'EXEC'` (`45 58 45 43`) at `+$B0`. If no TCB shows it, the routine never runs in
+a normal boot — which would put it with `!DLY` and `!CCB` as a facility present in the image and
+unused by this configuration. Either outcome is informative and neither has been measured.
+
+**Method note.** The census that missed it scanned for the `!` convention. A scan for *any* four
+printable ASCII bytes used as an immediate finds `!TCB`, `!VCT`, `HXP0` (twice — the computed
+`'HXP0'+ch` semaphore name) and `UUUU` (which is `$55555555`, the RAM-test pattern, not a tag);
+`'EXEC'` needs a raw byte scan because `move.l #imm,$B0(a0)` uses a different encoding from
+`move.l #imm,dN`. **Three different scans were needed to enumerate one small class of constant** —
+the same lesson as the six matcher-shape false negatives recorded elsewhere in this file.
+
+### And `TCB+$40` is a second ASQ pointer
+
+`$F015D8` validates a TCB and then an ASQ through a *different* field than the documented one:
+
+```
+$F015DA  cmpi.l  #$21544342,(a0)      '!TCB'
+$F015E2  movea.l a0,a5
+$F015E4  movea.l $40(a5),a4
+$F015E8  cmpi.l  #$21415351,(a4)      '!ASQ'
+```
+
+`TCB+$138` is documented as the pointer to the task's ASQ/stack block. **`TCB+$40` points at
+something carrying an `!ASQ` tag** — a distinct field, and the one the validity check at
+`$F015E8` (already noted here as "how a torn-down structure is rejected") actually dereferences.
+The two should not be conflated when reading a dump.
