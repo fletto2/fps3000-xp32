@@ -24520,3 +24520,47 @@ recorded.
 keyed on one addressing form — absolute, immediate, `lea`-derived — is a census of that form.
 Here the missing form was *a pointer cached in a global*, which no static base-register sweep can
 follow without tracking the store.
+
+## Every cached device pointer, enumerated — exactly three (2026-07-31)
+
+Finding VMOD accesses hidden behind a pointer in `$0E48` raised an obvious question: how many
+*other* devices are reached that way, invisible to every base-register and absolute-address
+census this project has run? Enumerating every global dereferenced as `movea.l $g,aN` answers it.
+
+**Nineteen pointer globals exist. Three hold device addresses:**
+
+| global | device | established at |
+|---|---|---|
+| **`$0C3A`** | the optional **display device** (falls back to scratch RAM `$800`) | `$F09C3C` |
+| **`$0C4E`** | the **MC6840 PTM** base | `$F0A28A` |
+| **`$0E48`** | the **VERSAmodule control register** `$1FFF0` | `$F0A492` |
+
+The other sixteen are RTOS structures — the scheduler block, the current TCB, the two list heads,
+the `!CCB` head, the eight directory slots, `!IDV`, `!UST`, `!TRACE`, and the saved interrupt
+stack — plus three special cases:
+
+- **`$0000`** and **`$0008`** — the reset-SP slot and the **bus-error vector**, dereferenced by
+  the self-test which installs and reads handlers there;
+- **`$0E58`** — dereferenced three times as a transfer pointer but **written by no `move.l aN,$E58`
+  anywhere**. That is expected and confirms the documented mechanism: `$0E58` is the transfer
+  address the **chassis** programs with op `$1`, written as data a half-word at a time, never as a
+  register store.
+
+### What this closes
+
+**There is no fourth cached device pointer.** Every device this firmware touches is reached
+either by an immediate base (`$FF0000`, `$F70018`, `$F70001`, `$400000`, `$1FFF0` directly), by an
+absolute address, or through one of these three globals. Combined with the base-address census —
+which established that no device address outside the documented set is ever *formed* — the device
+map is closed from two independent directions:
+
+| method | question answered |
+|---|---|
+| base-address census | which device addresses does the firmware ever compute? |
+| **pointer-global census** | which device addresses does it compute **once and remember**? |
+| runtime access log | which addresses actually reached the bus? |
+
+All three agree, and the second was the one with a blind spot until now. **The lesson is that a
+completeness claim about device access needs the pointer-global census as well** — it is cheap,
+it is exhaustive, and it is the only one of the three that catches an address computed at boot
+and used for the rest of the run.

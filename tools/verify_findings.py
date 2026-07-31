@@ -5433,6 +5433,28 @@ check('two more VMOD bit-5 sites are reached through the cached pointer',
       insn(0xF008C2) == 'ori.w #$20, (a0)' and insn(0xF009E2) == 'andi.w #$ffdf, (a0)')
 check('...one of them on the interrupt-exit path',
       insn(0xF008B6) == 'movem.l d0/a0, -(a7)' and insn(0xF008BA) == 'move.l $e48.w, d0')
+
+# ---- the complete cached-device-pointer census (2026-07-31) ----
+_ptrg = _mcol.Counter()
+for _a, (_m, _o, _) in _mins.items():
+    _mm = _mre.match(r'\$([0-9a-f]{1,4})\.[wl], a\d$', _o)
+    if _mm and _m.startswith('movea.l'): _ptrg[int(_mm.group(1), 16)] += 1
+check('exactly three pointer globals hold DEVICE addresses',
+      all(g in _ptrg for g in (0x0C3A, 0x0C4E, 0x0E48)))
+check('...the display, the PTM and the VMOD control register',
+      insn(0xF09C3C) == 'move.l a1, $c3a.w' and insn(0xF0A492) == 'move.l a2, $e48.l')
+check('$0E58 is dereferenced as a pointer but never stored from a register',
+      _ptrg[0x0E58] >= 1
+      and not any(_mre.match(r'a\d, \$e58\.[wl]$', o) and m.startswith('move.l')
+                  for _, (m, o, _) in _mins.items()))
+check('...consistent with the chassis programming it a half-word at a time via op $1',
+      insn(0xF04D02) == 'move.w $204(a0), $e5a.l'
+      and insn(0xF04D0C) == 'move.w $204(a0), $e58.l')
+check('no OTHER pointer global holds an address outside RAM',
+      not [g for g in _ptrg if g not in
+           (0x0000, 0x0008, 0x0C00, 0x0C08, 0x0C0C, 0x0C10, 0x0C20, 0x0C24, 0x0C28,
+            0x0C2C, 0x0C30, 0x0C3A, 0x0C4E, 0x0C66, 0x0C6A, 0x0C6E, 0x0C78, 0x0E48, 0x0E58)],
+      sorted(hex(g) for g in _ptrg))
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
