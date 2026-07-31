@@ -6046,6 +6046,18 @@ check('vector $54 is the PTM interrupt: it reads the status register and masks 3
 check('vector $53 clears VMOD bit 5 and returns',
       insn(0xF09330) == 'bclr.b #$5, $1(a5)' and insn(0xF09336) == 'rte')
 
+check('the PTM interrupt is armed via the VMOD interrupter and vector $54',
+      insn(0xF09074) == 'move.w d0, -$6(a2)' and insn(0xF0907E) == 'move.l a1, $150.l'
+      and insn(0xF09084) == 'bset.b #$7, $1(a2)')
+check('...with the CPU mask set to level 4',
+      insn(0xF0908A) == 'move.w #$2400, sr')
+check('the latch test walks ones through all 16 bits, on T1, T2 and T3',
+      insn(0xF09154) == 'moveq #$1, d0' and insn(0xF0916C) == 'asl.w #$1, d0'
+      and insn(0xF09096) == 'lea.l $4(a0), a1' and insn(0xF090A4) == 'lea.l $8(a0), a1'
+      and insn(0xF090B2) == 'lea.l $c(a0), a1')
+check('$F09176 holds the PTM in reset via CR2 select then CR1 bit 0',
+      insn(0xF0917E) == 'move.b #$1, $2(a0)' and insn(0xF09184) == 'move.b #$1, (a0)')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

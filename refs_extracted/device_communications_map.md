@@ -874,3 +874,53 @@ bit-29 arm issues `$281` through an issuer that ends in `bra .` and never return
 `$10AA` arm writes its reply and exits cleanly through the `$0C` sentinel. A model in which
 the mailbox always sets bit 29 will therefore hang the task on its first interrupt — the
 documented deadlock — whereas one that leaves bit 29 clear and sets `$10AA = 2` completes.
+
+## The PTM's interrupt is routed through the VERSAmodule interrupter (2026-07-31)
+
+`$F0905A`-`$F090E8` is the timer interrupt test, and its setup answers how the MC6840 reaches
+the CPU:
+
+```
+lea.l  $f70001.l,a0        ; PTM base
+lea.l  $1fff0.l,a2         ; VMOD base
+bsr    $f09176             ; hold the PTM in reset
+move.w #$150,d0 / lsr.w #$2,d0 / move.w d0,-$6(a2)   ; $1FFEA <- vector $54
+lea.l  $f0911e.l,a1 / move.l a1,$150.l                ; install the handler
+bset.b #$7,$1(a2)          ; ARM THE VMOD INTERRUPTER
+move.w #$2400,sr           ; CPU mask -> LEVEL 4
+... test T1 ($F70005), T2 ($F70009), T3 ($F7000D) ...
+bsr    $f09176 / bclr.b #$7,$1(a2)                    ; reset the PTM, disarm
+```
+
+**The timer does not have its own VERSAbus vector.** Its interrupt is presented through the
+**VERSAmodule interrupter** — armed by `$1FFF1` bit 7, vectored by `$1FFEA`, and delivered
+above the CPU mask of level 4. The handler at `$F0911E` then reads the PTM **status
+register** (`$2(a0)` with `a0 = $F70001` is register address 1, status on read) and masks the
+three timer flags.
+
+So the chain is: **MC6840 flag → VMOD interrupter → CPU at the programmed level with the
+programmed vector.** A model that raises a PTM interrupt directly, bypassing the interrupter,
+does not reproduce this test.
+
+### The latch test is walking-ones across all three timers
+
+```
+$F09154:  moveq #$1,d0
+loop:     movep.w d0,$0(a1)      ; write the latch
+          movep.w $0(a1),d1      ; ...read it back
+          cmp.w d0,d1 / beq ok / d7 = $F0F0F0F0
+          asl.w #$1,d0 / bne loop ; 1, 2, 4, ... $8000
+```
+
+Called three times with `a1` at `$F70005`, `$F70009` and `$F7000D` — **T1, T2 and T3**. So
+every timer latch must be a 16-bit register that reads back exactly what was written, for all
+sixteen single-bit patterns.
+
+That is the requirement behind this project's MC6840 fix note — "the write path still loads
+the raw latch, because phase `$1100`'s `movep.w` walking-ones test requires write/read-back
+equality". The test is now attributed precisely, and it covers **all three** timers, not just
+the one the RTOS uses.
+
+`$F09176` is the reset helper: `move.b #$1,$2(a0)` selects CR1, `move.b #$1,(a0)` sets its
+bit 0 — the internal reset that holds all three counters, exactly as the initialisation
+sequence does.
