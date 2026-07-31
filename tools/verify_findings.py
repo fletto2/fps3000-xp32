@@ -6078,6 +6078,13 @@ check('the VMOD block is walked four bytes at a time with rol(not(x))',
 check('$F08A50 is a generic block copier, not a board-status access',
       insn(0xF08A50) == 'move.l (a0)+, (a2)+' and insn(0xF08A52) == 'cmpa.l a0, a1')
 
+check('only four immediate device-range values reach a data register, none a base',
+      insn(0xF0998E) == 'move.l #$ff00ff, d0' and insn(0xF09AA4) == 'move.l #$493e0, d5'
+      and 0x0493E0 == 300000)
+check('the DRAM pattern set is three complementary pairs',
+      insn(0xF09996) == 'not.l d0' and insn(0xF0999A) == 'move.l #$55aa55aa, d0'
+      and insn(0xF099A6) == 'move.l #$33cc33cc, d0')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

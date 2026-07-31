@@ -27917,3 +27917,41 @@ the vector table, never for these devices. PC-relative likewise cannot reach the
 
 **With all six forms swept, the device register set is closed** against addressing-mode
 blindness, which was the source of this project's first, third and fifth false negatives.
+
+## No device base ever arrives via a data register (2026-07-31)
+
+The last provenance path to check: a device address could reach an address register through
+`movea.l dN,aM` (105 sites) if some data register held one. Sweeping every immediate load of
+a non-RAM, non-ROM value into a data register finds **four**, and none is a hidden base:
+
+| site | value | what it is |
+|---|---|---|
+| `$F04D90`, `$F04E04` | `#$400000` | chassis op `$3`'s window rebasing — already documented |
+| `$F09AA4` | `#$0493E0` | **300,000** — the DRAM refresh test's busy-wait count |
+| `$F0998E` | `#$FF00FF` | **a DRAM test pattern**, not an address |
+
+So device bases arrive by exactly three routes — a literal `lea`/`movea.l #imm`, a
+configuration-block load, or one of the three cached pointers (`$0C4E`, `$0C3A`, `$0E48`) —
+and **never through a data register**. Combined with the six addressing modes swept above,
+the device-access census is closed on both axes: how an address is *formed* and how it is
+*used*.
+
+### The DRAM pattern set
+
+`$F09986`-`$F099B2` runs six longword patterns as three complementary pairs:
+
+```
+$00FF00FF / $FF00FF00
+$55AA55AA / $AA55AA55
+$33CC33CC / $CC33CC33
+```
+
+Each is applied by `bsr $F099B8` and then inverted with `not.l` for its partner. Together
+with the SCM test's `$00000000/$FFFFFFFF` and `$55555555/$AAAAAAAA`, that is the firmware's
+whole pattern vocabulary — chosen to exercise adjacent-bit coupling at three different
+stripe widths (8, 1 and 2 bits).
+
+**Emulator note**: none of this is device-facing — it runs against DRAM — but a model that
+fills `ram[]` with a fixed pattern rather than zeros could collide with one of these six and
+mask a genuine failure. The current model zero-fills, which collides with `$00000000` only
+in the trivially-correct direction.
