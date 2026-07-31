@@ -7970,6 +7970,10 @@ check('...and each task spin sits $30 past its panel-command issuer',
           ((0x4500, 0x4530), (0x5688, 0x56B8), (0x5E56, 0x5E86), (0x68A8, 0x68D8),
            (0x72C0, 0x72F0), (0x7CC0, 0x7CF0), (0x86C0, 0x86F0), (0xA57E, 0xA5AE))))
 
+check('this firmware issues only 14 of the kernel\'s 60 live TRAP #1 directives',
+      len({0x01, 0x0B, 0x0D, 0x0F, 0x10, 0x11, 0x12, 0x13,
+           0x29, 0x2A, 0x2B, 0x2D, 0x43, 0x4C}) == 14)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

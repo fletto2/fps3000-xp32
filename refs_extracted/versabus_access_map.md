@@ -34587,3 +34587,38 @@ It also bounds the documented chassis-driving experiments: every result recorded
 "…and the SBC stops at `bra .`" is describing a state a clean boot never enters, reached only by
 driving the chassis to issue a panel command. The spins are a property of the *conversation*, not of
 the firmware's own startup.
+
+## Default-boot coverage, measured at instruction level on a complete boot (2026-07-31)
+
+2175 distinct PCs execute in a boot verified complete by `-breakpc 0xF00FC2`:
+
+| region | reached | decoded instructions | coverage |
+|---|---:|---:|---:|
+| RMS68K kernel `$F00000`-`$F04487` | 262 | 5,069 | **5.2%** |
+| FPS application `$F04488`-`$F0A824` | 1,913 | 6,780 | **28.2%** |
+| blank tail | **0** | — | — |
+| **ROM-wide** | 2,175 | 11,849 | **18.4%** |
+
+**The kernel is 95% unexecuted in a clean boot** — the single most striking number here, and on
+reflection the expected one: RMS68K is a general-purpose RTOS with 60 live directives of which this
+firmware issues **14**, plus whole dormant subsystems this project has already identified
+individually (the server family `$33`-`$36`, the delay path, `CMR`/`!CCB`, the trace hooks, the
+`$3B` supervisor call, the privilege model). Each was found to be dead on its own; the aggregate
+says they are most of the kernel.
+
+Zero PCs in the blank tail confirms the 22 KB zero-fill is never entered — worth having measured
+rather than assumed, since a runaway would land there.
+
+**These are not corrections to the recorded coverage figures — they measure something different.**
+The existing numbers ("25% of the FPS application code", "RTOS 41%", "54% of instruction bytes") are
+*byte*-weighted and taken as a **union over multiple driving configurations**; these are
+*instruction*-counted from a **single default boot**. Both are legitimate; they answer "how much of
+the firmware have we ever driven" versus "how much runs when you switch the machine on". The second
+is the right denominator for questions about what a green boot proves, and by that measure a green
+boot exercises **under a fifth** of the ROM.
+
+Method note: the two listings use different address formats (`F04488` in `fps3k_custom.asm`,
+`f00016:` in `fps3k_kernel.asm`). A sweep written for one silently returns **zero** on the other,
+which is how the kernel column first came out empty — the same narrow-matcher failure as elsewhere
+in this session, and again caught only because the result was implausible rather than by the sweep
+itself.
