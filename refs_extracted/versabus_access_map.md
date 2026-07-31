@@ -21405,3 +21405,47 @@ FPS3K_XPIRQ=6`, "having never run before", with no account of what those executi
 were register accesses — the response code `$94` has bit 7 set, and `$94 & $1F` = `$14`, the
 end-of-conversation code, which is why the machine stayed coherent while the path ran thousands
 of times.
+
+## `$25C`-`$260` are VALIDATION-FAILURE codes, not per-channel config (2026-07-31)
+
+`CLAUDE.md`'s functional panel-code table lists `$25C` as `PCMD_RESET_STATUS` ("global status
+reset") and `$25D`-`$260` as `PCMD_CH{1..4}_CONFIG` ("per-channel config"). Both labels date from
+an early pass. Reading the guard immediately above each emitter shows what they actually are, and
+it is one coherent family:
+
+| code | sites | the guard that fails |
+|---|---:|---|
+| **`$25C`** | 5 | **channel number out of range** — `$F04E3A`: `d1 <= 0` or `d1 > $105E`. Also `$F04840`, `$F04C9C`, `$F04EF6`, `$F05392` |
+| **`$25D`** | 2 | **index out of range** — `$F04FC6`: `$E7A > $C`, the 13-word status-file bound; and `$F050A2`, CHANSEL outside `0..$F` |
+| **`$25E`** | 1 | **register-access code out of range** — `$F05142`, the bit-7 dispatcher's `> $14` reject |
+| **`$25F`** | 2 | **bad terminator record** (`$F0555A`: type not in `S7`-`S9`) and a **bulk-port wait failure** (`$F04C28`) |
+| **`$260`** | 2 | **bad data record** — type not in `S0`-`S3` |
+
+**Not one of them is a configuration command.** Every one is emitted on the failing arm of a
+range check, `jsr`ed into a panel-command issuer, and followed by the issuer's `bra .`. That
+makes the whole run `$25C`-`$260` a **rejection vocabulary**, which is exactly the shape of the
+two other documented families — `$26D`-`$271` (TRAP #1 directive failures) and `$276`-`$27B`
+(the `USER`-task lifecycle failures).
+
+So the low panel-code space is organised by *what went wrong*, not by *which channel*:
+
+```
+$258-$25B   channel 1 operations        (unchanged)
+$25C-$260   INPUT VALIDATION failures   <- corrected
+$262-$268   per-channel status events   (established 2026-07-30)
+$269-$26C   aborts / release
+$26D-$271   TRAP #1 directive failures
+$276-$27B   USER-task lifecycle failures
+$27E-$282   TCBIO1I + host-link
+$29E-$2A6   CPU exception reporters
+```
+
+**`$261` remains unused**, which the old reading explained as "four per-channel config codes
+`$25D`-`$260`". The new reading explains it better: five validation classes were needed, they
+were allocated `$25C`-`$260`, and the next family starts at `$262` — leaving one gap, exactly as
+the `$27C` gap sits between the `USER`-lifecycle codes and the TCBIO1I family.
+
+**Diagnostic value.** Because these are emitted through the panel-command issuers, the last one
+issued is still readable at `$0E6E` and at `$FF000E` on a stalled board — so a machine that hangs
+in a validation reject names which class of input the chassis got wrong, and `$25C` versus `$25D`
+distinguishes "bad channel" from "bad index" without any further instrumentation.

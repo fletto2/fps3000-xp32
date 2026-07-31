@@ -4875,3 +4875,23 @@ check('codes 0-15 scale to $00-$3C, exactly the 16 saved registers',
       15 * 4 == 0x3C and 16 * 4 == 0x40)
 check('...and the response code $94 used in prior runs masks to $14, end-of-conversation',
       (0x94 & 0x1F) == 0x14 and (0x94 & 0x80) != 0)
+
+# ---- $25C-$260 are validation-failure codes (2026-07-31) ----
+check('$25C is emitted when the channel number fails its range check',
+      insn(0xF04E40) == 'cmpi.w #$0, d1' and insn(0xF04E46) == 'cmp.w $105e.l, d1'
+      and insn(0xF04E4E) == 'move.w #$25c, d0')
+check('$25D is emitted when the array index exceeds the 13-word status file',
+      insn(0xF04FC6) == 'cmpi.l #$c, $e7a.l' and insn(0xF04FD2) == 'move.w #$25d, d0')
+check('$25E is the bit-7 dispatcher register-code reject',
+      insn(0xF05142) == 'move.w #$25e, d0' and insn(0xF0514C) == 'bra.w $f050f8')
+check('$25F rejects a terminator record outside S7-S9',
+      insn(0xF0555A) == 'cmpi.w #$5337, d1' and insn(0xF05560) == 'cmpi.w #$5339, d1'
+      and insn(0xF0556E) == 'move.w #$25f, d0')
+_v25 = _mcol.Counter()
+for _a, (_m, _o, _) in _mins.items():
+    for _c in range(0x25C, 0x261):
+        if f'#${_c:x}, d0' in _o: _v25[_c] += 1
+check('the five validation codes have 5/2/1/2/2 emitters',
+      [_v25[c] for c in range(0x25C, 0x261)] == [5, 2, 1, 2, 2],
+      {hex(k): v for k, v in sorted(_v25.items())})
+check('$261 is emitted nowhere', not any('#$261, d0' in o for _, (_, o, _) in _mins.items()))
