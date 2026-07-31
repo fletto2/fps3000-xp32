@@ -36810,3 +36810,44 @@ selects decode to anything.
 **Stated as the natural reading, not a demonstration.** No sheet here shows the 4448's VersaBus
 address path, and the 3448 has no SBC to compare against. What is established is that the register
 file has exactly one selection mechanism and it is six lines wide.
+
+## The schematics vindicate the recorded `$FF0000` correction, and show the faithful model
+
+`emulator/versabus.h` declares:
+
+```c
+#define APIF_CMD_STATUS    0xFF0000   /* opcode write (0x8004/0x8005); status read (b14, b13) */
+#define APIF_CMD_ARG_LO    0xFF000E
+#define APIF_CMD_ARG_HI    0xFF0010
+```
+
+All three names are already recorded as wrong: `$FF0000` is the **remaining-word count**, `$FF000E`
+is the **panel command port**, and `$FF0010` is **never accessed** — "a register the emulator
+invents, not one awaiting hardware confirmation". This entry does not rediscover that; it adds what
+the hardware says.
+
+**Sheet 16 shows `WC` is four `25LS2569` up/down counters — a real 16-bit down-counter**, output-
+enabled by `WCOUT#`, whose zero condition sheet 10 turns into `DMADONE`. So `$FF0000` is not merely
+"not a status register": it is a counter with a defined terminal condition that the hardware itself
+acts on.
+
+**And the model currently short-circuits it.** The drain loop is satisfied by
+
+```c
+if (addr == APIF_CMD_STATUS && srec_exhausted) return 0x0000;
+```
+
+— returning zero once the source runs out, rather than counting down. That terminates the loop, which
+is why every test passes, but it means **the count never takes an intermediate value**. A record
+drained halfway would read 0 rather than a decreasing remainder, and any firmware path that inspected
+the count for anything other than "is it zero" would see the wrong thing.
+
+**The faithful model is now specified**: a 16-bit counter, loaded on transfer setup, decremented as
+words move (clocked by the transfer, not by reads of the count register — see the `WCCLK` note), with
+zero as the terminal condition. Whether that matters for this firmware is a separate question — its
+only use of `$FF0000` *is* the zero test — but the schematic removes the excuse of not knowing.
+
+**A related note on `$FF0010`.** The recorded claim that it is invented rather than awaiting
+confirmation is now supported from the hardware side too: the register file on these sheets is
+`{HMAH, HMAL, APMA, WC, CTL, TEMP}`, and nothing in it corresponds to a "command argument high" at
+that offset.
