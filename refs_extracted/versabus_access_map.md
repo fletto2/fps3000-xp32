@@ -26073,18 +26073,21 @@ one-slot version of the same idea is used more widely still.
 ### Every `nop` in the image is accounted for
 
 `nop` is the instruction most easily dismissed as filler, and in this ROM almost none of
-it is. Counting `nop`s at boundaries the listings validate gives **128**, and they
+it is. There are **128 `$4E71` words** in code regions, but they divide into two kinds of
+listing line, and the distinction matters: **63 are rendered as instructions** and **65 as
+`DC.W` entries inside the five dispatch tables** — the latter are executed only by being
+jumped to, which is why the disassembler calls them data. Counting them together (as an
+earlier version of this section did) overstates the instruction figure by 65. They
 partition:
 
-| group | count |
-|---:|---|
-| **65** | the five 42-entry dispatch tables — **13 no-op slots each**, `rts`+`nop` pairs |
-| **24** | self-test probe landing zones — **six sites of four** |
-| **28** | slot 2 of a `bsr` two-slot return vector (the failure arm) |
-| 3 | slot of a one-slot `addq.l #$2` skip-return |
-| 4 | the XP task template — one per task, at `$F06810`/`$F07228`/`$F07C28`/`$F08628` |
-| 1 | alignment after a `bra.b` |
-| 3 | context not established (the byte before does not decode on a boundary) |
+| group | count | kind |
+|---:|---|---|
+| **65** | the five 42-entry dispatch tables — **13 no-op slots each**, `rts`+`nop` pairs | `DC.W` |
+| **24** | self-test probe landing zones — **six sites of four** | instruction |
+| **28** | slot 2 of a `bsr` two-slot return vector (the failure arm) | instruction |
+| 11 | remainder: one-slot skip-returns, the four XP-task template `nop`s, and alignment | instruction |
+
+The instruction total is **63 = 24 + 28 + 11**, and the table entries are the other 65.
 
 The 65 independently re-derive "13 of the 42 codes are accepted and ignored by design",
 counted from the table bytes rather than from the handler census; and the 24 independently
@@ -26092,10 +26095,10 @@ re-derive the six four-`nop` landing zones. The four XP-task `nop`s sit at `$A00
 for XP1I-XP3I and `$A18` for XP4I — **the same irregular shift** that shows up in that
 task's abort routine and its dispatch table, from a third direction.
 
-So of 128 `nop`s, **121 are structural** — table entries, return-vector slots, fault
-landing zones, template artefacts — and at most 7 are filler. A tool that treats `nop` as
-padding is discarding a dispatch table's no-op entries and a calling convention's failure
-arm.
+So of 128 `$4E71` words, **at least 117 are structural** — 65 table entries, 24 landing
+zones, 28 return-vector slots — and the 11-word remainder contains the rest of the
+skip-returns and the template artefacts. A tool that treats `nop` as padding is discarding
+a dispatch table's no-op entries and a calling convention's failure arm.
 
 ## The kernel global map completed, and a 1 Hz display heartbeat (2026-07-31)
 
@@ -26470,24 +26473,29 @@ name. What can be stated is exact — five records, six bytes each, `$0C7C`-`$0C
 initialised to `{1, null}` — which is enough to recognise it in a RAM dump and enough for
 a model to reproduce it.
 
-### `$0CC0` IS a global
+### `$0CC0` is not a global — settled
 
-An earlier draft of this section claimed `$0CC0` was a misaligned decode. That was wrong:
-`$F004EC` **is** an instruction boundary in the validated listings. The mistake came from a
-display helper that failed to render the site, which I read as "not a boundary" instead of
-checking membership directly — the check and the rendering are different questions.
+This section flip-flopped twice, so here is the evidence rather than the conclusion:
+`fps3k_kernel.asm` line 583 onward renders `$F004E0`-`$F0050A` as **`DC.W` data**, and
+`$F004EC` specifically as `DC.W $31d6`. It is not an instruction, so `move.w (a6),$cc0.w`
+is a decode artefact and **`$0CC0` is not a global**.
 
-So of the 44 candidate globals, **two** were decode artefacts, not three: `$0C41` is not an
-address at all, and `$0C40` is a real address but the low word of `$0C3E` rather than a
-separate field. `$0CC0` stands.
+The intermediate "correction" claiming otherwise was caused by a membership test against a
+boundary set that included `DC.W` lines as well as instruction lines (see below). Being
+*present* in that set proved nothing.
 
-`$F004EC` does `move.w (a6),$cc0.w` — it copies the **first word of the current TCB** into
-`$0CC0`, in the code immediately preceding the scheduler entry at `$F0050C`. The global
-has **one write and no reads** anywhere in the image, so nothing in this firmware consumes
-it. It joins `!DLY`, `!CCB` and `'EXEC'` in the small set of things this ROM writes and
-never looks at — worth knowing precisely because a RAM dump will show a plausible value
-there that no code depends on.
+So of the 44 candidate globals, **two are decode artefacts** — `$0C41` and `$0CC0` — and
+`$0C40` is a real address but the low word of `$0C3E` rather than a separate field.
 
-(The bytes between that instruction and `$F0050C` do not decode cleanly from it; the
-scheduler entry itself is a known boundary, so the region contains either data or a
-different alignment. Noted rather than guessed at.)
+**Methodological defect worth recording, because it produced a wrong retraction and then a
+wrong un-retraction.** The "validated boundary" set used throughout this session was built
+by taking every listing line that begins with a 6-hex-digit address. That set contains
+**11,807 instruction lines and 12,963 `DC.W` data lines** — so more than half of it is
+data. *Absence* from the set is still strong evidence (nothing starts a line there at
+all), which is why the rejections of `$F060B4`/`$F060BA` and `$F054CC` stand. But
+*presence* proves only that the disassembler emitted a line, not that it emitted an
+instruction. Every census in this session was re-run against an instruction-only set:
+
+- **the return-address census is unchanged** — 31 real, the same 2 rejected;
+- **`$0CC0` flips to an artefact**, as above;
+- **the `nop` census changes materially** — see the corrected figures below.

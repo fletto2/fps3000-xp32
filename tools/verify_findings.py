@@ -5500,6 +5500,21 @@ check('the eight structures tile downward from $1FE00, strictly descending',
 check('...and the ONLY two-page gap is !UST, matching USTNPAGE = 2',
       [(_alloc[i] - _alloc[i + 1]) // 0x100 for i in range(7)] == [2, 1, 1, 1, 1, 1, 1])
 
+# --- the nop census, derived from ROM bytes rather than from a listing -------
+# An earlier count used a "validated boundary" set built from every listing line
+# with an address prefix.  That set is 11,807 instruction lines and 12,963 DC.W
+# lines, so presence in it proved nothing; the dispatch-table nops are DC.W.
+_tbl_nop = sum(1 for _t in (0xF05BA4, 0xF065E4, 0xF06FFC, 0xF079FC, 0xF083FC)
+               for _k in range(42)
+               if _rom[_t + _k * 4 - 0xF00000:_t + _k * 4 - 0xF00000 + 4]
+               == b'\x4e\x75\x4e\x71')
+check('the five dispatch tables hold 65 rts+nop no-op slots (13 each)',
+      _tbl_nop == 65 and _tbl_nop == 13 * 5, _tbl_nop)
+_st_nop = sum(1 for _a in range(0xF08700, 0xF09C00, 2)
+              if _rom[_a - 0xF00000:_a - 0xF00000 + 2] == b'\x4e\x71')
+check('the self-test region holds 24 nops = six four-nop landing zones',
+      _st_nop == 24 and _st_nop % 4 == 0, _st_nop)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
