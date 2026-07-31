@@ -7011,6 +7011,14 @@ check('...while XP4I tests bit 11 of its own parameter block instead',
       _w(0xF0609A) == 0x41D6 and _w(0xF0609C) == 0x4E41
       and _w(0xF060AA) == 0x3010 and _w(0xF060AC) == 0x0800 and _w(0xF060AE) == 0x000B)
 
+check('XP1I and XP4I share a 14-byte prefix then diverge in INSTRUCTIONS, not operands',
+      all(_b2 == _b4 for _b2, _b4 in zip(
+          [_w(0xF07EA6 + 2 * _i) for _i in range(7)],
+          [_w(0xF0609A + 2 * _i) for _i in range(7)]))
+      and _w(0xF07EB6) == 0x0839          # XP1I: btst.b #$b,<abs>  -- 8 bytes
+      and _w(0xF060AA) == 0x3010          # XP4I: move.w (a0),d0    -- 2 bytes
+      and _w(0xF060AC) == 0x0800)         #       btst.b #$b,d0     -- 4 bytes
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

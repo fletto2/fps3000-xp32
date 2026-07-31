@@ -31154,16 +31154,27 @@ XP4I  $F0609A  lea    (a6),a0
 ```
 
 Same logical test — "is bit 11 set?" — against **the channel status** in three tasks and against
-**the semaphore descriptor's name word** in the fourth. Given what this firmware is (hand-written
-assembly built from byte-identical template copies with hand-patched constants, XP4I being the one
-copy whose alignment already differs), **the most economical reading is a patch error in XP4I's
-copy: the operand was left pointing at the block `a0` still held rather than repointed at
-`$1066 + (ch-1)*6`.**
+**the semaphore descriptor's name word** in the fourth.
 
-Stated as an inference, not a certainty — but it is well supported: four copies, three agreeing,
-and the divergent one reading a structure that has no channel status in it. `"AX"` = `$4158` has
-bit 11 clear, so XP4I's test always takes the same arm on the first pass regardless of what the
-channel is doing.
+**I first read this as a hand-patch error — the operand left pointing at the block `a0` still held
+rather than repointed at `$1066 + (ch-1)*6`. The bytes refute that.** Diffing the two sites:
+
+```
+XP1I $F07EA6: 41 d6 4e 41 67 0a 30 3c 02 71 4e b9 00 f0 | 86 c0 | 08 39 00 0b 00 00 10 66 | 67 14 ...
+XP4I $F0609A: 41 d6 4e 41 67 0a 30 3c 02 71 4e b9 00 f0 | 68 a8 | 30 10 08 00 00 0b       | 66 06 ...
+                                     identical 14 bytes ^        ^ per-task issuer ^ DIFFERENT INSTRUCTIONS
+```
+
+The shared prefix is **14 bytes**, then the `jsr` target differs — a legitimate per-task patch,
+each task having its own panel-command issuer — and after that the **instruction sequence itself**
+differs: `btst.b #$b,$1066.l` (8 bytes) against `move.w (a0),d0` + `btst.b #$b,d0` (6 bytes).
+Different opcodes, different lengths, and 2 bytes of the local alignment drift accounted for.
+
+So this is **authored code, not a mis-patched constant** — which is exactly what `CLAUDE.md`
+already says ("XP4I DIVERGES STRUCTURALLY, not just by patched constants"). I proposed a reading
+that contradicted a documented finding and the bytes sided with the document. What survives is the
+behaviour, which is what matters for a model: `"AX"` = `$4158` has bit 11 clear, so XP4I's test
+takes the same arm on the first pass regardless of what its channel is doing.
 
 **Emulator consequence, and it is checkable.** XP4I will **never** issue the `$0000001B`
 transaction that XP1I/2/3 issue, whatever the channel reports, because it never looks at the
