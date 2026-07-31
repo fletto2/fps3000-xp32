@@ -769,6 +769,13 @@ static void apif_write(uint32_t addr, uint16_t val) {
 static int versabus_boot_complete(void);
 
 static uint16_t xltr_read(uint32_t addr) {
+    /* FPS3K_FAULT=xltr_alias: make $FF0212 read back as zero, violating phase
+     * $1600's requirement that it independently hold $20.  Second fault mode,
+     * used to reach failure paths the apif_berr injection cannot. */
+    { static int f = -1;
+      if (f < 0) { const char *e = getenv("FPS3K_FAULT");
+                   f = (e && !strcmp(e, "xltr_alias")); }
+      if (f && addr == 0xFF0212) return 0; }
     /* FPS3K_CHSEL_RD=<hex> makes CHANNEL_SELECT read back that value
      * instead of what the SBC last wrote.  F04A84 reads this register
      * and the bulk-transfer loop at F04AE2 only runs when it reads $28,

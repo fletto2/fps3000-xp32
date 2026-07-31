@@ -7919,6 +7919,12 @@ check('the bit-7 stage sets d7 INLINE, it does not call the fault reporter',
 check('the FPS3K_FAULT hook exists and is opt-in',
       'FPS3K_FAULT' in open('/home/fletto/ext/src/claude/fps3000/emulator/versabus.c').read())
 
+check('phase $1600 failure epilogue raises d7, polls, and retries the whole stage',
+      _w(0xF095E8) == 0x2E3C and _l(0xF095EA) == 0xF0F0F0F0
+      and _w(0xF095F2) == 0x4A87
+      and _w(0xF095F4) == 0x6600 and 0xF095F6 + _w(0xF095F6) == 0xF09536
+      and _w(0xF095F8) == 0x426E and _w(0xF095FA) == 0x0210)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

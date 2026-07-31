@@ -34355,3 +34355,52 @@ So the failure machinery is not one path but (at least) three independent ones �
 `bsr $F089EE`, and the bus-error counter — and this experiment exercises only the first. The other
 two remain unexecuted, and a second injection (aliasing two XLTR registers, say) would be needed to
 reach them.
+
+## Second injection: the register-file contract validated the same way (2026-07-31)
+
+`FPS3K_FAULT=xltr_alias` makes `$FF0212` read back zero, violating phase `$1600`'s requirement that
+it independently hold `$20`.
+
+| run | final PC | `CHANNEL_SELECT` | MODE2 |
+|---|---|---|---|
+| control | `$F00FE6` idle | `$2903` | `$0000` |
+| `xltr_alias` | **`$F09578`** | **`$1600`** | `$0010` |
+
+Predicted and observed: the machine stalls at **phase `$1600`**, with the final PC inside that
+phase's own register walk (`$F09574`-`$F09580`) — so the retry re-runs the **whole stage including
+its write phase**, not just the failing comparison. `MODE2 = $0010` is the walking-bit value the
+stage writes to `$FF0210`, confirming the walk itself still executes.
+
+**So the "no aliasing anywhere in the register file" requirement derived from phase `$1600` is now
+tested, not merely satisfied** — and by the same method as the bit-7 gate, on a completely different
+mechanism.
+
+### The failure machinery is FOUR independent paths, two now reached
+
+| path | reached by | |
+|---|---|---|
+| inline `d7 = $F0F0F0F0` at the failing test | `apif_berr` | ✅ |
+| **`$F095E8`** — phase `$1600`'s own epilogue | `xltr_alias` | ✅ |
+| `bsr $F089EE` — the shared fault reporter (SCM and others) | neither | ❌ |
+| `$F08912` — the bus-error **counter** handler | neither | ❌ |
+
+`$F095E8` is the idiom in its clearest form:
+
+```
+$F095E8  move.l #$f0f0f0f0,d7     ; raise the fault
+$F095EE  bsr.w  PollBoardStatus
+$F095F2  tst.l  d7
+$F095F4  bne.w  $F09536           ; RETRY THE WHOLE STAGE
+$F095F8  clr.w  $210(a6)          ; success path falls through the same epilogue
+$F09600  rts
+```
+
+Note the success and failure paths **share the epilogue**, differing only in whether `d7` was raised
+before reaching it. That is why `PollBoardStatus` is on every path and why it is the machine's
+hottest read: it is not a poll bolted onto failures, it is the stage-completion primitive.
+
+**Method note.** Two injections, two different subsystems, two correct predictions of *where* the
+machine stops and *what* the phase counter shows. That is the check this session's contract work
+needed: a derived requirement that cannot be violated in the model is not a tested requirement, and
+until now none of them had been. The remaining two failure paths need injections aimed at the stages
+that use them — the SCM test for `$F089EE`, and an unexpected bus error for `$F08912`.
