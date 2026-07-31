@@ -4847,3 +4847,31 @@ check('all five dispatch tables carry a channel map at +168, byte-identical',
       and _rom[0xF05BA4 + 168 - 0xF00000:][:5] == b'\x00\x05\x04\x03\x02')
 check("...and XP3I's sits six bytes before its per-channel helper $F070AA",
       0xF06FFC + 168 == 0xF070A4 and 0xF070AA - 0xF070A4 == 6)
+
+# ---- the bit-7 dispatcher is a remote register-access interface (2026-07-31) ----
+check('the panel-status ISR saves the COMPLETE register set, a7 included',
+      insn(0xF04930) == 'movem.l d0-d7/a0-a7, -(a7)')
+check('the bit-7 dispatcher masks the code to 5 bits and bounds it at $14',
+      insn(0xF04962) == 'andi.w #$1f, d0' and insn(0xF0496E) == 'cmpi.w #$14, d0')
+check('...code $14 is end-of-conversation, routing to the ISR exit stub',
+      insn(0xF04976) == 'cmpi.w #$14, d0' and insn(0xF0497A) == 'beq.w $f050f8')
+check('the code is scaled x4 into a BYTE OFFSET in the saved frame',
+      insn(0xF049A8) == 'lsl.w #$2, d0')
+check('...with a -2 adjustment past a7 to step over the SR word',
+      insn(0xF049AA) == 'cmpi.w #$3c, d0' and insn(0xF049B0) == 'subq.w #$2, d0')
+check('$E87 bit 6 selects the half, bit 5 the direction',
+      insn(0xF049B2) == 'btst.b #$6, $e87.l' and insn(0xF049BE) == 'btst.b #$5, $e87.l')
+check('WRITE low half: CHANNEL_SELECT into the saved frame',
+      insn(0xF049D0) == 'move.w $204(a0), (a7, d0.w)')
+check('READ low half: saved frame into the result global $E74',
+      insn(0xF04A04) == 'move.w (a7, d0.w), $e74.l')
+check('WRITE high half is the same register at +2',
+      insn(0xF04A2E) == 'move.w $204(a0), $2(a7, d0.w)')
+check('READ high half likewise', insn(0xF04A58) == 'move.w $2(a7, d0.w), $e74.l')
+check('the out-of-frame arms reach the USER STACK POINTER',
+      insn(0xF049E4) == 'move usp, a2' and insn(0xF049F0) == 'move a2, usp'
+      and insn(0xF04A40) == 'movea.w $204(a0), a1' and insn(0xF04A44) == 'move a1, usp')
+check('codes 0-15 scale to $00-$3C, exactly the 16 saved registers',
+      15 * 4 == 0x3C and 16 * 4 == 0x40)
+check('...and the response code $94 used in prior runs masks to $14, end-of-conversation',
+      (0x94 & 0x1F) == 0x14 and (0x94 & 0x80) != 0)

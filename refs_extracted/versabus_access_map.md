@@ -21322,3 +21322,86 @@ XP3I calls and XP4I's copy of which sits at `$F06692`. So each replica is `{42-e
 table, 5-byte channel map, padding, code}` — the tables are embedded in the code stream rather
 than pooled, which is what one expects from hand-assembled template copies and is another small
 piece of evidence against a compiler.
+
+## The bit-7 dispatcher is a REMOTE REGISTER ACCESS INTERFACE (2026-07-31)
+
+`$F0495C`, the "other dispatcher" reached when `$E87` bit 7 is set, has been described in this
+project only by its shape — "`andi #$1F` + range-check 0..`$14`". Decoding what it does with the
+code is the largest single finding of this pass: **it lets the chassis read and write every
+register of the interrupted 68000, including the user stack pointer.**
+
+### The mechanism
+
+The panel-status ISR opens by saving the *complete* register set:
+
+```
+$F04930  movem.l d0-d7/a0-a7,-(a7)      16 longwords = $40 bytes
+```
+
+and the dispatcher turns the chassis's code into an index into that frame:
+
+```
+$F0495C  move.w  $E86,d0
+$F04962  andi.w  #$1F,d0                5-bit code
+$F0496E  cmpi.w  #$14,d0 / bgt          reject above $14
+$F04976  cmpi.w  #$14,d0 / beq          $14 = end of conversation
+$F049A8  lsl.w   #$2,d0                 code * 4 -> BYTE OFFSET into the frame
+$F049AA  cmpi.w  #$3C,d0 / ble
+$F049B0  subq.w  #$2,d0                 past a7, step over the SR word
+```
+
+`$E87` bits 6 and 5 then select the half and the direction, giving four symmetric arms:
+
+| bit 6 | bit 5 | in-frame (`d0 <= $44`) | beyond (`d0 > $44`) |
+|:---:|:---:|---|---|
+| 0 | 0 | `move.w $204(a0),(a7,d0.w)` — **write** low half | write **USP** low half via `swap` |
+| 0 | 1 | `move.w (a7,d0.w),$E74` — **read** low half | read USP |
+| 1 | 0 | `move.w $204(a0),$2(a7,d0.w)` — **write** high half | `movea.w $204(a0),a1` / `move a1,usp` |
+| 1 | 1 | `move.w $2(a7,d0.w),$E74` — **read** high half | `move usp,a1` / `move.w a1,$E74` |
+
+Codes 0-15 (`d0` = `$00`-`$3C`) address **d0-d7 and a0-a7** exactly; higher codes reach the
+exception frame and the USP, which is why the USP arms use `swap` to compose a 32-bit value out
+of two 16-bit transfers. The value written comes from `$FF0204` and the value read is returned in
+`$E74` — the same argument and result channels every other chassis operation uses.
+
+### What this means for the machine
+
+Put beside the operations already decoded, the chassis's capability set is complete:
+
+| capability | mechanism |
+|---|---|
+| read/write **any SBC memory address** | chassis op `$6`, unbounded, no range check |
+| read/write **chassis memory** | chassis op `$3` through the `$400000` window |
+| read/write **every CPU register + USP** | **this dispatcher** |
+| **resume** the interrupted code | the ISR exit stub, op `$F` |
+
+**That is a complete remote debugger, implemented in the firmware and driven entirely from the
+chassis side.** It explains something this project has treated as a gap: why a machine with no
+console, no on-board monitor and unpowered RS-232 drivers needed none. The host had full
+visibility into the SBC through the AP I/F, and the "panel" protocol is the wire format for it.
+
+It also gives `$E87` bits 5 and 6 a second, precise role. Elsewhere they are direction and
+half-select for parameter loading; here they are direction and half-select for register access —
+the *same* two bits meaning the same two things, which is a consistent encoding rather than a
+coincidence, and good evidence the decode is right.
+
+### Consequences for emulation
+
+- The dispatcher **writes into the interrupt stack frame**, so a chassis model that exercises it
+  changes the resumed program's registers. Any emulator asserting these codes must model the
+  frame at `(a7)` exactly: 16 longwords in `movem.l d0-d7/a0-a7` order, then the 68000 group-1
+  exception frame.
+- `move usp,aN` / `move aN,usp` are **privileged**; they work here because the ISR runs
+  supervisor. A core that does not implement the USP transfer instructions will silently
+  mis-execute four of the eight arms.
+- This is a second reason — beyond op `$6` — that **the chassis must be modelled as trusted**.
+  There is no validation anywhere on this path: no check that the register index is sensible for
+  the operation, no bounds check beyond `0..$14`, and no authentication.
+
+### And it retires a standing puzzle
+
+`CLAUDE.md` records the bit-7 dispatcher as running **1463 times** under `FPS3K_RESP=0x94
+FPS3K_XPIRQ=6`, "having never run before", with no account of what those executions did. They
+were register accesses — the response code `$94` has bit 7 set, and `$94 & $1F` = `$14`, the
+end-of-conversation code, which is why the machine stayed coherent while the path ran thousands
+of times.
