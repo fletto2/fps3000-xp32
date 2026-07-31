@@ -4896,6 +4896,20 @@ check('...and five copies are 7155 bytes, 28% of the 25501-byte application regi
       1431 * 5 == 7155 and (1431 * 5 * 100) // 25501 == 28)
 check('the block ends exactly where the channel map ends',
       _blkhi - 1 == 0xF05C50 and 0xF05C4C + 5 == 0xF05C51)
+_dbytes = [_a for _a in range(_blklo, _blkhi)
+           if _rom[_a - 0xF00000] != _rom[_a + _blkoff - 0xF00000]]
+_druns = []
+for _a in _dbytes:
+    if _druns and _a == _druns[-1][-1] + 1: _druns[-1].append(_a)
+    else: _druns.append([_a])
+check('the 56 differing bytes form 28 runs of exactly two bytes each',
+      len(_druns) == 28 and all(len(r) == 2 for r in _druns), len(_druns))
+_dvals = _mcol.Counter(_rom[r[0] - 0xF00000:r[0] - 0xF00000 + 2].hex() for r in _druns)
+check('13 of them are the panel-command issuer address', _dvals['5688'] == 13, dict(_dvals))
+check('10 are the channel map address', _dvals['5c4c'] == 10)
+check('one is the 42-entry dispatch table address', _dvals['5ba4'] == 1)
+check('...so every fixup is an address, not a per-channel data constant',
+      _dvals['5688'] + _dvals['5c4c'] + _dvals['5ba4'] + _dvals['5bf8'] == 25)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

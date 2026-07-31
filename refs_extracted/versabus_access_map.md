@@ -22796,3 +22796,44 @@ length. That is a human with a text editor, not a toolchain.
 timeout, a different trigger word, an extra status bit — has to be made in all five copies or the
 channels will behave differently from each other. That is a real hazard for anyone modifying this
 ROM, and it is invisible from any single disassembly listing.
+
+## The 56 patched bytes are ALL address fixups — the block is relocated, not parameterised (2026-07-31)
+
+Enumerating every byte that differs between RDHC's copy of the 1,431-byte block and XP1I's gives
+**56 bytes in 28 runs, and every run is exactly two bytes — the low half of an address**:
+
+| pattern | count | what it references |
+|---|---:|---|
+| `5688` -> `86C0` | **13** | the task's **panel-command issuer** |
+| `5C4C` -> `84A4` | **10** | the task's **channel map** |
+| `5BA4` -> `83FC` | 1 | the task's **42-entry dispatch table** |
+| `5BF8` -> `8450` | 1 | a dispatch-table-relative address |
+| `FF06`/`FE9C`/`FE28` -> `06E6`/`067C`/`0608` | 3 | **self-relative branch displacements** to the issuer |
+
+**There is not a single per-channel data constant among them.** No channel literal, no BIM
+control-register byte, no window offset, no scan mask.
+
+That corrects a structural claim this project has carried since the template diff was first done.
+The list of patched constants — "channel literal `01/02/03/04`; BIM CR low byte `44/46/50/52`;
+channel ports `4E/6E/8E/AE`; per-channel record `$1066+(ch-1)*6`; scan mask `$FFF0`/`$FF0F`/
+`$F0FF`/`$0FFF`" — is real, but **those constants live in the task-specific code *around* the
+block, not inside it**. The block itself is channel-agnostic: it takes the command port in `a0`,
+the data port in `a1`, the BIM in `a3`, the operation in `d0`, the payload in `d1` and the channel
+in `d4`, and touches no per-channel constant at all.
+
+### So why is it replicated?
+
+Because it references **its own task's** issuer, dispatch table and channel map by **absolute
+address**. Twenty-six of the 28 fixups are exactly that, and the remaining three are pc-relative
+branches to the same issuer. Nothing else forced a copy.
+
+**With one base register, or pc-relative addressing for those three structures, this could have
+been a single shared routine.** The author chose absolute addressing, and the price was five
+copies of 1,431 bytes — 7,155 bytes, **28% of the application region** — to express what is
+functionally one routine called with different arguments.
+
+That is a cleaner and more useful characterisation than "a parameterised template". It also
+sharpens the modification hazard: a patch to the transaction logic must be applied five times,
+**and any patch that changes the block's length breaks the fixups**, which is precisely what
+happened to XP4I — its copy sits `$18` off the grid because an edit elsewhere in the task shifted
+it, and the 28 fixups had to be recomputed for that copy alone.
