@@ -27697,3 +27697,50 @@ do — worth having followed up rather than left standing.
 **Emulator consequence.** A model must derive `$F70019` bit 2 from the `$1FFF1` bits 0-2
 level field, not from any single control bit, and must let a non-zero level actually assert
 an interrupt once the CPU mask permits it.
+
+### The VMOD interrupter test installs two vectors and requires NESTED delivery
+
+`$F093D2`-`$F094EE` is the complete interrupter test, and it is the strongest interrupt
+requirement in the whole self-test:
+
+```
+lea.l $f094cc.l,a2 / lea.l $f094e4.l,a3     ; two handlers
+move.l a3,$148.l                            ; -> VECTOR $52
+move.l a2,$140.l                            ; -> VECTOR $50
+
+$F094AE (the walker):
+  andi.w #$fff8,(a5)      ; clear the request-level field, $1FFF1 bits 0-2
+  clr.l  d2               ; the delivery bitmap
+  bset.b #$7,$1(a5)       ; ARM the interrupter
+  ori.w  #$1,(a5)         ; request LEVEL 1
+  move.w #$f,d3
+  btst.b #$0,d2 / dbne d3 ; ...spin until the handler sets bit 0
+
+$F094CC (vector $50):
+  bset.b #$0,d2           ; mark delivery
+  move.w #$f,d3
+  btst.b #$1,d2 / dbne d3 ; ...and WAIT, INSIDE THE HANDLER, for the second
+  bclr.b #$7,$1(a5) / rte
+
+$F094E4 (vector $52):
+  bset.b #$1,d2
+  bclr.b #$7,$1(a5) / rte
+```
+
+**The first handler spins waiting for the second**, so vector `$52` must be delivered
+*while vector `$50`'s handler is still running*. A model that cannot deliver a nested
+interrupt fails here — the inner `dbne` exhausts its 15 iterations and the test reports a
+fault.
+
+Each handler **disarms the interrupter** (`bclr #$7`) before its `rte`, so the request is
+one-shot per arm.
+
+**What is not established**: what raises the second interrupt. The walker programs level 1
+only, and the handler at `$F094CC` does not program another level before waiting. Test B's
+`bset.b #$3,$1(a5)` touches bit 3, which lies *outside* the three-bit level field that
+`andi.w #$fff8` clears, so bit 3 is a separate control — plausibly a second request line, but
+the ROM does not say. That is the open end of the interrupter model.
+
+**Emulator requirements from this section:** deliver a VERSAbus interrupt when `$1FFF1`
+bits 0-2 are non-zero and bit 7 is armed; supply vectors `$50` and `$52`; permit nesting; and
+treat `bclr #$7` as withdrawing the request.

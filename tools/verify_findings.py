@@ -6000,6 +6000,20 @@ check('...and SET once a non-zero level is programmed',
       insn(0xF0945E) == 'bset.b #$3, $1(a5)' and insn(0xF09482) == 'btst.b #$2, $1(a4)'
       and insn(0xF09488) == 'bne.b $f09490')
 
+check('the interrupter test installs two handlers at vectors $50 and $52',
+      insn(0xF093D2) == 'lea.l $f094cc.l, a2' and insn(0xF093D8) == 'lea.l $f094e4.l, a3'
+      and insn(0xF093FE) == 'move.l a3, $148.l' and insn(0xF09404) == 'move.l a2, $140.l'
+      and 0x140 // 4 == 0x50 and 0x148 // 4 == 0x52)
+check('the walker arms bit 7 and requests level 1',
+      insn(0xF094AE) == 'andi.w #$fff8, (a5)' and insn(0xF094B4) == 'bset.b #$7, $1(a5)'
+      and insn(0xF094BA) == 'ori.w #$1, (a5)')
+check('...and the FIRST handler waits inside itself for the second -- nesting required',
+      insn(0xF094CC) == 'bset.b #$0, d2' and insn(0xF094D4) == 'btst.b #$1, d2'
+      and insn(0xF094E4) == 'bset.b #$1, d2')
+check('...each handler disarms the interrupter before rte',
+      insn(0xF094DC) == 'bclr.b #$7, $1(a5)' and insn(0xF094E8) == 'bclr.b #$7, $1(a5)'
+      and insn(0xF094EE) == 'rte')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
