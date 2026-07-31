@@ -4315,6 +4315,17 @@ check('...so max offset $3FFFFC is below the $400000 test and both bge are dead'
 check('...and the reachable window range $400000-$7FFFFC contains the mailbox',
       0x400000 <= 0x70001C <= 0x400000 + 0x3FFFFC)
 
+# Op $0's three-way split: $0 and $1..$10 take different paths.
+check('op $0 accepts 0..$10 or $28, rejecting anything else to panel $259',
+      insn(0xF04A8E) == 'cmpi.w #$10, d0'
+      and insn(0xF04A94) == 'cmpi.w #$28, d0')
+check('...and branches three ways on the stashed value',
+      insn(0xF04AC8) == 'cmpi.l #$28, $e5c.l'
+      and insn(0xF04B08) == 'cmpi.l #$0, $e5c.l')
+check('...with the 1..$10 arm validating the channel and using ((ch+1)<<5)',
+      insn(0xF04C94) == 'cmp.w $105e.l, d3'
+      and insn(0xF04CAC) == 'lsl.l #$5, d3')
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
