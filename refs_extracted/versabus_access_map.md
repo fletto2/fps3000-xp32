@@ -24979,3 +24979,59 @@ register writes**, so device state persists across everything except power-on.
 
 Both are the kind of negative that is only convincing when swept for exhaustively, and both
 simplify a faithful model rather than complicating it.
+
+## The SR census: a trace-dispatch path and the driver call's carry convention (2026-07-31)
+
+Every SR manipulation in the image, normalised:
+
+| form | count | |
+|---|---:|---|
+| `move.w sr,-(a7)` | **43** | the dual-entry prologue on directive handlers |
+| `ori.w #$0700,sr` | **22** | mask to level 7 — the dominant masking operation |
+| `move.w (a7),sr` | 12 | restore without popping |
+| `andi.w #$F8FF,sr` | 6 | **clear the interrupt mask** (enable all levels) |
+| `move.w #$2700,sr` | 4 | supervisor + level 7 |
+| `move.w #$2000,sr` | 2 | supervisor + level 0 |
+| `move.w #$2200,sr` / `#$2400,sr` | 1 each | supervisor + level 2 / level 4 |
+| `ori.w #$7000,sr` | 1 | the `$F70030` wrapper |
+| **`ori.w #$8000,sr`** | **1** | **sets the TRACE bit** |
+| `ori.w #$0001,sr` / `andi.w #$FFFE,sr` | 1 each | **set / clear CARRY** |
+
+Two of these are worth more than their counts.
+
+### There is a trace-enabled task dispatch
+
+```
+$F005B0  movea.l $138(a6),a6      the task's saved SP
+$F005B4  rte                      <- normal dispatch
+$F005B6  movea.l $138(a6),a6
+$F005BA  ori.w   #$8000,sr        <- SET THE TRACE BIT
+$F005BE  rte                      <- dispatch WITH TRACING
+```
+
+**Two dispatch exits, side by side: one plain, one that resumes the task with T set** so the
+trace exception fires after every instruction. That is RMS68K's per-task single-step facility,
+and it means **the trace exception is part of the stock firmware's design**, not only of
+`monitor/`.
+
+This project records enabling `M68K_EMULATE_TRACE` in `emulator/musashi/m68kconf.h` because
+"Musashi defaults it off, so the trace exception silently never fired and the monitor's
+single-step looked broken when it was not". That fix is attributed to the monitor — **it is also
+a stock-ROM requirement**, latent because nothing in this configuration selects the traced exit.
+A host-loaded debugger using it would have failed silently on the pre-patch emulator.
+
+### The driver call's carry convention, from the other end
+
+```
+$F04478  ori.w  #$1,sr      / rts     <- carry SET
+$F04482  andi.w #$FFFE,sr   / rts     <- carry CLEAR
+```
+
+Two adjacent exits differing only in the carry flag, immediately before `rts`. That is the
+**status return of the driver-call convention** — the walker at `$F044CA` does `bcs.b $F044D6` to
+stop the chain, and here are the two returns that drive it: `ori` to stop, `andi` to continue.
+
+So the convention is complete on both sides: **argument in the record pointer on the stack, entry
+point at `+$1E`, next link at `+$8`, status in the carry flag set by `ori.w #$1,sr` or cleared by
+`andi.w #$FFFE,sr` immediately before `rts`.** Both of these exits live in the kernel's last 60
+bytes, immediately above the FPS glue region that contains the walker.
