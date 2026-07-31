@@ -18606,3 +18606,23 @@ it, and the firmware contains no code that could balance it.
 (Note XP4I's site is `$F06762`, which is `−$18` from the `$A00` grid position `$F0677A` —
 the same local shift found at its abort routine, and different from the `−$1E` global
 best-fit for that task. The non-uniformity is now visible at three separate sites.)
+
+### The failure path balances; the success path does not
+
+The routine is entered by a plain `jsr $F08550` from `$F07E9E`, so its `rts` must return to
+`$F07EA4`. It has exactly two `rts` exits:
+
+| exit | path | stack |
+|---|---|---|
+| `$F08568` | channel rejected — panel `$264`, return **before** `$F0857A` | **balanced** |
+| `$F08614` | the channel accepted, `USER` called, result delivered | **96 bytes low** |
+
+So the *validation-failure* exit is correct and the *success* exit is not. That is the
+classic signature of code exercised only on the path that rejects: every test that ever ran
+against this routine — including every emulator configuration before this one, where
+`$10AE` was always zero and the `beq` at `$F08576` skipped the frame entirely — took a path
+that balances. The one path that allocates is the one that requires a CP program to reach.
+
+Which is also why this could not have been found by reading alone: the imbalance is only
+three instructions apart from correct, and it takes *executing* the accepted path to see
+the `rts` land on `$000000`.
