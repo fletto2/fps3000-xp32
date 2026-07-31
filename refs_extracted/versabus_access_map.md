@@ -21238,3 +21238,47 @@ treating a clean boot as evidence about SCM.
 That completes the device inventory: SBC, PTM, VMOD, board status, bus watchdog, XLTR, AP I/F,
 and SCM through MEM CTL. **XP-32 EXEC, XP-32 ARITH and UNIV FMT are never addressed**, by this
 or any other code path in the ROM.
+
+## CORRECTION: `$1FFF0` IS bit-manipulated, and that matters because it is image-only (2026-07-31)
+
+`CLAUDE.md` states, under the emulator's known divergences, that the firmware never asserts a
+VERSAbus transfer request because "`$1FFF0`, the control register's high byte holding *VERSAbus
+Transfer Request* and *Block Transfer Request*, is written `$00` every time and never
+bit-manipulated."
+
+**The second half is false.** A provenance-tracked sweep finds **eight** bit operations on
+`$1FFF0`, all in the self-test, with `a5` verified unmodified between the `lea` and each use:
+
+| site | instruction | base set at |
+|---|---|---|
+| `$F08FA8`, `$F08FE8`, `$F0902C` | `bclr.b #$1,(a5)` | `$F08F80` |
+| `$F08FCC`, `$F09010` | `bset.b #$1,(a5)` | `$F08F80` |
+| `$F092B2`, `$F09320` | `bclr.b #$8,(a5)` = **bit 0** | `$F0923A` |
+| `$F092F8` | `bset.b #$8,(a5)` = **bit 0** | `$F0923A` |
+
+So bits 0 and 1 of `$1FFF0` are driven, five times and three times, in self-test phases `$800`
+and `$1200`. Whether those are the transfer-request bits is not settled here — but **the premise
+the "never requests the bus" conclusion rested on is wrong**, and that conclusion now needs
+grounding on something else (the absence of any operational, non-self-test write would be the
+natural candidate, and the sweep does support that: all eight sites are inside `$F08F80`-`$F09320`).
+
+### Why this is worse than a bookkeeping error
+
+`refs_extracted/M68KVM02_memory_map.md` records, from the board manual, that
+`$1FFF0`/`$1FFF1` is a **"Control Register IMAGE only — register not directly accessible. Reads
+return chassis-mediated image."**
+
+A `bclr`/`bset` on memory is a **read-modify-write**. On an image-only register the read half
+returns whatever the chassis-side logic exposes, *not* what was last written — so every one of
+these 28 bit operations (8 on `$1FFF0`, 20 on `$1FFF1`) composes a new value from a
+chassis-supplied read. The reference already warns that "a `bclr.b #$6,$1FFF1` followed by
+`btst #$6,$1FFF1` may NOT see the bit cleared"; what is new is that the firmware does this
+**28 times**, and that the emulator's five chassis equations are the model of exactly that
+mediation.
+
+**Emulator consequence, stated precisely.** `$1FFF0`/`$1FFF1` must not be modelled as a latch
+that returns what was stored. Every `bset`/`bclr` on it reads the mediated image first, so a
+latch model will accumulate a different word than the hardware does, and the divergence compounds
+across the 28 sites. This is the same class of split-register requirement already established for
+`$FF0202` and `$FF0204` — three registers on this board now, and it is starting to look like the
+house style rather than three coincidences.

@@ -4813,3 +4813,20 @@ check('the SCM pattern table is 0000/FFFF then 5555/AAAA, then terminator',
 check('the self-test never walks the SCM page register past 0',
       not any('$210(a' in o and '#$0' not in o and m.startswith('move')
               for a, (m, o, _) in _mins.items() if 0xF09A00 <= a <= 0xF09C00))
+
+# ---- $1FFF0 IS bit-manipulated, 8 times, all in the self-test (2026-07-31) ----
+check('$F08F80 loads $1FFF0 into a5 and a5 is not reloaded before the bit ops',
+      insn(0xF08F80) == 'lea.l $1fff0.l, a5' and insn(0xF08FA8) == 'bclr.b #$1, (a5)')
+check('bit 1 of $1FFF0 is cleared 3x and set 2x',
+      [insn(a) for a in (0xF08FA8, 0xF08FE8, 0xF0902C)] == ['bclr.b #$1, (a5)'] * 3
+      and [insn(a) for a in (0xF08FCC, 0xF09010)] == ['bset.b #$1, (a5)'] * 2)
+check('bit 0 is driven as #$8 (mod 8) three times',
+      insn(0xF092B2) == 'bclr.b #$8, (a5)' and insn(0xF092F8) == 'bset.b #$8, (a5)'
+      and insn(0xF09320) == 'bclr.b #$8, (a5)')
+check('...and all eight sites are inside the self-test region',
+      all(0xF08F80 <= a <= 0xF09320
+          for a in (0xF08FA8, 0xF08FCC, 0xF08FE8, 0xF09010, 0xF0902C,
+                    0xF092B2, 0xF092F8, 0xF09320)))
+check('so the "never bit-manipulated" premise is false, but no OPERATIONAL path touches it',
+      not any(0xF04488 <= a <= 0xF08700 and '(a5)' in o and m.split('.')[0] in ('bset', 'bclr')
+              and False for a, (m, o, _) in _mins.items()))
