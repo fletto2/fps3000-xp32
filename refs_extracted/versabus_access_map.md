@@ -18143,3 +18143,62 @@ will happily decode that branch and mark the ISR as reachable from the task body
 is not — the only real entry is the vector. And anyone reading the listing will see what
 looks like a conditional dispatch into the handler and infer a polling mode the firmware
 does not have.
+
+## `$1064` is the SBC→chassis status register file, and `$107E` sequences it (2026-07-30)
+
+The XP task's "chassis busy" arm calls `$F08616` with `d2` = its **per-channel scan mask**
+(`$FFF0`/`$FF0F`/`$F0FF`/`$0FFF`). That routine is the status encoder, and it explains both
+the mask and the array:
+
+```
+d4 = $107E + 1                       ; a rolling SEQUENCE counter
+d5 = (a0)                            ; the channel's +$0E status word
+   bit 11 set                -> d4 = seq+1
+   bit 11 clear, bit 15 set  -> d4 = seq+1+9
+   bit 11,15 clear, bit 13 set -> d4 = 9
+   otherwise                 -> d4 = seq+1+4
+d3 = (channel-1)*4 ; d4 <<= d3       ; shift into this channel's NIBBLE
+$1064 &= d2                          ; clear my nibble  <- THIS is what the mask is for
+$1064 |= d4
+$107E += 1
+```
+
+So **`$1064` is a 16-bit word of four 4-bit per-channel status codes**, and the documented
+"scan mask, a 16-bit word of four 4-bit per-channel fields, each task clearing its own" is
+exactly a clear-my-nibble mask — now with the field's *meaning* as well as its shape. The
+nibble mixes a status class with a **rolling sequence number from `$107E`**, which is what
+lets a reader distinguish a repeated status from a new event.
+
+### The chassis reads it back with operation `$A`
+
+```
+$F04FBA  index = $E7A, validated 0..12 (panel $25D on reject)
+$F04FE6  $E74 <- $1064(index*2)
+$F04FEE  if command bit 4 set: index++        ; the documented auto-increment
+```
+
+So the array is **13 words, `$1064`-`$107C`**, with `$107E` — the sequence counter —
+immediately after it, and operation `$A` is how the chassis walks it. `$1064` is entry 0,
+the packed per-channel nibbles.
+
+### And the scan sets two more mode bits
+
+After encoding, `$F08668` sweeps channels 1..`$105E`, reading each `+$0E`, and flags any
+channel with **bit 15 set and bit 14 clear** — a raised but unserviced transaction. If
+**none** is found:
+
+```
+$107E <- 0                    ; reset the sequence counter
+MODE1 ($FF0202) bit 6  <- 1
+MODE0 ($FF0200) bit 11 <- 1
+```
+
+That gives two more listed-but-unexplained bits a role: **MODE1 bit 6 and MODE0 bit 11 mean
+"no channel has an unserviced transaction"**. And it completes a round trip for MODE0 bit
+11, because the panel-status ISR at `$F04930` **clears** that same bit when the chassis
+answers — so the SBC raises it to say "idle", and the chassis's reply clears it.
+
+With this, every bit of MODE0 and MODE1 that the firmware touches has a mechanism:
+MODE0 bit 10 (command issue / RDHC acknowledge) and bit 11 (channels idle); MODE1 bit 6
+(channels idle), bit 7 (busy, tested), bit 12 (command valid, set by the issuer), bit 14
+(cleared by the issuer and on channel abort), and bits 8-11 (per-channel abort flags).

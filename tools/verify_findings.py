@@ -3998,6 +3998,28 @@ check('there are exactly six unreachable beq.b/beq.w pairs, one per task',
 check('...and their targets are exactly the six !IDV ISR entries',
       sorted(_dead) == sorted(_lw2(0x1F808 + 14 * k + 6) for k in range(6)))
 
+# --- $1064: the SBC->chassis status register file -------------------------
+# The XP task's scan mask is a CLEAR-MY-NIBBLE mask: $1064 holds four 4-bit
+# per-channel status codes, mixed with a rolling sequence counter at $107E.
+check('the scan mask clears this channel\'s nibble of $1064, then ORs it back',
+      insn(0xF08652) == 'and.w d2, $1064.l'
+      and insn(0xF08658) == 'or.w d4, $1064.l')
+check('...and $107E is a rolling sequence counter folded into the code',
+      insn(0xF0865E) == 'addq.b #$1, $107e.l')
+# Each task loads its own clear-my-nibble mask right before the encoder call,
+# and the nibble it clears is (channel-1) -- XP1I $FFF0, XP2I $FF0F, XP3I
+# $F0FF, XP4I $0FFF, matching d3 = (channel-1)*4 in the encoder.
+check('each XP task loads the mask that clears exactly its own nibble',
+      [insn(a) for a in (0xF07E3C, 0xF0743C, 0xF06A3C, 0xF06042)]
+      == ['move.l #$fff0, d2', 'move.l #$ff0f, d2',
+          'move.l #$f0ff, d2', 'move.l #$fff, d2'])
+check('chassis op $A reads $1064+index*2 with a 0..12 bound and bit-4 auto-inc',
+      insn(0xF04FC6) == 'cmpi.l #$c, $e7a.l'
+      and insn(0xF04FE6) == 'move.w $1064(a1), $e74.l'
+      and insn(0xF04FEE) == 'btst.b #$4, $e87.l')
+check('an all-idle scan sets MODE1 bit 6 and MODE0 bit 11',
+      insn(0xF086AA) == 'bset.b #$6, d4' and insn(0xF086B6) == 'bset.b #$b, d4')
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
