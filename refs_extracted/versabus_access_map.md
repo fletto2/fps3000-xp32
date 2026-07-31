@@ -33432,3 +33432,46 @@ which is correct for the emulator's configuration: two ACs, no host.
 (`move.w $a8(a5),$107a`) — which is **not** `$10A8`: `a5` is `$FF0000` there, so it is channel 4's
 data-high port `$FF00A8`. Same lesson as the base-register census rule, in the opposite direction:
 widening a matcher to displacement forms admits false positives unless the base is checked.
+
+## The SCM test decoded — the SBC's only conversation with MEM CTL (2026-07-31)
+
+`$F09B20`-`$F09BB4` is the last stage of self-test sequence C, and it is the **only** code in the
+image that exercises System Common Memory. Fully decoded:
+
+```
+clr.w $210(a6)              ; window page 0
+d2 = 4                      ; stride, LONGWORDS
+a2 = $400000, a1 = $404000  ; the region under test: 4096 longwords = 16 KB
+a3 = $F09BB6                ; a ROM pattern table, read as {d0,d1} PAIRS
+  fill:   write d0 to every longword in [a2,a1)
+  verify: per longword -- $FF0204 <- d6; cmp d0; fault -> d7 = $F0F0F0F0, bsr $F089EE
+                          PollBoardStatus
+                          $FF0204 <- d6+1; write d1; cmp d1; fault likewise
+                          PollBoardStatus
+  next pair while d1 != $AAAAAAAA
+then: d6 += 2; a2 = $403FFC, a1 = $3FFFFC; neg.w d2  ->  stride -4, RUN IT ALL AGAIN DESCENDING
+```
+
+**The pattern table is `{$00000000, $FFFFFFFF}` then `{$55555555, $AAAAAAAA}`** — all-zeros/all-ones
+then the two alternating-bit complements, terminated by `d1 == $AAAAAAAA`.
+
+**Each longword is tested two different ways.** `d0` is bulk-filled across the whole region and only
+then verified, so it must survive 4096 intervening writes — an **aliasing / address-decode** test.
+`d1` is written and read back immediately — a **data** test. Running the whole thing ascending and
+then descending (`neg.w d2`, the loop re-entered by `blt`) is the classic way to catch address
+decoders that fail in one direction only.
+
+**Two facts an emulator owes:**
+
+1. **`$400000`-`$403FFF` must behave as 16 KB of read/write memory at window page 0**, and must hold
+   `$FFFFFFFF` and `$AAAAAAAA` faithfully. A model returning zeros passes the `$00000000` pattern
+   and fails the very next one — and per this suite's fault policy that is an **infinite retry**,
+   not an error, so it presents as a hang with `$2xxx` in `CHANNEL_SELECT`.
+2. **The SCM fault code is `$F0F0F0F0` in `d7`**, distinct from every other stage's.
+
+**And this routine is why `$FF0204` is the hottest register in the machine.** It writes the phase
+counter **twice per longword**: 4096 longwords x 2 patterns per pair x 2 pairs x 2 directions =
+**65,536 writes** if the window is fully working memory. Nothing else in the firmware writes any
+register at that scale, so the "~33k writes per run" figure recorded for `CHANNEL_SELECT` is
+this loop, throttled by however far the modelled window lets it get — which makes that count a
+*measure of how much SCM the model presents*, not a property of the firmware.

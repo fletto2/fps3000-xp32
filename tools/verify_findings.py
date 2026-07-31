@@ -7641,6 +7641,22 @@ check('...and $10A8 is written twice and never read (a probe for host-loaded sof
 check('...sitting immediately before the $105E channel-present probe',
       _w(0xF0A202) == 0x4241 and _w(0xF0A204) == 0x3028 and _w(0xF0A206) == 0x004E)
 
+check('the SCM test walks $400000-$403FFC at longword stride, both directions',
+      _w(0xF09B2C) == 0x343C and _w(0xF09B2E) == 0x0004
+      and _l(0xF09B32) == 0x00400000 and _l(0xF09B38) == 0x00404000
+      and _w(0xF09BAC) == 0x4442 and _w(0xF09BAE) == 0x6D8C
+      and _l(0xF09BA2) == 0x00403FFC and _l(0xF09BA8) == 0x003FFFFC)
+check('...against a four-pattern ROM table terminated by $AAAAAAAA',
+      [_l(0xF09BB6 + 4*_i) for _i in range(4)]
+      == [0x00000000, 0xFFFFFFFF, 0x55555555, 0xAAAAAAAA]
+      and _w(0xF09B90) == 0x0C81 and _l(0xF09B92) == 0xAAAAAAAA)
+check('...reporting SCM faults with the distinct code $F0F0F0F0 in d7',
+      _w(0xF09B5C) == 0x2E3C and _l(0xF09B5E) == 0xF0F0F0F0
+      and _w(0xF09B76) == 0x2E3C and _l(0xF09B78) == 0xF0F0F0F0)
+check('...and broadcasts the phase counter to $FF0204 twice per longword',
+      _w(0xF09B54) == 0x3D46 and _w(0xF09B56) == 0x0204
+      and _w(0xF09B6C) == 0x3D46 and _w(0xF09B6E) == 0x0204)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
