@@ -17595,3 +17595,36 @@ A consistency property worth stating: **every ISR entry and exit lies inside its
 XP4I's `$F05F00-$F068FF`, `$F04930`/`$F050FC` in RDHC's `$F04600-$F05CFF`, and
 `$F05DD6`/`$F05E4C` in IO1I's `$F05D00-$F05EFF`. Two structures written by different parts
 of the RTOS agree on where each task's code lives.
+
+### The second `!TST` segment is `STCK`, and it names the `TCB+$138` blocks
+
+`TSTMMU` is **4 words per segment** and `TSTATTR` likewise, with `TSTCSEGS = 2` live in
+every task. Read out for XP1I:
+
+```
+TSTMMU  : f07d f086 0000 0001 | 01e7 01e8 0000 0001 | (2 unused segments)
+TSTATTR : "PROG" 8000 0000    | "STCK" 8000 ff00    |
+```
+
+So each task has exactly two segments: **`PROG`**, the ROM code extent tabulated above,
+and **`STCK`**, a two-page RAM block. The `STCK` pages are exactly the blocks reached
+through `TCB+$138`, in every task:
+
+| task | `STCK` segment | `TCB+$138` |
+|---|---|---|
+| `XP1I` | `$1E700-$1E8FF` | `$1E700` |
+| `XP2I` | `$1E500-$1E6FF` | `$1E500` |
+| `XP3I` | `$1E300-$1E4FF` | `$1E300` |
+| `XP4I` | `$1E100-$1E2FF` | `$1E100` |
+| `IO1I` | `$1DF00-$1E0FF` | `$1DF00` |
+| `RDHC` | `$1DD00-$1DEFF` | `$1DD00` |
+
+Six for six. This **names** those blocks — they are the tasks' *stack* segments, with the
+ASQ/semaphore descriptors laid at the base — and it explains the observation this file
+already records, that RDHC's block is entirely zero: it is a stack, RDHC declares no
+semaphores to put at its base, and it never pushes deep enough to dirty either page. A
+contents-based scan cannot see an allocated-but-clean stack, which is exactly why the
+usable staging bound derived from a nonzero-byte scan came out 512 bytes too generous.
+
+Three structures written by different parts of the RTOS — the page allocator's tiling,
+`TCB+$138`, and `!TST` segment 1 — now agree on the same six blocks.
