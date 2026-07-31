@@ -5406,6 +5406,17 @@ check('$0C9A sits 16 bytes before it and is initialised to $01010000',
       0xCAA - 0xC9A == 16 and insn(0xF0A04E) == 'move.l #$1010000, $c9a.w')
 check('...and $0C8E sits 12 bytes before $0C9A', 0xC9A - 0xC8E == 12)
 check('the array is walked by TRAP #0 directive $13', _t0rev.get(0xF00DA4) == 0x13)
+
+# ---- the kernel-fatal path completes the post-mortem area (2026-07-31) ----
+check('the kernel-fatal stub saves a1 and the BUS-ERROR VECTOR before reporting',
+      insn(0xF00196) == 'move.l a1, $848.w' and insn(0xF0019A) == 'move.l $8.w, $84c.w')
+check('...then issues $2B2 and hangs',
+      insn(0xF001A0) == 'move.w #$2b2, d0' and insn(0xF001A4) == 'jsr $f04500.l'
+      and insn(0xF001AA) == 'bra.b $f001aa')
+check('$0848/$084C sit immediately past the 16-register snapshot',
+      0x808 + 16 * 4 == 0x848 and 0x848 + 4 == 0x84C)
+check('the display fallback $800 overlaps the snapshot area',
+      0x800 <= 0x804 < 0x848)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

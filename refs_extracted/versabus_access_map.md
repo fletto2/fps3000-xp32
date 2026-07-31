@@ -24410,3 +24410,47 @@ structure. Naming it would be guessing; the layout is recorded so a later dump c
 `$0C9A`, `$0CAA` structurally, and `$0C40` remains a single read at `$F01082` with no other
 reference. `$0C35`, `$0C73` and `$0C7C` are odd-address byte accesses into words already
 identified (`$0C34` trace mask, `$0C72` config, `$0C7C` after the `$0C78` stack pointer).
+
+## The kernel-fatal path saves two more things — the post-mortem area completed (2026-07-31)
+
+This project records panel code `$2B2` as "issued by a hand-placed FPS stub at `$F001A0`, inside
+the RMS68K kernel region, which then hangs". The two instructions *before* it were never read:
+
+```
+$F00196  move.l  a1,$848.w        save a1 as it stood at the fault
+$F0019A  move.l  $8.w,$84C.w      save THE BUS-ERROR VECTOR's contents
+$F001A0  move.w  #$2B2,d0         PCMD_KERNEL_FATAL
+$F001A4  jsr     $F04500          the panel-command issuer
+$F001AA  bra.b   $F001AA          hang
+```
+
+**Saving the bus-error vector is the informative part.** It records *which handler was installed*
+when the kernel died — the self-test's own counter at `$F08902`, the FPS layer's
+`PCMD_EXCEPTION_BUS_ERROR` reporter, or the kernel's default. That distinguishes a fault during
+the self-test from one after the RTOS took over, which nothing else in the machine records.
+
+### The complete low-RAM post-mortem area
+
+| address | contents | written by |
+|---|---|---|
+| `$0800` | the faulting **PC** | `$F00A62` snapshot |
+| `$0806` | the **SR** | `$F00A5E` |
+| `$0808`-`$0847` | **all 16 registers**, `movem.l d0-d7/a0-a7` order | `$F00A58` |
+| **`$0848`** | **`a1` at the kernel-fatal point** | `$F00196` |
+| **`$084C`** | **the bus-error vector's contents** | `$F0019A` |
+| `$0400` | the self-test fault count, low-stack variant | `$F08912` |
+| `$1F800` | the self-test fault count, high-stack variant | `$F0890A` |
+
+Together with `$0E6E` (the last panel command), `$FF000E` (the exception class), `$FF0204` (the
+self-test phase, major and minor), and the per-task `TCB+$2C`/`+$FC`/`+$B0`, **a single RAM dump
+of a stopped board now yields the PC, the SR, every register, which bus-error handler was live,
+the last panel command, the exception class, the self-test phase and every task's state.**
+
+That is a complete post-mortem story for a machine whose RS-232 drivers were unpowered as
+shipped, and every field in it has been traced to the instruction that writes it.
+
+**One overlap to watch**, noted earlier and worth repeating here: the display-device pointer
+`$0C3A` falls back to scratch RAM `$800` when no display is fitted — which is *inside* this area.
+So on a board without the optional display, the spurious-interrupt reporter and the boot-progress
+driver write to `$0804`, four bytes past the saved PC. A dump must be read knowing which
+mechanism ran last.
