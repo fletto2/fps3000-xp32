@@ -3958,6 +3958,18 @@ check('...and implements its direction flag with a single exg',
       insn(0xF054D4) == 'exg.l a1, a0'
       and insn(0xF054DA) == 'move.l (a0)+, (a1)+')
 
+# Runtime: CPLOAD really does arm the width converter -- $C0 -> $D0.
+# The bus log goes to a -bus FILE, not stderr, so this reads the file.
+with tempfile.TemporaryDirectory() as _tdc:
+    subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000',
+                    '-bus', f'{_tdc}/b'], capture_output=True, timeout=400,
+                   env={**os.environ, 'FPS3K_RESP': '0x94', 'FPS3K_XPIRQ': '6',
+                        'FPS3K_CHASSIS_CMD':
+                            '4,8,53310004,0000DEAD,BEEF0000'})
+    _cpb = open(f'{_tdc}/b').read()
+check('CPLOAD sets $FF0216 bit 4 at runtime: $C0 -> $D0',
+      'WR 2-byte FF0216 = 000000D0' in _cpb)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.

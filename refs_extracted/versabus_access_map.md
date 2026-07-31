@@ -17960,3 +17960,18 @@ layers and the transmit sequence, **every message this ROM can send or receive o
 VersaBUS is now described at register-and-field level.** The unmapped remainder is not the
 SBC's protocol but the *content* the counterpart card supplies — and the EU/AU, which the
 SBC cannot reach at all, as the self-test's own board coverage independently shows.
+
+**Runtime confirmation.** With `FPS3K_RESP=0x94 FPS3K_XPIRQ=6
+FPS3K_CHASSIS_CMD=4,8,53310004,0000DEAD,BEEF0000`, `$F05502` executes once, the `bset #$4`
+executes once, and the bus log shows the register going
+
+```
+WR FF0216 = $C0      <- the documented resting value
+RD FF0216 = $C0
+WR FF0216 = $D0      <- $C0 | $10, bit 4 SET, by CPLOAD
+```
+
+So the 16→32 width-conversion mux is armed by the upload path in a real run, not merely in
+the listing. `$FF0216`'s resting value `$C0` and its `$D0` upload value are now both
+accounted for; the register's remaining bits are the page/window controls established by
+self-test phases `$1700`/`$1800`.
