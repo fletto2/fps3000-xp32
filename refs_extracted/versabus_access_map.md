@@ -32361,3 +32361,32 @@ call the `$F0175x` family:
 So the unnamed segment family is not opaque even without names: all three take segment descriptors
 and route through the same translation machinery, differing in whose table they touch and whether
 privilege is required.
+
+### CORRECTION to the rule I just stated — base-agnostic is not always right
+
+Having found that `TCB+$36`'s census was `a6`-only, I stated as a rule that "any census of a
+structure field must be base-agnostic". **Applied to the TCB as a whole, that rule is wrong**, and
+re-running it shows why: matching `$xx(aN)` for every base register gives **91 offsets and 1,438
+accesses** against the `a6`-only 51 and 369 — but the extra 1,069 are overwhelmingly **not TCB
+accesses at all**. `$4(a7)` is a stack frame, `$8(a1)` is a parameter block, `$C(a0)` is a list
+node. The sweep conflates every small-displacement structure in the kernel into one.
+
+**`a6` is the correct filter for the TCB**, because this project's convention finding — "`a6` is
+the TCB pointer throughout the kernel" — is exactly what makes a displacement off it a TCB field.
+
+So why was `TCB+$36` different? Because those particular non-`a6` sites are **verifiable**: they
+load `$36(a5)`, `$36(a4)`, `$36(a2)`… and immediately call `T0LOGPHY` or `T0FNDSEG`, routines whose
+argument *is* a TCB's segment-table pointer. The base is confirmed to hold a TCB by what the value
+is used for, not assumed from the offset.
+
+**The correct rule, then:**
+
+> Widen a census beyond the conventional base register only when the other bases can be
+> **shown** to hold the same structure — by what the loaded value is passed to, or by tracing the
+> base's assignment. Otherwise the conventional base is the filter, and widening manufactures data.
+
+I nearly over-corrected a sound analysis on the strength of one genuine exception. The five
+earlier base-register mistakes were all cases where the *same* structure was addressed through
+different registers within one routine; this is the opposite case, where different structures share
+an offset. Both are real, and the discriminator is always whether the base's contents can be
+established.
