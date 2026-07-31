@@ -29926,3 +29926,70 @@ story (1 + 5) before the harness caught it. This is now a third independent deri
 census that classifies by operand form and knows nothing about the earlier dispute. Worth
 recording because the failure mode there was specific: 6 decomposes as 1+5 and 7 as 2+5, both
 neatly, so plausibility of the decomposition carried no evidential weight at all.
+
+## `$1FFD0`-`$1FFFF` is THREE 16-byte interrupter blocks (2026-07-31)
+
+The table at `$F0A4BE` — recorded in this project as "purpose unresolved" — decodes cleanly, and
+its structure settles what the top 48 bytes of RAM are.
+
+```
+$F0A452  d0 = config $F0A550 ($00020000, the RAM top), rounded DOWN to 4 KB -> $1F000
+$F0A468  a1 = $F0A4BE
+$F0A472  d4 = 3                       ; THREE blocks
+$F0A474  movea.w (a1)+,a2 ; a2 += d0  ; a per-block offset, sign-extended
+$F0A478  d3 = 7                       ; SEVEN words
+$F0A47A  move.w (a1)+,-(a2)           ; PRE-decrement: writes DOWNWARD
+$F0A48C  move.w #$cd0,(a2)            ; then the VMOD control word at $1FFF0
+```
+
+Three blocks of seven, not four of eight — the table is **48 bytes**, `$F0A4BE`-`$F0A4ED`. (The
+`DATA_REGIONS` entry in `tools/disasm_kernel.py` says 72 and is 24 too long; harmless, since the
+extra bytes are zero padding, but wrong.)
+
+Offsets `$1000`, `$0FF0`, `$0FE0` put the three descending runs at:
+
+| block | writes | values |
+|---|---|---|
+| 0 | `$1FFF2`-`$1FFFE` | `$8E` x7 |
+| 1 | `$1FFE2`-`$1FFEE` | `$8D $8E $8E $93 $1C $8C $8E` |
+| 2 | `$1FFD2`-`$1FFDE` | `$8E $71 $72 $73 $74 $8E $1F` |
+
+**These are interrupt vector NUMBERS**, and the identifications are already in this project:
+`$8D`, `$8E` and `$93` are exactly the vectors the FPS layer points at its panic catch-all
+`$F0A27A`, so `$8E` is the filler meaning "unassigned → panic". `$71`-`$74` is a **run of four**,
+and `$1C`, `$1F`, `$8C`, `$93` are specific assignments.
+
+**The gaps are the structure.** The runs stop short of `$1FFE0` and `$1FFF0` — and `$1FFF0` is
+the known VERSAmodule control register. So the top 48 bytes are **three identical 16-byte blocks**:
+
+```
+$1FFD0  control  |  $1FFD2-$1FFDE  seven vector registers, levels 1-7
+$1FFE0  control  |  $1FFE2-$1FFEE  seven vector registers
+$1FFF0  CONTROL  |  $1FFF2-$1FFFE  seven vector registers   <- the documented one
+```
+
+one word of control plus one vector register per VERSAbus interrupt level. The firmware writes
+`$0CD0` only to the *third* block's control word and leaves the other two alone.
+
+### This partially reinstates a hypothesis I retracted earlier today, and the retraction was an over-correction
+
+Earlier I proposed a seven-entry vector file at `$1FFF2`-`$1FFFF` and then withdrew it because
+the DRAM verify pattern-tests `$1FFF4`-`$1FFFF` as ordinary RAM. That argument is weaker than I
+gave it credit for, on two grounds this project had already established elsewhere:
+
+1. **A vector register that reads back what was written is indistinguishable from RAM in a
+   pattern test** — the exact reasoning `CLAUDE.md` already uses to explain why `$1FFE4` is not
+   in the exclusion list yet receives a vector number.
+2. **Order matters.** The self-test runs before `$F0A452`, so the DRAM walk happens *before* the
+   file is programmed and destroys nothing.
+
+The corrected picture is better than either endpoint: not seven registers but **twenty-one**, in
+three blocks, with the control words as the delimiters. And the convergent evidence is now
+threefold — the init table populates all 21; the self-test independently writes vector numbers to
+`$1FFE4`, `$1FFE6` and `$1FFEA` (`$F09354`, `$F093F0`, `$F0925C`, `$F09074`) and to `$1FFF2`; and
+**nothing in the ROM ever reads any of them**, which is what one expects of registers a device
+consumes.
+
+**Emulator consequence.** The VMOD interrupter's vector should come from
+`$1FFF2 + 2*(level-1)` after all — my retraction of that was wrong — and there are two further
+interrupter blocks at `$1FFE0` and `$1FFD0` that the current model does not represent at all.
