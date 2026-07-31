@@ -233,3 +233,35 @@ Six tasks exist because six consecutive `!TCB` records precede the blank tail; t
 `$F0A840` is zero. **"Six" is not a constant anywhere.** Each record differs from the others in
 only three fields — name, entry point, PROG pages — and its `+$18` word becomes the TCB's initial
 state, with **bit 4 meaning "enqueue on the ready list"**.
+
+## Hard CPU requirement: the bus-error frame must be exactly 14 bytes
+
+The firmware recovers from bus errors by a stack-marker protocol, and the marker's position
+is derived from the 68000 group-0 frame size. A caller pushes a **continuation address (4
+bytes)** and the marker **`$4245`** (2 bytes), performs a risky access, and drops the guard
+on success. On a fault, vector 2 reaches `$F00D00`, which tests `$12(a7)` for the marker and
+releases `$14` bytes:
+
+```
+6 (caller's guard) + 14 (CPU's group-0 frame) = 20 = $14
+marker offset seen by the handler = 14 + 4     = 18 = $12
+```
+
+**A model that pushes a 68010-format frame (58 bytes) breaks all seven guarded sites** —
+`$12(a7)` no longer holds the marker, the check fails, and every recoverable probe becomes
+`PCMD_KERNEL_FATAL`. One of the seven guards the **MC6840 programming**, so the failure
+appears during initialisation rather than somewhere diagnosable.
+
+This is the mechanism behind the vendored-core patch already recorded as a divergence fix.
+It is not cosmetic and must not be reverted.
+
+Related requirements this makes concrete:
+
+- **Unmapped space must fault.** Two separate sweeps depend on it — the `$20000`-`$EFFFFF`
+  walk at `$F08EC8` (stride `$800`) and the documented `$F80001`-`$F82001` watchdog test.
+- **`$8.w` changes during the self-test.** Five sites save and restore the bus-error vector
+  around temporary handlers; a model that caches vector 2 rather than reading it per fault
+  will dispatch to the wrong handler.
+- **The faulting instruction need not be restartable.** Recovery is by `rts` to a
+  continuation, not by resuming the access, so a model does not need precise bus-error
+  restart semantics — only a correctly-sized frame and a correct stacked PC.
