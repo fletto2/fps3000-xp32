@@ -5137,7 +5137,10 @@ check('$F02764 rounds a length up to even before taking +$1E and +$22',
 # check() call appears after the exit.
 # ---------------------------------------------------------------------------
 _self = open(__file__).read()
-_below = _self[_self.index('sys.exit(1 if fails else 0)'):].count('check(')
+_marker = 'sys.exit(1 if fails else 0)'
+# build the needle at runtime so this guard does not match its own source text
+_needle = 'ch' + 'eck('
+_below = _self[_self.rindex(_marker):].count(_needle)
 if _below:
     print(f'  FATAL: {_below} check() calls are below sys.exit() and never ran')
     sys.exit(2)
