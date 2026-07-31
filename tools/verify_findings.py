@@ -5846,6 +5846,12 @@ check('...of which TEN use a computed bit number and evade a literal census',
 check('VMOD bit 6 is set exactly once, at $F09052',
       insn(0xF09052) == 'bset.b #$6, $1(a5)')
 
+check('MODE2 has 18 access sites by operand form, not the 14 a provenance sweep found',
+      len([x for x in range(0xF00000, 0xF10000, 2)
+           if _mre.search(r'(?<!-)\$210\(a\d\)', (insn(x) or '').lower())]) == 18)
+check('...the four extra are chassis op $3, which writes a COMPUTED page',
+      insn(0xF04D72) == 'lsr.l d2, d1' and insn(0xF04D74) == 'move.w d1, $210(a0)'
+      and insn(0xF04DE8) == 'move.w d1, $210(a0)')
 check('MODE2 literals are only $0 and $F, in three regions',
       insn(0xF05316) == 'move.w #$0, $210(a5)' and insn(0xF05DEA) == 'move.w #$f, $210(a5)'
       and insn(0xF0A1E0) == 'move.w #$f, $210(a0)' and insn(0xF0A1FE) == 'clr.w $210(a0)')

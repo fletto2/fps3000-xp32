@@ -701,14 +701,26 @@ Fourteen access sites, and the firmware only ever *selects* **two** pages:
 | **self-test** | `$F095F8`, `$F0961A`, `$F096DC`, `$F09782`, `$F09AE2`, `$F09B24` | always **0** |
 | **init** | `$F0A1E0`/`$F0A1FE` | set **`$F`**, then clear to **0** |
 
-**Only `$0` and `$F` are ever written as literals.** Every other value that appears on the
-bus is a *restore* — `move.w (a7)+,$210(a0)` in RDHC and `move.w d7,$210(a5)` in TCBIO1I
-write back whatever was read a moment earlier. So a bus log showing a third value (this
-project recorded `$10` from a runtime trace) is observing a restored value, not a page the
-firmware chose.
+> **CORRECTED 2026-07-31, same day.** The table above lists 14 sites and was built from a
+> provenance sweep. Operand-form matching — sound here, since `$210` is a distinctive
+> displacement — finds **18**. The four missed sites are all in **chassis operation `$3`**
+> (`$F04D4E`, `$F04D74`, `$F04DE8`, `$F04E22`), which this same session decoded separately
+> without noticing the two results disagreed.
 
-**For a chassis model that means only two pages need backing**: page 0 for SCM and the
-`$400000` window generally, page `$F` for the host mailbox.
+**Only `$0` and `$F` are ever written as *literals*.** But op `$3` writes a **computed**
+page: `move.l $e58,d1 / moveq #$14,d2 / lsr.l d2,d1 / move.w d1,$210(a0)` — the top bits of
+whatever 32-bit address the chassis supplied. It saves the previous page on entry and
+restores it on exit, which is why a bus log shows values the firmware never names.
+
+**So the claim that "only two pages need backing" is wrong.** Page 0 (SCM, and the window
+generally) and page `$F` (the host mailbox) are the only two the firmware *selects by name*,
+but **op `$3` can select any page the chassis asks for**, and a model must back whatever the
+chassis addresses. That is the whole point of the operation: it is the SBC's arbitrary
+read/write path into chassis memory.
+
+The rest of the discipline stands: read the current page, set the one needed, restore it —
+now confirmed in **three** places rather than two, since op `$3` brackets a single access
+the same way RDHC and TCBIO1I bracket their sequences.
 
 **The discipline is uniform**: read the current value, set the page needed, restore. Three
 independent code regions do it the same way, and the self-test — which has the window to
