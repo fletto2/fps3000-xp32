@@ -18982,3 +18982,24 @@ returns, RDHC **posts to `HXP<ch>` and clears `$10A0` bit 1**, i.e. signals the 
 transfer is done and disables further notification until re-armed. That is the other end of
 the flag whose *set* side is RDHC command 1 — the two halves of `$10A0` bit 1 now both have
 a site and a meaning.
+
+### Per-code special cases in the handlers — and the register-provenance trap
+
+Sweeping the four handlers for comparisons against the operation code turns up five
+candidates, and **only two survive checking where the register came from**:
+
+| site | comparison | verdict |
+|---|---|---|
+| `$F08118` | `cmpi.w #$4,d0` in `D1_SEND` | **real** — `d0` is untouched from entry, so it is the op code. Operation `$04` sends and returns **without waiting** |
+| `$F0832A` | `cmpi.w #$a,d7` in `POLL` | **real** — `d7` is the op code by convention (`PanelSendAndWait` saves it at `$F056C4`). The documented drain-to-completion path for `$0A` |
+| `$F08216`, `$F0821C` | `cmpi.w #$8,d0` / `#$18,d0` | **not op-code tests** — `$F081E8` does `move.w $21a(a4),d0` first, so these compare the **IRQ-mask register value** |
+| `$F082AE`, `$F08388` | `cmpi.w #$0,d0` in `POLL`/`BLK_XFR` | same class — `d0` is reloaded before them |
+
+The trap is worth naming because it is the third instance of the same mistake in this
+session: a constant that *looks* like an operation code (`$8` and `$18` are both real
+`BLK_XFR` codes) compared against a register that no longer holds one. The earlier two were
+a **store** of `d0` counted as a test, and a `beq.b` mnemonic not matching a `beq` filter.
+
+**The rule that would have caught all three: before believing a comparison, find the most
+recent write to the register.** `d7` is safe inside these handlers because the convention
+reserves it; `d0` is not, because every error and teardown path reloads it.
