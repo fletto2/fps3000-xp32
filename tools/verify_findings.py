@@ -8245,6 +8245,19 @@ check('the day-rollover walk exits immediately on a null list head',
       _w(0xF00F1A) == 0x2069 and _w(0xF00F1C) == 0x000C
       and _w(0xF00F1E) == 0x2208 and _w(0xF00F20) >> 8 == 0x67)
 
+check('all nine trace hooks call $F01688 and carry a 2-byte inline parameter',
+      all(_w(_a) == 0x6100 and _bsrw(_a) == 0xF01688
+          for _a in (0xF002E4, 0xF005A2, 0xF006E0, 0xF0089E, 0xF00904, 0xF00F66)))
+check('the trace writer uses a $1A-byte entry past an 8-byte header, circular',
+      _w(0xF0168E) == 0x2678 and _w(0xF01690) == 0x0C30
+      and _w(0xF01696) == 0x2A53
+      and _w(0xF01698) == 0xBBEB and _w(0xF0169A) == 0x0004
+      and _w(0xF0169E) == 0x4BEB and _w(0xF016A0) == 0x0008
+      and _w(0xF016A2) == 0x49ED and _w(0xF016A4) == 0x001A)
+check('...writing A0 at +$8 and D0 at +$10, matching TRACE.EQ',
+      _w(0xF016AA) == 0x2B40 and _w(0xF016AC) == 0x0010
+      and _w(0xF016AE) == 0x2B48 and _w(0xF016B0) == 0x0008)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

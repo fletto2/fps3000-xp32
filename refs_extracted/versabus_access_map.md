@@ -35652,3 +35652,43 @@ dormant structure to the one piece of live code that would use it.
 
 Live state is consistent throughout: `$0C42` = 73,000 ms (73 s simulated), `$0C3E` = 0 days, and the
 rollover branch has never executed.
+
+## The nine trace hooks share one routine and pass an INLINE parameter (2026-07-31)
+
+Every one of the nine recorded trace sites is `bsr.w $F01688` followed by **two bytes of data**:
+
+| site | inline word | | site | inline word |
+|---|---|---|---|---|
+| `$F002E4` | `$FF15` | | `$F008A0` | `$EE14` |
+| `$F005A2` | `$FD10` | | `$F00904` | `$EE09` |
+| `$F006E0` | `$DD08` | | `$F00F66` | `$FF13` |
+
+They are not nine hooks but **one hook called nine times with an inline event code** — the classic
+`bsr`-then-data idiom, where the callee takes the word from its own return address and steps over it.
+That is why the disassembler renders those addresses as stray `addx.b`, `roxr.b`, `lsr.b` and `DC.W`:
+they are data embedded in the instruction stream, and this accounts for a handful of the "other"
+bytes in the byte census.
+
+`$F01688` itself confirms the recorded trace-table structure exactly:
+
+```
+$F0168E  movea.l $c30.w,a3        ; the trace-table pointer
+$F01692  ori.w   #$700,sr         ; mask to level 7
+$F01696  movea.l (a3),a5          ; TRCPTR
+$F01698  cmpa.l  $4(a3),a5        ; vs TRCLNG
+$F0169E  lea     $8(a3),a5        ; wrap past the 8-byte header
+$F016A2  lea     $1a(a5),a4       ; advance by $1A = 26 bytes
+$F016A6  move.l  a4,(a3)
+$F016AA  move.l  d0,$10(a5)       ; entry +$10 = D0
+$F016AE  move.l  a0,$8(a5)        ; entry +$8  = A0
+```
+
+**Entry size `$1A` = 26, an 8-byte header of `TRCPTR`/`TRCLNG`, circular wrap, and field offsets that
+match `{code w, SR w, PC l, A0 l, A6 l, D0 l, time_ms l, time_us w}` term for term** — A0 at `+$8`,
+D0 at `+$10`. The layout this project derived from Motorola's `TRACE.EQ` is confirmed from the
+writing side.
+
+**Reachability was checked first this time**, and it paid: of twelve `$0C2C` readers only four
+execute, the PAT service `$F01128` is not among them, and the per-tick path merely tests the null
+active list and skips. The tick's live work is exactly three things — advance `$0C42`, test the PAT
+head, decrement the quantum `$0C52` and set `$0C5B` bit 7 when it expires.
