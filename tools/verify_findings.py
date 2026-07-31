@@ -4383,6 +4383,36 @@ check('the two-page constant $F0A51A matches !UST\'s runtime USTNPAGE = 2',
       struct.unpack('>I', _rom[0xF0A51A - _B:0xF0A51E - _B])[0] == 2
       and struct.unpack('>H', _rq2[0x1FB0A:0x1FB0C])[0] == 2)
 
+# --- delayed acknowledgement, and the busy bit as a real model -----------
+def _delayrun(env):
+    with tempfile.TemporaryDirectory() as _t:
+        subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000',
+                        '-trace', f'{_t}/t', '-dump-ram', f'{_t}/r'],
+                       capture_output=True, timeout=400,
+                       env={**os.environ, **env})
+        return (collections.Counter(
+                    re.findall(r'[0-9A-F]{6}', open(f'{_t}/t').read())),
+                open(f'{_t}/r', 'rb').read())
+
+
+_d0 = _delayrun({'FPS3K_XPIRQ': '1', 'FPS3K_CHCMD': '4000'})[0]
+_d1 = _delayrun({'FPS3K_XPIRQ': '1', 'FPS3K_CHCMD': '4000',
+                 'FPS3K_CHACK_DELAY': '40000'})[0]
+check('a delayed channel ack lengthens the poll without causing a timeout',
+      _d1['F07F2C'] > 10 * _d0['F07F2C'] and _d1['F07F4C'] == 0
+      and _d1['F07F84'] == _d0['F07F84'])
+# The busy bit derives from an outstanding transfer -- contention, not self.
+_c0 = _delayrun({'FPS3K_XPIRQ': '1,2', 'FPS3K_CHCMD': '4000',
+                 'FPS3K_CHANNELS': '2'})
+_c1 = _delayrun({'FPS3K_XPIRQ': '1,2', 'FPS3K_CHCMD': '4000',
+                 'FPS3K_CHANNELS': '2', 'FPS3K_CHACK_DELAY': '200000'})
+check('with no transfer outstanding the busy bit is never set and $1064 stays 0',
+      _c0[0]['F08616'] == 0
+      and struct.unpack('>H', _c0[1][0x1064:0x1066])[0] == 0)
+check('...and under contention it is, so the encoder runs and $1064 reads $0005',
+      _c1[0]['F08616'] >= 1
+      and struct.unpack('>H', _c1[1][0x1064:0x1066])[0] == 0x0005)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
