@@ -17748,3 +17748,33 @@ terminates `USER`, which is why `addi.w #$264,d1` with `d1` = the channel produc
 patched — so the `+7` is universal and not a per-task constant. The same routine also
 clears MODE1 bit 14 and MODE0 bit 10, giving those two long-noted bits a concrete role:
 they are cleared when a channel aborts.
+
+## RDHC's main loop is a second, smaller chassis interface (2026-07-30)
+
+This file documents the **16-entry operation table at `$F05102`**, dispatched from the ISR.
+RDHC's *main loop* has its own decode of the same latched byte, and it is a different and
+much smaller command set. The selector is again bit 7 of `$E87`:
+
+**Bit 7 set** — `$F048D8`: `d0 = $E86 & $1F`, and **`$14` calls `$F052F8`**, the command
+processor that reads RDHC's four-command record out of chassis memory at `$400000`. This is
+the "a command record is waiting" meaning already recorded here, now located precisely.
+
+**Bit 7 clear** — `d0 = $E86 & $F`:
+
+| op | what RDHC does |
+|---|---|
+| `$8` | **`CPRUN`** — with `CHANNEL_SELECT == 0`, create/allocate/start the `USER` task; non-zero, `TERMT` it |
+| `$F` | `$F04824`: validate the channel in `$E60` against `$105E`, panel `$25C` on reject |
+| `$7` | `$F0489E`, taking the `beq` that **skips the BIM0 control-register rewrite** |
+| other | rewrite `BIM0 CR = $5E` (re-arm the panel responder), then test **MODE1 bit 7 (busy)**; if not busy, and not op `$F`, and not op `$8` with `CHANNEL_SELECT == 1`, clear **MODE0 bit 10** and write it back |
+
+Two long-standing register notes get concrete roles from this. **MODE1 bit 7 is tested as
+"busy"** exactly as the register table says, and it gates whether MODE0 is updated at all.
+And **MODE0 bit 10** — recorded here only as "bit 10 manipulated" — is the bit RDHC
+*clears* to acknowledge an operation, on every path except the three exceptions above.
+
+So the chassis→SBC protocol has **three** dispatch layers, not one: the ISR's 16-operation
+table (`$F05102`), the ISR's bit-7 alternative (`$F0495C`), and this main-loop set. A code
+means different things in each, which is why sweeping response values against a single
+table never reached most of the behaviour — and why `$8` is both "CH1 reset when idle" in
+the ISR table and `CPRUN` here.

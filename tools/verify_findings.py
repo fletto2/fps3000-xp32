@@ -3885,6 +3885,18 @@ check('...and driving op $8 reaches the operation decode but still rejects',
       _uk['driven']['F04740'] == 1 and _uk['driven']['F04756'] == 1
       and _uk['driven']['F04774'] == 0)
 
+# --- RDHC's main loop is a SECOND, smaller chassis interface --------------
+# Same latched byte, different decode from the ISR's 16-op table at $F05102.
+check('bit 7 set selects the command-record arm, where $14 calls $F052F8',
+      insn(0xF048E2) == 'cmpi.w #$14, d0')
+check('op $7 skips the BIM0 control-register rewrite',
+      insn(0xF0489E) == 'cmpi.w #$7, d0'
+      and insn(0xF048A4) == 'move.w #$5e, $230(a5)')
+check('MODE1 bit 7 (busy) gates whether MODE0 is updated at all',
+      insn(0xF048AE) == 'btst.b #$7, d1')
+check('...and MODE0 bit 10 is the bit RDHC clears to acknowledge an operation',
+      insn(0xF048CE) == 'bclr.b #$a, d1')
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
