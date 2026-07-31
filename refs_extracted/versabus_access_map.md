@@ -21814,3 +21814,27 @@ ASCII record fed to the CPLOAD path parses as garbage without any diagnostic.
 **Emulator consequence**: `FPS3K_SEQ`-driven uploads exercise the binary path; anything modelling
 the SLC path must present one ASCII character per word in the high byte and complete the
 `$FF0218` handshake for every one of them.
+
+### The ASCII/binary contrast is proven, not asserted (2026-07-31)
+
+The two parsers differ in **three independent ways**, each visible in one instruction:
+
+| | SLC path (`$F05298`) | CPLOAD path (`$F055A2`) |
+|---|---|---|
+| stream read | `move.w (a0),d2` — **no post-increment**, a FIFO port | `move.w (a0)+,d2` — **post-increment**, walking memory |
+| conversion | `jsr $F05150` — **ASCII hex -> binary** | **none** |
+| shift step | `subq.b #$8,d5` — **8 bits per character** | `subi.b #$10,d5` — **16 bits per word** |
+
+And the converter's caller census closes it: **`$F05150` has exactly four callers — `$F04B82`,
+`$F051C4`, `$F051FA`, `$F052B8` — all inside the SLC region, none inside `$F055xx`.**
+
+The shift steps are the tidiest confirmation. A path consuming one ASCII hex *character* per
+transfer contributes 4 bits of address per character but is written to step 8 bits per byte-pair;
+a path consuming one binary *word* contributes 16 bits and steps 16. Neither number is arbitrary,
+and neither would be correct for the other path.
+
+Both then converge: `adda.l #$10000,a1`, the same staging offset, and the same
+`$10000`-`$1FFFF` bounds check (`$F055CC`/`$F055D4`). **Two transports, two encodings, one
+destination rule** — which is why this project found the same arithmetic implemented twice and
+could treat the agreement as a check on the arithmetic. The agreement is real; the redundancy is
+not.

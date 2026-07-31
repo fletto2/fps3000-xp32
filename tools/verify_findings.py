@@ -5014,3 +5014,16 @@ check('the assembled address gets the +$10000 staging offset and lands in $E7E',
       insn(0xF052D0) == 'adda.l #$10000, a1' and insn(0xF052D6) == 'move.l a1, $e7e.l')
 check('the shift count steps down by 8 per byte',
       insn(0xF052C2) == 'lsl.l d5, d2' and insn(0xF052C8) == 'subq.b #$8, d5')
+
+# ---- the two S-record parsers differ in ENCODING, three ways (2026-07-31) ----
+_asc = [a for a, (_, o, _) in _mins.items() if 'f05150' in o]
+check('the ASCII converter has exactly four callers, all in the SLC region',
+      sorted(_asc) == [0xF04B82, 0xF051C4, 0xF051FA, 0xF052B8], [hex(x) for x in sorted(_asc)])
+check('SLC reads a FIFO port (no post-increment); CPLOAD walks memory (post-increment)',
+      insn(0xF052B4) == 'move.w (a0), d2' and insn(0xF055A8) == 'move.w (a0)+, d2')
+check('SLC steps 8 bits per character; CPLOAD steps 16 bits per word',
+      insn(0xF052C8) == 'subq.b #$8, d5' and insn(0xF055BA) == 'subi.b #$10, d5')
+check('both apply the same +$10000 staging offset',
+      insn(0xF052D0) == 'adda.l #$10000, a1' and insn(0xF055C4) == 'adda.l #$10000, a1')
+check('...and CPLOAD enforces the same $10000-$1FFFF bound',
+      insn(0xF055CC) == 'cmpa.l #$10000, a1' and insn(0xF055D4) == 'cmpa.l #$1ffff, a1')
