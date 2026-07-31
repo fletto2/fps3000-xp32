@@ -27775,11 +27775,22 @@ bset.b #$3,$1(a5) / bsr walker / btst #$2,$1(a4) / bne ok ; bit 3 set  -> the se
 That answers what raises the second interrupt: not a second level, but a **second request
 line gated by bit 3**, delivering its own programmed vector.
 
-**A tension worth recording.** `$1FFF2` sits inside the register range this project
-documents (`$01FFF0`-`$01FFF3`, "excluded by 8 independent sites"), but **`$1FFE4` does
-not** — the same note observes that nothing skips `$1FFE2`/`$1FFE4`/`$1FFE6`, which was the
-basis for calling them ordinary RAM. A vector register at `$1FFE4` and a RAM test that walks
-over it cannot both be right unless the ordering saves them (the RAM test runs in sequence A,
-the interrupter test in sequence B). The `lsr #$2` and the matching handler install make the
-vector-register reading hard to explain away, so **the RAM/register partition should be
-treated as unsettled below `$1FFF0`** rather than as established.
+**This refines the RAM/register partition rather than contradicting it.** `$1FFF2` sits
+inside the register range this project documents (`$01FFF0`-`$01FFF3`, "excluded by 8
+independent sites"), but `$1FFE4` does not — the same note observes that nothing skips
+`$1FFE2`/`$1FFE4`/`$1FFE6`, which was the basis for calling them ordinary RAM.
+
+Both can be true, and the resolution is instructive: **a vector register that reads back what
+was written is indistinguishable from RAM in a pattern test.** The RAM test walks `$1FFE4`,
+sees its patterns read back, and passes; the interrupter test then programs it with a vector
+number. Nothing is clobbered, because the interrupter test runs afterwards and writes what it
+needs.
+
+So the partition derived from the firmware's exclusions describes **what the firmware
+protects from pattern testing** — locations whose reads have side effects or whose contents
+must survive — not **what is physically RAM**. `$1FFF0`-`$1FFF3` is excluded because writing
+patterns there would drive the chassis; `$1FFE4` is not excluded because writing patterns
+there is harmless until the moment the interrupter needs it.
+
+That is a useful sharpening: an exclusion list is evidence about consequences, not about
+address decoding.
