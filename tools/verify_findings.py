@@ -4463,6 +4463,19 @@ check('...installs a temporary bus-error handler at vector 2 around the copy',
 check('...and the whole path is skipped: copy loop 0, skip target 1',
       _dpcs['F09C8C'] == 0 and _dpcs['F09C96'] == 1 and _dpcs['F09C66'] == 1)
 
+# --- the optional boot-progress display and its fallback -----------------
+check('the display address comes from config $F0A506, which is zero here',
+      insn(0xF09C38) == 'movea.l $f0a506(pc), a1'
+      and struct.unpack('>I', _rom[0xF0A506 - _B:0xF0A50A - _B])[0] == 0)
+check('...a non-zero address would be probed under a bus-error handler',
+      insn(0xF09C46) == 'move.l a0, $8.w'
+      and insn(0xF09C4A) == 'move.w #$80, $4(a1)')
+check('...and the fallback points $0C3A at scratch RAM $800',
+      _rq2[0x0C3A:0x0C3E] == bytes.fromhex('00000800'))
+# The driver writes value-then-value|$30 twice; the last of the four remains.
+check('the display driver leaves $0033 at $804, the last of its four writes',
+      struct.unpack('>H', _rq2[0x0804:0x0806])[0] == 0x0033)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
