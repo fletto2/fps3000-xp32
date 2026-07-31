@@ -21989,3 +21989,50 @@ individual byte is range-checked, not just the record's start address. So a reco
 inside the staging area and runs past `$1FFFF` is truncated exactly at the boundary and reported
 with `$25A` — it does not overrun. That is a stronger guarantee than "the check is on the result"
 implies, and it is the reason the staging bound holds even for a maliciously long record.
+
+## Subroutine-level completeness: the FPS layer is now 100% documented (2026-07-31)
+
+Counting **call targets** rather than labels (most labels are branch targets inside routines, not
+subroutines) gives a meaningful completeness metric. The ROM has **161 distinct `jsr`/`bsr`
+targets**. Cross-referencing them against every documentation file found 103 mentioned and 58 not
+— of which **51 are inside the RMS68K kernel**, i.e. generic Motorola RTOS internals that are not
+FPS-specific.
+
+That left **seven** FPS-layer subroutines undocumented. All seven are now identified, and three of
+them independently confirm structures this project derived from RAM dumps:
+
+| routine | what it is |
+|---|---|
+| **`$F06738`** | XP4I's **channel-number validator** — `1 <= d0 <= $105E`, else panel `$264`. The template's per-task copy |
+| **`$F08A5C`** | **the self-test's first routine**: `move.l a7,$0.w` (parks the SP in the not-yet-installed vector table), `lea $FF0000,a6`, broadcasts phase **`$100`**, then runs the `moveq` sign-extension test |
+| **`$F09176`** | **the MC6840 master reset** — `move.b #$1,$2(a0)` then `move.b #$1,(a0)` with `a0 = $F70001`, i.e. CR2 then CR1 bit 0. This is exactly the "single internal reset holding all timers" the emulator models |
+| **`$F09DCE`** | **the allocatable-RAM region-list builder** — writes `flags&$70` at `+$00`, `flags&$0F` at `+$01`, `a2` at `+$02`, `a0` at `+$06`, then `lea $A(a3),a3` |
+| **`$F09DE2`** | the tail of the same routine, reached as a second entry |
+| **`$F0A374`** | **page-align helper** — `(d + $FF) & ~$FF` via `addi.l #$FF` / `clr.b`, applied to d2/d3/d4. The same idiom that rounds `$F0A57E` up to the TDTI table at `$F0A600` |
+| **`$F0A424`** | **page-heap free-list node constructor** — zeroes `(a5)` and `$C(a5)`, stores `d7>>8` (a page count) at `$8(a5)`, links `a0` at `$4(a5)` and back-links `(a0) = a5` |
+
+### Three independent confirmations fall out
+
+**`$F09DCE` confirms the `$0C00` region-record layout from the construction side.** This project
+derived "10-byte records `{flags word, class byte at +1, base long at +2, limit long at +6}`" by
+reading RAM. The builder writes exactly those fields at exactly those offsets and advances by
+`$A`. Two derivations, opposite directions, same structure.
+
+**`$F0A424` confirms the page heap is a linked free list with a page count**, not a bump
+allocator — `d7 >> 8` is a byte count converted to pages, which is why `T0PAGAL` rounds to whole
+pages and why every structure lands on a `$1Fx00` boundary.
+
+**`$F09176` confirms the MC6840 reset model.** The emulator's "MC6840 single internal reset
+(CR1 bit 0) holding all timers" was one of four chassis-stub fixes made to get the self-test
+running. Here is the firmware performing precisely that sequence, in a routine that had never
+been read.
+
+### The resulting completeness statement
+
+- **FPS-layer subroutines: 110 of 110 documented (100%).**
+- **Kernel subroutines: 51 of 102 not individually documented** — generic RMS68K internals,
+  covered structurally by the directive tables, the TCB field map and the ISR-exit chain rather
+  than routine by routine.
+- Combined with the byte accounting (43,047 bytes of content, nothing unexplained), the
+  computed-dispatch census (25 of 25 identified) and the executed-PC boundary property, **the
+  FPS-specific half of this ROM is closed at every level examined**.

@@ -5066,3 +5066,22 @@ check('the staging bound is enforced PER BYTE, inside the store loop',
       and insn(0xF0520E) == 'move.b d2, (a1)+')
 check('...so an over-long record is truncated at the boundary and reported $25A',
       insn(0xF0520C) == 'bgt.b $f05212' and insn(0xF05224) == 'move.w #$25a, d0')
+
+# ---- the last seven FPS-layer subroutines (2026-07-31) ----
+check("XP4I's channel validator: 1 <= d0 <= $105E else panel $264",
+      insn(0xF06738) == 'cmpi.w #$1, d0' and insn(0xF0673E) == 'cmp.w $105e.l, d0'
+      and insn(0xF06746) == 'move.w #$264, d0')
+check('the self-test parks the SP at address 0 before vectors exist',
+      insn(0xF08A5C) == 'move.l a7, $0.w' and insn(0xF08A66) == 'move.w #$100, $204(a6)')
+check('$F09176 is the MC6840 master reset: CR2 then CR1 bit 0',
+      insn(0xF09178) == 'lea.l $f70001.l, a0' and insn(0xF0917E) == 'move.b #$1, $2(a0)'
+      and insn(0xF09184) == 'move.b #$1, (a0)')
+check('$F09DCE builds the $0C00 region records: flags, class, base, limit, stride $A',
+      insn(0xF09DD4) == 'andi.w #$f, d1' and insn(0xF09DD8) == 'andi.w #$70, d0'
+      and insn(0xF09DE2) == 'move.l a2, $2(a3)' and insn(0xF09DE6) == 'move.l a0, $6(a3)'
+      and insn(0xF09DEA) == 'lea.l $a(a3), a3')
+check('$F0A374 page-aligns via (d + $FF) & ~$FF',
+      insn(0xF0A374) == 'addi.l #$ff, d2' and insn(0xF0A37A) == 'clr.b d2')
+check('$F0A424 builds a free-list node with a PAGE COUNT at +$8 and a back-link',
+      insn(0xF0A42E) == 'lsr.l #$8, d7' and insn(0xF0A430) == 'move.l d7, $8(a5)'
+      and insn(0xF0A434) == 'move.l a0, $4(a5)' and insn(0xF0A43A) == 'move.l a5, (a0)')
