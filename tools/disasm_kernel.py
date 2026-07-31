@@ -76,6 +76,22 @@ TRAP1_NAMES = {
 DATA_REGIONS = [
     (TRAP0_TABLE, TRAP0_TABLE + 4 * TRAP0_N),   # $F001D6 + 140
     (TRAP1_TABLE, TRAP1_TABLE + 4 * TRAP1_N),   # $F003D8 + 308
+
+    # Added 2026-07-31.  An audit of how the listings render every data region
+    # this project has identified found that the four tables guarded above (plus
+    # the dispatch tables, which the descent happens to avoid) come out clean,
+    # while EVERY region discovered after the guard list was written renders
+    # 55-70% as code.  Each extent below is derived, not guessed:
+    (0xF0011E, 0xF0011E + 92),    # the static vector table: 23 records of
+                                  #   {1-byte vector, 3-byte handler}
+    (0xF0467E, 0xF0467E + 48),    # RDHC's task name / block table: 6 x 8 bytes
+    (0xF084A4, 0xF084A4 + 8),     # channel -> $FF021A bit map, 4 entries
+    (0xF08E8C, 0xF08E8C + 32),    # the VMOD longword pattern table: the reader
+                                  #   loop is `moveq #$7,d3` + `move.l (a4)+,d0`
+    (0xF09BB6, 0xF09BB6 + 24),    # the SCM pattern table: 3 complementary pairs
+    (0xF0A4BE, 0xF0A4BE + 72),    # the VMOD offset table: `moveq #$3,d4` outer,
+                                  #   each pass 1 offset word + 8 data words
+    (0xF0A600, 0xF0A600 + 576),   # the TDTI table: 6 records of 96 bytes
 ]
 
 

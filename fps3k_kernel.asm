@@ -4,7 +4,7 @@
 ; Method  : recursive descent seeded from the TRAP #0 jump
 ;           table at 0xF001D6 + exception vectors
 ; Coverage: 16662/17544 bytes as code  (95.0%)
-; Instructions: 5069   Labels: 987
+; Instructions: 5069   Labels: 969
 
   f00000: 00 00                    DC.W     $0000
   f00002: 00 00                    DC.W     $0000
@@ -211,7 +211,7 @@ loc_F00186:
 loc_F001AA:
   f001aa: 60 fe                    bra.b    $f001aa
 
-VEC_20_F001AC:
+TRAP0_HANDLER:
   f001ac: 3f 17                    move.w   (a7), -(a7)
   f001ae: 02 17 00 7f              andi.b   #$7f, (a7)
   f001b2: 54 8f                    addq.l   #$2, a7
@@ -299,7 +299,7 @@ loc_F001B8:
   f0025e: 00 f0                    DC.W     $00f0
   f00260: 11 98                    DC.W     $1198
 
-VEC_21_F00262:
+loc_F00262:
   f00262: 3f 17                    move.w   (a7), -(a7)
   f00264: 02 2f 00 0c 00 01        andi.b   #$c, $1(a7)
   f0026a: 02 17 00 7f              andi.b   #$7f, (a7)
@@ -978,7 +978,7 @@ loc_F0087C:
   f0088c: 21 6f 00 02 00 fc        move.l   $2(a7), $fc(a0)
   f00892: 60 00 fa 7c              bra.w    $f00310
 
-VEC_0C_F00896:
+loc_F00896:
   f00896: 08 38 00 0e 0c 34        btst.b   #$e, $c34.w
   f0089c: 67 06                    beq.b    $f008a4
   f0089e: 61 00 0d e8              bsr.w    $f01688
@@ -1163,47 +1163,19 @@ loc_F00A1A:
 
 loc_F00A76:
   f00a76: 61 1e                    bsr.b    $f00a96
-
-VEC_22_F00A78:
   f00a78: 61 1c                    bsr.b    $f00a96
-
-VEC_23_F00A7A:
   f00a7a: 61 1a                    bsr.b    $f00a96
-
-VEC_24_F00A7C:
   f00a7c: 61 18                    bsr.b    $f00a96
-
-VEC_25_F00A7E:
   f00a7e: 61 16                    bsr.b    $f00a96
-
-VEC_26_F00A80:
   f00a80: 61 14                    bsr.b    $f00a96
-
-VEC_27_F00A82:
   f00a82: 61 12                    bsr.b    $f00a96
-
-VEC_28_F00A84:
   f00a84: 61 10                    bsr.b    $f00a96
-
-VEC_29_F00A86:
   f00a86: 61 0e                    bsr.b    $f00a96
-
-VEC_2A_F00A88:
   f00a88: 61 0c                    bsr.b    $f00a96
-
-VEC_2B_F00A8A:
   f00a8a: 61 0a                    bsr.b    $f00a96
-
-VEC_2C_F00A8C:
   f00a8c: 61 08                    bsr.b    $f00a96
-
-VEC_2D_F00A8E:
   f00a8e: 61 06                    bsr.b    $f00a96
-
-VEC_2E_F00A90:
   f00a90: 61 04                    bsr.b    $f00a96
-
-VEC_2F_F00A92:
   f00a92: 61 02                    bsr.b    $f00a96
   f00a94: 4e 71                    nop      
 
@@ -1242,16 +1214,10 @@ loc_F00AC6:
   f00ae0: 61 2e                    bsr.b    $f00b10
   f00ae2: 61 2c                    bsr.b    $f00b10
   f00ae4: 61 2a                    bsr.b    $f00b10
-
-VEC_0A_F00AE6:
   f00ae6: 61 28                    bsr.b    $f00b10
-
-VEC_0B_F00AE8:
   f00ae8: 61 26                    bsr.b    $f00b10
   f00aea: 4e 71                    nop      
   f00aec: 4e 71                    nop      
-
-VEC_09_F00AEE:
   f00aee: 61 02                    bsr.b    $f00af2
   f00af0: 4e 71                    nop      
 
@@ -1637,8 +1603,6 @@ loc_F00EAC:
   f00ebc: 52 72 10 12              addq.w   #$1, $12(a2, d1.w)
   f00ec0: 08 ec 00 0b 00 2c        bset.b   #$b, $2c(a4)
   f00ec6: 4e 73                    rte      
-
-VEC_1C_F00EC8:
   f00ec8: 48 e7 c0 c0              movem.l  d0-d1/a0-a1, -(a7)
   f00ecc: 20 78 0c 3a              movea.l  $c3a.w, a0
   f00ed0: 11 7c 00 00 00 02        move.b   #$0, $2(a0)
