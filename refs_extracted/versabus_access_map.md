@@ -21785,8 +21785,10 @@ Three things this settles:
 / clear cycle on `$FF0218`. There is no block mode on this path — the 42 writes of `$0400` and
 `$0000` counted in the XLTR sweep are exactly this loop running.
 
-**2. The payload is ASCII, one character per 16-bit word, in the HIGH byte.** `$F05150` is the
-converter:
+**2. The payload is ASCII, TWO characters per 16-bit word — one data byte.**
+**[CORRECTED 2026-07-31: an earlier version of this section said "one character per word, in the
+high byte", having read only the first half of the converter. `$F05150` converts BOTH bytes.]**
+`$F05150` is the converter:
 
 ```
 $F05150  move.w  d2,d3
@@ -21925,3 +21927,65 @@ boundary the bytes are `22 7C 00 00 00 10` = **`movea.l #$10,a1`**, confirming t
 this artifact; **`$AAAAAAAA` is also a genuine RAM-test pattern in the self-test**, which is
 exactly why the two must be told apart by re-decoding from a known boundary rather than by
 recognising the value.
+
+## The converter takes TWO characters per word, and the S-record CHECKSUM IS NOT VERIFIED (2026-07-31)
+
+### `$F05150` in full
+
+```
+$F05150  move.w  d2,d3
+$F05152  lsr.w   #$8,d3          the HIGH byte
+$F05154  cmpi.b  #$40,d3 / ble
+$F0515A  subi.w  #$37,d3         'A'-'F'
+$F05160  subi.w  #$30,d3         '0'-'9'
+$F05164  lsl.w   #$4,d3          <- it is the HIGH NIBBLE
+$F05166  andi.w  #$ff,d2         the LOW byte
+$F0516A  cmpi.b  #$40,d2 / ble
+$F05170  subi.w  #$37,d2
+$F05176  subi.w  #$30,d2
+$F0517A  add.w   d3,d2           combine -> ONE BYTE in d2
+$F0517C  rts
+```
+
+So a 16-bit word from the stream port carries **two ASCII hex characters**, and the pair yields
+one data byte. That is why the address loop steps `subq.b #$8,d5` — 8 bits per word — which had
+looked inconsistent with "one character per word" and is exactly right for two.
+
+### The last word of every record is read and thrown away
+
+The S1 data loop terminates on `d4 == 1`, not `d4 == 0`:
+
+```
+$F05230  addq.l  #$1,d0
+$F05232  subq.w  #$1,d4
+$F05234  cmpi.w  #$1,d4
+$F05238  bne.b   $F051E2          loop while more than ONE word remains
+$F0523A  move.w  #$400,$218(a5)   ...then one final handshake...
+$F05250  move.w  (a0),d2          ...read the last word...
+$F05252  addq.l  #$1,d0
+$F05254  rts                      ...and return. d2 is never examined.
+```
+
+**That last word is the record checksum, and the firmware does not verify it.** It is consumed
+purely to keep the stream framed. There is no accumulation anywhere in the handler — `d2` is
+overwritten on every iteration and no running sum exists.
+
+Three consequences:
+
+- **A corrupted S-record is loaded silently.** The staging buffer will contain the corruption and
+  the upload will report success. The only integrity check anywhere on this path is the
+  `$10000`-`$1FFFF` bound, which catches a corrupted *address* but not corrupted *data*.
+- **`monitor/monitor.s` is stricter than the firmware it patches.** The monitor's `L` command
+  validates each record's checksum; the ROM's own loader does not. That asymmetry is worth
+  keeping in mind when the two are compared as loaders — the monitor is not merely a bypass, it
+  is a safer one.
+- A host implementation must still **send** a checksum byte, because the framing depends on the
+  word count including it.
+
+### And the bound is enforced per BYTE, not per record
+
+`$F051FE`/`$F05206` sit **inside** the store loop, immediately before `move.b d2,(a1)+`. Every
+individual byte is range-checked, not just the record's start address. So a record that begins
+inside the staging area and runs past `$1FFFF` is truncated exactly at the boundary and reported
+with `$25A` — it does not overrun. That is a stronger guarantee than "the check is on the result"
+implies, and it is the reason the staging bound holds even for a maliciously long record.

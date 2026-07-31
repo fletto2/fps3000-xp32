@@ -5005,9 +5005,10 @@ check('the SLC address loop arms $FF0218 with $400 and polls bit 15 PER WORD',
       insn(0xF0529E) == 'move.w #$400, $218(a5)' and insn(0xF052A8) == 'btst.b #$f, d7'
       and insn(0xF052AE) == 'move.w #$0, $218(a5)')
 check('...reads one word from the stream port each time', insn(0xF052B4) == 'move.w (a0), d2')
-check('...and converts it as ASCII HEX from the HIGH byte',
+check('...and converts it as ASCII HEX -- TWO characters per word, one data byte',
       insn(0xF052B8).startswith('jsr') and insn(0xF05152) == 'lsr.w #$8, d3'
-      and insn(0xF05154) == 'cmpi.b #$40, d3')
+      and insn(0xF05164) == 'lsl.w #$4, d3' and insn(0xF05166) == 'andi.w #$ff, d2'
+      and insn(0xF0517A) == 'add.w d3, d2')
 check("...'A'-'F' subtract $37, '0'-'9' subtract $30",
       insn(0xF0515A) == 'subi.w #$37, d3' and insn(0xF05160) == 'subi.w #$30, d3')
 check('the assembled address gets the +$10000 staging offset and lands in $E7E',
@@ -5050,3 +5051,18 @@ check('...and d1 is never used between iterations',
       insn(0xF05196) == 'addq.l #$1, d0')
 check('the SLC data handler seeds a1 = $10, matching CPLOAD',
       insn(0xF051A2) == 'movea.l #$10, a1' and insn(0xF055A2) == 'movea.l #$10, a1')
+
+# ---- the S-record checksum is READ AND DISCARDED (2026-07-31) ----
+check('the data loop terminates on d4 == 1, leaving one word unread',
+      insn(0xF05234) == 'cmpi.w #$1, d4' and insn(0xF05238) == 'bne.b $f051e2')
+check('...that last word is read through a full handshake and never examined',
+      insn(0xF05250) == 'move.w (a0), d2' and insn(0xF05254) == 'rts')
+check('no checksum accumulation exists anywhere in the S1 handler',
+      not any(_mins[a][0].startswith(('add.b', 'add.w', 'addx', 'eor'))
+              and 'd2' in _mins[a][1] and 'd3' not in _mins[a][1]
+              for a in range(0xF051A2, 0xF05256, 2) if a in _mins))
+check('the staging bound is enforced PER BYTE, inside the store loop',
+      insn(0xF051FE) == 'cmpa.l #$10000, a1' and insn(0xF05206) == 'cmpa.l #$1ffff, a1'
+      and insn(0xF0520E) == 'move.b d2, (a1)+')
+check('...so an over-long record is truncated at the boundary and reported $25A',
+      insn(0xF0520C) == 'bgt.b $f05212' and insn(0xF05224) == 'move.w #$25a, d0')
