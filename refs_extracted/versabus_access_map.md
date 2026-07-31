@@ -19823,3 +19823,27 @@ correctness property that matters more than coverage: **every PC the CPU was obs
 execute decodes as an instruction at its own address** — 620/620 in the kernel, and 2,134 of
 2,136 in the application (the two exceptions being the ordering artefact diagnosed above,
 not unreached code).
+
+### …and those 276 bytes, identified
+
+65 runs, and every one is attributable:
+
+| range | bytes | what |
+|---|---:|---|
+| `$F0A4C0`-`$F0A4EE` | 46 | a table of repeated `$008E` words, in the init region |
+| **`$F044A2`-`$F044B4`** | **18** | **undecoded CODE** — `btst.b #$e,$c34` / `beq` / `move.w sr,-(a7)` / `bsr.w`: the **FPS trace hook**, one of the nine sites gated by the zero trace mask |
+| `$F0535E`-`$F05370` | 18 | `jmp $F054A2` / `jmp $F054E8` … — **RDHC's four-command jump table** (6-byte entries, matching the documented `mulu #$6`) |
+| `$F0A4F2`-`$F0A4FE` | 12 | an init pointer table: `$F08700` (self-test), `$F00100`, `$F04600` (RDHC) |
+| `$F0A616`, `$F0A676`, `$F0A6D6`, `$F0A736`, `$F0A7F6` | 6-8 each | **TDTI record fields** (`$00009600`, `$0010A000`) inside the definition table |
+| ~20 small runs | 4 each | pointer and `jmp d16(pc)` table entries |
+
+So the application region contains **no unexplained bytes**: what is not instructions, ASCII
+or zero-fill is jump tables, pointer tables, TDTI record fields — and **one 18-byte stretch
+of real code the disassembler misses**.
+
+That last one is worth its own note. `$F044A2` is the **FPS-side trace hook**, and it is
+invisible to the executed-PC check precisely *because* the trace mask at `$F0A52A` is
+`$0000`, so it never runs. It is the one place in this project where "every executed PC
+decodes correctly" is satisfied and the listing is still wrong — a reminder that the property
+bounds errors in *reachable* code only, and that a permanently-disabled feature is exactly
+where a static gap can hide indefinitely.
