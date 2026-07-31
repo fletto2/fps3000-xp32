@@ -397,6 +397,38 @@ def decode(rom, seeds, data_mask, priority_seeds=None):
 
 # ----------------------------------------------------------------------
 # Driver
+
+# ----------------------------------------------------------------------
+def scan_tdti_table(rom):
+    """Task entry points from the ROM's own TDTI definition table.
+
+    TDTI scans a table of 96-byte `!TCB` records at $F0A600 and creates a task
+    from each.  Each record carries the task name at +$04, the ENTRY POINT at
+    +$1C, and the PROG segment's first/last page at +$20/+$22.
+
+    This matters because three of the six entry points sit immediately behind a
+    `'USER'` literal, so nothing branches to them and the recursive descent
+    never reaches them: $F0694A (XP3I), $F0734A (XP2I) and $F07D4A (XP1I) were
+    all rendered as `DC.W 0x7001` -- a task entry point shown as data.  The
+    other three happen to be reachable and were fine, which is exactly the kind
+    of partial symptom that hides a systematic gap.
+
+    The table is authoritative and static: its six entries reproduce the
+    RTOS's own runtime !TST segment table exactly, from the ROM alone.
+    """
+    TDTI, N, STRIDE = 0xF0A600, 6, 96
+    out = set()
+    for k in range(N):
+        rec = TDTI + STRIDE * k
+        off = rec - BASE
+        if rom[off:off + 4] != b"!TCB":
+            break
+        entry = struct.unpack(">I", rom[off + 0x1C:off + 0x20])[0] & 0xFFFFFF
+        if is_valid_target(entry):
+            out.add(entry)
+    return out
+
+
 # ----------------------------------------------------------------------
 def main():
     with open(ROM_PATH, "rb") as f:
@@ -415,6 +447,7 @@ def main():
     #   tier-B = scan_references() (BSR/JSR/Bcc/JMP targets, vectors).
     rv = struct.unpack(">I", rom[4:8])[0] & 0x00FFFFFF
     tier_a = set(a for a in NAMED if is_valid_target(a))
+    tier_a |= scan_tdti_table(rom)      # the six task entry points
     if is_valid_target(rv):
         tier_a.add(rv)
     tier_b = scan_references(rom) - tier_a

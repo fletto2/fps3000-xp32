@@ -3,8 +3,8 @@
 ; Base   : 0xF00000
 ; Range  : 0xF04488-0xF0FFFF  (47992 bytes)
 ; Method : recursive-descent + reference scan + convergence loop
-; Coverage: 23818/47992 bytes as code  (49.6%)
-; Instructions decoded: 6725
+; Coverage: 23930/47992 bytes as code  (49.9%)
+; Instructions decoded: 6755
 ; DATA   : 0xF0B17E-0xF10000  Zero-fill / ROM checksum word at F0FFFE
 
 ; ============================================================
@@ -3698,20 +3698,16 @@ F06942  45 52                   DC.W     0x4552  ; 'ER'
 F06944  00 00                   DC.W     0x0000
 F06946  00 00                   DC.W     0x0000
 F06948  00 00                   DC.W     0x0000
-F0694A  70 01                   DC.W     0x7001
-F0694C  41 f9                   DC.W     0x41f9
-F0694E  00 f0                   DC.W     0x00f0
-F06950  69 14                   DC.W     0x6914
-F06952  4e 41                   DC.W     0x4e41  ; 'NA'
-F06954  67 0e                   DC.W     0x670e
-F06956  30 3c                   DC.W     0x303c  ; '0<'
-F06958  02 6d                   DC.W     0x026d
-F0695A  4e b9                   DC.W     0x4eb9
-F0695C  00 f0 72 c0             DC.L     loc_F072C0
-F06960  60 00                   DC.W     0x6000
-F06962  01 ac                   DC.W     0x01ac
-F06964  4f e8                   DC.W     0x4fe8
-F06966  01 14                   btst.l   d0, (a4)
+F0694A  70 01                   moveq    #$1, d0
+F0694C  41 f9 00 f0 69 14       lea.l    TCBXP3I_CRTCBParams.l, a0
+F06952  4e 41                   trap     #$1
+F06954  67 0e                   beq.b    loc_F06964
+F06956  30 3c 02 6d             move.w   #$26d, d0
+F0695A  4e b9 00 f0 72 c0       jsr      loc_F072C0.l
+F06960  60 00 01 ac             bra.w    loc_F06B0E
+
+loc_F06964:
+F06964  4f e8 01 14             lea.l    $114(a0), a7
 F06968  2c 48                   movea.l  a0, a6
 F0696A  4b ee 00 0a             lea.l    $a(a6), a5
 F0696E  22 7c 00 f0 69 34       movea.l  #loc_F06934, a1
@@ -3736,9 +3732,7 @@ F0699C  60 00 01 70             bra.w    loc_F06B0E
 
 loc_F069A0:
 F069A0  4b ee 00 14             lea.l    $14(a6), a5
-F069A4  22 7c                   DC.W     0x227c  ; '"|'
-F069A6  00 f0                   DC.W     0x00f0
-F069A8  69 3e                   bvs.b    loc_F069E8
+F069A4  22 7c 00 f0 69 3e       movea.l  #loc_F0693E, a1
 F069AA  60 04                   bra.b    loc_F069B0
 
 loc_F069AC:
@@ -4629,12 +4623,14 @@ F07308  00 00 00 46             ori.b    #$46, d0
 F0730C  00 f0 74 e6             DC.L     loc_F074E6
 F07310  00 f0                   DC.W     0x00f0
 F07312  75 08                   DC.W     0x7508
-F07314  58 50 32 49             DC.B     "XP2I"  ; 4 bytes
-F07318  00 00                   DC.W     0x0000
-F0731A  00 00                   DC.W     0x0000
-F0731C  20 00                   DC.W     0x2000
-F0731E  00 00                   DC.W     0x0000
-F07320  53 54 43 4b             DC.B     "STCK"  ; 4 bytes
+
+loc_F07314:
+F07314  58 50                   addq.w   #$4, (a0)
+F07316  32 49                   movea.w  a1, a1
+F07318  00 00 00 00             ori.b    #$0, d0
+F0731C  20 00                   move.l   d0, d0
+F0731E  00 00 53 54             ori.b    #$54, d0
+F07322  43 4b                   DC.W     0x434b  ; 'CK'
 F07324  00 00                   DC.W     0x0000
 F07326  00 00                   DC.W     0x0000
 F07328  00 00                   DC.W     0x0000
@@ -4656,18 +4652,15 @@ F07342  45 52                   DC.W     0x4552  ; 'ER'
 F07344  00 00                   DC.W     0x0000
 F07346  00 00                   DC.W     0x0000
 F07348  00 00                   DC.W     0x0000
-F0734A  70 01                   DC.W     0x7001
-F0734C  41 f9                   DC.W     0x41f9
-F0734E  00 f0                   DC.W     0x00f0
-F07350  73 14                   DC.W     0x7314
-F07352  4e 41                   DC.W     0x4e41  ; 'NA'
-F07354  67 0e                   DC.W     0x670e
-F07356  30 3c                   DC.W     0x303c  ; '0<'
-F07358  02 6d                   DC.W     0x026d
-F0735A  4e b9                   DC.W     0x4eb9
-F0735C  00 f0 7c c0             DC.L     loc_F07CC0
-F07360  60 00                   DC.W     0x6000
-F07362  01 ac                   DC.W     0x01ac
+F0734A  70 01                   moveq    #$1, d0
+F0734C  41 f9 00 f0 73 14       lea.l    loc_F07314.l, a0
+F07352  4e 41                   trap     #$1
+F07354  67 0e                   beq.b    loc_F07364
+F07356  30 3c 02 6d             move.w   #$26d, d0
+F0735A  4e b9 00 f0 7c c0       jsr      loc_F07CC0.l
+F07360  60 00 01 ac             bra.w    loc_F0750E
+
+loc_F07364:
 F07364  4f e8 01 14             lea.l    $114(a0), a7
 F07368  2c 48                   movea.l  a0, a6
 F0736A  4b ee 00 0a             lea.l    $a(a6), a5
@@ -5587,12 +5580,13 @@ F07D0A  00 45 00 f0             ori.w    #$f0, d5
 F07D0E  7e e6                   moveq    #$e6, d7
 F07D10  00 f0                   DC.W     0x00f0
 F07D12  7f 08                   DC.W     0x7f08
-F07D14  58 50 31 49             DC.B     "XP1I"  ; 4 bytes
-F07D18  00 00                   DC.W     0x0000
-F07D1A  00 00                   DC.W     0x0000
-F07D1C  20 00                   DC.W     0x2000
-F07D1E  00 00                   DC.W     0x0000
-F07D20  53 54 43 4b             DC.B     "STCK"  ; 4 bytes
+
+loc_F07D14:
+F07D14  58 50                   addq.w   #$4, (a0)
+F07D16  31 49 00 00             move.w   a1, $0(a0)
+F07D1A  00 00 20 00             ori.b    #$0, d0
+F07D1E  00 00 53 54             ori.b    #$54, d0
+F07D22  43 4b                   DC.W     0x434b  ; 'CK'
 F07D24  00 00                   DC.W     0x0000
 F07D26  00 00                   DC.W     0x0000
 F07D28  00 00                   DC.W     0x0000
@@ -5614,18 +5608,15 @@ F07D42  45 52                   DC.W     0x4552  ; 'ER'
 F07D44  00 00                   DC.W     0x0000
 F07D46  00 00                   DC.W     0x0000
 F07D48  00 00                   DC.W     0x0000
-F07D4A  70 01                   DC.W     0x7001
-F07D4C  41 f9                   DC.W     0x41f9
-F07D4E  00 f0                   DC.W     0x00f0
-F07D50  7d 14                   DC.W     0x7d14
-F07D52  4e 41                   DC.W     0x4e41  ; 'NA'
-F07D54  67 0e                   DC.W     0x670e
-F07D56  30 3c                   DC.W     0x303c  ; '0<'
-F07D58  02 6d                   DC.W     0x026d
-F07D5A  4e b9                   DC.W     0x4eb9
-F07D5C  00 f0 86 c0             DC.L     loc_F086C0
-F07D60  60 00                   DC.W     0x6000
-F07D62  01 ac                   DC.W     0x01ac
+F07D4A  70 01                   moveq    #$1, d0
+F07D4C  41 f9 00 f0 7d 14       lea.l    loc_F07D14.l, a0
+F07D52  4e 41                   trap     #$1
+F07D54  67 0e                   beq.b    loc_F07D64
+F07D56  30 3c 02 6d             move.w   #$26d, d0
+F07D5A  4e b9 00 f0 86 c0       jsr      loc_F086C0.l
+F07D60  60 00 01 ac             bra.w    loc_F07F0E
+
+loc_F07D64:
 F07D64  4f e8 01 14             lea.l    $114(a0), a7
 F07D68  2c 48                   movea.l  a0, a6
 F07D6A  4b ee 00 0a             lea.l    $a(a6), a5

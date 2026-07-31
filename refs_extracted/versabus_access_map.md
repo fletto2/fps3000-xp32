@@ -19693,3 +19693,52 @@ and what the AU's 128-bit microcode does, are not observable from this ROM by an
 **The device map is closed at 68 addresses**, re-verified with zero unmapped accesses under
 the deepest configuration reached — the first in which the CP callback, the transaction
 success path and the notify arm all execute.
+
+## `disasm.py` was rendering three task entry points as data — fixed
+
+Validating the *tracked* application disassembly the same way as the kernel — every executed
+PC must appear as an instruction at its own address — found **16 failures in `fps3k.asm`**,
+and they are not incidental:
+
+```
+$F0694A  DC.W 0x7001      <- XP3I's entry point
+$F0734A  DC.W 0x7001      <- XP2I's entry point
+$F07D4A  DC.W 0x7001      <- XP1I's entry point
+   ...plus their prologues ($41F9 lea, $4E41 trap #1, $670E beq)
+```
+
+The cause: those three entries sit immediately behind a `'USER'` literal, nothing branches to
+them, and the recursive descent has no seed. The other three task entries happen to be
+reachable and were fine — a partial symptom that hid a systematic gap.
+
+**The fix is a seed source the ROM already contains.** TDTI's definition table at `$F0A600`
+is six 96-byte `!TCB` records with the task name at `+$04`, the **entry point at `+$1C`**, and
+the PROG segment's first/last page at `+$20`/`+$22`:
+
+| | entry | segment |
+|---|---|---|
+| `RDHC` | `$F046F0` | `$F04600-$F05CFF` |
+| `IO1I` | `$F05D36` | `$F05D00-$F05EFF` |
+| `XP4I` | `$F05F4A` | `$F05F00-$F068FF` |
+| `XP3I` | `$F0694A` | `$F06900-$F072FF` |
+| `XP2I` | `$F0734A` | `$F07300-$F07CFF` |
+| `XP1I` | `$F07D4A` | `$F07D00-$F086FF` |
+
+**These reproduce the runtime `!TST` segment table exactly, from the ROM alone** — so the
+task map that this project derived from a RAM dump is also derivable statically, and the two
+sources agree on all twelve numbers.
+
+`disasm.py` now seeds tier-A from that table. `fps3k_custom.asm` regenerated: the three
+entries decode as `moveq #$1,d0`, coverage 49.6% → **49.9%** (6,725 → 6,755 instructions),
+and executed-PC failures drop from 16 to **2**.
+
+**The residual two**, stated rather than hand-waved: `$F08F70` and `$F098EC`, both
+`movem.l …,-(a7)` subroutine prologues in the self-test, each reached by exactly one `bsr.w`
+(`$F0879E` and `$F08992`). Both call sites *are* decoded and the disassembler even emits the
+labels `loc_F08F70`/`loc_F098EC` — so the target was recognised and then not decoded. Cause
+not established; 2 of 2,136 executed PCs.
+
+**`fps3k.asm` still carries all 16.** It is built from the frozen `fps3k_custom_annotated.asm`
+through a chain with an unrunnable link, so the fix cannot propagate there. Anyone reading
+the canonical listing should know that **three of the six task entry points appear as
+`DC.W 0x7001`** in it, and that `fps3k_custom.asm` is now correct on that point.
