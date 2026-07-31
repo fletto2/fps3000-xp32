@@ -19453,3 +19453,42 @@ The SBC validates every *channel number* and every *array index*, and validates 
 backplane — which it is — but it means **an emulator's chassis model is, in effect, a
 debugger with full access to the SBC**, and any model that lets a stray index or address
 through will corrupt the machine silently rather than being rejected.
+
+### The complete bounds audit of all 16 chassis operations
+
+Sweeping each operation's code range for comparisons:
+
+| op | bounds it enforces |
+|---|---|
+| `$0` | `d0` in `0..$10`, or `$28` — the transfer arm |
+| `$1` | **none** — sets the address `$E58`/`$E5A` that op `$6` will use |
+| `$2` | **none** — sets the count `$E64`/`$E66` |
+| `$3` | `cmpa.l #$400000,a1` twice — the chassis-window bound |
+| `$4` | channel `1..$105E`, and a check on `$E58` |
+| `$5` | channel `1..$105E` |
+| `$6` | **none** — the arbitrary peek/poke |
+| `$7` | none needed — takes no parameter |
+| `$8` | CHANNEL_SELECT `== 0`, **and `$E7E` against `$10000..$1FFFF`** |
+| `$9` | **none** — sets the third parameter |
+| `$A` | index `0..12`, panel `$25D` |
+| `$B` | none needed — returns a constant |
+| `$C` | **none** — the unbounded indexed access |
+| `$D` | CHANNEL_SELECT `0..$F` |
+| `$E` | CHANNEL_SELECT `== 0` |
+| `$F` | none needed — the exit stub |
+
+Seven operations validate, and of the nine that do not, four (`$7`, `$B`, `$F`, and `$E`'s
+trivial case) take nothing to validate. The genuinely unchecked inputs are **`$1`/`$6` (an
+arbitrary address) and `$C` (an unbounded index)**, with `$2` and `$9` setting values that
+*other* operations bound before use.
+
+**And one address *is* validated: op `$8` checks `$E7E` against `$10000`-`$1FFFF`** — the
+microcode staging buffer's range, failing to panel `$25A`. That identifies `$E7E` as a
+**staging-buffer pointer**, and it is the only place in the chassis command set where the
+firmware range-checks an address at all. So the design is not uniformly trusting: it guards
+the one pointer that indexes the WCS upload path and leaves the general peek/poke open.
+
+That asymmetry is worth stating plainly because it reads as deliberate rather than
+accidental — the staging pointer is the one a *bug* would corrupt silently and unrecoverably
+(it feeds microcode into an AC), while the peek/poke is a debug facility whose whole purpose
+is to be unrestricted.
