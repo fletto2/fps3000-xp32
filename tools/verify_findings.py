@@ -7478,6 +7478,16 @@ check('$21 has QEVNT\'s shape: ASQ pointer TCB+$40, status 4 when null',
       and _w(0xF0267A) == 0x286E and _w(0xF0267C) == 0x0040
       and _w(0xF02682) == 0x586E and _w(0xF02684) == 0x0102)
 
+check('$3B reads its target from $0C04 by pre-decrementing $0C08',
+      _w(0xF039E6) == 0x2078 and _w(0xF039E8) == 0x0C08 and _w(0xF039EA) == 0x2C20)
+check('...translates it, loads the saved register frame, and jsr (a5)',
+      _w(0xF039EE) == 0x206E and _w(0xF039F0) == 0x0036
+      and _bsrw(0xF039F2) == 0xF0175C
+      and _w(0xF03A02) == 0x4CEE and _w(0xF03A04) == 0x1FFF and _w(0xF03A06) == 0x0100
+      and _w(0xF03A08) == 0x4E95)
+check('...then clears $0C62, one of its five clear sites',
+      _w(0xF03A0A) == 0x42B8 and _w(0xF03A0C) == 0x0C62)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

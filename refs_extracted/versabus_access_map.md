@@ -32755,3 +32755,31 @@ The handler then tests **`TCB+$70`** (an unidentified field) and reads the displ
 `movea.l a6,a4` / `bra` into the routine the listing labels `TRAP0_dir_10` — so the same
 implementation serves a TRAP #1 directive and a TRAP #0 one, entered two bytes apart in the usual
 dual-entry style.
+
+### The rest of `$3B` confirms the documented mechanism exactly
+
+```
+$F039DA  movea.l $c3a.w,a0 ; btst.b #$1,$1(a0) ; bne -> deny
+$F039E6  movea.l $c08.w,a0
+$F039EA  move.l  -(a0),d6              ; PRE-DECREMENT -> reads $0C04
+$F039EE  movea.l $36(a6),a0
+$F039F2  bsr.w   $F0175C               ; T0LOGPHY translates the target
+$F039FC  movea.l d6,a5
+$F039FE  clr.l   $100(a6)              ; clear saved d0
+$F03A02  movem.l $100(a6),d0-d7/a0-a4  ; load the task's SAVED REGISTER FRAME
+$F03A08  jsr     (a5)                  ; arbitrary code, supervisor mode
+$F03A0A  clr.l   $c62.w
+```
+
+Every element of this project's description checks out — the target from `$0C04` (the
+pre-decrement is *why* it is `$0C04` and not `$0C08`), the translation, the full register load, and
+the `jsr`. Two things the register-frame work adds:
+
+- **`movem.l $100(a6),…` is loading the task's saved registers**, so a caller stages its arguments
+  in the frame and `$3B` restores them before the call. The key in `a0` is part of that same frame,
+  which is why one register suffices for the gate.
+- **`$F03A0A clr.l $c62.w`** is one of the five `$0C62` clear sites found earlier. Clearing it
+  immediately after the `jsr` supports reading `$0C62` as a call-in-progress marker.
+
+Both gates remain shut on this machine: the key exists only as that one `cmpi.l` operand, and
+`$0C04` has no writer anywhere in the image.
