@@ -8383,6 +8383,13 @@ check('the SLC store loop bounds each byte before writing it',
       _w(0xF051FE) != 0 and _w(0xF05206) != 0
       and 0xF051FE < 0xF05206 < 0xF05300)
 
+check('the SLC address parser accumulates MSB-first and adds $10000',
+      _w(0xF05298) == 0x227C and _l(0xF0529A) == 0x00000000
+      and _w(0xF052C2) == 0xEBAA and _w(0xF052C4) == 0xD3C2
+      and _w(0xF052C8) == 0x5105
+      and _w(0xF052D0) == 0xD3FC and _l(0xF052D2) == 0x00010000
+      and _w(0xF052D6) == 0x23C9 and _l(0xF052D8) == 0x00000E7E)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

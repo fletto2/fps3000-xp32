@@ -37158,3 +37158,42 @@ of the dispatcher: the SLC loader and record handler regions (`$F04B08`-`$F04C4C
 The run ending in a panel-issuer `bra .` is also expected rather than a failure — this project
 documents all eight issuers as terminating that way, and the earlier hang map measured none of them
 reached in a clean boot. Reaching one here is the normal end of a chassis conversation.
+
+## `$F05298` decoded: the S-record address-field parser (2026-07-31)
+
+One of the newly-executing regions, previously unidentified:
+
+```
+$F05298  movea.l #$0,a1                   ; the address accumulator
+loc_F0529E:
+$F0529E  move.w #$400,$218(a5)            ; arm
+$F052A4  move.w $218(a5),d7 / btst #$f    ; poll bit 15
+$F052AE  move.w #$0,$218(a5)              ; clear
+$F052B4  move.w (a0),d2                   ; one ASCII PAIR from $FF0008
+$F052B8  jsr $F05150                      ; ASCII -> binary
+$F052C2  lsl.l d5,d2                      ; shift into position
+$F052C4  adda.l d2,a1                     ; accumulate
+$F052C8  subq.b #$8,d5                    ; next byte, 8 bits down
+$F052CE  bge.b $F0529E                    ; loop while d5 >= 0
+$F052D0  adda.l #$10000,a1                ; + the staging base
+$F052D6  move.l a1,$e7e.l                 ; store the destination
+```
+
+**It parses the S-record address field MSB-first**, one byte per iteration, using `d5` as a shift
+count that steps down by 8 — which is exactly the mechanism this project records from the other end:
+"`$F05256` mapping `d4` = 3/4/5 to shift 8/16/24 (**S1/S2/S3**)". `d5` is seeded with that
+width-dependent shift and walks it down to zero, so **one loop handles all three address widths**.
+
+Two recorded facts confirmed with their instructions: the **`adda.l #$10000,a1`** staging offset, and
+**`$F052D6` writing `$E7E`**, the destination that chassis op `$8` later range-checks.
+
+**Note the per-pair handshake.** Every ASCII character pair costs a full `$FF0218` arm / poll-bit-15 /
+clear cycle. The address field alone is 2-4 pairs, each with its own handshake — so the SLC path is
+handshaked per 16-bit word throughout, not per record. That is consistent with the recorded bulk-loop
+description ("one 16-bit word per cycle, no interrupts anywhere in the path") and now shown to hold
+for the address field as well as the data.
+
+**And `a1` starts at zero here, not `$10`.** `$E7E` therefore holds `addr + $10000` while the *data*
+pointer is seeded `$10` at `$F051A2` — so the two differ by `$10`, and `$E7E` is the record's declared
+destination rather than the address bytes actually land at. Worth keeping straight when comparing
+`$E7E` against a RAM dump.
