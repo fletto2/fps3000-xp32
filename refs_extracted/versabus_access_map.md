@@ -33213,3 +33213,34 @@ Two confirmations fall out, each from a different direction:
 That completes the static picture: `!TST`'s two segments, `!IDV`'s six records, `!UST`'s nine
 entries, the six TCBs' priorities and entry points are **all ROM data**, split across the TDTI table
 and the six region heads. Nothing about the boot-time task configuration is computed.
+
+## `TCB+$28`'s initial value is a ROM constant — the flags word is fully accounted (2026-07-31)
+
+The TDTI record's unexplained field at `+$18` reads `$0010A000`, and its **low word `$A000` is the
+initial task flags word**. Every measured `TCB+$28` is that value plus bits set at runtime:
+
+| task | measured | = ROM `$A000` | + runtime |
+|---|---|---|---|
+| XP1I-XP4I, IO1I | `$A081` | bits 15, 13 | bits **7** and **0** |
+| RDHC | `$A001` | bits 15, 13 | bit **0** only |
+
+with each runtime bit already traced to its setter:
+
+| bit | meaning | source |
+|---:|---|---|
+| **15** | **privilege** | **the ROM record — granted by TDTI at creation** |
+| **13** | **snapshot enable** (consumed by `$0E` `ABORT`) | **the ROM record** |
+| 7 | a semaphore is registered | `$F031F0`, during `CRSEM`/`ATSEM` |
+| 6 | an owner is registered | `$F0353E`, beside the owner stamp |
+| 3, 4 | `EXPVCT`/`TRPVCT` handler tables registered | `$F03134`/`$F03142` |
+| 0 | an interrupt vector is connected | `$F0226E`, during `CNCTIRQ` |
+
+**That answers a question raised earlier today.** I noted that "every task carries privilege but
+none uses it" and read it as a deliberate grant. It is simpler than that: **privilege is one word
+in one ROM record, replicated identically into all six tasks by TDTI.** No per-task decision is
+made — the firmware's authors set `$A000` once and every task inherits it, including the snapshot
+enable that no task ever exercises.
+
+RDHC's `$A001` versus the others' `$A081` is likewise not a special case: it is the same initial
+value, differing only because RDHC declares no semaphores and so never reaches the bit-7 setter.
+Every apparent difference between RDHC and the worker tasks in this word reduces to that one fact.

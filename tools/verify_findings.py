@@ -7602,6 +7602,13 @@ check('...and the six records differ only in name, entry and segment pages',
       len({_rom_bytes[0xF0A600 - 0xF00000 + 96 * _i + 0x14] for _i in range(6)}) == 1
       and len({_rom_bytes[0xF0A600 - 0xF00000 + 96 * _i + 0x04] for _i in range(6)}) > 1)
 
+check('the TDTI record supplies the initial flags word $A000 (privilege + snapshot)',
+      all((_l(0xF0A600 + 96 * _i + 0x18) & 0xFFFF) == 0xA000 for _i in range(6))
+      and (0xA000 >> 15) & 1 and (0xA000 >> 13) & 1)
+check('...so the measured $A081 / $A001 are $A000 plus runtime bits 7 and 0',
+      (0xA081 & ~0xA000 & 0xFFFF) == 0x0081
+      and (0xA001 & ~0xA000 & 0xFFFF) == 0x0001)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
