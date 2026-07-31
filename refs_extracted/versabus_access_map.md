@@ -34319,3 +34319,39 @@ project records against reading the region linearly — it applies to the counte
 
 `$F09B20`, the SCM test, is the **last** thing sequence C does before the `$D0` checkpoint, which is
 consistent with its measured position at 91% of the boot.
+
+## The retry-forever fault policy, finally MEASURED (2026-07-31)
+
+`FPS3K_FAULT=apif_berr` (added to `versabus.c`, opt-in, default off) breaks exactly one derived
+requirement: it makes `versabus_apif_dma_busy()` return 0, so the `$FF0216` bit-7 bus-error gate
+never fires. Everything else is untouched.
+
+| run | final PC | `CHANNEL_SELECT` | MODE1 |
+|---|---|---|---|
+| control (hook off) | `$F00FE6` idle | `$2903` | `$8020` |
+| `FPS3K_FAULT=apif_berr` | **`$F08940`** | **`$1A00`** | **`$1000`** |
+
+**Every element of the predicted failure signature appears, and nothing else changes:**
+
+1. **The machine never completes boot** — the retry-forever policy, until now an inference from
+   reading `PollBoardStatus`, is now observed.
+2. **It stalls at phase `$1A00`** — the AP I/F stage, which is precisely where the broken gate is
+   tested. The phase counter really does name the failing stage on a stalled board, which is the
+   whole basis of the "read `CHANNEL_SELECT` on dead hardware" diagnostic.
+3. **The final PC is `$F08940`, inside `PollBoardStatus`'s `d7 != 0` arm** — code that executes
+   **zero** times in every passing run, and which the coverage measurement above listed as unreached.
+4. **MODE1 reads `$1000`**, which is exactly what `$F08946` in that arm writes.
+
+So the contracts derived this session are now *tested* rather than merely *satisfied*: violating one
+produces the predicted symptom in the predicted place, which is a different and stronger claim.
+
+**One expectation was wrong, and it sharpens the picture.** I expected the fault reporter `$F089EE`
+and the bus-error counter `$F08912` to execute. Breakpoints on both **never fire**. The reasons are
+specific: the bit-7 stage sets `d7 = $F0F0F0F0` **inline** at `$F09856` rather than calling the
+reporter, so `$F089EE` belongs to other stages (the SCM test calls it via `bsr.w`); and `$F08912`
+counts *bus errors*, of which the injected fault produces none — suppressing the BERR is the fault.
+
+So the failure machinery is not one path but (at least) three independent ones — inline `d7` sets,
+`bsr $F089EE`, and the bus-error counter — and this experiment exercises only the first. The other
+two remain unexecuted, and a second injection (aliasing two XLTR registers, say) would be needed to
+reach them.

@@ -685,6 +685,14 @@ int versabus_apif_dma_busy(void) {
      * memory, bit 7 for the AP I/F -- and gating on `!= 0` conflated them: a
      * write of $20 intended only to arm the chassis-memory gate would also have
      * armed this one. */
+    /* FPS3K_FAULT=apif_berr: deliberately BREAK the $FF0216 bit-7 bus-error
+     * gate, to test that a violated self-test requirement produces the
+     * predicted hang rather than an unrelated failure.  Opt-in; default off,
+     * so golden-master behaviour is unchanged. */
+    { static int f = -1;
+      if (f < 0) { const char *e = getenv("FPS3K_FAULT");
+                   f = (e && !strcmp(e, "apif_berr")); }
+      if (f) return 0; }
     return xltr.arm_pending && (xltr.data_hi & 0x80);
 }
 

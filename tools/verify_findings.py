@@ -7912,6 +7912,13 @@ check('the SCM test is the last sequence-C stage before the $D0 checkpoint',
       _w(0xF088C8) == 0x6100 and 0xF088CA + _w(0xF088CA) == 0xF09B20
       and _w(0xF088CC) == 0x3ABC and _w(0xF088CE) == 0x00D0)
 
+check('the bit-7 stage sets d7 INLINE, it does not call the fault reporter',
+      _w(0xF09856) == 0x2E3C and _l(0xF09858) == 0xF0F0F0F0
+      # ...whereas the SCM test reaches the reporter by bsr
+      and _w(0xF09B62) == 0x6100 and 0xF09B64 + _w(0xF09B64) == 0xF089EE)
+check('the FPS3K_FAULT hook exists and is opt-in',
+      'FPS3K_FAULT' in open('/home/fletto/ext/src/claude/fps3000/emulator/versabus.c').read())
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
