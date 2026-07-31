@@ -27865,3 +27865,55 @@ place.
 provenance was disputed; it is vector `$51`'s handler, installed by a test that sets
 `a5 = $1FFF0` and then lowers the CPU mask so it fires. Both the count of 52 and the
 "bit 6 is set exactly once" claim rest on that.
+
+### The VMOD block is verified as four bytes, transformed and read back
+
+`$F08958`-`$F0896E`, reached with `a5` at the VMOD base, walks **four consecutive bytes**:
+
+```
+move.l a5,-(a7)
+  bsr $F08970 / move.b d0,(a5)+      ; x4, unrolled
+move.l -(a5),d0                       ; ...then read the whole longword back
+movea.l (a7)+,a5
+
+$F08970:  clr.l d0 / move.b (a5),d0 / not.b d0 / rol.b #$1,d0
+```
+
+Each byte is read, **inverted and rotated left one bit**, and written back; then the block is
+read as a longword. So all four bytes of `$1FFF0`-`$1FFF3` are exercised as read/write
+storage, which independently supports the documented register extent — and shows `$1FFF3` is
+touched, which no displacement census had recorded.
+
+The transform is chosen so no byte can pass by accident: `rol(not(x))` maps every value to a
+different one, so a stuck or aliased byte fails on the read-back.
+
+### A provenance false positive, left in as an example
+
+The same sweep attributed `$F08A50: move.l (a0)+,(a2)+` to the `$F70018` base. It is not a
+board-status access — it is a **generic longword block copier** (`until a0 == a1`) whose
+three registers are all set by its caller. The sweep reached it by walking forward from an
+unrelated `lea` past intervening control flow, exactly the failure mode documented above.
+
+It is recorded here rather than quietly dropped because it is the clearest small illustration
+of why the addressing-mode sweeps below are stated as *access forms present*, not as
+*counts per register*.
+
+## The addressing-mode sweep is complete
+
+Every 68000 memory addressing mode that could reach a device has now been swept:
+
+| mode | result |
+|---|---|
+| absolute long | the original census; misses everything base-relative |
+| displacement `$xx(aN)` | the bulk of device access |
+| **negative** displacement | **the VMOD vector-register file** — five registers, otherwise invisible |
+| indexed `$xx(aN,dM)` | the XP idle sweep and the SCM address-line test |
+| bare `(aN)` | the channel transaction primitive and bulk ports |
+| post/pre-increment | the VMOD four-byte walk; RDHC's `$400000` record read |
+
+Absolute *short* (`$xxxx.w`) cannot reach `$FF0000`, `$F70000` or `$400000` at all — it
+covers only `$0000`-`$7FFF` and `$FF8000`-`$FFFFFF` — so it is used for kernel globals and
+the vector table, never for these devices. PC-relative likewise cannot reach them.
+
+**With all six forms swept, the device register set is closed** against addressing-mode
+blindness, which was the source of this project's first, third and fifth false negatives.

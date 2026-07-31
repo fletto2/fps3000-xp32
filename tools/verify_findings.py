@@ -6072,6 +6072,12 @@ check('...and no other device base is reached by indexed addressing',
            if _mre.search(r'\(a\d, d\d\.[wl]', (insn(x) or '').lower())
            and _mre.search(r'\$(1fff0|f7000)', (insn(x) or '').lower())])
 
+check('the VMOD block is walked four bytes at a time with rol(not(x))',
+      insn(0xF0895C) == 'move.b d0, (a5)+' and insn(0xF0896A) == 'move.l -(a5), d0'
+      and insn(0xF08974) == 'not.b d0' and insn(0xF08976) == 'rol.b #$1, d0')
+check('$F08A50 is a generic block copier, not a board-status access',
+      insn(0xF08A50) == 'move.l (a0)+, (a2)+' and insn(0xF08A52) == 'cmpa.l a0, a1')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
