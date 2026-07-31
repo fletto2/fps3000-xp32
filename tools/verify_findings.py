@@ -6253,6 +6253,12 @@ check('phase $2200 is the SCM address-line test, bounded at $4000',
       insn(0xF09AE6) == 'movea.l #$400000, a0' and insn(0xF09AEC) == 'move.l #$4000, d0'
       and insn(0xF09AF6) == 'move.l d1, (a0, d1.l)')
 
+check('phase $2500 plants a two-longword signature at the staging-buffer boundary',
+      insn(0xF089B6) == 'move.l #$ff000102, -(a5)' and insn(0xF089BC) == 'move.l #$1796af3, -(a5)'
+      and insn(0xF089B0) == 'lea.l $eff8.l, a5' and insn(0xF089CC) == 'lea.l $10008.l, a5')
+check('...and calls $F099F4, whose byte-walk therefore runs on DRAM, not the VMOD block',
+      insn(0xF089C2) == 'bsr.w $f099f4' and insn(0xF09A0A) == 'bsr.w $f08958')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

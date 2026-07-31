@@ -28721,3 +28721,46 @@ patterns — mirroring the DRAM pair at `$0400` and `$2400`.
 
 With these, the phase map has one unidentified entry left (`$2500`, which has no `bsr`
 immediately after its step) and one partly identified (`$2100`).
+
+### Phase `$2500` — the DRAM boundary test, and the phase map is complete
+
+`$2500` has no `bsr` directly after its step because it is inline, and it branches on how
+far DRAM extends:
+
+```
+$F089A0  addi.w #$100,d6              ; phase $2500
+$F089A4  cmpa.l #$1fff0,a1            ; does DRAM reach the VMOD register?
+$F089AA  blt low
+  lea.l  -$20(a1),a1                  ; back off 32 bytes
+  lea.l  $eff8.l,a5                   ; a5 = $EFF8
+  move.l #$ff000102,-(a5)             ; -> $EFF4
+  move.l #$1796af3,-(a5)              ; -> $EFF0
+  bsr.w  $f099f4                      ; the DRAM transform test
+  lea.l  $20(a1),a1 / bra done
+low:
+  lea.l  $10008.l,a5                  ; a5 = $10008
+  move.l #$ff000102,-(a5)             ; -> $10004
+  move.l #$1796af3,-(a5)              ; -> $10000
+  bsr.w  $f099f4
+```
+
+Both arms plant the same two-longword signature — `$01796AF3` low, `$FF000102` high — and
+then run `$F099F4`, which is the routine that calls the four-byte `rol(not(x))` walk at
+`$F08958`. The addresses are `$EFF0` and `$10000`: **the boundary of the microcode staging
+buffer**, tested from either side depending on how far DRAM extends.
+
+**This settles the byte-walk's base independently.** I retracted the claim that
+`$F08958` operates on the VMOD block after finding its only caller was in the DRAM test;
+here is the caller's caller, planting its data at `$EFF0`/`$10000`. The retraction was
+right and now has positive evidence rather than only the absence of a VMOD path.
+
+**With `$2500` identified, every phase in the map has a routine**, and all but `$2100` have
+a purpose. The suite's shape is now fully visible:
+
+- **sequence A** (`$0200`-`$0900`): board status mapping, ROM checksum, DRAM address lines,
+  the status poll, the VMOD pattern test, the bus watchdog, an interrupt test, the PTM
+- **sequence B** (`$1100`-`$1A00`): the VMOD/board-status bit mappings, the interrupter and
+  its levels, nested delivery, CHANNEL_SELECT read-back, the XLTR register file, and the
+  three `$FF0216` gate tests
+- **sequence C** (`$2100`-`$2600`): DRAM boundary and patterns, SCM address lines and
+  patterns, DRAM refresh
