@@ -36600,3 +36600,35 @@ against the list.
   32-bit host-transfer reading ultimately lives.
 - **`RUN*` (A93)**, **`HALTINT*` (B34)**, **`!HRSET` (B52)**, **`SYRST*` (B63)** — run/halt/reset
   control from the host side.
+
+## `REGSEL` proves the AP I/F register file is DUAL-ACCESSED (2026-07-31)
+
+The connection list puts **`REGSEL00`-`REGSEL05` on J23 (B54, B56, B57, B59, B61, B65)** — the
+*host* connector. Six select lines, arriving **from the host**, and the block diagram shows them
+going `REGSEL -> REG -> DECODE -> PNL CTL CLKS & ENBS`, i.e. into the same decode chain sheet 7
+implements with its two `74S138`s.
+
+**So the host selects AP I/F registers, and so does the SBC** — the SBC through the VersaBus at
+`$FF0000`-`$FF00FF`, the host through `REGSEL` on the ribbon. The AP I/F register file is reachable
+from both sides. That is what makes it an interface card rather than a peripheral, and it is not
+visible from the firmware at all, which only ever sees its own side.
+
+**Six select lines allow up to 64 register addresses** from the host side, against the 4 registers
+per window x 8 windows the SBC side exposes. The two address spaces are not the same size and need
+not correspond one-for-one.
+
+**This also reconciles the `Am29705` question.** The documented card carries eight **two-port**
+`Am29705`s. A two-port RAM is exactly what a register file wants when two masters read and write it
+independently — which the `REGSEL` finding says is the case here. The `Am27LS03`s on the 4448 board
+photo are single-port, so that board must separate the accesses some other way (the `74S138` decoders
+and `25S08` registers being the visible candidates). The earlier note flagged this difference as
+possibly mattering for AP I/F contention; `REGSEL` shows contention is real, so the difference is
+worth settling rather than assuming away.
+
+### The 32-bit reading, from the connector rather than from part counts
+
+J22 and J23 carry **`HST00`-`HST15`** and **`HD00`-`HD15`** — two full 16-bit host-side buses,
+interleaved across both connectors. Sixteen plus sixteen is the most direct evidence yet for
+**32-bit host transfers**, and it does not depend on counting 16x4 RAMs or on deciding whether they
+are a register file or a FIFO. The recorded inference ("eight Am29705 = 32 bits wide, so the host was
+a 32-bit machine such as a VAX") now has a much better-grounded companion argument.
