@@ -36157,3 +36157,30 @@ other. That is consistent with an earlier or engineering revision.
 32-bit width, and the `MC3487`/`MC3486` differential drivers by the PA/PB connectors. Both are
 recorded from the other photo; confirming or refuting them here would establish whether the variants
 differ in interface as well as in PROM content.
+
+## The second AP I/F variant shares the RS-422 interface (2026-07-31)
+
+Reading row H of `4448_APIF_F.JPG` at full resolution, immediately above the edge connector:
+
+| position | part | |
+|---|---|---|
+| **H6** | **`DS3486N` / `MC3486P`** | **quad differential line RECEIVER** — the chip carries *both* markings (National and Motorola second-source) |
+| H1, H5 | `AM25S08PC` (8239DMP) | AMD quad D register — **not previously recorded for this card** |
+| H2, H3 | `SN74S240N` (8309TAP) | octal inverting buffers |
+| H4, H8, H9 | `SN74LS244N` / `SN74S244N` | octal buffers |
+| H11 | `SN74LS373N` | octal latch |
+| — | `J5R1`-`J5R3`, `J6R1`-`J6R3` | **termination resistor packs**, sited between the receiver and the connector |
+
+**So the RS-422 differential link is common to both AP I/F variants.** The recorded finding — "the
+link is RS-422 DIFFERENTIAL … **MC3486P** quad differential receivers … with termination resistor
+packs alongside" — holds on this board as well, with the receiver and its terminations in exactly the
+described arrangement.
+
+The `DS3486N`/`MC3486P` dual marking is worth noting in its own right: it is a second-sourced part,
+so a parts search for one number alone would miss boards populated with the other.
+
+**Still unlocated on this variant:** the eight `Am29705` 16x4 dual-port SRAMs. They are not in row H,
+which is buffers, registers and the differential receiver — consistent with the 29705s living further
+up the board near the data path rather than at the connector. Their presence or absence is what would
+decide whether the two variants differ in interface width or only in PROM content, and it is worth a
+targeted look before anyone treats the two boards as interchangeable.
