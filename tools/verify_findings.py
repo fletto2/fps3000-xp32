@@ -6666,6 +6666,23 @@ check('$0C14 has exactly four references: dead store, clear, then the ready-list
       and _w(0xF09E3C) == 0x21FA and _w(0xF0A062) == 0x42B8
       and _w(0xF0A0BC) == 0x2B78 and _w(0xF0A0C2) == 0x21CD)
 
+_rom_bytes = open('/home/fletto/ext/src/claude/fps3000/FPS3K_U11_U12_JOIN.bin', 'rb').read()
+def _lw_count(v):
+    return _rom_bytes.count(v.to_bytes(4, 'big'))
+check('the bare-rte handler $F088FA appears as a longword exactly 3x (the checkpoints)',
+      _lw_count(0xF088FA) == 3)
+check('phase $1300 and phase $1400 install DIFFERENT handler pairs on vectors $50/$52',
+      _lw_count(0xF093BE) == 1 and _lw_count(0xF093C8) == 1
+      and _lw_count(0xF094CC) == 1 and _lw_count(0xF094E4) == 1
+      and _l(0xF09344) == 0x00F093BE and _l(0xF0933E) == 0x00F093C8
+      and _l(0xF093D4) == 0x00F094CC and _l(0xF093DA) == 0x00F094E4)
+check('...and phase $1300 handlers differ in whether they touch d2 at all',
+      _w(0xF093C2) == 0x343C and _w(0xF093C4) == 0xF0F0
+      and _w(0xF093C8) == 0x0255 and _w(0xF093CC) == 0x4E73)
+check('every interrupter handler acknowledges with andi.w #$fff8,(a5) first',
+      all(_w(x) == 0x0255 and _w(x + 2) == 0xFFF8
+          for x in (0xF093BE, 0xF093C8, 0xF094AE)))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

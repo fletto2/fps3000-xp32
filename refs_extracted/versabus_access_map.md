@@ -30111,3 +30111,38 @@ sweep — though the ready-list operations themselves all use the absolute short
 some evidence the slot is addressed that way throughout. And "dead" here means *on this boot
 path*: a config with a different `$F0A546` (the relocator) or `$F0A506` (the display) takes
 branches this one does not.
+
+## The complete interrupter handler map — and each phase reinstalls its own pair (2026-07-31)
+
+Searching the ROM for each handler address **as a literal longword** gives an unambiguous
+handler→vector attribution (unlike pairing `lea` to a later store, which carries stale register
+state across unrelated code and over-reports badly — a script doing that produced rows like
+"vector `$39F`" for the global `$0E7E`).
+
+| handler | what it does | occurrences | installed at |
+|---|---|---:|---|
+| `$F088FA` | **bare `rte`** | 3 | vector **`$55`**, at the three checkpoints |
+| `$F088FC` | `move.w #$ffff,d2` | 1 | vectors **`$00`/`$01`** during the RAM tests |
+| `$F08902` | the group-0 fault counter | 2 | vectors **`$02`/`$03`** at `$F08706`/`$F0870E` |
+| `$F09052` | sets `$1FFF1` **bit 6** | 1 | vector **`$51`** |
+| `$F09330` | clears `$1FFF1` **bit 5** | 1 | vector **`$53`** |
+| `$F093BE` | `andi #$fff8,(a5)` then `d2 = $F0F0` | 1 | vector **`$50`** — phase `$1300` |
+| `$F093C8` | `andi #$fff8,(a5)` only, `d2` untouched | 1 | vector **`$52`** — phase `$1300` |
+| `$F094CC` | sets `d2` **bit 0** | 1 | vector **`$50`** — phase `$1400` |
+| `$F094E4` | sets `d2` **bit 1** | 1 | vector **`$52`** — phase `$1400` |
+
+**The two interrupt phases install different handler pairs on the same two vectors**, and the
+pairs are tailored to what each phase is asking:
+
+| | vector `$50` | vector `$52` | the question |
+|---|---|---|---|
+| phase `$1300` | sets `d2 = $F0F0` | sets nothing | *did delivery happen at all?* — a wrong vector is silently indistinguishable from none |
+| phase `$1400` | sets `d2` **bit 0** | sets `d2` **bit 1** | *which vector arrived?* — the two are now distinguishable |
+
+That is a clean escalation, and it independently confirms the vector-routing reading of `$1FFF1`
+bit 3 from the handler side rather than from the branch conditions. It also explains why the two
+phases needed separate handlers at all, which looked redundant when only one phase was read.
+
+**Every handler in this family acknowledges by clearing `$1FFF1` bits 0-2 (`andi.w #$fff8,(a5)`)
+before doing anything else** — vectors `$50`, `$52`, `$53` visibly, and `$51` by setting bit 6.
+So software acknowledgement is the house convention for the interrupter, not a quirk of one test.
