@@ -32465,3 +32465,32 @@ Which makes the live table readable as an inventory of who owns what:
 nor a task number 1-6 — and it sits inside an otherwise uniform run of `$FF` across the TRAP
 vectors. The builder writes only `$FF` or leaves zero, so something else wrote it. Recorded as an
 anomaly rather than explained; a RAM watchpoint on `$1FA2D` would identify the writer in one run.
+
+### `!VCT` is untagged, and the anomalous byte is `$FF` with bit 6 cleared
+
+Reading the base from its own directory slot rather than assuming it: **`$0C66` = `$1FA00`**, and
+the four bytes there are `FF FF FF FF` — **not a tag**. That confirms this project's note that
+"`!VCT` also has a live untagged instance", and it is worth stating as a caution: a structure scan
+that looks for a `!`-prefixed tag finds `!IDV`, `!IOV`, `!UDR`, `!PAT`, `!GST` and `!UST` but
+**misses `!VCT` entirely**, because its first bytes are the builder's `$FF` fill.
+
+The anomalous byte resolves to a precise shape:
+
+```
+$1FA20:  ff ff ff ff ff ff ff ff ff ff ff ff ff BF ff ff  00 00 ...
+                                                 ^^ $1FA2D
+```
+
+**`$BF` is `$FF` with bit 6 cleared** — the sole non-`$FF` byte in an otherwise uniform run across
+the sixteen TRAP-vector entries (`$20`-`$2F`), at index `$2D`, which is **TRAP #13**. The builder
+writes only `$FF` or leaves zero, so this is a *modification* of an existing `$FF`, not a fresh
+write — something performed a bit-clear on it.
+
+That is a much narrower question than "who wrote `$BF`": the search is for a `bclr` of bit 6 against
+a byte address, and the target is one specific `!VCT` entry. Recorded rather than guessed at; the
+one-run test is a write watchpoint on `$1FA2D`.
+
+Two candidates ruled out along the way. **The display progress code `$BF` is not the source** —
+`$F09C50` loads it, but `$F09C40` branches past that whole path because config `$F0A506` is zero,
+so it never executes on this machine. And **`CNCTIRQ` is not the source** — it writes `d7` computed
+as `(offset + 6) / 14`, an `!IDV` record index, which for six records cannot reach 191.

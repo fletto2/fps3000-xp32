@@ -7336,6 +7336,15 @@ check('the !VCT builder writes ten $FF bytes then marks non-default vectors',
       and _w(0xF09F22) == 0xB9DA and _w(0xF09F26) == 0x1082
       and _l(0xF09F2E) == 0x00000400)
 
+check('the display progress path is skipped: $F0A506 is zero so $F09C40 branches away',
+      _l(0xF0A506) == 0 and _w(0xF09C38) == 0x227A
+      and _w(0xF09C3C) == 0x21C9 and _w(0xF09C3E) == 0x0C3A
+      and (insn(0xF09C40) or '').startswith('beq')
+      and _w(0xF09C50) == 0x323C and _w(0xF09C52) == 0x00BF)
+check('CNCTIRQ derives the task number as an !IDV record index, (x+6)/14',
+      _w(0xF02264) == 0x5C87 and _w(0xF02266) == 0x8EFC and _w(0xF02268) == 0x000E
+      and _w(0xF0226A) == 0x1387)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
