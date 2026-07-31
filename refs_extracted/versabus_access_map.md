@@ -28939,3 +28939,35 @@ So phase `$2100` is a two-pass exhaustive memory test, and the count of distinct
 in sequence C is: address lines (`$0400`, in sequence A), exhaustive uniqueness in two
 polarities (`$2100`), six data patterns filled up and verified down (`$2400`), a boundary
 signature (`$2500`), and refresh (`$2600`).
+
+## Phase `$2600`: the DRAM refresh test, exactly (2026-07-31)
+
+```
+move.l  #$9abcdef,d0        ; a distinctive nibble-ramp pattern
+movea.l a0,a2               ; remember the start
+fill:   move.l d0,(a0)+     ; fill the whole range
+        cmpa.l #$1fff0,a0 / lea.l $4(a0),a0    ; skipping the VMOD register
+        cmpa.l a0,a1 / bne fill
+move.l  #$493e0,d5          ; 300,000
+delay:  subq.l #$1,d5 / bne delay
+verify: cmp.l (a2)+,d0      ; ...and check every longword from the saved start
+        cmpa.l #$1fff0,a2 / lea.l $4(a2),a2
+        cmpa.l a2,a1 / bne verify
+tst.l d7 / bne retry_whole_test
+```
+
+**The delay works out to 0.675 s from cycle counts alone**: `subq.l #$1,d5` is 8 cycles and a
+taken `bne.b` is 10, so 18 cycles per iteration × 300,000 = 5,400,000 cycles, and at the
+board's 8 MHz that is **0.675 s** — independently confirming the figure this project
+records, from the instruction timings rather than from measurement.
+
+The pattern `$09ABCDEF` is chosen so no bit position repeats within a nibble ramp, and the
+verify starts from `a2`, the saved base, so the *entire* range is re-read after the wait
+rather than the tail alone.
+
+**This is one of the two phases that cannot fail in an emulator.** A model's RAM retains
+its contents across any delay, so the test passes trivially and says nothing about the
+refresh circuitry it exists to exercise. The other is phase `$2400`'s disturb check.
+
+Both are worth flagging in the same breath as "the self-test passed": of 24 phases, **22
+carry real information about a model and 2 do not.**

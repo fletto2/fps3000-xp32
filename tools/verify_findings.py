@@ -6305,6 +6305,13 @@ check('...and that pass writes NOT(address) at each address, then verifies',
       insn(0xF09942) == 'not.l d0' and insn(0xF09944) == 'move.l d0, (a0)+'
       and insn(0xF0995A) == 'not.l d0' and insn(0xF0995C) == 'cmp.l (a0)+, d0')
 
+check('the refresh test fills with $09ABCDEF, waits, and re-verifies from the base',
+      insn(0xF09A8A) == 'move.l #$9abcdef, d0' and insn(0xF09A90) == 'movea.l a0, a2'
+      and insn(0xF09AAE) == 'cmp.l (a2)+, d0')
+check('...with a 300,000-iteration delay = 0.675 s at 8 MHz',
+      insn(0xF09AA4) == 'move.l #$493e0, d5' and insn(0xF09AAA) == 'subq.l #$1, d5'
+      and abs(0x493E0 * 18 / 8e6 - 0.675) < 0.001)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
