@@ -22988,3 +22988,27 @@ XP tasks.
 `$F05E88`-`$F05EFF` is all zero. TCBIO1I uses 392 of its 512-byte segment, and the `!TST`
 segment table still claims the full two pages — consistent with segments being allocated in whole
 pages rather than sized to content.
+
+### The emulator models the mailbox as a separate device; the firmware treats it as window page `$F`
+
+`emulator/versabus.c` has a dedicated `mailbox` struct with `mailbox_read`/`mailbox_write`
+answering `$70001C` and `$700020` **unconditionally**. `xltr.mode2` is stored (`$F05DEA`'s write
+lands in it) but is consulted only by the `$400000` window path, never by the mailbox path.
+
+**Today this has no observable consequence**, because TCBIO1I's ISR always selects page `$F`
+before touching the mailbox and restores the previous page afterwards — so any gate the model
+might apply would be satisfied every time. The divergence is structural, not behavioural:
+
+| | emulator | firmware's view |
+|---|---|---|
+| `$700000`-`$70FFFF` | a distinct device with its own handler | **the chassis window at page `$F`** |
+| `$FF0210` | selects the `$400000` page only | selects the page for **all** of `$400000`-`$7FFFFF` |
+
+**When it would bite**: a chassis model that places anything else at page `$F` offset `$1C`, or
+firmware (host-loaded, not this ROM) that reads the mailbox without setting the page. Both are
+plausible for the real machine and neither is reachable from this image.
+
+Recording it in the known-divergences list rather than fixing it, because the fix touches the
+address decode that three golden-master digests depend on, and the change would be invisible in
+every configuration currently tested — exactly the sort of edit that should be made with a
+measurement in hand.
