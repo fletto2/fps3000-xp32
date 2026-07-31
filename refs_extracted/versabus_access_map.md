@@ -27147,7 +27147,18 @@ instructions in `fps3k_kernel.asm`:
 It contains a privilege check (`btst.b #$7,$28(a6)`) and structure manipulation, so it looks
 like a directive arm this build never selects.
 
-**Stated as a candidate, not a finding.** Given that the sweep is provably unsound in both
-directions, "no discoverable entry" is weaker than "unreachable". It is recorded here as the
-one place worth a targeted look, and as an honest counterpart to the 72 candidates that are
-not worth reporting.
+**It belongs to `CMR`.** Directive `$3C` `CMR` has its handler at `$F03D0C`, and it is the
+**last** TRAP #0 or TRAP #1 handler in the image — no other dispatch entry lies between it
+and the end of the kernel region at `$F04487`. So `$F04230`-`$F042A1` is inside `CMR`'s
+code extent.
+
+That fits everything else known about `CMR`: this firmware **never issues `$3C`**, which is
+why `!CCB` has no instance, why its single marker-write instruction never executes, and why
+the driver-chain walker it registers and the FPS trace hook at `$F044A2` are both dark. The
+114-byte block is most likely a conditional arm inside a directive that is itself never
+called — so its unreachability is *doubly* determined, exactly like the trace hook.
+
+**Still stated as a candidate, not a finding.** Given the sweep is provably unsound in both
+directions, "no discoverable entry" is weaker than "unreachable". It is recorded as the one
+place worth a targeted look, and as an honest counterpart to the 72 candidates that are not
+worth reporting.

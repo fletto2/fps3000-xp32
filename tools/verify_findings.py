@@ -5730,6 +5730,12 @@ check('...and no longword anywhere in the image points into that block',
       sum(1 for _o in range(0, len(_rom) - 3)
           if 0xF04230 <= struct.unpack('>I', _rom[_o:_o + 4])[0] <= 0xF042A1) == 0)
 
+check('CMR ($3C) at $F03D0C is the LAST dispatch handler in the image',
+      _t1[0x3C][0] == 0xF03D0C
+      and not [v for v in (_t1[n][0] for n in _t1live) if 0xF03D0C < v < 0xF04487])
+check('...so the unreachable candidate lies inside CMR, a directive never issued',
+      0xF03D0C < 0xF04230 < 0xF04487)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
