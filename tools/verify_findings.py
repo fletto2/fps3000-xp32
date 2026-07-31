@@ -6179,9 +6179,14 @@ check('...meaning $FF0240 and $FF0248 ARE written, despite no explicit reference
       insn(0xF09574) == 'move.w d0, (a6, a0.w)' and 0x230 <= 0x240 <= 0x24E
       and 0x230 <= 0x248 <= 0x24E)
 
-check('the only address-indexed DEVICE accesses are the phase $1600 walks',
+# FOUR sites, not three: write $210-$216, write the BIM block, then verify each.
+check('the only address-indexed DEVICE accesses are the four phase $1600 walks',
       sorted(x for x, (m, o, _) in _mins.items()
-             if _mre.search(r'\(a6, a0\.[wl]\)', o)) == [0xF09560, 0xF09574, 0xF095C0])
+             if _mre.search(r'\(a6, a0\.[wl]\)', o))
+      == [0xF09560, 0xF09574, 0xF095C0, 0xF095D6])
+check('...the fourth being the BIM block READ-BACK verify',
+      insn(0xF095CE) == 'move.w #$c0, d0' and insn(0xF095D2) == 'movea.w #$230, a0'
+      and insn(0xF095D6) == 'cmp.w (a6, a0.w), d0' and insn(0xF095E0) == 'addq.w #$1, d0')
 check('$F08E9A lies inside the $F08E8C pattern table, so it is data',
       0xF08E8C <= 0xF08E9A < 0xF08E8C + 8 * 4)
 

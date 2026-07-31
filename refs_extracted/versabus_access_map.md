@@ -28664,3 +28664,28 @@ unconditionally, or ignoring the mask, passes the mask-0 phases and fails at `$0
 Combined with the nesting requirement at `$1400`, the interrupt contract is: **assert at the
 programmed level; the CPU takes it only when that level exceeds the current mask; a
 higher-level request must preempt a running handler.**
+
+### Phase `$1600` in full: four indexed walks, and the BIM registers must READ BACK
+
+The register-file test is symmetric — write then verify, twice:
+
+| site | walk |
+|---|---|
+| `$F09560` | **write** `$10`, `$20`, `$40`, `$80` to `$FF0210`-`$FF0216` |
+| `$F09574` | **write** `$C0`, `$C1`, `$C2`, … to `$FF0230`+ |
+| `$F095C0` | **verify** `$FF0210`-`$FF0216` |
+| `$F095D6` | **verify** `$FF0230`+ against the same incrementing values |
+
+I had recorded three sites; there are four. The missing one is the BIM read-back, and it
+carries a requirement worth stating plainly:
+
+**Every BIM control and vector register must be readable and return exactly what was
+written** — all 16 in the two-BIM configuration, all 24 in the three-BIM one, including
+`$FF0240`, `$FF0248` and `$FF025E`, which have no explicit reference anywhere in the ROM.
+
+This project notes the BIM registers "are *not* write-only" on the strength of one
+read-modify-write in chassis op `$7`. Phase `$1600` is far stronger evidence: it reads back
+every one of them and fails the suite on any mismatch.
+
+For a model that means the BIM block cannot be write-only or partially decoded — a common
+shortcut, since operationally the firmware only ever *programs* 21 of the 24.
