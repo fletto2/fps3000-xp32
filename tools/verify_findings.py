@@ -5641,6 +5641,19 @@ check('the same byte at record+$16 is read TWICE, giving $9696 not $9600',
       insn(0xF0A086) == 'move.b $12(a3), d4' and insn(0xF0A08C) == 'move.b $12(a3), d4'
       and _rom[0xF0A600 - 0xF00000 + 0x16] == 0x96)
 
+check('$F0A306 is a second snapshot reporter using the same $0800 area',
+      insn(0xF0A308) == 'lea.l $800.l, a6' and insn(0xF0A30E) == 'move.l $4(a7), (a6)')
+check('...but it puts the SR at $0804, not $0806',
+      insn(0xF0A312) == 'move.w sr, $4(a6)' and insn(0xF0018C) == 'move.w sr, $806.w')
+check('...and saves FOURTEEN registers, with a6/a7 written separately',
+      insn(0xF0A31E) == 'movem.l d0-d7/a0-a5, (a6)'
+      and insn(0xF0A322) == 'move.l (a7)+, $38(a6)' and insn(0xF0A326) == 'move.l a7, $3c(a6)')
+check('...announcing display code $A2 in an endless loop',
+      insn(0xF0A32A) == 'move.w #$a2, d1' and insn(0xF0A330) == 'bra.b $f0a32a')
+check('$F0A332 zeroes each allocated block downward from its end',
+      insn(0xF0A334) == 'lsl.l #$8, d6' and insn(0xF0A33C) == 'move.l d6, -(a6)'
+      and insn(0xF0A33E) == 'cmpa.l a0, a6')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

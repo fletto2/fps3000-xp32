@@ -26864,3 +26864,63 @@ One oddity worth recording rather than smoothing over: `move.b $12(a3),d4` / `ls
 two different bytes. Whether that is intentional (a duplicated field) or a transcription
 slip in the original source cannot be told from the ROM — but a model must reproduce
 `$9696`, not `$9600`.
+
+## `$F0A306` is a SECOND post-mortem reporter, with a different layout (2026-07-31)
+
+Every RTOS-init allocation branches to `$F0A306` on failure, and it is not the kernel-fatal
+path — it is an independent reporter that happens to use the same low-RAM area:
+
+```
+pea.l   (a6)                 ; save a6 on the stack
+lea.l   $800.l,a6            ; THE SNAPSHOT AREA
+move.l  $4(a7),(a6)          ; $0800 <- the CALLER's return address
+move.w  sr,$4(a6)            ; $0804 <- the SR          <-- note the offset
+move.w  #$2700,sr
+lea.l   $8(a6),a6
+movem.l d0-d7/a0-a5,(a6)     ; $0808-$083F <- FOURTEEN registers
+move.l  (a7)+,$38(a6)        ; $0840 <- the saved a6
+move.l  a7,$3c(a6)           ; $0844 <- a7
+loop: move.w #$a2,d1 / bsr $f0a344 / bra loop   ; display $A2 forever
+```
+
+**The two layouts differ, and both are live:**
+
+| | `$F00186` (kernel fatal) | `$F0A306` (init failure) |
+|---|---|---|
+| `$0800` | faulting return address | caller's return address |
+| `$0804` | *(part of the PC longword)* | **the SR** |
+| `$0806` | **the SR** | *(part of the SR longword)* |
+| `$0808`- | `movem.l d0-d7/a0-a7` — 16 regs | `movem.l d0-d7/a0-a5` — **14 regs** |
+| `$0840`/`$0844` | *(within the 16-reg block)* | saved `a6` / `a7`, written separately |
+| `$0848`/`$084C` | USP / bus-error vector | not written |
+| announcement | panel `$2B2`, then hang | **display code `$A2`, in a loop** |
+
+So reading a dump at `$0800` requires knowing *which* reporter ran. The discriminator is
+easy: a kernel fatal also leaves `$2B2` at `$FF000E` and writes `$0848`/`$084C`; an init
+failure leaves neither and instead drives the display continuously.
+
+**A board that fails RTOS initialisation therefore shows `$A2`** — and does so repeatedly
+rather than once, which on a fitted display is a distinguishable steady state rather than a
+value latched at the moment of failure.
+
+**Three-way collision on `$0804`.** This project already noted that with no display fitted,
+`$0C3A` points at scratch `$800` and the spurious-interrupt reporter writes into `$0804`,
+inside the snapshot area. There are now three writers of that word: the display driver (on
+an unfitted board), the init reporter (deliberately, as the SR), and the tail of the kernel
+fatal's PC longword. On a display-less machine the `$A2` loop is *itself* writing into
+`$0804`, overwriting the SR it just saved. That is worth knowing before trusting a dump: on
+this chassis, **`$0804` from an init failure is not the SR — it is display traffic**.
+
+### `$F0A332` zeroes each freshly allocated block
+
+```
+move.l d2,d6 / lsl.l #$8,d6      ; pages -> bytes
+movea.l d6,a6 / adda.l a0,a6     ; a6 = end of block
+loop: move.l d6,-(a6) / cmpa.l a0,a6 / bgt loop
+```
+
+A downward longword clear from the end of the block to its base, called immediately after
+every successful `T0PAGAL`. So every RTOS structure is **guaranteed zero before its header
+is written** — which is why unset fields in a dump read as clean zeros rather than heap
+residue, and why a model that hands out non-zeroed pages will still boot but will diverge in
+any field the firmware leaves untouched.
