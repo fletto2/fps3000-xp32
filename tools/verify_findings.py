@@ -5685,6 +5685,22 @@ check('...28 jmps in runs plus 1 isolated = 29, with 13 no-ops = 42',
 check('two bsr fan-in tables and no more',
       len([1 for a in (0xF00A74, 0xF00ADA)
            if insn(a).startswith('bsr.b') and insn(a + 2).startswith('bsr.b')]) == 2)
+
+# ---- a stack canary: $4245 = 'BE' (2026-07-31) ----
+_can = [a for a, (_, o, _) in _mins.items() if '4245' in o]
+check("the marker $4245 = ASCII 'BE' appears at 8 sites", len(_can) == 8, len(_can))
+check('...seven pushes and exactly one check',
+      sum(1 for a in _can if insn(a) == 'move.w #$4245, -(a7)') == 7
+      and sum(1 for a in _can if insn(a).startswith('cmpi.w #$4245')) == 1)
+check('the check validates it 18 bytes up the stack',
+      insn(0xF00D00) == 'cmpi.w #$4245, $12(a7)')
+check('...and calls the KERNEL-FATAL path when it is wrong',
+      insn(0xF00D06) == 'beq.b $f00d0c' and insn(0xF00D08) == 'bsr.w $f00186.l')
+check('...then discards a 20-byte frame on success', insn(0xF00D0C) == 'adda.l #$14, a7')
+check('the push idiom is pea <continuation> then the marker',
+      insn(0xF01F00) == 'pea.l $f01ea4(pc)' and insn(0xF01F04) == 'move.w #$4245, -(a7)')
+check('so $2B2 on a stock machine means STACK CORRUPTION, reachable despite the vector override',
+      insn(0xF001A0) == 'move.w #$2b2, d0')
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')

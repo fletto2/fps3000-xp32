@@ -25195,3 +25195,49 @@ and calls with literal targets, which recursive descent follows by construction.
 
 That is as close to a proof of control-flow completeness as static analysis of a hand-written
 binary allows.
+
+## A stack canary: `$4245` = ASCII `'BE'`, pushed 7 times and checked once (2026-07-31)
+
+An ASCII census of the whole image turned up a four-character run at seven sites that is not a
+name, a marker or a task: **`$4245`**, which is `'BE'`. Tracing it:
+
+```
+push sites (7), all of this shape:
+$F01F00  pea.l   $F01EA4(pc)          a continuation address
+$F01F04  move.w  #$4245,-(a7)         ...then the MARKER
+
+the single check:
+$F00D00  cmpi.w  #$4245,$12(a7)       validate it 18 bytes up the stack
+$F00D06  beq.b   $F00D0C              intact -> carry on
+$F00D08  bsr.w   $F00186              CORRUPT -> THE KERNEL-FATAL PATH
+$F00D0C  adda.l  #$14,a7              discard the 20-byte frame
+```
+
+**Seven pushes, one check, and the failure action is deliberate death.** `$F00186` is the
+kernel-fatal routine already documented here — it saves `a1` to `$0848` and the **bus-error
+vector** to `$084C`, issues panel `$2B2`, and hangs.
+
+**So this is a stack canary.** A routine pushes a continuation address plus a magic word; the
+common unwind point at `$F00D00` verifies the word is still there before trusting the address
+beside it. If the stack has been corrupted in between, the kernel refuses to jump to whatever is
+now in that slot and kills itself instead — which is exactly the right behaviour and exactly what
+the `$2B2` "kernel fatal" code has always meant without anyone knowing why it would fire.
+
+### It gives the kernel-fatal path a second, reachable trigger
+
+This project records `$2B2` as issued by "a hand-placed FPS stub at `$F001A0`, inside the RMS68K
+kernel region, which then hangs", and separately that vector 142 points at `$F00186` but is
+**overridden by the FPS layer**. So the vector route is dead on a running machine.
+
+**The canary route is not.** `$F00D08 bsr.w $F00186` is an ordinary call, unaffected by any vector
+override, and it fires whenever a frame is corrupted. So on a stock machine `$2B2` at `$FF000E`
+means **stack corruption detected**, not a vectored exception — and the fields at `$0848`/`$084C`
+*are* written on that path, which corrects the reachability caveat recorded earlier: they are
+unreachable via vector 142, but reachable via the canary.
+
+### Why `'BE'`
+
+Almost certainly the tail of a longer word — the marker is stored as a word and only two
+characters fit. `$4245` reads as the first two letters of something the author had in mind; the
+kernel's other tags are four characters (`!TCB`, `EXEC`) because they are longwords. Nothing in
+the image disambiguates it, and it does not matter: the value is a magic constant, not a name.
