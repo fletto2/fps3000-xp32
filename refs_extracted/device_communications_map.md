@@ -552,3 +552,48 @@ the self-test and be restored each time.
 **So the device-communication map is closed against the indirection that produced its last
 three false negatives**: absolute references, base registers holding literals, base
 registers from configuration, and cached pointers have all now been swept.
+
+## The display channel, completely specified (2026-07-31)
+
+The driver at `$F0A344`/`$F0A34A` is thirteen instructions and fully determines what the
+optional front-panel display receives:
+
+```
+$F0A344: move.w #$10,d0     ; entry A
+$F0A34A: move.w #$90,d0     ; entry B -- differs only in bit 7
+         not.b  d1          ; INVERT the code
+         ror.l  #$4,d1      ; ...and keep its HIGH nibble
+         or.b   d1,d0
+         move.w #$2,d1 / rol.l #$4,d1        ; d1 = $20
+         movea.l $c3a.w,a1 / lea $4(a1),a1   ; the device register
+         move.w d1,(a1) / ori.w #$30,d1 / move.w d1,(a1)   ; $20 then $30
+         move.w d0,(a1) / ori.w #$30,d0 / move.w d0,(a1)   ; V then V|$30
+```
+
+**Only the high nibble of the code, inverted, ever reaches the display.** The low nibble is
+discarded by the `ror.l #$4`, so `$BF` and `$B0` are indistinguishable on the panel.
+
+There are exactly **three** driver call sites in the image:
+
+| code | site | when | writes | digit |
+|---|---|---|---|---|
+| `$BF` | `$F09C54` | during early init, entry B | `$20 $30 $94 $B4` | 4 |
+| `$C0` | `$F0A2FC` | after the PTM is running, just before the RTOS handoff | `$20 $30 $13 $33` | 3 |
+| `$A2` | `$F0A32E` | **RTOS init failure**, in an endless loop | `$20 $30 $15 $35` | 5 |
+
+**The arithmetic reproduces this project's own measurement.** A dump previously showed
+`$0020,$0030,$0013,$0033` landing at `$0804`; feeding `$C0` through entry A gives exactly
+that, byte for byte. The driver model and the recorded observation now agree without either
+being used to derive the other.
+
+**The write format is `{position nibble, data nibble}` followed by the same value with
+`$30` set** — a value-then-strobe pair per digit. The constant first pair is position 2,
+data 0; the second pair is position 1 (or 9 — entry B sets bit 7, which is a further flag
+the ROM does not otherwise explain) carrying the data nibble.
+
+**A collision to know about.** The 1 Hz heartbeat writes `$15 $35 $2E $3E` **inline**, not
+through the driver — and `$15 $35` is byte-identical to the data pair an `$A2` init failure
+produces. On a running machine those two words alone cannot distinguish "initialisation
+failed" from "the clock is ticking"; the surrounding writes can (`$20 $30` before it, versus
+`$2E $3E` after it). Anyone reading `$0800`-`$0807` on a display-less board should read all
+four words, not the pair.

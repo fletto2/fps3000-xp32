@@ -5654,6 +5654,23 @@ check('$F0A332 zeroes each allocated block downward from its end',
       insn(0xF0A334) == 'lsl.l #$8, d6' and insn(0xF0A33C) == 'move.l d6, -(a6)'
       and insn(0xF0A33E) == 'cmpa.l a0, a6')
 
+def _disp(code, seed):
+    _d1 = (~code) & 0xFF
+    _d1 = ((_d1 >> 4) | (_d1 << 28)) & 0xFFFFFFFF
+    _d0 = seed | (_d1 & 0xFF)
+    return [0x20, 0x30, _d0, _d0 | 0x30]
+check('the display driver keeps only the INVERTED HIGH NIBBLE of the code',
+      insn(0xF0A34E) == 'not.b d1' and insn(0xF0A350) == 'ror.l #$4, d1')
+check('...and its two entries differ only in bit 7 of the seed',
+      insn(0xF0A344) == 'move.w #$10, d0' and insn(0xF0A34A) == 'move.w #$90, d0'
+      and (0x10 ^ 0x90) == 0x80)
+check('...emitting value-then-strobe pairs, $30 being the strobe',
+      insn(0xF0A364) == 'ori.w #$30, d1' and insn(0xF0A36C) == 'ori.w #$30, d0')
+check('the model reproduces the MEASURED $0020,$0030,$0013,$0033 for code $C0',
+      _disp(0xC0, 0x10) == [0x20, 0x30, 0x13, 0x33])
+check('an init failure ($A2) produces the same data pair as the 1 Hz heartbeat',
+      _disp(0xA2, 0x10)[2:] == [0x15, 0x35] and insn(0xF009FC) == 'move.w #$15, $4(a1)')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
