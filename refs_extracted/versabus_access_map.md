@@ -25446,3 +25446,48 @@ at runtime.
 advancing by **two** — the same net-stride-2 content scan the `!VCT` search uses. So **both of the
 firmware's table lookups locate their target by tag rather than by address**, which is the
 load-time-addressing discipline the relocatable-kernel machinery requires.
+
+## Task creation is bounded by the blank tail, and the segment copy is 64 bytes (2026-07-31)
+
+The rest of the creation loop:
+
+```
+$F0A0C6  lea     $1C(a3),a2       a2 = record+$20 -- a descriptor array
+$F0A0CA  moveq   #$3,d0           FOUR entries (dbra 3)
+$F0A0CE  tst.w   $6(a2) / beq
+$F0A0D4  addq.l  #$1,d1           count the ones with a non-zero +$6
+$F0A0D6  lea     $8(a2),a2        stride EIGHT
+$F0A0DA  dbra    d0,$F0A0CE
+$F0A0DE  lea     $1C(a3),a3
+$F0A0E2  movea.l $36(a5),a4       the task's own structure
+$F0A0E6  move.b  d1,$5(a4)        store the count as a BYTE
+$F0A0EA  lea     $C(a4),a4
+$F0A0EE  moveq   #$F,d0
+$F0A0F0  move.l  (a3)+,(a4)+      COPY 16 LONGWORDS = 64 BYTES
+$F0A0F2  dbra    d0,$F0A0F0
+$F0A0F6  cmpi.l  #$21544342,(a3)  does the NEXT record start with '!TCB'?
+$F0A0FC  beq.b   $F0A082          yes -> create the next task
+```
+
+**So record+`$20` is a four-entry array of eight-byte segment descriptors**, counted by whether
+each has a non-zero word at its own `+$6`, and **64 bytes are copied wholesale** from record+`$20`
+into `[TCB+$36]+$C` — which is the task's `!TST`, whose `TSTNSEGS = 4` matches the array length
+exactly.
+
+### The table's length is self-describing, and the blank tail terminates it
+
+`$F0A0F6` continues the loop **only while the next 96-byte slot begins with `!TCB`**. The six
+records occupy `$F0A600`-`$F0A83F`, and the seventh slot would start at **`$F0A840` — inside the
+blank tail**, which is all zero.
+
+**So "six tasks" is not a constant anywhere in the firmware.** It is the number of consecutive
+`!TCB` records before the zero fill, and adding a seventh record would create a seventh task with
+no other change. That is consistent with the rest of the boot's design — the `!VCT` search, the
+`!TCB` search, the computed VMOD address and the config-driven RAM top all avoid hard-coded
+sizes — and it makes the blank tail load-bearing rather than merely empty: **anything written at
+`$F0A840` that happens to begin `!TCB` would be interpreted as a task definition.**
+
+That is worth knowing before patching the tail. `monitor/patch_rom.py` places the monitor at
+`$F0A826`, **26 bytes before that slot**, so a monitor grown past 26 bytes into the seventh slot
+would need its first longword checked — though in practice the monitor's code would have to begin
+with exactly `$21544342` to cause trouble.

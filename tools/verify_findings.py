@@ -5797,6 +5797,19 @@ check('...and its bit 4 means ENQUEUE ON THE READY LIST',
 check('...which is set in all six records, explaining the six ready-list pushes',
       all(_bst.unpack('>H', _rom[0xF0A600 - 0xF00000 + n * 96 + 0x18:][:2])[0] & 0x0010
           for n in range(6)))
+check('record+$20 is a four-entry array of eight-byte descriptors',
+      insn(0xF0A0CA) == 'moveq #$3, d0' and insn(0xF0A0D6) == 'lea.l $8(a2), a2'
+      and insn(0xF0A0CE) == 'tst.w $6(a2)')
+check('...and 64 bytes are copied into the task structure at [TCB+$36]+$C',
+      insn(0xF0A0E2) == 'movea.l $36(a5), a4' and insn(0xF0A0EA) == 'lea.l $c(a4), a4'
+      and insn(0xF0A0EE) == 'moveq #$f, d0' and insn(0xF0A0F0) == 'move.l (a3)+, (a4)+')
+check('the loop continues only while the NEXT slot begins with !TCB',
+      insn(0xF0A0F6) == 'cmpi.l #$21544342, (a3)' and insn(0xF0A0FC) == 'beq.b $f0a082')
+check('...and the seventh slot lies in the all-zero blank tail',
+      0xF0A600 + 6 * 96 == 0xF0A840 and 0xF0A840 > 0xF0A825
+      and _rom[0xF0A840 - 0xF00000:0xF0A844 - 0xF00000] == b'\x00' * 4)
+check('so "six tasks" is not a constant -- it is where the !TCB records stop',
+      all(_rom[0xF0A600 - 0xF00000 + n * 96:][:4] == b'!TCB' for n in range(6)))
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')
