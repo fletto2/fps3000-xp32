@@ -30633,3 +30633,30 @@ identical across all four) is real.
 This is the discipline the project's own standing hazard demands — "validate any such detector
 against a known-positive control before believing it" — generalised: **validate a negative with a
 detector biased toward false positives, and a positive with one biased toward false negatives.**
+
+### Where the sound tracker is *not* the right tool: access direction
+
+Running the block-scoped sweep over the XLTR block to classify each register read-only /
+write-only / read-write produces a table that looks authoritative and is not. It reports
+`$FF0204` and every BIM register as **write-only**, and omits `$FF0212`, `$FF0214` and `$FF0216`
+entirely — yet the self-test demonstrably reads `$FF0204` back (`$F094FE`), chassis op `$7`
+read-modify-writes `$FF0230` (`$F04F3A`), and `$FF0216` has 23 accesses.
+
+The reason is the tracker's own conservatism: it discards any use whose base was established in a
+previous basic block, and most of these registers are addressed from a base set once at the top
+of a routine and used across many blocks. So for *direction*, absence of evidence is not evidence
+of absence, and a "W only" row means only "no read was provable in the same block".
+
+**For direction the authoritative source is the runtime access log**, already recorded in
+`device_communications_map.md` from `FPS3K_ACCESSLOG` over four driving configurations — every
+access with its true CPU-level width and direction, observed rather than inferred. Static
+analysis settles *structure* (which offsets exist, which are never touched); execution settles
+*behaviour* (which are read, how wide, how often).
+
+That completes the tool-selection rule this session arrived at:
+
+| question | tool |
+|---|---|
+| is X ever touched? | the loose, over-reporting static sweep |
+| what offsets exist / what is the layout? | the sound block-scoped static sweep |
+| is X read or written, how wide, how often? | the runtime access log |
