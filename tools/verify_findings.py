@@ -7840,6 +7840,17 @@ check('read-back: MODE0 low byte must be zero, $FF0218 & $610 must equal $400',
 check('...and $FF0204 must still read back the phase counter',
       _w(0xF09582) == 0xBC6E and _w(0xF09584) == 0x0204)
 
+check('$FF0218 bit 4 is read UNARMED, before the $400 write, to size the walk',
+      _w(0xF09522) == 0x302E and _w(0xF09524) == 0x0218
+      and _w(0xF09526) == 0x0800 and _w(0xF09528) == 0x0004
+      and _w(0xF0952A) >> 8 == 0x66
+      and _w(0xF0952C) == 0x323C and _w(0xF0952E) == 0x00D0
+      # the $400 write comes later, and the masked check later still
+      and 0xF09522 < 0xF0954C < 0xF095A2)
+check('...and the two walk lengths are exactly 16 and 24 registers',
+      (0xD0 - 0xC0) == 16 and (0xD8 - 0xC0) == 24
+      and 0x230 + 2 * 16 - 2 == 0x24E and 0x230 + 2 * 24 - 2 == 0x25E)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

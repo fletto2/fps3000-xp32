@@ -33952,3 +33952,43 @@ loop bound and nothing else, which is what this project concluded from a differe
 The verify phase re-walks both register runs comparing against the same generated values, so a model
 that aliases any two of `$FF0210`/`$0212`/`$0214`/`$0216`, or any two BIM registers, fails at the
 first aliased pair.
+
+## `$FF0218` bit 4 has TWO behaviours at two different times — the BIM question closed (2026-07-31)
+
+The selector is explicit at the head of phase `$1600`:
+
+```
+$F09518  movem.l d0-d1/a0,-(a7)
+$F09520  clr.w (a5)              ; $1FFF0 <- 0
+$F09522  move.w $218(a6),d0      ; read $FF0218 -- UNARMED
+$F09526  btst.b #$4,d0
+$F0952A  bne.b  $F09532
+$F0952C  move.w #$d0,d1          ; bit 4 CLEAR -> 16 registers ($FF0230-$FF024E)
+$F09532  move.w #$d8,d1          ; bit 4 SET   -> 24 registers ($FF0230-$FF025E)
+```
+
+(`$D0-$C0 = $10` = 16 iterations at two bytes of address each = `$FF0230`-`$FF024E`;
+`$D8-$C0 = $18` = 24 = `$FF0230`-`$FF025E`.)
+
+**The decisive detail is the ordering.** Bit 4 is read at `$F09522`, *before* anything is written to
+`$FF0218`. The register is only written `$400` later, at `$F0954C`, and only then does `$F095A2`
+require `($FF0218 & $610) == $400` — i.e. **bit 4 clear**.
+
+So the two requirements this project spent a long time treating as contradictory are **sequential,
+not simultaneous**:
+
+| when | bit 4 | meaning |
+|---|---|---|
+| read **unarmed** | may be set | "size the walk for three BIMs" |
+| read **after `$FF0218 <- $400`** | must be clear | part of the armed-status pattern |
+
+That is precisely the behaviour the emulator was given empirically (the `$0400` write case clears
+`bim3_present`), and this is the firmware-side proof that the fix is correct rather than a
+workaround. It also finally explains the shape of the original derailment: a **sticky strap** model
+satisfies the first read and fails the second, which is why setting the bit produced a machine that
+walked 24 registers and then retried forever.
+
+**Restating the resolved position, now with the instruction sequence behind it:** the card carries
+three MC68153s; three of the six live interrupt channels are on BIM2, which is programmed
+unconditionally; bit 4 sizes only *this test's walk*; and a correct model has three BIMs **and** bit 4
+reading clear once armed. Nothing here is a hardware-inventory bit.
