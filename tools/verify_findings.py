@@ -6213,6 +6213,12 @@ check('$0400 survives the boot clear, which starts at $800',
 check('$1F800 does NOT survive: it is !IDV\'s base, tagged at init',
       insn(0xF09F80) == 'move.l a0, $c6e.w')
 
+check('the watchdog test $F08F1C runs at phase $0700, not $0600',
+      insn(0xF08792) == 'addi.w #$100, d6' and insn(0xF08796) == 'bsr.w $f08f1c'
+      and insn(0xF0878A) == 'addi.w #$100, d6' and insn(0xF0878E) == 'bsr.w $f08e2e')
+check('...and the ROM checksum is phase $0300, three steps from the $0200 base',
+      insn(0xF08764) == 'move.l #$200, d6' and insn(0xF08772) == 'bsr.w $f08d1a')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

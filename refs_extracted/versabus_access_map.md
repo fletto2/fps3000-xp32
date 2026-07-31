@@ -28552,3 +28552,49 @@ be taken before RTOS initialisation, or the counter read some other way.
 
 `$03FC` surviving is the useful half: it is a single longword, outside every clear and every
 override, holding whatever `d0` contained when the self-test finished.
+
+## The complete phase → test map, and a corrected phase number (2026-07-31)
+
+Walking the phase counter `d6` through the self-test's `move.l #base,d6` and
+`addi.w #$100,d6` steps gives the definitive mapping between the code broadcast to
+`CHANNEL_SELECT` and the routine running:
+
+| phase | test | what it is |
+|---|---|---|
+| `$0200` | `$F08C4A` | |
+| `$0300` | `$F08D1A` | **ROM checksum** — whole-image XOR must be zero |
+| `$0400` | `$F08D5E` | |
+| `$0500` | `$F08DF8` | `BoardStatusPoll_3F11` |
+| **`$0600`** | **`$F08E2E`** | **the VMOD longword pattern test** (8 patterns from `$F08E8C`) |
+| **`$0700`** | **`$F08F1C`** | **the bus-timeout watchdog** — requires a fault in `$F80001`-`$F82001` |
+| `$0800` | `$F08F70` | |
+| `$0900` | `$F0905A` | the PTM interrupt test |
+| `$1100` | `$F0918C` | VMOD bit 4 ↔ board bit 1 |
+| `$1200` | `$F09236` | |
+| `$1300` | `$F09338` | the VMOD interrupter / request-level walk |
+| `$1400` | `$F093CE` | interrupt delivery, vectors `$50`/`$52` |
+| `$1500` | `$F094F0` | |
+| `$1600` | `$F09518` | the XLTR register-file walk |
+| `$1700` | `$F09602` | `$FF0216` bit 5 — the `$400000` window gate |
+| `$1800` | `$F096C4` | `$FF0216` bit 6 — verified inert |
+| `$1900` | `$F09776` | the 16→32 width mux |
+| `$1A00` | `$F09832` | `$FF0216` bit 7 — the AP I/F command-port gate |
+| `$2100` | `$F08992` | |
+| `$2200` | `$F09AD6` | |
+| `$2300` | `$F09B20` | **the SCM test** |
+| `$2400` | `$F09986` | the DRAM pattern test |
+| `$2600` | `$F09A7E` | the DRAM refresh test |
+
+**Correction: the bus-timeout watchdog is phase `$0700`, not `$0600`.** This project records
+"**`$600` is the bus-timeout watchdog test** — it *requires* a BERR somewhere in
+`$F80001`-`$F82001`; a model that returns zero for unmapped space hangs here." The
+requirement is right and the routine (`$F08F1C`) is right; the **phase number is off by
+one**. Phase `$0600` is the VMOD pattern test at `$F08E2E`.
+
+That matters because the phase code in `CHANNEL_SELECT` is the primary diagnostic on a board
+with no serial output. Someone debugging a model that never faults on unmapped space would
+watch for `$0600` and see `$0700`, and could reasonably conclude the watchdog was not the
+problem.
+
+The map is derived mechanically — each `addi.w #$100,d6` followed by the `bsr` it precedes —
+so it can be regenerated rather than trusted.
