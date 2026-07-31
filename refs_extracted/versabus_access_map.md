@@ -18500,3 +18500,10 @@ array ends where `$10A0` begins. That last one is worth the caution it nearly co
 clearing routine at `$F08536` computes `(ch-1)*4` for `$1080` and then **halves it** before
 `$1098`, so `$1098` is stride 2, not 4. Read as stride 4 it would alias `$10A0` and produce
 a contradiction that is not there.
+
+*Sweep caveat:* a regex over `$xxx`/`$xxxx` operands counts **immediates** as globals. In
+the `$0E00-$1100` window the false positives are `$0FF0`, `$0FFF` and `$1000`, which are
+`adda.l #$ff0,a2`, the `$FFF` IRQ-mask and XP4I scan-mask constants, and `move.w #$1000,
+$202(a6)` — MODE1 with **bit 12**, the command-valid bit, set by three self-test sites. None
+is an address. Any future sweep of this window should filter on the `#` prefix; the
+consolidated table above already excludes them.
