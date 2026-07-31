@@ -4369,6 +4369,20 @@ check('...whose bases $1000/$0FF0/$0FE0 bracket the VMOD register at $1FFF0',
        for k in range(3)] == [0x1000, 0x0FF0, 0x0FE0]
       and 0x20000 - 2 * 7 == 0x1FFF2 and 0x1FFF0 - 2 == 0x1FFEE)
 
+# --- the RTOS configuration block at $F0A502-$F0A552 ---------------------
+check('the config block holds the trace mask, device base and RAM top',
+      struct.unpack('>H', _rom[0xF0A52A - _B:0xF0A52C - _B])[0] == 0x0000
+      and struct.unpack('>I', _rom[0xF0A52C - _B:0xF0A530 - _B])[0] == 0x00F70000
+      and struct.unpack('>I', _rom[0xF0A550 - _B:0xF0A554 - _B])[0] == 0x00020000)
+check('...and seven allocator page counts, six ones and one two',
+      sorted(struct.unpack('>I', _rom[a - _B:a - _B + 4])[0]
+             for a in (0xF0A516, 0xF0A51A, 0xF0A534, 0xF0A538,
+                       0xF0A522, 0xF0A51E, 0xF0A526)) == [1, 1, 1, 1, 1, 1, 2])
+# The 2-page constant and the runtime USTNPAGE agree, read from opposite ends.
+check('the two-page constant $F0A51A matches !UST\'s runtime USTNPAGE = 2',
+      struct.unpack('>I', _rom[0xF0A51A - _B:0xF0A51E - _B])[0] == 2
+      and struct.unpack('>H', _rq2[0x1FB0A:0x1FB0C])[0] == 2)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
