@@ -28354,3 +28354,28 @@ thing that resolved the VMOD `a5` provenance question earlier.
 registers does the firmware *program* individually", which is what the interrupt-vector
 analysis depends on. A register written only by a walking-pattern test is exercised, not
 configured.
+
+### Closing the address-indexed sweep
+
+Seven address-indexed sites exist in the image. Classifying them:
+
+| site | form | verdict |
+|---|---|---|
+| `$F09560`, `$F09574`, `$F095C0` + 1 | `(a6,a0.w)` | **device** — the phase `$1600` walks |
+| `$F02078` | `(a0,a5.w)` | a kernel structure access, not a device |
+| `$F0A61E`, `$F004D0`, `$F0A67E` | `(a0,a7)`, `(a6,a7)` | misaligned decodes |
+| `$F08E9A` | `(a3,a2.l)` | **inside the `$F08E8C` pattern table** — data the listings render as code |
+
+So **the only address-indexed device accesses are the phase-`$1600` walks**, and the device
+register set is now closed against this form too.
+
+**One caution the last row earns.** `$F08E9A` lies within the eight-longword pattern table at
+`$F08E8C`, which this file establishes independently (the loop reads it with
+`move.l (a4)+,d0`). The listings nonetheless render it as an instruction, so it passes a
+boundary filter built from them.
+
+That is the second class of listing error found this session, after the five trace-hook
+inline parameters rendered as `addx.b`/`roxr.b`/`lsr.b`. **"The listing shows an
+instruction" is evidence, not proof** — the listings are a disassembler's output and carry
+its mistakes. Where a region is known to be data on independent grounds, that knowledge
+outranks the rendering.

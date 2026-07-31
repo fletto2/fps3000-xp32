@@ -6179,6 +6179,12 @@ check('...meaning $FF0240 and $FF0248 ARE written, despite no explicit reference
       insn(0xF09574) == 'move.w d0, (a6, a0.w)' and 0x230 <= 0x240 <= 0x24E
       and 0x230 <= 0x248 <= 0x24E)
 
+check('the only address-indexed DEVICE accesses are the phase $1600 walks',
+      sorted(x for x, (m, o, _) in _mins.items()
+             if _mre.search(r'\(a6, a0\.[wl]\)', o)) == [0xF09560, 0xF09574, 0xF095C0])
+check('$F08E9A lies inside the $F08E8C pattern table, so it is data',
+      0xF08E8C <= 0xF08E9A < 0xF08E8C + 8 * 4)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
