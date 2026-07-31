@@ -18875,3 +18875,48 @@ Census of XP1I's copy, measured: **13 slots empty, `POLL` 9, `D1_SEND` 10, `BLK_
 having an "identical index-to-handler pattern"; the `POLL` and `BLK_XFR` counts differ here.
 Worth re-checking against RDHC's table directly rather than assuming either count — the
 handler *set* is certainly the same four, and `D1_SEND` and `D2_FIN` agree exactly.
+
+### The 42-slot table, recounted: 13 slots are deliberate no-ops, and all five copies match
+
+Two things settle the census I flagged above.
+
+**All five tables have a byte-identical index-to-handler pattern.** Reducing each to a
+signature (`-` = no jump, letters assigned by first appearance) gives the same string for
+`$F05BA4` (RDHC), `$F065E4`, `$F06FFC`, `$F079FC` and `$F083FC`:
+
+```
+-ABBBBBBCCA--BBBB---D-AACACACCCA--ACAC----
+```
+
+So this project's claim that the XP copies share RDHC's pattern is confirmed mechanically,
+and any count derived from one applies to all five.
+
+**The slots that "have no handler" are not empty.** Each is `4E75 4E71` — **`rts` followed
+by `nop`** — an explicit do-nothing entry, not padding and not a gap:
+
+```
+slot  0 $F083FC: 4e75 4e71    rts / nop
+slot 11 $F08428: 4e75 4e71
+... 13 slots in total
+```
+
+Corrected census, mechanically counted:
+
+| | slots |
+|---|---:|
+| `rts`/`nop` — accept and ignore | **13** |
+| `POLL` | 9 |
+| `D1_SEND` | 10 |
+| `BLK_XFR` | 9 |
+| `D2_FIN` | 1 |
+| **total** | **42** |
+
+This project records **POLL 12 and BLK_XFR 11**; those are overstated by 3 and 2. The
+`D1_SEND` (10) and `D2_FIN` (1) figures agree exactly, and the handler *set* was never in
+doubt. The likely origin of the drift is counting the no-op slots as belonging to their
+neighbouring run — which is easy to do by eye and impossible mechanically, since `4E75` and
+`4EFA` differ in the second nibble.
+
+The practical consequence is small but real: **13 of the 42 operation codes are explicitly
+accepted and ignored**, rather than 8 being undefined. A chassis issuing one of those gets
+silence by design, not by omission.
