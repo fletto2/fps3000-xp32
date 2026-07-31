@@ -23993,3 +23993,60 @@ firmware's operational configuration touches 21 of 24. What the self-test's walk
 separate question, answerable only from a run, and the runtime observation that `$FF025E` "is
 never touched" was made with the model presenting two BIMs — where the walk covers 16 registers
 and stops before BIM2 entirely.
+
+## The BIM initialisation read out — the four orphan vectors identified by channel (2026-07-31)
+
+`$F0A164`-`$F0A1C4` programs every BIM register the tasks do not:
+
+```
+movea.l #$FF0000,a0
+move.w  #$0,$232(a0)   BIM0 CR1  -- disabled
+move.w  #$0,$234(a0)   BIM0 CR2  -- disabled
+move.w  #$0,$236(a0)   BIM0 CR3  -- disabled
+move.w  #$0,$242(a0)   BIM1 CR1  -- disabled
+move.w  #$0,$254(a0)   BIM2 CR2  -- disabled (IO1I re-enables it later)
+move.w  #$0,$256(a0)   BIM2 CR3  -- disabled
+move.w  #$41,$238(a0)  BIM0 VR0
+move.w  #$42,$23A(a0)  BIM0 VR1
+move.w  #$43,$23C(a0)  BIM0 VR2
+move.w  #$44,$23E(a0)  BIM0 VR3
+move.w  #$45,$24C(a0)  BIM1 VR2
+move.w  #$46,$24E(a0)  BIM1 VR3
+move.w  #$47,$258(a0)  BIM2 VR0
+move.w  #$48,$25A(a0)  BIM2 VR1
+move.w  #$49,$24A(a0)  BIM1 VR1   <- OUT OF SEQUENCE
+move.w  #$4A,$25C(a0)  BIM2 VR2
+```
+
+**Ten vector registers, vectors `$41`-`$4A`, assigned almost in register order** — with `$49`
+placed out of sequence into BIM1 VR1, after the `$47`/`$48` pair has already moved on to BIM2.
+
+### It confirms all six documented BIM vectors and names the four orphans
+
+| vector | BIM register | owner |
+|---|---|---|
+| `$41` | BIM0 VR0 `$238` | **RDHC** |
+| `$42` | BIM0 VR1 `$23A` | **orphan** |
+| `$43` | BIM0 VR2 `$23C` | **orphan** |
+| `$44` | BIM0 VR3 `$23E` | **orphan** |
+| `$45` | BIM1 VR2 `$24C` | **XP1I** |
+| `$46` | BIM1 VR3 `$24E` | **XP2I** |
+| `$47` | BIM2 VR0 `$258` | **XP3I** |
+| `$48` | BIM2 VR1 `$25A` | **XP4I** |
+| `$49` | BIM1 VR1 `$24A` | **orphan** |
+| `$4A` | BIM2 VR2 `$25C` | **IO1I** |
+
+The six task vectors match the documented table exactly, derived here from the init code that
+writes them rather than from the task bodies that consume them. And the **four orphan vectors
+`$42`/`$43`/`$44`/`$49`** — recorded as "read 0" in the `!VCT` table with no further account —
+are now placed: **BIM0 channels 1-3 and BIM1 channel 1**.
+
+**Their control registers are the ones zeroed.** `$232`/`$234`/`$236` (BIM0 CR1-3) and `$242`
+(BIM1 CR1) are set to `$0000` in the same routine, so those four channels are **vectored but
+disabled** — they carry a valid vector and can never assert it. That is exactly why the `!VCT`
+table shows their entries as unowned: nothing ever connects a task to them, and nothing ever
+will.
+
+So the machine's interrupt wiring is: **ten BIM channels vectored, six enabled and owned, four
+vectored-but-disabled, and three registers never named at all** (BIM1 CR0/VR0 and BIM2 VR3).
+Twelve BIM channels exist; the firmware uses half of them.

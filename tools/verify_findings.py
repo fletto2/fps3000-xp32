@@ -5262,6 +5262,27 @@ check('...and the two BIM1 absences are the SAME channel, CR0 and VR0',
       0x248 - 0x240 == 8)
 check('BIM2 CR3 IS programmed while its VR is not -- a configured channel with no vector',
       _bimrefs(0x256) >= 1 and _bimrefs(0x25E) == 0)
+
+# ---- the BIM init assigns vectors $41-$4A to ten channels (2026-07-31) ----
+_vecmap = [(0xF0A18E, 0x41, 0x238), (0xF0A194, 0x42, 0x23A), (0xF0A19A, 0x43, 0x23C),
+           (0xF0A1A0, 0x44, 0x23E), (0xF0A1A6, 0x45, 0x24C), (0xF0A1AC, 0x46, 0x24E),
+           (0xF0A1B2, 0x47, 0x258), (0xF0A1B8, 0x48, 0x25A), (0xF0A1BE, 0x49, 0x24A),
+           (0xF0A1C4, 0x4A, 0x25C)]
+check('ten BIM vector registers are programmed with vectors $41-$4A',
+      all(insn(a) == 'move.w #$%x, $%x(a0)' % (v, r) for a, v, r in _vecmap))
+check('...and $49 goes out of sequence into BIM1 VR1',
+      insn(0xF0A1BE) == 'move.w #$49, $24a(a0)')
+check('six control registers are zeroed at init -- vectored but disabled channels',
+      all(insn(a).startswith('move.w #$0, ')
+          for a in (0xF0A16A, 0xF0A170, 0xF0A176, 0xF0A17C, 0xF0A182, 0xF0A188)))
+check('the four orphan vectors $42/$43/$44/$49 map to BIM0 ch1-3 and BIM1 ch1',
+      [r for _, v, r in _vecmap if v in (0x42, 0x43, 0x44, 0x49)] == [0x23A, 0x23C, 0x23E, 0x24A])
+check('...and their CRs are exactly the ones zeroed',
+      insn(0xF0A16A).endswith('$232(a0)') and insn(0xF0A170).endswith('$234(a0)')
+      and insn(0xF0A176).endswith('$236(a0)') and insn(0xF0A17C).endswith('$242(a0)'))
+check('the six task vectors match the documented BIM table',
+      [(v, r) for _, v, r in _vecmap if v in (0x41, 0x45, 0x46, 0x47, 0x48, 0x4A)]
+      == [(0x41, 0x238), (0x45, 0x24C), (0x46, 0x24E), (0x47, 0x258), (0x48, 0x25A), (0x4A, 0x25C)])
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
