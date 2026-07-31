@@ -6719,6 +6719,25 @@ check('the walking-bit phases pair a computed VMOD write with a computed board-s
 check('$F08F70 is an undecoded movem.l prologue, so $F08F72 is a register mask not an opcode',
       _w(0xF08F70) == 0x48E7 and _w(0xF08F74) == 0x47F9 and _l(0xF08F76) == 0x00F09052)
 
+check('the PTM test loads all THREE timer latches with $0FFF via movep.w',
+      _w(0xF090F0) == 0x303C and _w(0xF090F2) == 0x0FFF
+      and _w(0xF090F4) == 0x0188 and _w(0xF090F6) == 0x0004
+      and _w(0xF090F8) == 0x0188 and _w(0xF090FA) == 0x0008
+      and _w(0xF090FC) == 0x0188 and _w(0xF090FE) == 0x000C)
+check('...then CR3=$C2, CR2=$C3, CR1=$C2 -- the address-select flip between the two (a0) writes',
+      _w(0xF09104) == 0x4228 and _w(0xF09106) == 0x0002
+      and _w(0xF09108) == 0x10BC and _w(0xF0910A) == 0x00C2
+      and _w(0xF0910C) == 0x117C and _w(0xF0910E) == 0x00C3
+      and _w(0xF09112) == 0x10BC and _w(0xF09114) == 0x00C2)
+check('...CR value $C2 sets bit 6 (IRQ enable) and bit 1 (internal clock), bit 0 clear',
+      (0xC2 >> 6) & 1 and (0xC2 >> 1) & 1 and not (0xC2 & 1))
+check('PTMInit puts the PTM in reset: CR2 <- $1 then CR1 <- $1',
+      _w(0xF0917E) == 0x117C and _w(0xF09180) == 0x0001 and _w(0xF09182) == 0x0002
+      and _w(0xF09184) == 0x10BC and _w(0xF09186) == 0x0001)
+check('the RTOS programs only T3 and T1 operationally, never T2',
+      _w(0xF0A2C6) == 0x0189 and _w(0xF0A2C8) == 0x000D
+      and _w(0xF0A2CE) == 0x0189 and _w(0xF0A2D0) == 0x0005)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

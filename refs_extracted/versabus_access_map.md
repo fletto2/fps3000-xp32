@@ -30252,3 +30252,47 @@ register at `$F08F72`. That is not an instruction: `$F08F70` is one of the two `
 this project knows the disassembler fails to decode, so `$F08F72` is its **register mask** being
 read as an opcode. Any census driven off the disassembly text rather than the ROM bytes will pick
 up both of those sites (`$F08F70`, `$F098EC`); they should be excluded by address.
+
+## The PTM interrupt test, programmed side (2026-07-31)
+
+`$F090EA` sets up what the vector-`$54` handler then checks, and it closes the loop on the
+"all three timers" requirement from the programming side:
+
+```
+$F090EA  bsr    PTMInit          ; CR2 <- $01, CR1 <- $01  -- internal RESET, all three held
+$F090EE  clr.w  d2               ; the delivery flag the handler will set
+$F090F0  move.w #$fff,d0
+$F090F4  movep.w d0,$4(a0)       ; T1 latch <- $0FFF
+$F090F8  movep.w d0,$8(a0)       ; T2 latch <- $0FFF
+$F090FC  movep.w d0,$c(a0)       ; T3 latch <- $0FFF
+$F09100  move.w #$5fff,d0        ; the spin bound
+$F09104  clr.b  $2(a0)           ; CR2 bit 0 = 0  -> address 0 now selects CR3
+$F09108  move.b #$c2,(a0)        ;   CR3 <- $C2
+$F0910C  move.b #$c3,$2(a0)      ; CR2 <- $C3, bit 0 = 1 -> address 0 now selects CR1
+$F09112  move.b #$c2,(a0)        ;   CR1 <- $C2   -- bit 0 clear RELEASES the reset
+$F09116  tst.w  d2 / dbne d0     ; bounded spin, up to $5FFF iterations
+```
+
+**All three timers are loaded with the same latch (`$0FFF`) and released together**, which is
+exactly why sub-phase 3 can demand `status & 7 == 7` — they expire simultaneously by
+construction. `$C2` sets **bit 6 (interrupt enable)** and **bit 1 (internal E clock)** on every
+control register.
+
+**The self-test reconfigures T1 away from its operational mode.** This project records that
+operationally `CR1 = $00`, making T1 an *external-input* counter — which is why it never expires
+in normal running. Here CR1 is `$C2`, bit 1 set, so T1 runs from the internal clock like the
+others. A model that hard-codes T1 as externally clocked passes the boot and hangs in this phase.
+
+**The CR2 address-select dance is the detail to get right.** The two writes to `(a0)` — the same
+address — hit **different registers**, because `$F09104` and `$F0910C` flip CR2 bit 0 in between:
+zero selects CR3 at address 0, one selects CR1. Writing CR1 last is what releases the reset, so
+the ordering is load-bearing rather than stylistic. (This is the bit that was once mistaken for a
+master reset; the correction is already in `mc6840.c`, and this is the site that forces it.)
+
+Timing sanity: `$0FFF` = 4095 E-cycles at 800 kHz ≈ 5.1 ms, against a spin bound of `$5FFF`
+iterations ≈ 30 ms of CPU time — comfortable, but a model whose timers run slow enough will miss
+the window and, per the fault policy, loop forever rather than report.
+
+**Operational contrast, from the same census.** The RTOS programs only **T3** (`movep.w d0,$d(a1)`
+at `$F0A2C6`) and **T1** (`$5(a1)` at `$F0A2CE`) — never T2. So T2 is programmed exactly once in
+the machine's life, by this test.
