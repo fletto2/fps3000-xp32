@@ -318,10 +318,18 @@ So one fix retires two divergences — the undersized window and the invented ma
 — and makes the model match the firmware's own description of the hardware rather than
 working around it.
 
-**Caveat on the page semantics.** That `$70001C` is reached by *direct CPU addressing*
-while op `$3` reaches its target by *computed* `page`/`offset` means the two paths index the
-window differently, and the ROM alone does not settle how the XLTR combines `MODE2` with the
-CPU address lines. The safe reading — and the one both paths are consistent with — is that
-`MODE2` supplies the high page bits and the CPU address supplies the offset within the
-window's 4 MB aperture. A schematic or a bus trace would settle it; until then a model
-should keep the two paths behaviourally identical rather than assuming either.
+**The ROM does constrain the page semantics, more than I first allowed.** TCBIO1I selects
+`MODE2 = $F` and then touches CPU address `$70001C`. Within the 4 MB aperture that address
+sits at offset `$30001C`, whose own bits 20-21 are **3**. So `MODE2` (`$F`) and the CPU
+address's high offset bits (`3`) **disagree** — they cannot be the same field.
+
+`MODE2` therefore selects a **chassis-side page** independently of the CPU address, which
+supplies only the offset within the aperture. The mailbox is "chassis page `$F`, aperture
+offset `$30001C`", and op `$3` reaches its target by writing the page it wants and using the
+low bits as the offset — the same two-part scheme, driven from the chassis rather than from
+a fixed address.
+
+What remains unestablished is the *width* of the page field and how many pages the backplane
+decodes; the firmware only ever names `$0` and `$F` by literal, with op `$3` supplying the
+rest at runtime. A model should implement page-plus-offset and accept any page value rather
+than assuming 16.

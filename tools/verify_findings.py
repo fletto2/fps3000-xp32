@@ -5965,6 +5965,13 @@ check('no 32-bit operation touches ANY XLTR register',
 check("op $3's window arithmetic reaches $7FFFFC -- 4 MB, not 1",
       0x400000 + (0xFFFFF << 2) == 0x7FFFFC)
 
+check('the mailbox base $700000 is loaded by TCBIO1I and read at init',
+      insn(0xF05DE0) == 'movea.l #$700000, a4' and insn(0xF0A1E6) == 'move.l $70001c.l, d1')
+check('...and MODE2 = $F disagrees with the aperture offset page bits (3)',
+      (0x70001C - 0x400000) >> 20 == 3)
+check('the firmware names five absolute addresses in the window extent',
+      insn(0xF09BA0) == 'lea.l $403ffc.l, a2' and insn(0xF09B36) == 'lea.l $404000.l, a1')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
