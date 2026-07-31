@@ -6169,6 +6169,16 @@ check('...and the register-file test verifies six more registers by literal',
       insn(0xF09588) == 'cmpi.w #$2000, $202(a6)' and insn(0xF0959A) == 'cmpi.w #$1, $20c(a6)'
       and insn(0xF095B0) == 'cmpi.w #$fff, $21a(a6)' and insn(0xF095AA) == 'cmpi.w #$400, d0')
 
+check('the BIM walk length is chosen by $FF0218 bit 4: 16 or 24 registers',
+      insn(0xF09522) == 'move.w $218(a6), d0' and insn(0xF09526) == 'btst.b #$4, d0'
+      and insn(0xF0952C) == 'move.w #$d0, d1' and insn(0xF09532) == 'move.w #$d8, d1')
+check('...so it covers $FF0230-$FF024E or $FF0230-$FF025E',
+      0x230 + 2 * ((0xD0 - 0xC0) - 1) == 0x24E
+      and 0x230 + 2 * ((0xD8 - 0xC0) - 1) == 0x25E)
+check('...meaning $FF0240 and $FF0248 ARE written, despite no explicit reference',
+      insn(0xF09574) == 'move.w d0, (a6, a0.w)' and 0x230 <= 0x240 <= 0x24E
+      and 0x230 <= 0x248 <= 0x24E)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

@@ -28307,3 +28307,50 @@ That is the seventh distinct mechanism by which a sweep here has produced a conf
 answer, and the second involving indexed addressing specifically. **Both index register
 classes must be matched**, and the earlier "indexed addressing reaches the channel windows"
 finding should be read as *incomplete* rather than wrong.
+
+## The "three never-referenced BIM registers" — the caveat was right (2026-07-31)
+
+Phase `$1600`'s BIM walk is address-indexed, and it covers the whole block:
+
+```
+move.w $218(a6),d0 / btst.b #$4,d0
+bne  three_bim
+move.w #$d0,d1          ; 2-BIM: 16 registers, $FF0230-$FF024E
+bra  go
+three_bim: move.w #$d8,d1   ; 3-BIM: 24 registers, $FF0230-$FF025E
+go: ...
+    movea.w #$230,a0 / move.w #$c0,d0
+loop: move.w d0,(a6,a0.w) / lea $2(a0),a0 / addq.w #$1,d0 / cmp.w d1,d0 / bne loop
+```
+
+| register | explicit reference | written by the `$1600` walk |
+|---|---|---|
+| `$FF0240` BIM1 CR0 | none | **yes — in both configurations** |
+| `$FF0248` BIM1 VR0 | none | **yes — in both configurations** |
+| `$FF025E` BIM2 VR3 | none | **yes, when `$FF0218` bit 4 is set** |
+
+So the statement "three registers have **no reference of any kind**" is true only of
+*explicit* references. All three are written by the indexed walk, two of them
+unconditionally.
+
+**This project's own text anticipated exactly this**: "*Caveat: this counts explicit
+references; self-test phase `$1600` walks the block with computed addressing and may touch
+more.*" The caveat was correct and is now resolved concretely.
+
+### Three confirmations that shared one blind spot
+
+I recorded this finding as "confirmed three ways — absolute scanning, provenance sweeping and
+operand-form matching alike". That was the wrong claim to make. **All three methods match
+*operand forms containing a literal displacement*, and none of them can see
+`move.w d0,(a6,a0.w)`.** They agreed because they shared a blind spot, not because they were
+independent.
+
+The correct generalisation: independence is about *what a method cannot see*, not about how
+differently it is implemented. Three matchers over the same syntactic surface are one method
+in three costumes. The finding that broke the tie came from decoding a *routine* — the same
+thing that resolved the VMOD `a5` provenance question earlier.
+
+**What stands unchanged**: the 21-of-24 figure is still the right answer to "which BIM
+registers does the firmware *program* individually", which is what the interrupt-vector
+analysis depends on. A register written only by a walking-pattern test is exercised, not
+configured.
