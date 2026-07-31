@@ -680,3 +680,39 @@ This supersedes the "RETRACTED — setting that bit DERAILS THE BOOT" note: the 
 correct about the observation and wrong about the cause. Three BIMs are not optional — BIM2 is
 programmed unconditionally by init and by three tasks — so a correct model has **three BIMs and
 bit 4 clear after arming**, which were never in tension.
+
+
+---
+
+## MEASURED 2026-07-31: the bit-4 fix is ALREADY IMPLEMENTED, and the docs are stale
+
+The fix specified above — bit 4 readable before the arm write, clear after — **is already in
+`versabus.c`**, implemented on the *write* side rather than the read side: the `$0400` case does
+`xltr.status_irq = 0x0400; xltr.bim3_present = 0;`, so the read-path OR stops firing after the arm.
+Its own comment states the mechanism in the same terms this session re-derived from the ROM, with
+measured retry counts (`$F09574` executed 3,055,728 times when it was wrong).
+
+So my "fix and prediction" re-derived something already done. What is genuinely new is the
+measurement, and it retires a stale claim.
+
+**Measured, unpatched, 400 M cycles:**
+
+| configuration | final PC | `$FF025E` accesses |
+|---|---|---:|
+| default (bit 4 clear) | **`$F00FC2`** | 0 |
+| **`FPS3K_BIMS=3`** | **`$F00FC2`** — identical | **2** |
+
+Both reach the same final PC with the same `XLTR mode1=8020 chsel=2903`. **`FPS3K_BIMS=3` does not
+derail the boot.** And `$FF025E` is touched exactly **twice** — one write from phase `$1600`'s
+24-register walk and one read from its verify pass, precisely the two accesses the phase structure
+predicts and the confirmation the prediction asked for.
+
+**`CLAUDE.md` therefore carries a stale retraction**: "RETRACTED 2026-07-30 — setting that bit
+DERAILS THE BOOT ... with three BIMs the machine ends at final PC `$011758`". That was true of the
+model as it stood then; it is not true of the model as it stands now. The observation was correct,
+the cause was mis-attributed to BIM count, and the code was subsequently fixed without the note
+being updated.
+
+What this session adds beyond the fix: **BIM2 is programmed unconditionally** by init and by three
+tasks, so three BIMs were never optional — which the code comment does not say, and which is the
+reason the bit cannot be a presence strap in the first place.
