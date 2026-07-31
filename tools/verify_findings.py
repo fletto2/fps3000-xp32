@@ -4767,3 +4767,33 @@ check('bit 1 is by far the most tested (the two-phase handshake)',
 check('...and an absolute-address scan sees only 2 of the 17 accesses',
       sum(1 for _, (m, o, _) in _mins.items()
           if 'f70019' in o and m.split('.')[0] == 'btst') == 2)
+
+# ---- the VERSAmodule control register $1FFF0/$1FFF1 (2026-07-31) ----
+_vleas = [(a, o.split(', ')[1]) for a, (m, o, _) in sorted(_mins.items())
+          if m.startswith('lea') and '$1fff0' in o]
+check('thirteen sites load $1FFF0 into a base register', len(_vleas) == 13, len(_vleas))
+_vbits, _vd0 = _mcol.defaultdict(_mcol.Counter), 0
+for _st, _rg in _vleas:
+    _p = _st + _mins[_st][2]
+    for _ in range(300):
+        if _p not in _mins: break
+        _m, _o, _sz = _mins[_p]
+        if _m.startswith(('lea', 'movea')) and _o.endswith(', ' + _rg): break
+        _mm = _mre.match(r'#\$([0-9a-f]+), \$?([0-9a-f]?)\(' + _rg + r'\)$', _o)
+        if _mm:
+            _off, _v, _op = int(_mm.group(2) or '0', 16), int(_mm.group(1), 16), _m.split('.')[0]
+            if _op in ('btst', 'bset', 'bclr'): _vbits[(_off, _v % 8)][_op] += 1
+            elif _op == 'move' and _v == 0xD0: _vd0 += 1
+        _p += _sz
+check('$1FFF1 bit 7 is the busiest control bit (bclr x11, bset x8)',
+      _vbits[(1, 7)]['bclr'] == 11 and _vbits[(1, 7)]['bset'] == 8, dict(_vbits[(1, 7)]))
+check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
+check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
+      0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
+check('exactly 8 sites guard against touching $1FFF0 (the RAM/register partition)',
+      sum(1 for _, (m, o, _) in _mins.items()
+          if m.startswith('cmpa') and '#$1fff0' in o) == 8,
+      sum(1 for _, (m, o, _) in _mins.items() if m.startswith('cmpa') and '#$1fff0' in o))
+check('...and none guards $1FFE2/$1FFE4/$1FFE6',
+      not any(m.startswith('cmpa') and any(x in o for x in ('#$1ffe2', '#$1ffe4', '#$1ffe6'))
+              for _, (m, o, _) in _mins.items()))

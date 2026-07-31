@@ -21132,3 +21132,45 @@ reported bits 4 and 5 only and missed bit 1 entirely, which is the most-tested b
 register and the one carrying the two-phase handshake. This is the same 12%-visibility problem
 recorded for `$FF0204`, and it is why `CLAUDE.md` opens with "absolute-address scanning misses
 essentially every access".
+
+## The VERSAmodule control register `$1FFF0`/`$1FFF1`, complete (2026-07-31)
+
+The writable counterpart to the read-only board status register. Thirteen `lea $1FFF0,aN` sites
+dominate, so a provenance-tracked sweep is again the only way to see it.
+
+| byte | bit | operations |
+|---|---:|---|
+| `$1FFF0` | 1 | `bclr` x3, `bset` x2 |
+| `$1FFF0` | 0 (written `bclr.b #$8`) | `bclr` x2, `bset` x1 |
+| `$1FFF1` | 3 | `bclr` x2, `bset` x1 |
+| `$1FFF1` | 5 | `bset` x3, `bclr` x2, **`btst` x2** |
+| `$1FFF1` | 6 | `bclr` x6, `bset` x1 |
+| `$1FFF1` | 7 | **`bclr` x11, `bset` x8** — the busiest |
+| `$1FFF0` | — | `move #$D0` x3 |
+
+**The mod-8 trap is live here.** Three of these appear in the disassembly as `bclr.b #$8` and
+`bset.b #$8`; `btst`/`bset`/`bclr` on a *memory* operand take the bit number mod 8, so those are
+**bit 0**, not a nonexistent bit 8. Reading them literally invents a ninth bit on an eight-bit
+port. (On a *data register* the same mnemonics are mod 32, which is why the `$FF0202` bit-14
+operations earlier are genuine bit 14s — the distinction is the operand, not the mnemonic.)
+
+### This reconciles a bit the emulator's equations need but no bit operation touches
+
+`emulator/versabus.c` models `$F70019` bit 1 as `NOT(bit 4 of $1FFF1) OR (bit 5 AND NOT bit 0 of
+$1FFF0)`. **Bit 4 of `$1FFF1` appears in no `bset`/`bclr` anywhere.** It is not missing — it is
+set by the literal: **`$D0` = `1101 0000` = bits 7, 6 and 4**, written three times. So the `$D0`
+checkpoint marker asserts bit 4 along with 7 and 6 in a single write, and the equation is
+satisfied by a path the bit-operation sweep cannot see.
+
+That closes the loop: every bit the five chassis equations reference — `$1FFF0` bits 0 and 1,
+`$1FFF1` bits 3, 4, 5, 6, 7 — is written by this firmware, four of them by bit operations, bit 4
+only by the `$D0` literal. **No equation references a bit the firmware never drives, and the
+firmware drives no bit no equation reads.** The model and the code have the same surface.
+
+### The eight guards that skip the register are confirmed from the other side
+
+`CLAUDE.md` records "8 independent sites skip `$1FFF0`" as the evidence for the RAM/register
+partition. The census finds them explicitly: seven `cmpa.l #$1FFF0,aN` at `$F098FE`, `$F09916`,
+`$F09946`, `$F09960`, `$F099BE`, `$F09A94`, `$F09ABC`, plus `$F089A4` — **eight**, exactly, and
+none for `$1FFE2`/`$1FFE4`/`$1FFE6`. The partition was derived from the exclusions; here it is
+re-derived from an unrelated sweep with the same count.
