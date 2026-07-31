@@ -30389,3 +30389,56 @@ what made that design viable — and the sweep that establishes it now covers th
 earlier version of this same check silently did not: the kernel listing uses a different address
 format (`  f008c6:` rather than `F008C6  `) and the regex matched none of it, so the check was
 passing on the application region alone.
+
+## The RMS68K kernel's complete device surface — and only the PTM is live (2026-07-31)
+
+Sweeping the kernel listing (with a parser that actually matches its address format — the earlier
+one silently matched none of it) gives **every** device reference in `$F00000`-`$F04487`:
+
+| address | site | how | live? |
+|---|---|---|---|
+| `$F70003` PTM status | `$F00EE4` | `$3(a0)`, `a0` from `$0C4E` | **yes** — the tick ISR's interrupt acknowledge |
+| `$F7000D` PTM T3 | `$F00EE8`, `$F00FA4` | `$D(a0)` | **yes** — acknowledge, and `TRAP #0 $1C`'s live counter read |
+| `$F70018` board status | `$F008CA` | `$18(a0)` | **no** — see below |
+| `$F70030` | `$F00A44` | absolute | no — dormant, executes zero times |
+
+There is **no `lea` of any device base anywhere in the kernel**, so there is no hidden fourth
+addressing route: every live access goes through the **config-supplied base at `$0C4E`**. (The one
+apparent extra hit, `$01FFFF` at `$F03644`, is a substring of the immediate `#$1ffffff` — a
+matcher artefact, not an address.)
+
+### `$F008B6` is a dormant chassis handshake in the interrupt-exit path
+
+```
+$F008B6  movem.l d0/a0,-(a7)
+$F008BA  move.l  $e48.w,d0        ; the VERSAmodule control register address
+$F008BE  beq.b   $F008D4          ; ZERO -> skip the whole thing
+$F008C0  movea.l d0,a0
+$F008C2  ori.w   #$20,(a0)        ; set VMOD control bit 5
+$F008C6  movea.l $c4e.w,a0
+$F008CA  move.w  $18(a0),d0       ; read BOARD STATUS
+$F008CE  btst.b  #$1,d0
+$F008D2  beq.b   $F008BA          ; LOOP until board bit 1 goes set
+$F008D4  movem.l (a7)+,d0/a0
+```
+
+So every interrupt return would set a VMOD bit and spin on a board-status bit — except that
+**`$0E48` is never written**. This project established that from the opposite direction: the code
+at `$F0A492` that would cache the computed VMOD address is jumped over by an unconditional
+`bra.b` at `$F0A490`, and has zero references. **The unreachable cache and this guard are two
+halves of one dormant feature**, found five days apart from opposite ends.
+
+Consequences worth having explicitly:
+
+- **The kernel's board-status read never executes**, so at runtime the kernel touches *only* the
+  PTM. Board status belongs entirely to the FPS layer.
+- **Nothing in the kernel ever writes VMOD**, so a model need not handle a kernel-driven change
+  to `$1FFF1` — which matters because bit 5 participates in the board-status equations.
+- The guard is a `beq`, so this is **fail-safe by construction**: a machine that never populates
+  `$0E48` skips the handshake rather than spinning on a bit no one will set. The sibling reader at
+  `$F009E2` has no such guard, which is why it would fault on a null pointer — and is itself
+  unreachable for a different reason.
+
+Taken with the PTM fallback at `$F0A2EC`, the kernel is strikingly defensive about devices: its
+only live device is reached through a replaceable pointer that degrades to scratch RAM, and its
+one chassis interaction is gated on a value that this build never supplies.

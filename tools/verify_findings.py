@@ -6752,6 +6752,19 @@ check('...and the fallback points the PTM base at scratch RAM $0800',
 check('...so $0800 is shared by the exception snapshot, the display fallback and this one',
       _l(0xF0A2EE) == 0x00000800)
 
+check('the kernel interrupt-exit handshake is guarded by $0E48 and skips when it is zero',
+      _w(0xF008BA) == 0x2038 and _w(0xF008BC) == 0x0E48
+      and (insn(0xF008BE) or '').startswith('beq')
+      and _w(0xF008C2) == 0x0050 and _w(0xF008C4) == 0x0020)
+check('...and it reads BOARD STATUS through the $0C4E device base, then loops on bit 1',
+      _w(0xF008C6) == 0x2078 and _w(0xF008C8) == 0x0C4E
+      and _w(0xF008CA) == 0x3028 and _w(0xF008CC) == 0x0018
+      and _w(0xF008CE) == 0x0800 and _w(0xF008D0) == 0x0001
+      and (insn(0xF008D2) or '').startswith('beq'))
+check('the kernel tick ISR acknowledges the PTM via $3(a0) then $D(a0)',
+      _w(0xF00EE4) == 0x1028 and _w(0xF00EE6) == 0x0003
+      and _w(0xF00EE8) == 0x1028 and _w(0xF00EEA) == 0x000D)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
