@@ -37197,3 +37197,30 @@ for the address field as well as the data.
 pointer is seeded `$10` at `$F051A2` — so the two differ by `$10`, and `$E7E` is the record's declared
 destination rather than the address bytes actually land at. Worth keeping straight when comparing
 `$E7E` against a RAM dump.
+
+## `$E7E` measured across three runs — the decode confirmed (2026-07-31)
+
+| run | outcome | `$0E7E` |
+|---|---|---|
+| newlines present (framing broken) | 1 record loaded | `$00000000` |
+| **newlines stripped (both records loaded)** | 2 records loaded | **`$00010000`** |
+| address at the staging edge | truncated, `$25A` | `$00000000` |
+
+**The successful run gives `$00010000`** — exactly `addr + $10000` with `addr = 0`, as the
+`$F05298` decode predicts. The two zeros are from runs where the parse never completed: framing
+desynchronisation in one, the bound rejection in the other.
+
+**Two things this clarifies.**
+
+1. **`$E7E` is written only when the address parse runs to completion.** A zero there does not mean
+   "destination zero", it means "no address was parsed" — which matters because both failure modes in
+   this sample leave it zero, and a reader could mistake that for a valid low address.
+2. **`$E7E` is not the store pointer.** In the edge-case run the data *did* land (at `$1FFF2`-`$1FFFF`)
+   while `$E7E` stayed zero. So the bytes are placed through the pointer seeded at `$F051A2`, and
+   `$E7E` exists separately for chassis op `$8`'s range check — consistent with this project's record
+   that op `$8` "is conditional on `$E7E` lying in `$10000`-`$1FFFF`".
+
+**One loose end.** In the two-record run `$E7E` reads `$00010000`, the **first** record's destination,
+not the second's (`$00010004`). So it is written once per session rather than per record, or the
+second record reaches the store by a path that skips `$F05298`. Not resolved; recorded so the value
+is not read as "the last record's address".
