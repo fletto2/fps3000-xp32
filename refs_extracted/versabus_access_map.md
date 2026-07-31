@@ -33645,3 +33645,41 @@ and then retries forever.
 Every step is gated by `PollBoardStatus` and, on mismatch, sets `d7 = $F0F0F0F0` and branches back
 to the same step — the suite's usual retry-forever policy, so a wrong equation is a hang, not a
 diagnostic.
+
+## `$F70019` bit 2 is an INTERRUPT-REQUEST indicator (2026-07-31)
+
+The two literal-form bit-2 tests sit in the VMOD interrupter stage, and read together they state a
+requirement of a different kind from the bit-1/bit-3 inversions.
+
+Stage preamble (`$F093F8`-`$F09418`):
+
+```
+move.w d1,$2(a5)          ; $1FFF2 <- the vector number
+move.l a3,$148.l          ; install a handler at vector $52
+move.l a2,$140.l          ; ...and at vector $50
+bset.b #$7,$1(a5)         ; $1FFF1 bit 7 — enable the interrupter
+andi.w #$f8ff,sr          ; LOWER the CPU mask so it can actually fire
+```
+
+Then:
+
+| site | preceding action | required |
+|---|---|---|
+| `$F09420` | `andi.w #$fff8,(a5)` — clear `$1FFF1` bits 0-2 | `beq` ⇒ bit 2 = **0** |
+| `$F09482` | `bsr $F094AE` — set a non-zero level | `bne` ⇒ bit 2 = **1** |
+
+So **`$F70019` bit 2 tracks "the VMOD interrupter is requesting"**: it reads 1 exactly when the
+level field in `$1FFF1` bits 0-2 is non-zero, with bit 7 enabling. That is a live status line, not
+a combinational function of unrelated bits — and it independently confirms the documented reading
+of bits 0-2 as an **interrupt-request level field**, from the responding side.
+
+**Flagged as a possible model divergence, not an error.** The emulator computes
+`bit 2 = NOT(bit 5 of $1FFF1) OR (bit 3 AND bit 0 of $1FFF1)`, fitted against a different stage.
+That formula *can* satisfy both points above (with bit 5 set and `bit3 AND bit0` true at the second
+point), so the two are not necessarily in conflict — but they are different propositions, and only
+the level-field reading explains why the stage bothers to install vectors and lower the CPU mask.
+Worth reconciling against the stage the original equation was fitted to before changing anything.
+
+The same preamble is the concrete instance of two things this project records abstractly: the
+"four interrupt handlers installed by tests that set `a5` and then lower the CPU mask", and
+`$1FFE4`/`$1FFF2` receiving vector numbers `$52`/`$50` — here written one instruction apart.

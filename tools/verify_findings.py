@@ -7716,6 +7716,19 @@ check('...driven by alternating bclr/bset on $1FFF1 through d0',
       [_w(_a) for _a in (0xF08C84, 0xF08CC0, 0xF08CFC, 0xF091E4, 0xF0921C)]
       == [0x01AD, 0x01ED, 0x01AD, 0x01ED, 0x01AD])
 
+check('the bit-2 stage installs vectors $50/$52, enables bit 7, then lowers the CPU mask',
+      _w(0xF093FE) == 0x23CB and _l(0xF09400) == 0x00000148
+      and _w(0xF09404) == 0x23CA and _l(0xF09406) == 0x00000140
+      and _w(0xF0940A) == 0x08ED and _w(0xF0940C) == 0x0007 and _w(0xF0940E) == 0x0001
+      and _w(0xF09410) == 0x027C and _w(0xF09412) == 0xF8FF)
+check('...requires $F70019 bit 2 CLEAR with the level field zeroed',
+      _w(0xF0941C) == 0x0255 and _w(0xF0941E) == 0xFFF8
+      and _w(0xF09420) == 0x082C and _w(0xF09422) == 0x0002
+      and _w(0xF09426) >> 8 == 0x67)
+check('...and SET once a non-zero level is written',
+      _w(0xF09482) == 0x082C and _w(0xF09484) == 0x0002
+      and _w(0xF09488) >> 8 == 0x66)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
