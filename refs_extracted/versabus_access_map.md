@@ -30597,3 +30597,39 @@ So the rule to carry forward: **base tracking is sound only for straight-line co
 load and its use.** A derived base (`lea $d(aN),aM`) compounds the error, because it inherits any
 staleness in its source. Where the two disagree, the documented negative won — and it won because
 it was checkable against a specific pair of instructions.
+
+### A sound base tracker, and the two-sided method it enables
+
+Resetting the tracked bases at **every branch target** and after every unconditional transfer
+makes the sweep sound: a base is only believed inside the basic block that established it. Rerun
+that way, every phantom disappears —
+
+```
+window 0: +$00, +$04, +$0E          (+$08 via a derived base, see below)
+window 1: never accessed
+windows 2-5: +$04, +$08, +$0A, +$0E   -- identical in all four
+windows 6, 7: never accessed
+offsets >= $100 (the phantom "windows 8-15"): NONE
+```
+
+— and the counts drop (e.g. `$FF0048` from 13 to 1) because uses whose base was set in an earlier
+block are now discarded. **That is the conservative direction: block-scoped tracking can
+under-report but cannot over-report.** Window 0's `+$08` is a real access that this tracker cannot
+see, because it is reached through `lea $8(a0),a0` — a derived base, deliberately not followed
+here since deriving compounds any staleness in the source.
+
+**Which gives a two-sided method worth adopting as standard for this project:**
+
+| question | use | why |
+|---|---|---|
+| "is address X **ever** touched?" | the **over-reporting** sweep (loose base tracking, derived bases, absolute) | if even a sweep that invents accesses finds none, there are none |
+| "what **is** touched, and where?" | the **sound** block-scoped sweep | everything it reports is real |
+
+Applied here the two agree on the structure and disagree only where the loose sweep invented
+offsets: both find nothing in windows 1, 6 and 7, so those negatives are as strong as static
+analysis gets; and everything the sound sweep reports (four registers per channel window,
+identical across all four) is real.
+
+This is the discipline the project's own standing hazard demands — "validate any such detector
+against a known-positive control before believing it" — generalised: **validate a negative with a
+detector biased toward false positives, and a positive with one biased toward false negatives.**

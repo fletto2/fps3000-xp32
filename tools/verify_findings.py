@@ -6868,6 +6868,17 @@ check('...and the same form appears in XP3I and XP4I at the $A00 stride',
 check('$FF0010 really is never accessed: $F04B64/$F04B7E read (a0) = $FF0008',
       _w(0xF04B64) == 0x3210 and _w(0xF04B7E) == 0x3410)
 
+check('all four XP channel windows expose exactly +$04, +$08, +$0A, +$0E',
+      all(_re21a.search(r'\$%02x\(a\d\)' % (0x40 + 0x20 * _c + _o), _asm21a) or
+          _re21a.search(r'\$ff00%02x' % (0x40 + 0x20 * _c + _o), _asm21a)
+          for _c in range(4) for _o in (0x04, 0x08, 0x0A, 0x0E)))
+# NOTE: must exclude IMMEDIATES.  $F0998E is `move.l #$ff00ff,d0`, a test
+# pattern, and a bare search for '$ff00ff' matches it -- the same class of
+# false positive as `#$1ffffff` matching '$1ffff'.
+check('...and AP I/F windows 1, 6 and 7 appear nowhere as an ADDRESS',
+      not any(_re21a.search(r'(?<!#)\$ff00%02x(?![0-9a-f])' % _o, _asm21a)
+              for _o in list(range(0x20, 0x40)) + list(range(0xC0, 0x100))))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
