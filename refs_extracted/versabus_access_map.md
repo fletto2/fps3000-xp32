@@ -33810,3 +33810,46 @@ interrupt handler and the main line interleave on it.
 `$F088FA` (bare `rte`), `$F088FC` (`move.w #$ffff,d2`), `$F09150` (`move.w #$ffff,d2` +
 `bsr PTMInit`). The `$FFFF` in `d2` is the same "handler ran" sentinel the chassis handlers set to
 `$F0F0`, so `d2` is this suite's interrupt-observation register.
+
+## `$FF0216` bit 7 is a BUS-ERROR GATE on the AP I/F command port (2026-07-31)
+
+`$F09832` installs the instruction-skipping bus-error handler `$F098E0` at vector 2 (saving and
+restoring the old one) and runs three stages against `$FF000E`. The shared probe `$F098C4` is:
+
+```
+$FF020C <- $FF        ; the "boot-diagnostic only" counter value
+$FF0218 <- $400       ; ARM
+tst.w $e(a6)          ; read $FF000E
+nop x4                ; latency allowance
+tst.w d1              ; d1 = 1 iff the handler ran
+```
+
+| stage | setup | required outcome |
+|---|---|---|
+| 1 `$F0984A` | `$FF0216 <- $80` (**bit 7 set**), probe | `bne` ⇒ **the read MUST bus-error** |
+| 2 `$F09872` | bit 7 still set, **`$FF0218 <- 0`**, write `$AAAA` to `$FF000E` | must **read back `$AAAA`** |
+| 3 `$F0989E` | **`$FF0216 <- 0`** (bit 7 clear), probe | `beq` ⇒ **the read must NOT fault** |
+
+**So the fault is conditional on three things at once**: `$FF0216` bit 7 set, `$FF0218` armed with
+`$400`, and `$FF020C = $FF`. Stage 2 is the control that proves it is not simply "bit 7 makes the
+port dead" — with bit 7 still set but the IRQ register disarmed, `$FF000E` is an ordinary
+read/write latch that returns what was written.
+
+**This upgrades what the register table says about bit 7.** `CLAUDE.md` records it behaviourally —
+"gates chassis op `$6`: cleared for the duration and the original word restored at `$F04EDC`" — with
+no mechanism. The mechanism is that **op `$6` is the unbounded 16-bit peek/poke**, so it must clear
+the bus-error gate or its own accesses would fault. The firmware is not "gating an operation"; it is
+**disabling a fault detector around code that deliberately touches arbitrary addresses**.
+
+It also gives `$FF020C = $FF` a purpose. That value is recorded as "boot-diagnostic only" against
+the operational `$04`; it is the counter setting under which the gate is exercised, written by this
+probe and nowhere else.
+
+**Emulator contract.** A model must raise BERR on a read of `$FF000E` when bit 7 of `$FF0216` is set
+and `$FF0218` holds `$400`, and must not otherwise. Getting this wrong fails in whichever direction
+the model errs: never faulting hangs stage 1, always faulting hangs stage 3 — and both are
+retry-forever loops, so neither reports anything beyond a stalled phase counter.
+
+**Caveat on scope.** Every stage probes `$FF000E` only. Whether the gate covers the whole AP I/F
+window or just the command port is **not** established by this test, and nothing else in the image
+exercises it. A model may reasonably implement the narrow reading until hardware says otherwise.

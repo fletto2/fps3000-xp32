@@ -7779,6 +7779,28 @@ check('six self-test handlers write $1FFF0/$1FFF1 from interrupt context',
       and _w(0xF094E8) == 0x08AD and _w(0xF094EA) == 0x0007
       and _w(0xF09052) == 0x08ED and _w(0xF09054) == 0x0006)
 
+check('$F09832 saves vector 2 and installs the instruction-skipping handler',
+      _w(0xF09836) == 0x2078 and _w(0xF09838) == 0x0008
+      and _w(0xF0983A) == 0x21FC and _l(0xF0983C) == 0x00F098E0
+      and _w(0xF09840) == 0x0008
+      and _w(0xF098BA) == 0x21C8 and _w(0xF098BC) == 0x0008)
+check('the probe arms $FF020C=$FF and $FF0218=$400 then reads $FF000E',
+      _w(0xF098C4) == 0x3D7C and _w(0xF098C6) == 0x00FF and _w(0xF098C8) == 0x020C
+      and _w(0xF098CA) == 0x3D7C and _w(0xF098CC) == 0x0400 and _w(0xF098CE) == 0x0218
+      and _w(0xF098D0) == 0x4A6E and _w(0xF098D2) == 0x000E
+      and _w(0xF098DC) == 0x4A41)
+check('stage 1: $FF0216 bit 7 SET => the read MUST fault (bne skips the fault report)',
+      _w(0xF0984C) == 0x3D7C and _w(0xF0984E) == 0x0080 and _w(0xF09850) == 0x0216
+      and _w(0xF09854) >> 8 == 0x66)
+check('stage 2 control: bit 7 set but $FF0218 cleared => $FF000E is a R/W latch',
+      _w(0xF09878) == 0x426E and _w(0xF0987A) == 0x0218
+      and _w(0xF0987C) == 0x3D7C and _w(0xF0987E) == 0xAAAA and _w(0xF09880) == 0x000E
+      and _w(0xF09882) == 0x0C6E and _w(0xF09884) == 0xAAAA and _w(0xF09886) == 0x000E
+      and _w(0xF09888) >> 8 == 0x67)
+check('stage 3: $FF0216 cleared => the read must NOT fault',
+      _w(0xF098A0) == 0x426E and _w(0xF098A2) == 0x0216
+      and _w(0xF098A6) >> 8 == 0x67)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
