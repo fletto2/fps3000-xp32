@@ -28798,3 +28798,48 @@ is only possible because they behave as plain read/write storage — the point m
 about an exclusion list describing consequences rather than address decoding.
 
 **With this, all 24 phases of the self-test are identified.**
+
+## Phase `$1900`: the 16↔32 width mux, as a truth table (2026-07-31)
+
+Two probes, each run with `$FF0216` bit 4 set and clear, determine the mux exactly.
+
+**Probe A — `$F09806`**: write a longword, then a **word to the same window address**, then
+read the longword back.
+
+```
+move.l d0,(a0)        ; $400000 <- $55555555
+move.w d1,(a0)        ; $400000 <- $AAAA   (16-bit)
+cmp.l  (a0),d2
+```
+
+**Probe B — `$F0981A`**: write a longword, then a **word to `$FF0214`**, then read the
+window's low half.
+
+```
+move.l d0,(a0)        ; $400000 <- $55555555
+move.w d1,$214(a6)    ; $FF0214 <- $AAAA   (the latch)
+cmp.w  $2(a0),d2      ; read $400002
+```
+
+| probe | `$FF0216` bit 4 | required result |
+|---|---|---|
+| A | **set** | `$AAAA5555` — the word write replaced the **high** half |
+| A | clear | `$55555555` — the word write **did not affect** the longword |
+| B | **set** | `$5555` — the read returns the **stored** low half |
+| B | clear | `$AAAA` — the read returns the **`$FF0214` latch** |
+
+So the mux routes the **low half** of a chassis-window access:
+
+- **bit 4 clear** — 16-bit traffic goes through the `$FF0214` **latch**: a word write to the
+  window does not stick, and a word read of the low half returns the latch. This is the
+  state in which a 32-bit chassis word is assembled from two 16-bit host transfers.
+- **bit 4 set** — 16-bit traffic reaches the **window itself**: a word write lands in the
+  high half, and a word read of the low half returns real storage.
+
+That is a complete, emulatable specification, and it sharpens this project's existing note
+("bit 4 muxes the low half, with `$FF0214` as the low-half latch") into four testable
+outcomes. It also explains why `CPLOAD` **brackets** bit 4 — `bset` at `$F0550A`, `bclr` at
+`$F05582` — rather than leaving it set: the upload needs the window addressed directly, and
+everything else needs the latch path.
+
+**With this, every phase of sequence B has a stated requirement.**

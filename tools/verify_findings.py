@@ -6267,6 +6267,18 @@ check('...skipping exactly four bytes at $1FFF0, in both passes',
 check('...which pins the protected span at $1FFF0-$1FFF3',
       0x1FFF0 + 4 - 1 == 0x1FFF3)
 
+check('the mux probe A writes a longword then a word to the same address',
+      insn(0xF09806) == 'move.l d0, (a0)' and insn(0xF09808) == 'move.w d1, (a0)'
+      and insn(0xF0980A) == 'cmp.l (a0), d2')
+check('...and probe B writes the word to the $FF0214 LATCH and reads $400002',
+      insn(0xF0981A) == 'move.l d0, (a0)' and insn(0xF0981C) == 'move.w d1, $214(a6)'
+      and insn(0xF09820) == 'cmp.w $2(a0), d2')
+check('...with bit 4 set expecting $AAAA5555 and clear expecting $55555555',
+      insn(0xF097B2) == 'move.l #$aaaa5555, d2' and insn(0xF097B8) == 'move.w #$10, $216(a6)'
+      and insn(0xF097CA) == 'move.l d0, d2' and insn(0xF097CC) == 'clr.w $216(a6)')
+check('...and the 16-bit arm expecting $5555 set, $AAAA clear',
+      insn(0xF097DC) == 'move.l #$5555, d2' and insn(0xF097F4) == 'move.l d1, d2')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
