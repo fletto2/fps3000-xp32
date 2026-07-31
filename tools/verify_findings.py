@@ -5523,6 +5523,31 @@ check('...and each is two bytes, so a listing resyncs after one bogus line',
       all(_w(x) in (0xDD08, 0xEE14, 0xEE09, 0xEE07, 0xDD07)
           for x in (0xF006E4, 0xF008A2, 0xF00908, 0xF022CC, 0xF022DC)))
 
+check('!GST entries start at +$14 with the count at +$0E',
+      insn(0xF01802) == 'lea.l $14(a1), a2' and insn(0xF01806) == 'move.w $e(a1), d0')
+check('...and the stride is $12 = 18 bytes',
+      insn(0xF01840) == 'adda.l #$12, a2')
+check('...with name at +$00, owner at +$04, flags at +$08, in-use at +$0A',
+      insn(0xF01826) == 'cmp.l (a2), d2' and insn(0xF01820) == 'cmpa.l $4(a2), a0'
+      and insn(0xF0182A) == 'btst.b #$c, $8(a2)' and insn(0xF0180E) == 'tst.w $a(a2)')
+check('the GST search also records the first FREE slot as it goes',
+      insn(0xF0181C) == 'movea.l a2, a3' and insn(0xF01814) == 'cmpa.l #$0, a3')
+check('...and the flags test is three-way: entry bit, then two request bits',
+      insn(0xF01832) == 'btst.b #$c, d1' and insn(0xF01838) == 'btst.b #$d, d1')
+
+check('!IOV uses the bounded header: entries from +$08, stride $14',
+      insn(0xF021D8) == 'moveq #$8, d7' and insn(0xF021DE) == 'cmpa.l $4(a2), a3'
+      and insn(0xF021F4) == 'addi.l #$14, d7')
+check('!IDV likewise: entries from +$08, stride $0E',
+      insn(0xF00292) == 'lea.l $8(a5), a5' and insn(0xF0029E) == 'adda.l #$e, a5')
+check('...and its walk compares +$0A, the ISR-exit field',
+      insn(0xF0029A) == 'cmpa.l $a(a5), a4')
+check('the allocator writes the !IOV tag and its END address at +$04',
+      insn(0xF09F52) == 'move.l #$21494f56, (a0)'
+      and insn(0xF09F5E) == 'move.l d2, $4(a0)')
+check('the counted convention is used by exactly the two name-searched tables',
+      insn(0xF01806) == 'move.w $e(a1), d0' and insn(0xF01886) == 'move.w $e(a1), d2')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

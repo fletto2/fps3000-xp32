@@ -26513,3 +26513,82 @@ instruction. Every census in this session was re-run against an instruction-only
 - **the return-address census is unchanged** — 31 real, the same 2 rejected;
 - **`$0CC0` flips to an artefact**, as above;
 - **the `nop` census changes materially** — see the corrected figures below.
+
+## `!GST`, the Global Segment Table, decoded from its search routine (2026-07-31)
+
+`$09` `T0FNDGSG` walks `$0C20` and its loop states the layout exactly:
+
+```
+lea.l  $14(a1),a2        ; entries start at +$14 (the generic 20-byte header)
+move.w $e(a1),d0         ; +$0E = entry count
+loop:
+  tst.w  $a(a2)          ; +$0A = IN-USE marker; zero means a free slot
+  beq    remember_free   ; ...and the first free one is kept in a3
+  cmpa.l $4(a2),a0       ; +$04 = OWNER, matched against the caller's
+  cmp.l  (a2),d2         ; +$00 = the segment NAME/key
+  btst.b #$c,$8(a2)      ; +$08 = flags; bit 4 of that byte
+  adda.l #$12,a2         ; STRIDE = $12 = 18 bytes
+  subq.w #$1,d0
+  bne loop
+```
+
+| offset | field |
+|---|---|
+| `+$00` | segment name / key (longword) |
+| `+$04` | owner (longword, matched against `a0`) |
+| `+$08` | flags word — one bit tested here, and the caller's `d1` is tested for the same bit and one above |
+| `+$0A` | in-use marker; **zero = free** |
+| stride | **`$12` = 18 bytes** |
+
+Two things worth noting for a model:
+
+- **The search is also an allocator.** It records the first free slot in `a3` as it goes,
+  so one pass answers both "is this segment present?" and "where would it go?". A model
+  that implements lookup and allocation as separate walks will not reproduce which slot a
+  new segment lands in.
+- **The flags comparison is three-way**: the entry's bit is tested, then the *request's*
+  same bit, then the request's next bit up — a share/exclusive style negotiation rather
+  than a plain match. Two entries can therefore have the same name and different
+  outcomes depending on the requester's flags.
+
+With this, all three `T0FND*` structures have layouts: `!GST` 18-byte entries here,
+`!UST` 22-byte entries (name, users, type, session, then the semaphore object at `+$10`),
+and the task's own `!TST` at 80 bytes with four 4-word segment descriptors.
+
+## The RTOS uses TWO structure-header conventions (2026-07-31)
+
+Decoding each structure's own walk routine shows the kernel does not use one table format
+— it uses two, and knowing which is which is what lets a RAM dump be read without the
+vendor headers.
+
+**Convention A — 8-byte `{tag, end-address}` header, entries from `+$08`.** The allocator
+writes the marker at `+$00` and `base + size*256 - 1` at `+$04`, and walks compare the
+running pointer against that end address rather than counting.
+
+| structure | slot | stride | evidence |
+|---|---|---:|---|
+| `!IOV` | `$0C6A` | `$14` = 20 | `moveq #$8,d7` / `cmpa.l $4(a2),a3` / `addi.l #$14,d7` |
+| `!IDV` | `$0C6E` | `$0E` = 14 | `lea $8(a5),a5` / `adda.l #$e,a5` |
+| trace table | `$0C30` | `$1A` = 26 | live `TRCPTR = $1F508` = base + 8 |
+
+**Convention B — 20-byte counted header, entries from `+$14`.** Counts live at `+$0C`
+(maximum) and `+$0E` (current), and walks are `subq.w #$1,d0` loops.
+
+| structure | slot | stride | evidence |
+|---|---|---:|---|
+| `!GST` | `$0C20` | `$12` = 18 | `lea $14(a1),a2` / `move.w $e(a1),d0` / `adda.l #$12,a2` |
+| `!UST` | `$0C24` | `$16` = 22 | `moveq #$14,d0` / live `USTMENT=22`, `USTCENT=9`, `USTFENT=$1FB14` |
+
+The split is not arbitrary: **the counted form is used by the two tables that are searched
+by name** (`T0FNDGSG`, `T0FNDSEM`) and need a free-slot count, while the bounded form is
+used by tables that are only ever walked end to end. `!IOV`'s and `!IDV`'s walks genuinely
+have no count — they run until the pointer passes `+$04`.
+
+**For an emulator or a dump reader this is the practical result:** given any of these
+structure pointers from `$0C20`-`$0C6E`, the header tells you which convention applies
+(a `!`-tag at `+$00` with a plausible RAM address at `+$04` means A; counts at `+$0C`/`+$0E`
+mean B), and the stride follows from the table above.
+
+`!IDV`'s record layout is already documented as `{vector, TCB, ISR entry, ISR exit}` at
+`+$00`/`+$02`/`+$06`/`+$0A`; the walk confirms both the `+$0A` compare and the `+$02` fetch
+(`movea.l -$c(a5),a6` after the stride add is record + 2).
