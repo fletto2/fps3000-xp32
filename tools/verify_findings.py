@@ -6097,6 +6097,14 @@ check('the self-test fault handler counts and discards the 14-byte group-0 frame
       insn(0xF0890A) == 'addq.l #$1, $1f800.l' and insn(0xF08912) == 'addq.l #$1, $400.w'
       and insn(0xF08916) == 'lea.l $8(a7), a7' and 8 + 6 == 14)
 
+check('the self-test fills the whole vector table with a d2 = $FFFF catch-all',
+      insn(0xF08E3E) == 'lea.l $f088fc.l, a3' and insn(0xF088FC) == 'move.w #$ffff, d2'
+      and insn(0xF08E54) == 'move.l a3, (a2)+' and insn(0xF08E50) == 'lea.l $400.w, a1')
+check('...starting at vector 4, so vectors 2 and 3 keep the watchdog handler',
+      insn(0xF08E4C) == 'lea.l $10.w, a2' and 0x10 // 4 == 4)
+check('address $0000 doubles as scratch for the stack pointer',
+      insn(0xF08A5C) == 'move.l a7, $0.w' and insn(0xF08AE8) == 'movea.l $0.w, a7')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

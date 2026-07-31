@@ -28003,3 +28003,35 @@ that `rte` pops), so a fault is counted and execution resumes at the *next* inst
 That is the mechanism behind the two documented fault counters, and it confirms again that
 the frame must be 68000-format: with a 68010 frame the adjustment is wrong and `rte` returns
 into the middle of the frame.
+
+## The self-test fills the whole vector table with a catch-all (2026-07-31)
+
+```
+lea.l  $f088fc.l,a3      ; the catch-all: move.w #$ffff,d2 / rte
+move.l a3,$0.w           ; vector 0
+move.l a3,$4.w           ; vector 1
+lea.l  $10.w,a2          ; ...then vector 4 onwards
+lea.l  $400.w,a1
+loop:  move.l a3,(a2)+ / cmpa.l a1,a2 / bne loop
+ori.w  #$700,sr
+```
+
+Every vector from `$000` to `$3FF` receives the same two-instruction handler — set
+`d2 = $FFFF`, `rte` — **except `$008` and `$00C`**, vectors 2 and 3, which the loop steps
+over by starting at `$10`. Those are bus error and address error, and they keep the handler
+the watchdog test installed.
+
+So the pattern is: arm every unexpected exception to raise a flag, deliberately provoke the
+expected ones, and check `d2`. A stray exception anywhere in the suite therefore surfaces as
+`d2 = $FFFF` rather than as a crash.
+
+**Emulator consequences:**
+
+- `$0000`-`$03FF` must be ordinary writable RAM — the suite rewrites all 256 vectors, twice
+  (this fill, then the FPS layer's own installation later).
+- **Address `$0000` is used as scratch**, not only as the reset SSP: `$F08A5C` does
+  `move.l a7,$0.w` and `$F08AE8` does `movea.l $0.w,a7`, saving and restoring the stack
+  pointer across a test. A model that treats the reset vector as read-only, or that reads the
+  initial SSP from RAM after boot, breaks here.
+- Vectors 2 and 3 are the only ones the fill preserves, which is why the bus-error handler
+  installed for the watchdog survives into the tests that follow it.
