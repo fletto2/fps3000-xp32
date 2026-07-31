@@ -4919,6 +4919,21 @@ for _a, (_m, _o, _) in _mins.items():
 check('the 45 $26C emitters are exactly 9 per region across five regions',
       dict(_t26c) == {'RDHC': 9, 'XP4I': 9, 'XP3I': 9, 'XP2I': 9, 'XP1I': 9}, dict(_t26c))
 check('...i.e. a poll tail inlined 9x inside a block copied 5x', 9 * 5 == 45)
+_devacc = _mcol.Counter()
+for _a in range(_blklo, _blkhi, 2):
+    if _a not in _mins: continue
+    for _m in _mre.finditer(r'\$([0-9a-f]{1,3})\((a\d)\)', _mins[_a][1]):
+        _devacc[(_m.group(2), int(_m.group(1), 16))] += 1
+check('the block touches $FF021A twenty times per copy -- ten RMW pairs',
+      _devacc[('a4', 0x21A)] == 20, _devacc[('a4', 0x21A)])
+check('...so 10 pairs x 5 copies = the 50 RMW pairs measured ROM-wide', 10 * 5 == 50)
+check('the block also reaches $FF0218 x6, $FF0202 x2, $FF020C x1 per copy',
+      _devacc[('a4', 0x218)] == 6 and _devacc[('a4', 0x202)] == 2
+      and _devacc[('a4', 0x20C)] == 1)
+check('...and the AP I/F ready flag and bulk port twice each',
+      _devacc[('a4', 0x004)] == 2 and _devacc[('a4', 0x008)] == 2)
+check('the only other displacement is the channel data-low at $2(a1)',
+      _devacc[('a1', 2)] == 12)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

@@ -22884,3 +22884,46 @@ Duplicated-window occurrences by region: XP4I 546, XP3I 545, XP2I 545, XP1I 544,
 unique code around its copy; and **TCBIO1I and the init code are essentially free of
 replication** — 13 and 19 occurrences, i.e. incidental matches rather than structure. Those two
 regions are where per-byte reading pays, and both are already fully documented.
+
+## The replicated block's device surface — nine locations, and it explains `$FF021A` (2026-07-31)
+
+Sweeping the 1,431-byte block for every displacement access gives its complete hardware surface.
+`a4` holds `$FF0000`; `a0`, `a1` and `a3` are supplied by the caller:
+
+| access | count per copy | device |
+|---|---:|---|
+| `$21A(a4)` | **20** | `XLTR_IRQMASK` `$FF021A` |
+| `$218(a4)` | 6 | `XLTR_STATUS_IRQ` `$FF0218` |
+| `$202(a4)` | 2 | `XLTR_MODE1` `$FF0202` |
+| `$20C(a4)` | 1 | `XLTR_COUNTER` `$FF020C` |
+| `$004(a4)` | 2 | AP I/F `$FF0004` ready flag |
+| `$008(a4)` | 2 | AP I/F `$FF0008` bulk data port |
+| `(a0)` | 21 | the channel's `+$0E` command/status |
+| `(a1)` / `$2(a1)` | 22 / 12 | the channel's `+$08` / `+$0A` data pair |
+| `(a3)` | 11 | the channel's **BIM control register** |
+
+**Nine locations, six of them fixed and three caller-supplied.** That is the entire device
+vocabulary of 28% of the application code.
+
+### It accounts for the `$FF021A` figure exactly
+
+`$FF021A` is recorded here as "the most read-modify-written register in the machine: 50 reads,
+50 matching writes". The block contains **20 accesses to it per copy — 10 read/write pairs** — and
+there are **five copies**:
+
+```
+10 pairs x 5 copies = 50 pairs = 50 reads + 50 writes
+```
+
+So every single `$FF021A` read-modify-write in the firmware lives inside this one replicated
+block. The register is not "busy" because many subsystems use it; it is busy because **one
+subsystem that uses it ten times was copied five times**.
+
+The same reasoning applies to the other counts: `$FF0218`'s 6 accesses per copy give 30 of its
+total, and `$FF0202`'s 2 per copy give 10 of the 21 documented RMW pairs — so roughly half the
+MODE1 traffic is also this block.
+
+**For an emulator this is a useful compression.** Modelling the nine locations above correctly —
+in particular `$FF021A` as a genuine per-bit read/write latch and `$FF0008` as a FIFO — is
+sufficient for 28% of the firmware's code and for the whole channel-transaction protocol on every
+one of the five paths that implement it.
