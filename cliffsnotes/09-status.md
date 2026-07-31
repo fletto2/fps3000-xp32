@@ -291,3 +291,64 @@ Bit 4 only sizes phase `$1600`'s register **walk** (16 or 24). The derailment is
 now-explained fact: `$F095A2` requires `($FF0218 & $610) == $400` *after* `$FF0218 <- $400`, so
 **bit 4 must read zero once armed**, and the model re-asserts it on every read. Fix and prediction
 in `refs_extracted/chassis_model_spec.md`.
+
+---
+
+## Session of 2026-07-31 (third block) — the RTOS side, and five methodological corrections
+
+277 commits. The device side was already closed; this block went into the kernel, and the useful
+output is as much about *method* as about findings.
+
+### Structures
+
+- **The TCB is re-derived.** Of 51 offsets and 369 accesses, **12 offsets / 179 accesses are
+  register-frame slots, not fields** — `+$102` (the busiest offset in the kernel, 119 accesses) is
+  `saved d0 + 2`, which is the whole explanation of the status-in-`d0` convention. Full map in
+  `cliffsnotes/11-rtos-structures.md`.
+- **Three register frames**: `+$74` (full context), `+$FA`-`$FF` (the `{SR, PC}` exception frame),
+  `+$100`-`$13F` (normal, `a6` at `+$138`, `a7` at `+$13C`). The suspend path's `-6` and `-$3C`
+  reserve exactly those two blocks.
+- **Fields identified**: `+$14` session, `+$25` priority ceiling, `+$36` `!TST` pointer,
+  `+$48`/`+$4C` handler tables, `+$5E` staged status, `+$148` bit 7 single-step enable,
+  `+$B0`/`+$B4` a `{name, session}` copy.
+- **Two permission layers connected**: privilege (`+$28` bit 7, a session wildcard in `T0GETTCB`)
+  and ownership (`+$29` bit 6 with the owner identity at `+$140`/`+$144`).
+
+### Directives
+
+- **All nine singleton-sized directives** now have a name or a decode. `$1A`/`$1B` register handler
+  tables, `$3E` does vector ownership, `$18` sets priority, `$23` is `QEVNT`.
+- **The census is exact**: 60 live slots, **29 nameable** by the decimal rule, **31 not** — three
+  counts that had been conflated with "14 issued by this firmware" and "84 named in the source".
+
+### Mechanisms closed
+
+- **Single-stepping**: armed at `$F00D3E` by the exception monitor, consumed at `$F005A8`. The
+  "nothing selects the traced exit" note is retired.
+- **The `$F00B74` dispatch**: registration (`$1A`/`$1B`), enable bits, descriptors and consumer —
+  all four parts, and dormant only because the trace mask is zero.
+- **`'EXEC'` is a rename**, not a marker: `+$B4` receives four ASCII spaces alongside it.
+
+### Corrections to this project's own record
+
+`+$138` is saved `a6`, not an ASQ pointer · `+$B0` is a name field, not a marker slot · the `$0E48`
+handshake and the `$F00B74` dispatch are one dormant feature seen from two ends · `$0C40` is not a
+global (it is the low half of the longword day counter at `$0C3E`) · the `FPS3K_BIMS=3` derailment
+note is stale — measured, it boots identically and touches `$FF025E` twice.
+
+### Method — the part worth keeping
+
+Five mistakes of mine this block were the **same** mistake: a census keyed to one base register.
+The sixth was the opposite — over-widening. The resolved rule:
+
+> Widen beyond the conventional base register only when the other bases can be **shown** to hold
+> the same structure. Otherwise the convention *is* the filter.
+
+And a four-way tool split, arrived at by getting each one wrong first:
+
+| question | tool |
+|---|---|
+| can X ever happen? | **static absence** — a runtime negative cannot distinguish "never" from "not this time" |
+| does X happen, how often, how wide? | **runtime log** |
+| what is the structure? | **sound (block-scoped) static sweep** — it can under-report, never over-report |
+| is X touched anywhere? | **loose static sweep** — if even an over-reporting sweep finds nothing, nothing is there |
