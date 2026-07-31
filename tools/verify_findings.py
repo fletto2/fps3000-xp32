@@ -6442,8 +6442,11 @@ check('the self-test BERR handler flags d1, pops a 14-byte frame and advances th
 check('$FF0216 bit 5 set REQUIRES a bus error (bne), bit 6 set requires NONE (beq)',
       (insn(0xF09630) or '').startswith('bne') and (insn(0xF096F4) or '').startswith('beq')
       and (insn(0xF09716) or '').startswith('beq') and (insn(0xF0973A) or '').startswith('beq'))
-check('...and bit 6 is tested against BOTH the read and the write routine',
-      _l(0xF096F0) == 0x0000FFBC or True)
+check('...and bit 6 is tested against BOTH the read routine and the write routine',
+      _w(0xF096EE) == 0x6100 and _w(0xF096F0) == 0xFFBC    # arm 1 -> $F096AC read
+      and _w(0xF09710) == 0x6100 and _w(0xF09712) == 0xFF9A  # arm 2 -> $F096AC read
+      and _w(0xF09734) == 0x6100 and _w(0xF09736) == 0xFF82  # arm 3 -> $F096B8 write
+      and _w(0xF09756) == 0x6100 and _w(0xF09758) == 0xFF60) # arm 4 -> $F096B8 write
 check('phase $1600 walks $FF0210-$FF0216 with lsl.b, four registers one bit each',
       _w(0xF09558) == 0x303C and _w(0xF0955A) == 0x0010 and _w(0xF0955C) == 0x307C
       and _w(0xF0955E) == 0x0210 and _w(0xF09560) == 0x3D80 and _w(0xF09568) == 0xE308)
