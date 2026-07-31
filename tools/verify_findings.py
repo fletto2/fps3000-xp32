@@ -3589,6 +3589,17 @@ with tempfile.TemporaryDirectory() as _tdq:
     check('the XP entries are $F05F4A/$F0694A/$F0734A/$F07D4A and IO1I $F05D36',
           sorted(e for n, _, _, e in _tst if n != 'RDHC')
           == [0xF05D36, 0xF05F4A, 0xF0694A, 0xF0734A, 0xF07D4A])
+    # Segment 1 is STCK, and its pages ARE the TCB+$138 blocks -- which names
+    # them, and explains why RDHC's is all zeros: it is a stack it never dirties.
+    check('every task\'s second segment is named STCK',
+          all(_rq[b + 0x160 + 0x2C + 8:b + 0x160 + 0x2C + 12] == b'STCK'
+              for b in _tcbs))
+    check('...and the STCK pages are exactly the TCB+$138 blocks, six for six',
+          [struct.unpack('>H', _rq[b + 0x174:b + 0x176])[0] << 8 for b in _tcbs]
+          == [_lw(b + 0x138) for b in _tcbs])
+    check('...which are the six 2-page blocks tiling $1DD00-$1E8FF',
+          sorted(_lw(b + 0x138) for b in _tcbs)
+          == [0x1DD00, 0x1DF00, 0x1E100, 0x1E300, 0x1E500, 0x1E700])
 
     # --- !UST: the semaphore registry, per Motorola UST.EQ -----------------
     # 20-byte header, 22-byte entries {task name, session, sem name, users,
