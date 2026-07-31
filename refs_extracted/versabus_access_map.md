@@ -18796,3 +18796,49 @@ SBC→chassis status-readback path comes alive for the first time. Everything ne
 it afterwards is already known — `$1064` should acquire a non-zero nibble in the channel's
 position, `$107E` should increment, and the idle sweep should set MODE1 bit 6 / MODE0 bit 11
 once no channel has bit 15 set with bit 14 clear.
+
+### Completing the bit-15-clear arm: the data high byte is a class selector
+
+`$F084C2` shifts the latched 32-bit channel data right by 24 and tests the resulting byte:
+
+```
+$F084C2  moveq #$18,d2 / lsr.l d2,d1     ; d1 = the HIGH BYTE of the 32-bit data
+$F084C6  cmpi.b #$0,d1 / beq $F08500
+```
+
+| high byte | what the SBC does |
+|---|---|
+| **non-zero** | `$10` `TERMT` on `'USER'`, panel `$264+ch`, set MODE1 bit `7+ch`, clear MODE0 bit 10 — the **abort** path |
+| **zero** | `$F08500` — the **normal request** path |
+
+And the normal path issues **two** channel transactions back to back:
+
+```
+$F08500  d4 = channel
+         d0 = $FFFF0010                  ; operation $10
+         d1 = $10
+         a2 = [$1080 + (ch-1)*4]         ; the per-channel pointer to $101E
+         d2 = $1   / jsr $F07F12         ; transaction 1
+         d0 = $FFFF000E                  ; operation $0E
+         d1 = -(a2)                      ; pre-decrement a longword OUT of $101E
+         d2 = $10  / jsr $F07F12         ; transaction 2
+```
+
+So a normal channel request becomes **op `$10` followed by op `$0E`**, the second carrying a
+longword pulled from the shared register file by pre-decrement — which is why the file is
+published per channel at `$1080` in the first place. `d2` (1, then `$10`) is a mode or count
+parameter to the transaction primitive.
+
+That closes the channel status decode tree. Every branch is now accounted for:
+
+| bit 15 | bit 14 | bit 11 | data high byte | action |
+|:---:|:---:|:---:|:---:|---|
+| 0 | — | — | 0 | two transactions: op `$10`, then op `$0E` with data from `$101E` |
+| 0 | — | — | ≠0 | abort: `TERMT` `'USER'`, panel `$264+ch`, MODE1 bit `7+ch` |
+| 1 | 0 | — | — | panel `$262` — interrupt with no valid transaction |
+| 1 | 1 | 0 | — | call the CP program's channel handler, then `SGSEM` |
+| 1 | 1 | 1 | — | write `$0000001B` to the data pair, `$8000` to `+$0E` |
+
+`$F07EB6`'s apparent re-test of bit 11 is not redundant: it is the join point where the
+bit-11-clear arm falls through after its `SGSEM`, so the bit is genuinely re-examined for a
+path that arrived with it clear.
