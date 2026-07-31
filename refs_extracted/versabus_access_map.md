@@ -29458,3 +29458,113 @@ are caught by the second pass.
 plain read/write longword storage with no aliasing, no side effects on read, and no
 write-to-read latency the CPU can observe. Both tests fault into the unbounded retry on any
 deviation, so a shortcut here presents as a hang parked on the phase code, not as an error.
+
+## `$FF0216` bit 6 is PROVEN orthogonal to the window — the firmware asserts it (2026-07-31)
+
+`CLAUDE.md` records bit 6 as "unidentified" and notes it "tested inert w.r.t. the window". The
+self-test is more specific than that: it has a dedicated four-arm test whose *required* outcome
+is no fault in every arm, which makes the orthogonality a property the firmware demands rather
+than something we happened not to observe.
+
+The two guarded accesses, each padded with `nop`s:
+
+```
+$F096AC  move.w (a1),d0   nop nop nop nop  rts     ; a READ of $400000
+$F096B8  clr.w  (a1)      nop nop nop      rts     ; a WRITE -- but see below
+```
+
+and the contrast between the two bits, `d1` being the bus-error flag:
+
+| test | `$FF0216` | access | required |
+|---|---|---|---|
+| bit 5 `$F09626` | `$20` set | read | `tst.w d1` / **`bne`** — a bus error **MUST** occur |
+| bit 5 `$F09648` | cleared | read | no fault |
+| bit 6 `$F096E8` | `$40` set | read | `tst.w d1` / **`beq`** — **no** fault |
+| bit 6 `$F0970C` | cleared | read | no fault |
+| bit 6 `$F0972E` | `$40` set | write | no fault |
+| bit 6 `$F09752` | cleared | write | no fault |
+
+So **bit 6 changes nothing about `$400000` accessibility, in either state, for either direction**
+— and the firmware checks all four combinations to say so. A chassis model that treated bits 5
+and 6 as a single window gate, or that made bit 6 affect writes only, fails this phase. Bit 6's
+actual function remains unknown, but its *non*-function is now pinned down precisely.
+
+Note that `clr.w (a1)` is not a pure write on a 68000 — it reads the destination first — so the
+"write" arm is really a read-modify-write, and the test does not distinguish a write-only gate.
+
+## The self-test's bus-error handler advances the PC by 4, which is why the accesses are padded
+
+```
+$F098E0  moveq #$1,d1        ; flag the fault to the caller
+$F098E2  lea   $8(a7),a7     ; discard 8 bytes -> the 14-byte group-0 frame
+$F098E6  addq.w #$4,$4(a7)   ; ADVANCE the stacked PC by 4
+$F098EA  rte
+```
+
+The 68000's bus-error frame stacks an **imprecise** PC — it may point anywhere from the faulting
+instruction to several bytes past it. The firmware does not try to decode it: it blindly adds 4
+and returns. **That is what the trailing `nop`s are for.** Each guarded access is followed by
+three or four `nop`s so that "wherever the PC was, plus 4" lands inside harmless padding and
+falls through to the `rts`. The same idiom appears with five `nop`s in the bus-timeout watchdog
+test at `$F08F1C`.
+
+Two consequences for a model. The frame **must be 14 bytes** — `lea $8(a7),a7` plus `rte`'s six
+— which is the third independent site requiring the Musashi 68000-frame patch this project
+already carries. And the stacked PC has slack by design, so a model that stacks the faulting
+instruction's own address and one that stacks it plus two both work; the firmware is tolerant
+here on purpose.
+
+The handler is installed and removed around the test (`a0 = [$8]` at `$F096C8`, restored at
+`$F096A2`), the same save/restore protocol as the watchdog test.
+
+## Phase `$1600`'s setup, and two registers it proves exist (2026-07-31)
+
+`$F09518` opens sequence B's XLTR register walk with the initialisation values this project has
+recorded piecemeal, now attributed to one site: **MODE1 `$2000`, MODE0 `$0`, `$FF020C` `$1`,
+`$FF0218` `$400`, `$FF021A` `$FFF`**.
+
+It then walks two register runs with **address-register-indexed** addressing, `(a6,a0.w)` with
+`a6 = $FF0000` — the form absolute-address scans miss:
+
+```
+$F09558  d0 = $10 ; a0 = $210
+$F09560  move.w d0,(a6,a0.w) ; a0 += 2 ; lsl.b #$1,d0 ; bcc loop
+```
+
+`lsl.b` on `$10` gives `$20`, `$40`, `$80`, then `$00` **with carry set**, so the loop runs
+exactly four times: **`$FF0210` ← `$10`, `$FF0212` ← `$20`, `$FF0214` ← `$40`, `$FF0216` ←
+`$80`**. This is direct evidence that **`$FF0212` and `$FF0214` are standalone registers**, each
+addressed on its own — independently confirming the retraction of the old "`$FF0212` is not a
+register, only the second half of a 32-bit access to `$FF0210`" claim, and doing it from a
+different site than the one that forced the retraction.
+
+The second run is the BIM walk, and it carries the 2-BIM/3-BIM decision:
+
+```
+$F09522  d0 = $FF0218 ; btst #$4,d0
+$F0952C  d1 = $D0     ; bit 4 CLEAR -> limit $D0
+$F09532  d1 = $D8     ; bit 4 SET   -> limit $D8
+$F0956C  d0 = $C0 ; a0 = $230
+$F09574  move.w d0,(a6,a0.w) ; a0 += 2 ; d0 += 1 ; cmp.w d1,d0
+```
+
+Starting at `$C0` and counting to `$D0` is **16 registers** (`$FF0230`-`$FF024E`, two BIMs); to
+`$D8` is **24** (`$FF0230`-`$FF025E`, three). Each register receives a **distinct** value, which
+is what lets the read-back detect address aliasing rather than merely presence. This is the walk
+that touches `$FF0240`, `$FF0248` and `$FF025E` — the three registers with no explicit reference
+anywhere in the ROM.
+
+## `$FF0204` is a readable latch, and the firmware proves it (2026-07-31)
+
+`$F094F0` is a six-iteration write/read-back test on `CHANNEL_SELECT`:
+
+```
+$F094FA  move.w d6,$204(a6)
+$F094FE  cmp.w  $204(a6),d6     ; must read back what was written
+```
+
+for `d6 = 0..5`. Given `$FF0204` is the hottest register on the board (~33k writes against 7
+reads), it is worth having this stated by the firmware: **whatever else CHANNEL_SELECT does, it
+latches and returns the last value written.** A model that makes it write-only, or that lets the
+chassis overwrite it asynchronously, fails here — which constrains the "the chassis presents
+`$28` in CHANNEL_SELECT" mechanism to happen only outside this phase.

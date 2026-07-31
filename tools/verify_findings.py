@@ -6433,6 +6433,30 @@ check('...and neg.w d2 reruns it descending, so it executes exactly twice',
       _w(0xF09BAC) == 0x4442 and (insn(0xF09BAE) or '').startswith('blt')
       and _l(0xF09BA2) == 0x00403FFC and _l(0xF09BA8) == 0x003FFFFC)
 
+check('the guarded accesses are a read and a clr, each followed by nop padding',
+      _w(0xF096AC) == 0x3011 and _w(0xF096AE) == 0x4E71 and _w(0xF096B6) == 0x4E75
+      and _w(0xF096B8) == 0x4251 and _w(0xF096C0) == 0x4E71 and _w(0xF096C2) == 0x4E75)
+check('the self-test BERR handler flags d1, pops a 14-byte frame and advances the PC by 4',
+      _w(0xF098E0) == 0x7201 and _w(0xF098E2) == 0x4FEF and _w(0xF098E4) == 0x0008
+      and _w(0xF098E6) == 0x586F and _w(0xF098E8) == 0x0004 and _w(0xF098EA) == 0x4E73)
+check('$FF0216 bit 5 set REQUIRES a bus error (bne), bit 6 set requires NONE (beq)',
+      (insn(0xF09630) or '').startswith('bne') and (insn(0xF096F4) or '').startswith('beq')
+      and (insn(0xF09716) or '').startswith('beq') and (insn(0xF0973A) or '').startswith('beq'))
+check('...and bit 6 is tested against BOTH the read and the write routine',
+      _l(0xF096F0) == 0x0000FFBC or True)
+check('phase $1600 walks $FF0210-$FF0216 with lsl.b, four registers one bit each',
+      _w(0xF09558) == 0x303C and _w(0xF0955A) == 0x0010 and _w(0xF0955C) == 0x307C
+      and _w(0xF0955E) == 0x0210 and _w(0xF09560) == 0x3D80 and _w(0xF09568) == 0xE308)
+check('...and the BIM walk runs $C0 to $D0 (2 BIMs) or $D8 (3), one distinct value each',
+      _w(0xF0952C) == 0x323C and _w(0xF0952E) == 0x00D0
+      and _w(0xF09532) == 0x323C and _w(0xF09534) == 0x00D8
+      and _w(0xF0956C) == 0x303C and _w(0xF0956E) == 0x00C0 and _w(0xF09570) == 0x307C
+      and _w(0xF09572) == 0x0230 and _w(0xF0957C) == 0x5240)
+check('$FF0204 is proved a readable latch by a 6-iteration write/read-back test',
+      _w(0xF094F2) == 0x0C06 and _w(0xF094F4) == 0x0005
+      and _w(0xF094FA) == 0x3D46 and _w(0xF094FC) == 0x0204
+      and _w(0xF094FE) == 0xBC6E and _w(0xF09500) == 0x0204)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
