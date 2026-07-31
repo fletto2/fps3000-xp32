@@ -5119,8 +5119,11 @@ check('the walker returns into the kernel interrupt-exit path',
       insn(0xF008B0) == 'movem.l (a7)+, d0-d7/a0-a6' and insn(0xF008B4) == 'addq.l #$6, a7')
 check('so the trace hook is dark for TWO reasons: zero mask AND no CCB',
       _bst.unpack('>H', _rom[0xF0A52A - 0xF00000:][:2])[0] == 0)
-check('the ASQ-post wrapper IS called, from $F043E8', insn(0xF043E8) == 'bsr.w $f04488.l'
-      or insn(0xF043E8) == 'bsr.w $f04488')
+# capstone renders bsr.w without a .l suffix -- three assertions in this file
+# were written with one and had to be corrected.  Recorded here so the next
+# person writing a bsr assertion checks the rendering first.
+check('the ASQ-post wrapper IS called, from $F043E8',
+      insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
       0xF03D0C < 0xF043E8 < 0xF04488 and _t1[0x3C][0] == 0xF03D0C)
 check('so BOTH FPS kernel extensions belong to CMR, which is never issued',
