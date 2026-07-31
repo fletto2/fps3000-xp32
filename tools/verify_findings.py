@@ -8375,6 +8375,10 @@ check('the SLC dispatcher branches on S0/S1 after the handshake',
       _w(0xF04B68) != 0 and _w(0xF04B22) != 0
       and _lw_count(0x53305331) + _lw_count(0x53315332) >= 0)
 
+check('the SLC handler reads a final word at $F05250 and never tests it',
+      _w(0xF05250) != 0
+      and not _re21a.search(r'^F0525[0-9A-F].*\s(eor|addx)', _asm21a, _re21a.M))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

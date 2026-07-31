@@ -36998,3 +36998,37 @@ worth knowing before diagnosing a real transfer from the panel code alone.
 (`$0E6E` still ends at `$25F` in this run, from the trailing `S9` terminator — the SLC dispatcher
 handles `S0`/`S1` inline and passes other types onward, and I have not traced where the terminator is
 accepted. The data load is unaffected.)
+
+## The S-record checksum is not verified — DEMONSTRATED (2026-07-31)
+
+Same two records, checksums deliberately wrong (`00` and `FF` where `C0` and `B4` are correct):
+
+```
+S1070000DEADBEEF00S1070004CAFEBABEFFS9030000FC
+->  $10010: DE AD BE EF CA FE BA BE
+```
+
+**Byte-for-byte identical to the correct-checksum run.** Both records load, nothing is rejected,
+nothing is reported.
+
+The recorded finding — "**THE S-RECORD CHECKSUM IS NOT VERIFIED**… a corrupted record loads silently
+and reports success" — now rests on **three independent lines of evidence**:
+
+1. **Static**, verified against a control: no accumulating arithmetic of any form exists in
+   `$F051A2`-`$F05300` — nine arithmetic instructions, all loop counters or address arithmetic —
+   while the detector finds the ROM checksum's `eor.w d1,d0` immediately.
+2. **Runtime**: `$F05250`, the read that consumes the checksum word without examining it, executes.
+3. **Behavioural**: two records with wrong checksums load to the correct addresses with the correct
+   data and no error.
+
+That is as thoroughly established as anything in this project.
+
+**The practical consequences follow directly.** The recorded observation that
+`monitor/monitor.s`'s `L` command "DOES validate checksums, so the monitor is a *safer* loader than
+the ROM, not merely a bypass" is demonstrated rather than argued. And for anyone loading real
+microcode through this path on hardware: **a corrupted WCS image will be accepted silently**, with
+the first symptom being an AC that misbehaves rather than a load that fails.
+
+**For an emulator** this is a non-requirement — the model need not compute checksums, because the
+firmware never looks at them. But a *host-side* tool feeding this port should validate before
+sending, since nothing downstream will.
