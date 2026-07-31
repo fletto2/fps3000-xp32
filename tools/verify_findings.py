@@ -8205,6 +8205,17 @@ check('...and POLL polls TWO ready mechanisms on the bulk path',
       and _w(0xF08294) == 0x397C and _w(0xF08296) == 0x0400  # $FF0218 <- $400
       and _w(0xF0829E) == 0x0804 and _w(0xF082A0) == 0x000F) # ...bit 15
 
+check('D1_SEND sends d1 with $8004; D2_FIN sends d2 with $8005',
+      _w(0xF0810A) == 0x4841 and _w(0xF0810C) == 0x3281
+      and _w(0xF08114) == 0x30BC and _w(0xF08116) == 0x8004
+      and _w(0xF07F90) == 0x4842 and _w(0xF07F92) == 0x3282
+      and _w(0xF07F9A) == 0x30BC and _w(0xF07F9C) == 0x8005)
+check('...and $26C follows cmpi.l #$0,d5 in D2_FIN, the timeout signature',
+      _w(0xF07FBC) == 0x0C85 and _l(0xF07FBE) == 0x00000000
+      and _w(0xF07FC4) == 0x303C and _w(0xF07FC6) == 0x026C)
+check('the $F084A4 channel map is 1->5, 2->4, 3->3, 4->2',
+      [_rom_bytes[0x84A4 + _c] for _c in range(1, 5)] == [5, 4, 3, 2])
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

@@ -35508,3 +35508,35 @@ five bytes, index 0 unused. Every value matches.
 **All four dispatch handlers have now been read end to end** — `D1_SEND`, `D2_FIN`, `POLL`,
 `BLK_XFR` — and not one recorded claim about them has required correction. The only corrections this
 session produced in this area were to my own additions.
+
+## `D2_FIN` read — and a correction to my own claim of completeness
+
+Last entry I wrote "all four dispatch handlers have now been read end to end". That was premature:
+I had read `POLL`, `BLK_XFR` and `D1_SEND`, not `D2_FIN`. Reading it now:
+
+```
+$F07F90  swap d2 / move.w d2,(a1)        ; HIGH word -> +$08
+$F07F94  swap d2 / move.w d2,$2(a1)      ; LOW word  -> +$0A
+$F07F9A  move.w #$8005,(a0)              ; CONTINUE-TRANSFER
+$F07F9E  move.l #$3e8,d5                 ; 1000
+$F07FA4  poll (a0) bit 14 DONE
+$F07FB6  btst #$d,d4                     ; bit 13 ERROR
+$F07FBC  cmpi.l #$0,d5 / bne
+$F07FC4  move.w #$26c,d0 / jsr $F086C0   ; TIMEOUT
+```
+
+Confirms the recorded description exactly — **`$8005` CONTINUE-TRANSFER**, the same high-word-first
+longword split, the 1000-iteration poll on bit 14 with bit 13 as error.
+
+**It also confirms the `$26C` correction at its own site.** This project revised `$26C` from
+"PCMD_RELEASE" to "THE TIMEOUT CODE", on the grounds that all 45 sites follow `cmpi.l #$0,d5` — the
+poll counter reaching zero. Here is that exact sequence: `cmpi.l #$0,d5` / `bne` / `move.w #$26c,d0`.
+The revision is right, and the reason `D2_FIN` emits it is simply that `D2_FIN` polls too.
+
+**The handler names decode:** `D1_SEND` sends **`d1`**, `D2_FIN` sends **`d2`**. That is the whole
+distinction — same structure, different source register and different command word. So `D2_FIN` is
+better read as "send `d2`, continue" than as a finalizer, which fits the recorded note that
+"`D2_FIN` issues [`$26C`] because `D2_FIN` polls too, not because it is a finalize code".
+
+Now all four are genuinely read, and the count stands: **no recorded claim about any of them has
+needed correction.**
