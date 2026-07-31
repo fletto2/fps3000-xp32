@@ -129,6 +129,58 @@ if _vac:
     sys.exit(2)
 
 
+# --- STRUCTURAL SELF-AUDIT #4: shadowed ROM accessors ----------------------
+# _b/_w/_l are the byte/word/long ROM readers.  Later code rebinds some of
+# these names to loop variables (_b as a regex match at two sites), so a
+# check written BELOW the rebind and calling the accessor dies with
+# "'re.Match' object is not callable" -- mid-run, after ~25 minutes.  That is
+# how h33 was lost.  Audit #2 catches use-BEFORE-definition; this catches
+# use-AFTER-rebinding, which is the same hazard from the other side.
+_acc = {'_b', '_w', '_l'}
+_defline, _rebind = {}, {}
+
+def _scan_module(_body):
+    """Module-scope binds only.  Function bodies and comprehension targets do
+    not leak in Python 3, so counting them over-reports (it flagged _l, whose
+    rebinds are all comprehension-local and harmless)."""
+    for _n in _body:
+        if isinstance(_n, _ast_g.FunctionDef):
+            if _n.name in _acc: _defline.setdefault(_n.name, _n.lineno)
+            continue
+        if isinstance(_n, _ast_g.ClassDef):
+            continue
+        _tg = []
+        if isinstance(_n, _ast_g.Assign): _tg = _n.targets
+        elif isinstance(_n, (_ast_g.For, _ast_g.AsyncFor)): _tg = [_n.target]
+        for _t in _tg:
+            if isinstance(_t, _ast_g.Name) and _t.id in _acc:
+                if _t.id in _defline: _rebind.setdefault(_t.id, _n.lineno)
+                else: _defline.setdefault(_t.id, _n.lineno)
+        for _f in ('body', 'orelse', 'finalbody'):
+            if hasattr(_n, _f): _scan_module(getattr(_n, _f))
+        for _h in getattr(_n, 'handlers', []): _scan_module(_h.body)
+
+_scan_module(_tree_g.body)
+_bad = []
+for _n in _ast_g.walk(_tree_g):
+    if isinstance(_n, _ast_g.Call) and getattr(_n.func, 'id', '') in _rebind \
+            and _n.lineno > _rebind[_n.func.id]:
+        _bad.append((_n.lineno, _n.func.id))
+if _bad:
+    # WARNING, not fatal.  A module-scope rebind inside a conditional block
+    # that never executes leaves the accessor intact, so static analysis
+    # over-reports: _l is flagged this way and is demonstrably fine (1920
+    # checks using it passed).  The one PROVEN break was _b, rebound
+    # unconditionally as a regex match -- so _b is fatal and the rest advise.
+    _fatal = [x for x in _bad if x[1] == '_b']
+    print('  NOTE: ROM accessor possibly shadowed at:', _bad[:4],
+          '(warning only unless _b)')
+    if _fatal:
+        print('  FATAL: _b is rebound unconditionally; use word() below line',
+              _rebind.get('_b'), '--', _fatal[:4])
+        sys.exit(2)
+
+
 def word(a): return struct.unpack('>H', d[a-B:a-B+2])[0]
 def long_(a): return struct.unpack('>I', d[a-B:a-B+4])[0]
 
@@ -6363,7 +6415,7 @@ check('the $D0 marker sets both $1FFF1 bits 7 and 6; $50 and the $9F/$9A pattern
       and not ((0x50 >> 7) & 1) and not ((0x9F >> 6) & 1) and not ((0x9A >> 6) & 1))
 
 check('PollBoardStatus $F0891C tests board bits 4 and 5, and both set jumps to $F088F4',
-      _b(0xF08926) == 0x082A and _b(0xF0892E) == 0x082A
+      _w(0xF08926) == 0x082A and _w(0xF0892E) == 0x082A
       and (insn(0xF08934) or '').startswith('bne') and (insn(0xF0894E) or '').startswith('bra'))
 check('...it NEVER clears d7: no clr/moveq-to-d7 anywhere in $F0891C-$F08956',
       not any('d7' in (insn(a) or '') and (insn(a) or '').split()[0] in ('clr.l','moveq')
