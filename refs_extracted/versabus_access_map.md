@@ -21713,3 +21713,45 @@ control-flow map of this ROM is closed.
 **What remains unknown is not in the ROM.** It is the counterparty: the CP program that fills
 `$10AE`, and the host-side card the AP I/F talks to. Both are called *through* dispatches that
 are themselves fully understood.
+
+## Refinement: `$25F` is invalid record TYPE, `$260` is invalid address WIDTH (2026-07-31)
+
+The two S-record rejection codes were documented earlier today as "bad terminator record" and
+"bad data record". Decoding both emitters' guards separates them more precisely — and shows the
+firmware implements the S-record address-width rules explicitly.
+
+**`$260` — invalid address-field width.** Two sites, both selecting a shift count from the
+record's width field and rejecting anything else:
+
+```
+$F05256  data records            $F055FC  terminator records
+  d4 == 3  -> d5 = $08             d4 == 2  -> d5 = $00
+  d4 == 4  -> d5 = $10             d4 == 3  -> d5 = $10
+  d4 == 5  -> d5 = $18             else     -> $260
+  else     -> $260
+```
+
+`d5` is the **shift count used to assemble the address**, and the mapping is `shift = (d4-1)*8`
+for data records — i.e. `d4` selects a 2-, 3- or 4-byte address field, exactly the **S1 / S2 /
+S3** distinction. The terminator decoder is the mirror for **S9 / S8**. So the firmware supports
+the full S-record address-width set on both the data and the termination side, and `$260` is what
+it emits for a width outside that set.
+
+**`$25F` — invalid record type.** Its two sites test the *type* character, not the width:
+`$F0555A` requires `$5337 <= d1 <= $5339` (`S7`-`S9`), and `$F04C00` requires `$5338`/`$5339`
+(`S8`/`S9`). Anything else drains and reports.
+
+That makes the pair complementary rather than overlapping: **`$25F` = "I do not recognise this
+record type", `$260` = "I recognise the type but its address field is the wrong width".** The
+corrected line for the panel-code table is:
+
+| code | meaning |
+|---|---|
+| `$25F` | S-record **type** not recognised |
+| `$260` | S-record **address-field width** not recognised |
+
+**Emulator/host consequence.** A host feeding this firmware may use S1, S2 or S3 for data and S8
+or S9 for termination, and the address is assembled by shifting — so a 4-byte-address S3 record is
+accepted and shifted by 24. Combined with the `+$10000` staging offset and the `$10000`-`$1FFFF`
+bound enforced three ways, the upload path's accepted input set is now fully specified from the
+firmware side, with a distinct diagnostic code for each way of getting it wrong.

@@ -4986,3 +4986,16 @@ check('...and the callback is jsr (a2) in every one',
 check('$F044C6 is the RMS68K driver call: pointer at +$1E, status in carry',
       insn(0xF044C0) == 'movea.l $1e(a5), a1' and insn(0xF044C6) == 'jsr (a1)'
       and insn(0xF044CA) == 'bcs.b $f044d6')
+
+# ---- $25F is type, $260 is address WIDTH (2026-07-31) ----
+check('the data-record width decoder maps d4=3/4/5 to shift 8/16/24 (S1/S2/S3)',
+      insn(0xF05256) == 'cmpi.w #$3, d4' and insn(0xF0525C) == 'move.w #$8, d5'
+      and insn(0xF05268) == 'move.w #$10, d5' and insn(0xF05274) == 'move.w #$18, d5')
+check('...rejecting any other width with $260', insn(0xF0528C) == 'move.w #$260, d0')
+check('the terminator width decoder maps d4=2/3 to shift 0/16 (S9/S8)',
+      insn(0xF055FC) == 'cmpi.w #$2, d4' and insn(0xF05602) == 'move.w #$0, d5'
+      and insn(0xF0560E) == 'move.w #$10, d5' and insn(0xF05614) == 'move.w #$260, d0')
+check('$25F guards the record TYPE, not the width',
+      insn(0xF0555A) == 'cmpi.w #$5337, d1' and insn(0xF04C00) == 'cmpi.w #$5338, d1')
+check('...so the two codes are complementary: type vs width',
+      insn(0xF0556E) == 'move.w #$25f, d0' and insn(0xF05614) == 'move.w #$260, d0')
