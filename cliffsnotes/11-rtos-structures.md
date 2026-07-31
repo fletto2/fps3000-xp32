@@ -190,3 +190,44 @@ Five items in the previous map were re-attributed: `+$138` is **saved `a6`**, no
 pointer; `+$B0` is a **name field**, not an `'EXEC'` marker slot; `+$102`/`+$114`/`+$120`/`+$123`
 are **register slots**, not independent fields; and `+$00` is **not a field at all** — its 23
 apparent accesses are `lea`/`pea` passing the TCB pointer itself.
+
+---
+
+## Live contents of every RTOS structure (2026-07-31, from a boot RAM dump)
+
+### `!GST` shares `!UST`'s header format — and is empty
+
+`UST.EQ`'s 20-byte header layout applies verbatim to the Global Segment Table:
+
+| field | `!UST` `$1FB00` | `!GST` `$1FD00` |
+|---|---|---|
+| `NSEG` | 1 | 1 |
+| **`NPAGE`** | **2** | **1** |
+| `MENT` (entry size) | 22 | **13** |
+| **`CENT` (entries)** | **9** | **0** |
+| `FENT` (first entry) | `$1FB14` | `$1FD14` |
+
+Two things follow. **`!GST` is empty** — no global segments exist, which is why directive `$09`
+`T0FNDGSG` would never find anything. And **`NPAGE` matches the configuration block from the other
+end**: this project records the allocator page counts as `1, 2, 1, 1, 1, 1, 1`, with the two-page
+entry at `$F0A51A` allocating the structure whose header reports `USTNPAGE = 2`. `!GST` reports
+`NPAGE = 1`, consistent with the remaining single-page entries. Two structures now confirm the
+config block's page counts against their own live headers.
+
+### The rest, measured
+
+| structure | live state |
+|---|---|
+| `!IDV` `$1F800` | **populated** — bound `$1F8FF`, then 14-byte records `{vector, TCB, ISR entry, ISR exit}`; the first is `{$45, $1E900, $F07EE6, $F07F08}` = XP1I, matching the documented IRQ table exactly |
+| `!IOV` `$1F900` | **empty** — tag and bound pointer only, 7 non-zero bytes in the page |
+| `!UDR` `$1F600` | **empty** — count `$19` = **25 slots**, all unused, confirming the documented figure |
+| `!PAT` `$1F700` | **free list only** — head `$1F714`, chaining to `$1F732` at the documented `$1E` stride; active list null |
+| `!GST` `$1FD00` | **empty** — `CENT = 0` |
+| `!UST` `$1FB00` | **9 entries**, first named `XP1I`, exactly as recorded |
+| `!VCT` `$1FA00` | 256 bytes, `byte[vector] = owning task` |
+
+So of the eight allocated structures, **three are populated** (`!IDV`, `!UST`, `!VCT`), one holds
+only a free list (`!PAT`), and **four are empty** (`!IOV`, `!UDR`, `!GST`, plus `!CCB`/`!DLY` which
+have no instance at all). That is the machine's real shape: the interrupt wiring and the semaphore
+registry are live; segments, user directives, I/O vectors and periodic activations are all
+mechanisms present and unused.

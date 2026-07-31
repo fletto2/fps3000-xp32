@@ -7318,6 +7318,10 @@ check('...with exactly one writer, so a translation base is set once per task',
 check('...and its consumers are T0LOGPHY ($F0175C) and T0FNDSEG ($F017C4)',
       _l(0xF001D6 + 4 * 0x08) == 0xF0175E and _l(0xF001D6 + 4 * 0x07) == 0xF017C6)
 
+check('the allocator page counts in the config block are 1,2,1,1,1,1,1',
+      _l(0xF0A516) == 1 and _l(0xF0A51A) == 2 and _l(0xF0A51E) == 1
+      and _l(0xF0A522) == 1 and _l(0xF0A526) == 1)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
