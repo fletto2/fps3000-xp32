@@ -20163,3 +20163,31 @@ rather than accidental — and it is checkable: the zero run stops on the first 
 Otherwise it is consistent with everything else known about that subsystem — `EXMON`, `DEMON` and `EXMMSK`
 are named directives this firmware never issues, and `TCBEMMSK` and friends sit unused in
 every TCB.
+
+### Closing the config block: `$0C74` is a 2×2 selection table
+
+The last unidentified config destinations were `$0C72`/`$0C73` (bytes from `$F0A53C`/`$F0A53D`)
+and `$0C74`/`$0C76` (words from `$F0A53E`/`$F0A540`). `$F019A2`, inside `GTSEG`, shows what
+the second pair is:
+
+```
+$F019A2  lea $c74.w,a0
+$F019A6  btst #$e,d0        / bne -> skip
+$F019AC  addq.l #$1,a0                     ; +1 when d0 bit 14 is CLEAR
+$F019AE  btst #$f,$28(a5)   / bne -> skip  ; $28 = TCBATTR
+$F019B6  addq.l #$2,a0                     ; +2 when TCBATTR bit 15 is CLEAR
+```
+
+So `a0` lands on one of **four consecutive bytes at `$0C74`-`$0C77`**, selected by a 2×2
+combination of a directive-option bit and a task-attribute bit. The config block supplies
+those four bytes as two words, and on this machine both are `$0000`, so all four entries are
+zero.
+
+What the byte *means* is not established — the site is in the segment allocator and the
+selectors are an option bit and a task attribute, which fits a default protection or
+attribute value per {option, task-class} pair, but that is a reading rather than a finding.
+The **structure** is definite: a 2×2 table, config-supplied, selected exactly this way.
+
+With that, every destination of the configuration block is accounted for: the trace mask, the
+device base, the RAM top, seven allocator page counts, the scheduler quantum, two
+indirect-jump pointers, and this table.
