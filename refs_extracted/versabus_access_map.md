@@ -32911,3 +32911,49 @@ argument shape as well as by number. And by number it fills a gap: Motorola's se
 are `ATSEM` 41, `WTSEM` 42, `SGSEM` 43, `CRSEM` 45 — **44 is absent from the list available here**,
 and `$2C` is 44. So it is the unnamed semaphore operation between `SGSEM` and `CRSEM`; a detach or
 delete would fit the position, but the ROM does not say so and I have not assumed it.
+
+## CORRECTION: all 60 live directives were already named — and the names confirm the decodes (2026-07-31)
+
+I reported the directive census as "**60 live, 29 nameable, 31 not**". **That is wrong.** The
+29/31 split came from a `names` dict I built by hand from what I remembered of `CLAUDE.md`. The
+kernel listing carries **61 `TRAP1_*` labels**, seeded from `TR1.EQ` by `tools/disasm_kernel.py` —
+this project's own note says "84 directives are now named ... (named labels 19 -> 124)".
+
+Mapping every live slot to its label: **60 of 60 are named.** Exactly one carries a placeholder —
+`$3B`, labelled `TRAP1_dir_3B`, which is precisely the "undocumented directive" this project
+already flags.
+
+**I spent several turns hand-decoding directives the listing names.** The right first move was to
+read the listing's own labels. That said, the exercise was not wasted, because the names now
+*check* the decodes — and they mostly agree:
+
+| directive | name | my hand decode | verdict |
+|---|---|---|---|
+| `$15` / `$1E` | **DELAY** / **DELAYW** | "a delay pair sharing code, `d7` selects the variant, clamped to one day" | **confirmed**, including which variant is which |
+| `$18` | **SETPRI** | "set priority, bounded by `TCB+$25`" | **confirmed** — and `+$25` is the ceiling |
+| `$42` | **EXMMSK** | "masked update of `TCB+$148`, caller bits 0-2" | **confirmed** — an exception-monitor *mask* |
+| `$4A` | **GTDTIM** | "read time of day, `{days, ms}`" | **confirmed**, pairs with `$49` **STDTIM** |
+| `$2C` | **DESEM** | "a semaphore op between SGSEM and CRSEM; delete would fit" | **confirmed** — delete |
+| `$21` | **SETASQ** | "an unnamed ASQ directive" | **confirmed** as ASQ |
+| `$0E` | **ABORT** | "flag, snapshot, deferred work" | consistent |
+| `$16` | **RELINQ** | "a third termination entry" | **wrong** — it is a yield, not a termination |
+| `$1C` | **TSKINFO** | "a privileged segment operation" | **wrong** — it queries task info |
+
+### `$1A`/`$1B` = `EXPVCT`/`TRPVCT` explains the `$F00B74` dispatch
+
+I decoded these as "register a handler table at `TCB+$48`/`+$4C`". Their names are **EXPVCT** and
+**TRPVCT** — *exception vector* and *trap vector*. So the caller-site-indexed dispatch at
+`$F00B74` is the mechanism by which **a task registers its own exception and trap handlers**, and
+the kernel dispatches to them based on which kernel site raised the event. That is exactly the
+shape the descriptors implied, and it explains why the two tables are separate.
+
+### `$40`-`$45` are the exception-monitor family
+
+**EXMON, DEMON, EXMMSK, RSTATE, PSTATE, REXMON.** This closes the single-step thread completely:
+`$F00D3E` arms `TCB+$148` bit 7 *inside the exception monitor*, and these are the directives that
+drive it. `CLAUDE.md` already noted the monitor exit "executes zero times ... consistent with
+`EXMON`/`DEMON`/`EXMMSK` being directives this firmware never issues" — and now the arming site,
+the consuming site, the mask directive and the family are all one picture.
+
+**The lesson is about order of operations**: when a project has already extracted vendor names into
+its tooling, read the tooling before decoding by hand. I had the listing open throughout.

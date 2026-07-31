@@ -7529,6 +7529,18 @@ check('$2C looks up a semaphore by name through T0FNDSEM, status 7 on failure',
       and _w(0xF03366) == 0x2055 and _bsrw(0xF03368) == 0xF01876
       and _w(0xF0336E) == 0x5E6E and _w(0xF03370) == 0x0102)
 
+_klab = open('/home/fletto/ext/src/claude/fps3000/fps3k_kernel.asm').read()
+check('the kernel listing names all 60 live TRAP #1 directives',
+      _klab.count('TRAP1_') >= 60
+      and 'TRAP1_EXPVCT' in _klab and 'TRAP1_TRPVCT' in _klab
+      and 'TRAP1_SETPRI' in _klab and 'TRAP1_EXMMSK' in _klab
+      and 'TRAP1_GTDTIM' in _klab and 'TRAP1_DESEM' in _klab)
+check('...and only $3B carries a placeholder label, matching its "undocumented" status',
+      'TRAP1_dir_3B' in _klab)
+check('$1A/$1B are EXPVCT/TRPVCT, so $F00B74 dispatches task-registered handlers',
+      'TRAP1_EXPVCT' in _klab and 'TRAP1_TRPVCT' in _klab
+      and _w(0xF03134) == 0x08EE and _w(0xF03142) == 0x08EE)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
