@@ -29234,20 +29234,47 @@ bit 1, a two-stage handshake between nested deliveries.
 *here* — it falls through with `d2 = 0` and the caller's arm records the fault instead, which
 is what then loops forever per the section above.
 
-## Phase `$1400` tests that `$1FFF1` bit 3 is the interrupt MASK (2026-07-31)
+## Phase `$1400` tests that `$1FFF1` bit 3 SELECTS THE VECTOR (2026-07-31)
 
-The two middle arms are complementary, which is what identifies the bit:
+**Corrected the same day — my first reading of this was wrong.** I read the two middle arms as
+a mask test (bit 3 clear ⇒ no delivery, bit 3 set ⇒ delivery). The two ISRs settle it against
+that: they are distinct routines, both ending in `rte`, differing only in which bit of `d2`
+they set.
 
-| arm | VMOD bit 3 | test | required |
-|---|---|---|---|
-| `$F0943C` | **`bclr`** — clear | `btst #$1,d2` / `beq` skips the fault | delivery must **NOT** happen |
-| `$F0945E` | **`bset`** — set | `btst #$1,d2` / `bne` skips the fault | delivery **MUST** happen |
+```
+$F094CC  bset #$0,d2      ; ... then a bounded spin on bit 1 ...
+$F094E2  rte
+$F094E4  bset #$1,d2
+$F094E8  bclr #$7,$1(a5)
+$F094EE  rte
+```
 
-Same helper, same signal, opposite expectations — so the arms isolate exactly one variable
-and **`$1FFF1` bit 3 is the enable/mask for the VMOD interrupt request**. The outer two arms
-(`$F09420`, `$F09482`) test `$F70019` **bit 2** instead, so the board-status bit reflects the
-request line. The handler is installed at `$F09404` as `move.l a2,$140` — **vector `$50`**,
-which is the base of the VMOD vector register file.
+Under a mask reading the second handler would have nothing to do. Under a **vector-selector**
+reading both arms receive an interrupt and bit 3 chooses *which vector is supplied*:
+
+| arm | VMOD bit 3 | vector | handler | sets | arm requires |
+|---|---|---|---|---|---|
+| `$F0943C` | `bclr` — clear | `$50` | `$F094CC` | `d2` bit **0** | bit 1 **clear** (`beq` skips the fault) |
+| `$F0945E` | `bset` — set | `$52` | `$F094E4` | `d2` bit **1** | bit 1 **set** (`bne` skips the fault) |
+
+Both arms pass, and the test proves the chassis **routes the VMOD interrupt to one of two
+vectors according to bit 3**. That is a stronger and more specific statement than "bit 3 is an
+enable", and it explains the vector register file at `$50`-`$54` rather than a single vector.
+
+The outer two arms (`$F09420`, `$F09482`) test `$F70019` **bit 2**, so the board-status bit
+reflects the request line. The handler is installed at `$F09404` as `move.l a2,$140` —
+**vector `$50`**, the base of that file.
+
+**This also dissolves the phase-`$1400` discrepancy I recorded in the model spec.** I claimed
+the emulator had no interrupt source derived from `vmod_ctrl`; it does — the `$1FFF1` write
+handler is edge-triggered on bits 0-2 with bit 7 set, and routes to `$50`/`$52` on bit 3,
+exactly as above. My sweep for `m68k_set_irq` call sites had looked at the tick and BIM
+functions and missed the one inside the register write path. So the emulator's recorded
+progress through phases `$0100`-`$1A00` is real, not an artefact of the abort path.
+
+Two lessons, both already familiar here: **a negative from a call-site sweep is only as good
+as its coverage of where the call can appear**, and the fix that mattered was reading the
+model's own source rather than reasoning further from my summary of it.
 
 ## `$F08902` is the self-test's bus-error counter (2026-07-31)
 

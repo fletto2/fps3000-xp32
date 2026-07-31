@@ -515,3 +515,22 @@ pass was in flight, so this is recorded as a discrepancy rather than resolved.
 It matters beyond bookkeeping: if the answer is (2), then **the abort path is load-bearing in
 the current model** — the boot completes because the self-test gives up, not because it
 passes. That would make several "the emulator reaches X" claims weaker than they read.
+
+
+## RESOLVED 2026-07-31 — the phase `$1400` discrepancy was my error
+
+This file recorded an unresolved discrepancy: phase `$1400` arm 2 needs a real interrupt, the
+emulator appeared to have no VMOD-derived interrupt source, yet the project records it reaching
+later phases. **The emulator does model the interrupter** — in the `$1FFF1` write path, edge-
+triggered on bits 0-2 with bit 7 set, dispatching to vector `$50` or `$52` on bit 3. My sweep
+for interrupt sources missed it because it looked at the tick and BIM routines rather than the
+register write handler.
+
+So there is no discrepancy, the recorded phase coverage is genuine, and the three candidate
+resolutions listed above are all moot. **The abort path is not load-bearing in the current
+model** — which was the substantive worry, and it is retired.
+
+What survives from that investigation, and is independently useful, is the fault policy:
+`PollBoardStatus` never clears `d7`, so a genuinely failing arm retries forever while
+announcing itself, and the only exit is the chassis raising board-status bit 5. A model that
+cannot raise bit 5 turns any real diagnostic failure into a silent hang.
