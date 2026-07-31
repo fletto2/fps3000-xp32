@@ -6918,13 +6918,29 @@ check('...while the inbound staging loop polls $FF0218 bit 15 before every word'
       _w(0xF04AE2) == 0x3B7C and _w(0xF04AE4) == 0x0400
       and _w(0xF04AEC) == 0x0807 and _w(0xF04AEE) == 0x000F
       and _w(0xF04AF8) == 0x32D0)
-check('...and the SLC loop does TWO full handshakes per iteration, one per hex character',
+# CORRECTED: the two handshakes read the record HEADER (type word + count word).
+# One 16-bit word carries TWO ASCII characters, so a data byte costs one handshake.
+check('...and the SLC loop reads a type word then a count word, two chars each',
       _w(0xF04B4E) == 0x3B7C and _w(0xF04B50) == 0x0400
       and _w(0xF04B68) == 0x3B7C and _w(0xF04B6A) == 0x0400
       and _w(0xF04B64) == 0x3210 and _w(0xF04B7E) == 0x3410)
 check('all three bulk loops transfer exactly $E64 words (no off-by-one)',
       _l(0xF04AFE) == 0x00000E64 and _l(0xF04C44) == 0x00000E64
       and _l(0xF04C68) == 0x00000E64)
+
+check('$F05150 converts BOTH bytes of one word: high byte then low, then adds',
+      _w(0xF05150) == 0x3602 and _w(0xF05152) == 0xE04B
+      and _w(0xF05164) == 0xE94B and _w(0xF05166) == 0x0242 and _w(0xF05168) == 0x00FF
+      and _w(0xF0517A) == 0xD443 and _w(0xF0517C) == 0x4E75)
+check('...discriminating only on <= $40, with no range check either side',
+      _w(0xF05154) == 0x0C03 and _w(0xF05156) == 0x0040
+      and _w(0xF0515A) == 0x0443 and _w(0xF0515C) == 0x0037
+      and _w(0xF05160) == 0x0443 and _w(0xF05162) == 0x0030)
+check('...so lowercase hex silently mis-converts: 0x61 - 0x37 = 0x2A, not 10',
+      (0x61 - 0x37) == 0x2A and (0x61 > 0x40))
+check('the record TYPE arrives as one word holding two ASCII chars ($5330 = "S0")',
+      _w(0xF04B8A) == 0x0C41 and _w(0xF04B8C) == 0x5330
+      and _w(0xF04B9A) == 0x0C41 and _w(0xF04B9C) == 0x5331)
 
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')

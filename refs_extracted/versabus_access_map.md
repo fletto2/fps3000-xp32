@@ -30840,13 +30840,56 @@ no off-by-one between them:
 | `$F04B4C` (SLC stream) | **in** | **two** full handshakes, `move.w (a0),dN` each | `d0` from **0**, `blt`, `+1` twice |
 | `$F04C60` (outbound) | **out** | `move.w (a1)+,(a0)` — **nothing else** | `d0` from **1**, `ble` |
 
-### The SLC loop takes two handshakes per data byte
+### CORRECTED: the SLC loop's two handshakes read the record HEADER, not one data byte
 
-`$F04B4E`-`$F04B82` arms, polls and clears `$FF0218` **twice**, reading one word each time, then
-calls the ASCII-to-binary converter at `$F05150`. That is the wire format this project records —
-"two ASCII hex characters per 16-bit word = one data byte" — visible in the handshake structure:
-each hex character arrives as its own 16-bit word with its own ready handshake, and `d0` counts
-*words*, not bytes. A 55 KB microcode bank therefore costs ~113,000 handshakes.
+I wrote above that "each hex character arrives as its own 16-bit word", making a 55 KB bank cost
+~113,000 handshakes. **That is wrong**, and decoding `$F05150` shows why: it splits **`d2`** into
+its high and low bytes and converts *each* as an ASCII hex digit, so **one 16-bit word carries two
+characters** — which is exactly the wire format this project already recorded ("two ASCII hex
+characters per 16-bit word = one data byte").
+
+The two handshakes at `$F04B4E` and `$F04B68` therefore read the **four characters of the record
+header**:
+
+```
+$F04B64  move.w (a0),d1        ; word 1 = 'S' and the type digit  -> $5330 / $5331 / ...
+$F04B7E  move.w (a0),d2        ; word 2 = two hex digits
+$F04B82  jsr    $F05150        ; -> d2 = the byte count
+$F04B88  move.b d2,d4
+$F04B8A  cmpi.w #$5330,d1      ; S0 -> drain
+$F04B9A  cmpi.w #$5331,d1      ; S1 -> SRecordDataHandler
+```
+
+So a data byte costs **one** handshake, not two, and a 55 KB bank costs ~56,600 — the figure I
+gave was double. The `$5330`/`$5331` comparisons are themselves the proof of the packing: those
+are the two ASCII bytes `'S'`,`'0'` in a single word.
+
+### The converter has no validation whatsoever
+
+```
+$F05150  d3 = d2 >> 8              ; the first character
+$F05154  cmpi.b #$40,d3
+$F05158  ble -> subi #$30          ; <= '@'  : treat as '0'-'9'
+$F0515A       subi #$37            ; >  '@'  : treat as 'A'-'F'
+$F05164  lsl.w #$4,d3
+   ...   the same for the low byte, then add
+```
+
+The only discrimination is **`<= $40`**, and there is no range check on either side of it:
+
+| input | result | |
+|---|---|---|
+| `'0'`-`'9'`, `'A'`-`'F'` | correct | |
+| **`'a'`-`'f'`** (`$61`+) | `$61 - $37 = $2A` | **lowercase hex silently yields garbage** |
+| `':'` (`$3A`) | `$0A` | a non-hex character that looks like a valid nibble |
+| `'@'` (`$40`) | `$10` | overflows a nibble into the neighbouring digit |
+
+Combined with the already-recorded fact that **the S-record checksum is consumed and never
+verified**, the SLC path has *no* input validation at any level: bad characters produce wrong
+bytes, and the field that would catch it is read and discarded. **A host sending lowercase hex
+uploads silently corrupted microcode and is told it succeeded.** That is a concrete hazard for
+anyone writing the host side, and it is a reason the monitor's `L` command — which does validate
+checksums — is the safer loader.
 
 ### The outbound loop has no flow control at all
 
