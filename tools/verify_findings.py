@@ -4943,3 +4943,19 @@ check('...and the stream read has NO post-increment -- (a0) is a FIFO port',
       insn(0xF04C30) == 'move.w (a0), d0' and '+' not in insn(0xF04C30))
 check('the drain happens BEFORE the panel code is issued',
       insn(0xF04C34) == 'move.w #$25f, d0' and insn(0xF05224) == 'move.w #$25a, d0')
+
+# ---- the USP arms are asymmetric; arm B has dead code (2026-07-31) ----
+_usp = [a for a, (_, o, _) in sorted(_mins.items()) if 'usp' in o]
+check('the ROM contains exactly 13 USP instructions', len(_usp) == 13, len(_usp))
+check('...six of them in the bit-7 register interface',
+      sum(1 for a in _usp if 0xF049E0 <= a <= 0xF04A62) == 6)
+check('USP write arm A is a correct read-modify-write preserving the other half',
+      insn(0xF049E4) == 'move usp, a2' and insn(0xF049E8) == 'swap d2'
+      and insn(0xF049EA) == 'move.w d1, d2' and insn(0xF049EC) == 'swap d2'
+      and insn(0xF049F0) == 'move a2, usp')
+check('USP write arm B reads the USP into a1 and immediately overwrites it -- DEAD CODE',
+      insn(0xF04A3E) == 'move usp, a1' and insn(0xF04A40) == 'movea.w $204(a0), a1')
+check('...so arm B replaces the WHOLE USP with a sign-extended 16-bit value',
+      insn(0xF04A44) == 'move a1, usp')
+check('the self-test also exercises the USP as a register',
+      insn(0xF08AD2) == 'move a5, usp' and insn(0xF08AD6) == 'move usp, a3')

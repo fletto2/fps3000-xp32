@@ -21581,3 +21581,51 @@ immediately, which is harmless; a model returning a constant non-zero value make
 forever**, and the symptom would be a hang on a *malformed* S-record only — precisely the case a
 test suite is least likely to exercise. Any chassis model that streams records must decrement
 this register.
+
+## The USP arms of the register interface are asymmetric, and one contains dead code (2026-07-31)
+
+The ROM contains **13** USP instructions in total: five in the kernel's task switch (`$F00194`,
+`$F00592`, `$F006C0`, `$F008AE`, `$F0090E`), two in the self-test (`$F08AD2`/`$F08AD6`, a
+write/read-back test of the USP as a register), and **six in the bit-7 register interface** —
+nearly half the total, which is itself evidence that remote register access is a first-class
+feature of this firmware rather than an incidental path.
+
+Comparing the two USP *write* arms shows they are not built the same way:
+
+```
+arm A ($E87 bit 6 = 0)                      arm B ($E87 bit 6 = 1)
+$F049E0  move.w  $204(a0),d1                $F04A3E  move    usp,a1     <-- DEAD
+$F049E4  move    usp,a2                     $F04A40  movea.w $204(a0),a1
+$F049E6  move.l  a2,d2                      $F04A44  move    a1,usp
+$F049E8  swap    d2
+$F049EA  move.w  d1,d2
+$F049EC  swap    d2
+$F049EE  movea.l d2,a2
+$F049F0  move    a2,usp
+```
+
+**Arm A is a correct read-modify-write**: it reads the USP, swaps, inserts the 16-bit value from
+`$FF0204` into one half, swaps back and writes the whole longword — the other half is preserved.
+
+**Arm B is not.** `move usp,a1` at `$F04A3E` loads the USP into `a1` and the very next
+instruction overwrites `a1` with `movea.w $204(a0),a1`. The read is **dead code**, and `movea.w`
+**sign-extends** its 16-bit source to 32 bits — so arm B does not set one half of the USP, it
+replaces the entire register with a sign-extended copy of the chassis's 16-bit argument. Any
+value with bit 15 set writes `$FFFFxxxx`.
+
+The dead `move usp,a1` is the tell: it is exactly the first instruction of the read-modify-write
+that arm A performs in full. **Arm B looks like an abandoned or unfinished copy of arm A**, left
+with its now-useless read still in place.
+
+Whether this is a defect depends on the intended contract, which is not in the image — if the
+chassis is expected to write both halves in sequence, arm B's clobbering is harmless because arm
+A follows. But the asymmetry is real and the dead instruction is not explicable any other way.
+
+**Emulation consequence, and it is concrete.** A faithful model must reproduce this: writing the
+"high half" of the USP through arm B destroys the low half and sign-extends. A model that
+implements both arms symmetrically — the natural thing to write from the documentation above —
+will diverge from the hardware on exactly the values a test is most likely to use.
+
+**And a core requirement**: `move usp,aN` / `move aN,usp` are privileged and are exercised in
+three separate places here, including a self-test write/read-back at `$F08AD2`. A 68000 core
+that does not implement them fails the self-test, not merely this interface.
