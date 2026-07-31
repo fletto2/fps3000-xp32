@@ -17520,3 +17520,31 @@ So of the twelve markers: six `!TCB` and six `!TST` per task, `!UST` with 9 live
 25 slots all empty, `!VCT` live but untagged, and `!CCB`/`!DLY` with no instance at all —
 `!CCB` because directive `$3C` `CMR` is never issued. **Every one is now accounted for,
 by layout and by live contents.**
+
+## The `$26D`-`$271` channel-label ambiguity is settled, by the RTOS's own bounds
+
+This file has carried an open item: `$26E` is labelled `PCMD_CH1_*` but its site `$F05F92`
+falls in code the enclosing-function heuristic attributes to **TCBXP4I**, and "either the
+CH1 label is wrong or the function attribution is. Unresolved — do not rely on the channel
+numbers in this block." The reason it stayed open is that `build_clean_disasm.py`'s region
+bounds are approximate, so the attribution could not adjudicate itself.
+
+The `!TST` segment table settles it, because those bounds are not heuristic. Re-attributing
+every panel-code load site against them:
+
+| code | sites per task | XP4I | XP3I | XP2I | XP1I |
+|---|---|---|---|---|---|
+| `$26D` | 1 | `$F05F56` | `$F06956` | `$F07356` | `$F07D56` |
+| `$26E` | **2** | `$F05F92`, `$F05FC8` | `$F06992`, `$F069C8` | `$F07392`, `$F073C8` | `$F07D92`, `$F07DC8` |
+| `$270` | 1 | `$F05FE2` | `$F069E2` | `$F073E2` | `$F07DE2` |
+| `$271` | **2** | `$F0607A`, `$F060A0` | `$F06A78`, `$F06AAC` | `$F07478`, `$F074AC` | `$F07E78`, `$F07EAC` |
+
+**`$F05F92` is inside XP4I** (`$F05F00-$F068FF`), so the enclosing-function attribution was
+**right** and the `CH1` label was wrong. The four tasks emit a perfectly symmetric multiset,
+which is what makes a channel reading impossible.
+
+And the multiplicities are themselves the confirmation of the directive reading: each
+failure code appears exactly as many times as its directive is invoked in that task —
+`$26D` once ↔ `$01` `GTSEG` once, **`$26E` twice ↔ `$2D` `CRSEM` twice**, `$270` once ↔
+`$4C` once, **`$271` twice ↔ `$29` `ATSEM` twice**. `$26F` does not occur at all. That is a
+count-level match across four independent copies, not just a plausible story.
