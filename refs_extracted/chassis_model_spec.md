@@ -333,3 +333,48 @@ What remains unestablished is the *width* of the page field and how many pages t
 decodes; the firmware only ever names `$0` and `$F` by literal, with op `$3` supplying the
 rest at runtime. A model should implement page-plus-offset and accept any page value rather
 than assuming 16.
+
+## Fault-conformance suite: nine assertions extracted from the self-test (2026-07-31)
+
+The self-test is written as a specification **with negative cases** — it checks not only
+that gates fault, but that the wrong bits do *not*. Extracting every
+`probe → tst.w d1 → beq/bne` and `probe → beq/bne` pattern gives a complete table a model
+must satisfy.
+
+**The three probes**, each with a four-`nop` landing zone so byte-exact PC semantics are not
+required:
+
+| probe | what it does |
+|---|---|
+| `$F096AC` | `move.w (a1),d0` — **read** `$400000` |
+| `$F096B8` | `clr.w (a1)` — **write** `$400000` |
+| `$F098C4` | `$FF020C <- $FF`, `$FF0218 <- $400`, then `tst.w $e(a6)` — access `$FF000E` |
+
+**The nine assertions:**
+
+| site | probe | `$FF0216` | required |
+|---|---|---|---|
+| `$F0962C` | read `$400000` | `$20` | **bus error** |
+| `$F0966E` | write `$400000` | `$20` | **bus error** |
+| `$F0968E` | write `$400000` | `$0000` | no fault |
+| `$F096EE` | read `$400000` | `$40` | no fault |
+| `$F09710` | read `$400000` | `$0000` | no fault |
+| `$F09734` | write `$400000` | `$40` | no fault |
+| `$F09756` | write `$400000` | `$0000` | no fault |
+| `$F09852` | access `$FF000E` | `$80` | **bus error** |
+| `$F098A4` | access `$FF000E` | `$0000` | no fault |
+
+Reduced to rules:
+
+1. **`$FF0216` bit 5 set ⇒ any access to `$400000` faults**, read or write.
+2. **`$FF0216` bit 7 set, with `$FF0218` armed ⇒ access to `$FF000E` faults.**
+3. **Bit 6 is inert** with respect to the chassis window, in all four combinations.
+4. With `$FF0216` clear, both regions are accessible.
+
+Each failure sets `d7 = $F0F0F0F0` and retries the arm indefinitely, so a model that gets one
+of these backwards **hangs in that phase** rather than reporting — the observable symptom is
+a stuck `CHANNEL_SELECT` sub-phase, not a message.
+
+Two further fault requirements documented elsewhere complete the picture: the phase-`$600`
+watchdog needs a fault somewhere in `$F80001`-`$F82001`, and the earlier `$20000`-`$EFFFFF`
+sweep needs unmapped space to fault at a `$800` stride.

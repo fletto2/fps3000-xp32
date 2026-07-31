@@ -6154,6 +6154,12 @@ check('bit 6 must NOT fault, in all four set/clear x read/write combinations',
       and insn(0xF0972E) == 'move.w #$40, $216(a6)' and insn(0xF0973A) == 'beq.b $f09742'
       and insn(0xF09752) == 'clr.w $216(a6)' and insn(0xF0975C) == 'beq.b $f09764')
 
+check('the bit-7 arm requires a fault, the clear arm requires none',
+      insn(0xF09852) == 'bsr.b $f098c4' and insn(0xF09854) == 'bne.b $f0985c'
+      and insn(0xF098A4) == 'bsr.b $f098c4' and insn(0xF098A6) == 'beq.b $f098ae')
+check('all three probes end in a nop landing zone, so PC semantics need not be exact',
+      insn(0xF096AE) == 'nop' and insn(0xF096BA) == 'nop' and insn(0xF098D4) == 'nop')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
