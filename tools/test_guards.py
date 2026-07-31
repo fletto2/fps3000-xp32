@@ -62,6 +62,17 @@ def main():
          src.replace("def word(a):",
                      "check('real or', (1 == 2) or (2 == 2))\n\n\ndef word(a):", 1),
          'quiet'),
+        # Guard #6: a helper redefined beyond the known-benign set.  This is the
+        # mistake that killed a 40-minute run -- a third `_t1` shadowed the
+        # second and a later caller died on it.  Must be injected LATE, so it
+        # counts as an extra redefinition rather than the first binding.
+        ('helper redefined beyond the known set',
+         src.replace("check('the ASQ-post wrapper IS called, from $F043E8',",
+                     "def _t1(x):\n    return 0\n\n\n"
+                     "check('the ASQ-post wrapper IS called, from $F043E8',", 1),
+         'fired'),
+        # ... while the three collisions that predate the guard stay quiet.
+        ('known benign redefinitions are tolerated', src, 'quiet'),
     ]
     bad = 0
     for i, (name, text, want) in enumerate(cases):
