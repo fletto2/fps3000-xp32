@@ -5363,7 +5363,7 @@ check('...and accumulates the adjustment so elapsed time survives a clock set',
 check("...with an 8-byte block = {day longword, millisecond longword}",
       (_t1[0x49][1] >> 8) == 8)
 check('directive $4A reads the time by calling the clock at its PRE-TRAP entry',
-      _t1[0x4A][0] == 0xF03862 and insn(0xF03862) == 'bsr.w $f00f96.l')
+      _t1[0x4A][0] == 0xF03862 and insn(0xF03862) == 'bsr.w $f00f96')
 check('...normalises the interpolated millisecond value past a day boundary',
       insn(0xF0386A) == 'cmpi.l #$5265c00, d1' and insn(0xF03872) == 'subi.l #$5265c00, d1'
       and insn(0xF03878) == 'addq.l #$1, d0')
@@ -5375,10 +5375,10 @@ check('...while $4A needs no permission check',
       not insn(0xF03862).startswith('btst'))
 _t28 = [a for a, (m, o, _) in _mins.items()
         if _mre.search(r'\$28\(a6\)', o) and m.split('.')[0] == 'btst']
-check('TCB+$28 is bit-tested at 22 sites', len(_t28) == 22, len(_t28))
+check('TCB+$28 is bit-tested at 21 sites', len(_t28) == 21, len(_t28))
 check('...and #$F and #$7 address the SAME bit under the mod-8 rule', 0xF % 8 == 7 % 8)
-check('...so one privilege flag gates 21 of them',
-      sum(1 for a in _t28 if insn(a) in ('btst.b #$f, $28(a6)', 'btst.b #$7, $28(a6)')) == 21,
+check('...so one privilege flag gates 20 of them, and bit 5 the twenty-first',
+      sum(1 for a in _t28 if insn(a) in ('btst.b #$f, $28(a6)', 'btst.b #$7, $28(a6)')) == 20,
       sum(1 for a in _t28 if insn(a) in ('btst.b #$f, $28(a6)', 'btst.b #$7, $28(a6)')))
 check('$F02A18 is NOT a real instruction boundary -- $F02A14 is',
       0xF02A14 in _mins and insn(0xF02A14) == 'btst.b #$f, $28(a6)')

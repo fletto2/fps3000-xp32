@@ -24281,16 +24281,18 @@ implementation internally rather than trapping.
 
 ### TCB+$28 joins the field map — and the first draft of this paragraph was wrong
 
-`TCB+$28` is tested at **23 sites**, and the bit is the same one almost everywhere:
+`TCB+$28` is tested at **21 sites** (plus 2 whole-word reads), and the bit is the same one
+almost everywhere. **Counts corrected 2026-07-31** after regression checks asserting 22 and 21
+failed at 21 and 20:
 
 | form | sites | bit addressed |
 |---|---:|---|
-| `btst.b #$F,$28(a6)` | 18 | **bit 7 of the byte at `$28`** (mod 8) |
+| `btst.b #$F,$28(a6)` | **17** | **bit 7 of the byte at `$28`** (mod 8) |
 | `btst.b #$7,$28(a6)` | 3 | **the same bit**, written the other way |
 | `btst.b #$D,$28(a6)` | 1 | bit 5 of that byte |
 | `move.w $28(a6),dN` | 2 | the whole word |
 
-So **one privilege flag — bit 7 of the byte at `TCB+$28` — gates 21 sites across the kernel**,
+So **one privilege flag — bit 7 of the byte at `TCB+$28` — gates 20 sites across the kernel**,
 including `$49`'s clock-set. It is a general capability bit, not a clock-specific one, and the
 `#$F` / `#$7` pair is the mod-8 rule producing two spellings of one test.
 
