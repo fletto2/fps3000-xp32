@@ -8155,6 +8155,23 @@ check('all five dispatch-table pairs are exactly 84 bytes (21 slots) apart',
           ((0xF05BA4, 0xF05BF8), (0xF065E4, 0xF06638), (0xF06FFC, 0xF07050),
            (0xF079FC, 0xF07A50), (0xF083FC, 0xF08450))))
 
+def _slot_tgt(_addr):
+    """Resolve a `jmp d16(pc)` dispatch slot, or None if it is not one."""
+    if _w(_addr) != 0x4EFA:
+        return None
+    _d = _w(_addr + 2)
+    return _addr + 2 + (_d - 0x10000 if _d >= 0x8000 else _d)
+check('base-A codes $15-$29 and base-B codes $00-$14 are the same bytes',
+      all(_slot_tgt(0xF083FC + 4 * (0x15 + _i)) == _slot_tgt(0xF08450 + 4 * _i)
+          for _i in range(0x15)))
+check('...and the continue half pairs POLL with BLK_XFR on adjacent codes',
+      [(_slot_tgt(0xF08450 + 4*_c) == 0xF0826A,
+        _slot_tgt(0xF08450 + 4*_c) == 0xF08366) for _c in (0x02, 0x03)]
+      == [(True, False), (False, True)]
+      and [(_slot_tgt(0xF08450 + 4*_c) == 0xF0826A,
+            _slot_tgt(0xF08450 + 4*_c) == 0xF08366) for _c in (0x0F, 0x10)]
+      == [(True, False), (False, True)])
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

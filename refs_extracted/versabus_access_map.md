@@ -35269,3 +35269,39 @@ constant.
 **A passing check is not evidence the constant in it is right** when the arithmetic around it is
 also unverified. This is the second time today that hardening a correct-looking expression turned up
 a latent wrong value underneath it.
+
+## The 42-slot table is really TWO 21-slot tables (2026-07-31)
+
+Decoding XP1I's table as `jmp d16(pc)` instructions and resolving targets from **both** bases:
+
+| code | from `$F083FC` (request) | from `$F08450` (continue) |
+|---|---|---|
+| `$01` | POLL | POLL |
+| `$02` / `$03` | D1_SEND / D1_SEND | **POLL / BLK_XFR** |
+| `$04` / `$05` | D1_SEND / D1_SEND | **POLL / BLK_XFR** |
+| `$06` / `$07` | D1_SEND / D1_SEND | **POLL / BLK_XFR** |
+| `$08` / `$09` | BLK_XFR / BLK_XFR | BLK_XFR / BLK_XFR |
+| `$0A` | POLL | POLL |
+| `$0D` / `$0E` | D1_SEND / D1_SEND | **POLL / BLK_XFR** |
+| `$0F` / `$10` | D1_SEND / D1_SEND | **POLL / BLK_XFR** |
+| `$14` | D2_FIN | — |
+| `$15`+ | POLL/BLK_XFR mix | past the table end |
+
+Base B's valid range is exactly **21 slots**, which is the 84-byte offset — so the structure is
+**one 42-slot table used as two 21-slot halves**: base A indexes the lower half for the *request*
+phase, base B the upper half for the *continue* phase. Base-A codes `$15`-`$29` and base-B codes
+`$00`-`$14` are literally the same bytes.
+
+**This explains the recorded interleaving.** This project notes that "POLL/BLK_XFR **interleave**
+across `$16`-`$25` (`$22`/`$23`, `$24`/`$25` are clean adjacent pairs), which given they are mirrors
+reads as **direction pairs**" — an observation offered tentatively. Read from base B the pattern is
+plain: **adjacent code pairs, one POLL and one BLK_XFR each**, i.e. one memory→channel and one
+channel→memory entry per operation. The interleaving was never a quirk of the code assignment; it is
+the continue-phase table's *shape*, and it only looks irregular when read through the wrong base.
+
+(The pairing is by adjacency, not parity — `$02`/`$03` runs even-then-odd while `$0D`/`$0E` runs
+odd-then-even — so "direction pairs" is the right description and "even means POLL" is not.)
+
+**For a chassis model this halves the vocabulary to explain.** There are not 29 live codes with an
+irregular handler assignment; there are ~21 operations, each appearing in a request form and a
+continue form, with the phase selected by which base the firmware jumps through.
