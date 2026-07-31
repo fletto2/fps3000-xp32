@@ -21126,11 +21126,23 @@ and much smaller picture:
 
 | bit | tests | sites | self-test phase |
 |---:|---:|---|---|
-| 1 | **12** | `$F09274`, `$F09296`, `$F092D0`, `$F0930A`, ... | `$1100`/`$1200` |
+| 1 | **4** | `$F09274`, `$F09296`, `$F092D0`, `$F0930A` | `$1100`/`$1200` |
 | 2 | 2 | `$F09420`, `$F09482` | `$1400` stage 3 |
 | 3 | 1 | `$F09046` | `$800` |
 | 4 | 2 | `$F08728` (absolute), `$F08926` | self-test entry + `$F0891C` |
 | 5 | 2 | `$F08732` (absolute), `$F0892E` | the suite gate |
+
+**COUNTS CORRECTED 2026-07-31.** An earlier version of this table gave bit 1 as **12** tests and
+the total as **17 accesses**. Both were inflated: nine `lea $F70018,aN` sites produce overlapping
+forward scans, so the same `btst` instruction was counted once per scan that reached it.
+Deduplicating by **instruction address** gives **9 distinct base-register `btst`s** plus the 2
+absolute-form ones — **11 accesses in total**, and bit 1 is tested at exactly four addresses.
+The absolute-address form therefore sees 2 of 11, **18%**, not the 12% quoted below.
+
+The qualitative findings are unchanged and were never at risk: only bits 1-5 exist, the register
+is never written, and bit 1 is still the most-tested. **But a count derived from overlapping
+scans is not a count** — the same discipline the rest of this file applies to matcher shapes
+applies to scan windows, and this is the first place it was not applied.
 
 **This exactly matches the five equations `emulator/versabus.c` models — no more, no fewer.**
 That is a real confirmation rather than a coincidence: the model was built by reverse-engineering
@@ -21143,7 +21155,7 @@ drives constantly. So for emulation `$F70019` is a pure input: a function of VMO
 chassis condition, never a latch.
 
 **And the methodological note, once more with a number attached.** The absolute-address form
-sees `$F08728` and `$F08732` — 2 of 17 accesses, **12%**. A detector built on it would have
+sees `$F08728` and `$F08732` — 2 of 17 accesses, **18%**. A detector built on it would have
 reported bits 4 and 5 only and missed bit 1 entirely, which is the most-tested bit on the
 register and the one carrying the two-phase handshake. This is the same 12%-visibility problem
 recorded for `$FF0204`, and it is why `CLAUDE.md` opens with "absolute-address scanning misses

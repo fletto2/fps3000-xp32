@@ -4586,7 +4586,8 @@ check('XP3I passes the channel in d0 before the helper; XP4I does not',
       insn(0xF06A5C) == 'move.w #$3, d0' and insn(0xF06062).startswith('jsr'))
 check('...and XP4I\'s helper is the correctly -$18-shifted copy',
       insn(0xF06A60) == 'jsr $f070aa.l' and insn(0xF06062) == 'jsr $f06692.l'
-      and 0xF070AA - 0xF06692 == 0x18)
+      # XP3I is one $A00 task-stride above XP4I, plus the $18 local shift
+      and 0xF070AA - 0xF06692 == 0xA00 + 0x18)
 
 # ---- XLTR_MODE1 ($FF0202): the complete operational bit map (2026-07-31) ----
 import re as _mre, collections as _mcol
@@ -4752,24 +4753,30 @@ _bsleas = {0xF0875E: 'a4', 0xF08920: 'a2', 0xF089F8: 'a4', 0xF08C54: 'a4', 0xF08
            0xF08F7A: 'a4', 0xF09196: 'a4', 0xF0924A: 'a4', 0xF093DE: 'a4'}
 check('nine sites load $F70018 into a base register',
       all(insn(a).startswith('lea.l $f70018.l,') for a in _bsleas))
-_bsbits, _bswrites = _mcol.Counter(), 0
+_bsseen, _bswrites = {}, 0
 for _st, _rg in _bsleas.items():
     _p = _st + _mins[_st][2]
     for _ in range(400):
         if _p not in _mins: break
         _m, _o, _sz = _mins[_p]
+        if _m.startswith(('lea', 'movea')) and _o.endswith(', ' + _rg): break  # reg reloaded
         _mm = _mre.match(r'#\$([0-9a-f]+), \$([0-9a-f]?)\(' + _rg + r'\)$', _o)
-        if _mm and _m.split('.')[0] == 'btst': _bsbits[int(_mm.group(1), 16)] += 1
+        # dedup by INSTRUCTION ADDRESS: nine lea sites give overlapping scans, and
+        # counting per-scan inflated bit 1 from 4 to 12 in an earlier version.
+        if _mm and _m.split('.')[0] == 'btst': _bsseen[_p] = int(_mm.group(1), 16)
         if (_mre.search(r', \$[0-9a-f]?\(' + _rg + r'\)$', _o)
                 and _m.split('.')[0] in ('move', 'clr', 'bset', 'bclr', 'or', 'and')):
             _bswrites += 1
         _p += _sz
 check('the board status register is NEVER written, in any form', _bswrites == 0, _bswrites)
+_bsbits = _mcol.Counter(_bsseen.values())
 check('only bits 1-5 of $F70019 are ever tested',
       sorted(_bsbits) == [1, 2, 3, 4, 5], sorted(_bsbits))
-check('bit 1 is by far the most tested (the two-phase handshake)',
-      _bsbits[1] == 12, dict(_bsbits))
-check('...and an absolute-address scan sees only 2 of the 17 accesses',
+check('nine DISTINCT btst instructions reach it through a base register',
+      len(_bsseen) == 9, len(_bsseen))
+check('bit 1 is the most tested, at four addresses (deduped by instruction)',
+      _bsbits[1] == 4 and _bsbits.most_common(1)[0][0] == 1, dict(_bsbits))
+check('...and an absolute-address scan sees only 2 of the 11 accesses',
       sum(1 for _, (m, o, _) in _mins.items()
           if 'f70019' in o and m.split('.')[0] == 'btst') == 2)
 
