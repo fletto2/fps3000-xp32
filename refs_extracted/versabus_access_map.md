@@ -35372,3 +35372,40 @@ and the clearest possible illustration of why an absolute-address census underco
 `+$0E` with the DONE/ERROR bits, accept writes to `+$08`/`+$0A`, tolerate MODE1 read-modify-writes,
 and tolerate the BIM CR being driven to `$4F` and back to `$5F`. Nothing else is exercised by a
 channel cycle.
+
+## The channel wire protocol, observed value by value (2026-07-31)
+
+Bus log of a driven channel-1 cycle, every distinct value on the three channel ports:
+
+| port | dir | value | count | |
+|---|---|---|---:|---|
+| `+$0A` data low | **WR** | `$0000` | 1 | |
+| | **WR** | `$0001` | 1 | |
+| | **WR** | `$000E` | 1 | the recorded operation `$0E` |
+| | **WR** | `$0010` | 3 | the recorded operation `$10` |
+| `+$08` data high | **WR** | `$0000` | 6 | always zero — the high half is never used |
+| `+$0E` command | **WR** | `$8004` | 23 | **REQUEST-TRANSFER, and nothing else** |
+| `+$0E` status | RD | `$C004` | 1487 | |
+| | RD | `$0001` | 2 | before arming |
+| `+$08`/`+$0A` | RD | `$0000` | 1484 each | the ISR latch, empty window |
+
+**What the firmware emits (real evidence):**
+
+- **`$8004` is the only command ever written.** No `$8005` CONTINUE-TRANSFER appears, because that
+  belongs to `D2_FIN` (code `$14`), which this path never dispatches — consistent with the trace.
+  `BLK_XFR` also issues `$8004`, which is why 23 writes cover both dispatch phases.
+- **The operation codes on the wire are `$00`, `$01`, `$0E`, `$10`.** `$0E` and `$10` are the recorded
+  pair; **`$01` and `$00` are not in the recorded vocabulary** and come from the continue-phase
+  handler rather than the request path. `$1B` does not appear — it belongs to the bit-11 sub-mode,
+  which this stimulus does not select.
+- **`+$08` receives `$0000` on every write.** The 32-bit data register's high half is unused by this
+  path entirely; everything travels in the low half.
+
+**What the model answers (NOT evidence about hardware):** the `$C004` status is the emulator's ack
+(`$8004` with bit 14 forced), and the `$0000` reads are an empty channel window. These confirm the
+firmware *accepts* `$C004` as DONE — bit 14, as recorded — but say nothing about what a real AC
+returns.
+
+That distinction matters for this whole file: **write values are firmware behaviour and are evidence;
+read values are model behaviour and are not.** A real AC could answer differently on every read here
+and the firmware would still be doing exactly what is shown.

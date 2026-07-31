@@ -8175,6 +8175,13 @@ check('...and the continue half pairs POLL with BLK_XFR on adjacent codes',
 check('the channel primitive masks the BIM CR to $4F and restores $5F',
       _w(0xF07F12) == 0x36BC and _w(0xF07F14) == 0x004F)
 
+check('REQUEST-TRANSFER is $8004 and CONTINUE-TRANSFER is $8005',
+      _w(0xF07F22) == 0x30BC and _w(0xF07F24) == 0x8004
+      and any(_w(_a) == 0x8005 for _a in range(0xF07F90, 0xF07FF0, 2)))
+check('...and DONE/ERROR are polled as bits 14 and 13 of the status word',
+      _w(0xF07F30) == 0x0804 and _w(0xF07F32) == 0x000E
+      and _w(0xF07F3E) == 0x0804 and _w(0xF07F40) == 0x000D)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
