@@ -36771,3 +36771,42 @@ transfer to the 4448.
 
 What survives unchanged is the *consequence*: nothing in this firmware programs a host address, and a
 chassis model need not invent one. What does not survive is my account of *why*.
+
+## Sheet 5 `READY, RGSEL` — the register decode, driven by `REGSEL` (2026-07-31)
+
+**Five `74S138` decoders** — `D20`, `D21` tagged **`[WRITE]`**, and `D22`, `D23`, `D24` tagged
+**`[READ]`** — fed from **`REGSEL00`-`REGSEL05`** buffered through an `H20 74S244`, gated by
+`REGSELE#`, `LOAD#`, `WRITE`/`IWRITE` and `READ`.
+
+Their outputs are the entire register-strobe set:
+
+| kind | strobes |
+|---|---|
+| write clocks | `CTLCLK#`, `HMACLK#`, `HMALCLK#`, `HADRCLK#`, `HADRCLK1#`, `HADRCLK2#`, `LDFN#`, `LDSR#`, `LDTEMP`, `LDFMTE#` |
+| read enables | **`RDCTL#`**, **`RDFIF#`**, `RDHMAH`, `RDHMAL`, `RDAPMA#`, `RDTEMP#`, `ROMCK#` |
+| routing | `HBH2HD#`, `HBL2HD#`, `HB92HD#`, `HBMA2HD#`, `LT2HD#`, `FN2HD#`, `SR2HD#`, `TEMPENB#` |
+| status | `APIDENT#`, `HPDDRSE#`, `LDFN-SRE#` |
+
+**`RDCTL#`** is sheet 15's control-register read strobe and **`RDFIF#`** is the FIFO read strobe —
+both traced back here to their source. And **`READY`** is generated on this sheet and driven out to
+pin **A-5**, matching the connection list exactly.
+
+### This answers "who selects registers", and connects the SBC's memory map to the hardware
+
+`REGSEL00`-`REGSEL05` arrive on the connector (B54, B56, B57, B59, B61, B65). **Six select lines
+into five decoders is the whole addressing mechanism of the AP I/F register file.**
+
+On the 3448 — an FPS-100-class card with no VersaBus SBC — those lines come from the host. **On the
+4448 in this chassis, the SBC reaches the same register file through `$FF0000`-`$FF00FF`**, so the
+natural reading is that the SBC's address bits drive `REGSEL00`-`REGSEL05`: 6 bits = 64 selects,
+against the 8 windows x 4 registers = 32 addresses the firmware actually uses. The counts are
+consistent, with room to spare.
+
+That would make the recorded window structure — "a uniform grid of eight 32-byte windows… each with
+exactly four registers at `+$00`, `+$04`, `+$08`, `+$0E`" — a *view* of the `REGSEL` space rather
+than a separate mechanism, and would explain why the offsets are so sparse: only some of the 64
+selects decode to anything.
+
+**Stated as the natural reading, not a demonstration.** No sheet here shows the 4448's VersaBus
+address path, and the 3448 has no SBC to compare against. What is established is that the register
+file has exactly one selection mechanism and it is six lines wide.
