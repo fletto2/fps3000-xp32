@@ -442,3 +442,38 @@ Nine fault assertions: bit 5 set ⇒ `$400000` faults both directions; bit 7 set
 `MODE1 <- $8000` occurs only at the three checkpoints, and board bit 4 is literal-tested at
 one site. The "busy/ready from MODE1 bit 15" reading is inferred from the handshake's shape.
 A model should implement it, but should not treat it as pinned the way the others are.
+
+## Model gap: the VMOD interrupter's vector registers are not implemented (2026-07-31)
+
+The emulator declares `VMOD_CTRL` as **exactly two bytes** — `static uint16_t vmod_ctrl` at
+`$1FFF0`-`$1FFF1` — and its own comment notes that "a long write at `$1FFF0` covers RAM at
+`$1FFF2-3` too". So:
+
+| address | firmware role | emulator |
+|---|---|---|
+| `$1FFF0`-`$1FFF1` | control | modelled |
+| `$1FFF2` | **interrupter vector register → `$50`** | plain RAM |
+| `$1FFE2` | **vector register → `$51`** | plain RAM |
+| `$1FFE4` | **vector register → `$52`** | plain RAM |
+| `$1FFE6` | **vector register → `$53`** | plain RAM |
+| `$1FFEA` | **vector register → `$54`** | plain RAM |
+
+**Why this has gone unnoticed**: every self-test that touches them only writes and reads
+back, and RAM does that perfectly. Phases `$0600` (longword patterns), `$1600` (the
+register-file walk) and `$2100` (address uniqueness) all pass against RAM. The registers'
+*storage* behaviour is indistinguishable.
+
+**Where it must matter**: the vector registers exist so the interrupter can supply a vector
+during the IACK cycle. A model that stores them in RAM has no way to read back what the
+firmware programmed, so any VMOD interrupt it delivers cannot be using the programmed
+vector — it must be hard-coding or autovectoring. Phases `$0800`, `$1200`, `$1300` and
+`$1400` install handlers at `$140`-`$150` and require delivery *to those vectors*.
+
+**What to check next** (needs a run, so recorded rather than concluded): how the current
+model satisfies phase `$1400`'s delivery arm, which requires `d2` bit 1 to be set by a
+handler at vector `$52`. Either it delivers to a hard-coded vector that happens to match, or
+that arm is not reached. Both are worth knowing.
+
+The fix is small and principled: back `$1FFE2`, `$1FFE4`, `$1FFE6`, `$1FFEA` and `$1FFF2`
+as device registers, and supply their contents as the vector when the corresponding request
+line is acknowledged.
