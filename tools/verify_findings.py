@@ -6860,6 +6860,14 @@ check('$FF0216 <- $C0 at $F0A22A is the init tail, which branches AWAY from $F0A
       _w(0xF0A22A) == 0x317C and _w(0xF0A22C) == 0x00C0 and _w(0xF0A22E) == 0x0216
       and _w(0xF0A236) == 0x6000 and 0xF0A238 + _w(0xF0A238) == 0xF0A282)
 
+check('the XP tasks establish channel bases with movea.l #$imm, not lea',
+      _w(0xF07E26) == 0x207C and _l(0xF07E28) == 0x00FF004E
+      and _w(0xF07E2C) == 0x227C and _l(0xF07E2E) == 0x00FF0048)
+check('...and the same form appears in XP3I and XP4I at the $A00 stride',
+      _w(0xF0742C) == 0x227C and _l(0xF0742E) == 0x00FF0068)
+check('$FF0010 really is never accessed: $F04B64/$F04B7E read (a0) = $FF0008',
+      _w(0xF04B64) == 0x3210 and _w(0xF04B7E) == 0x3410)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

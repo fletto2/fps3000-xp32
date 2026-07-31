@@ -30551,3 +30551,49 @@ claim is about one instruction at one address. The hazard is specific to checks 
 Worth keeping as a rule: **a point assertion may name a base register; a census may not.** Three
 of today's four wrong results came from violating it — the MODE1 bit-15 count, the board-status
 "writable bit 7", and this one.
+
+## AP I/F window census, and the limits of linear base tracking (2026-07-31)
+
+Re-deriving the AP I/F window map with the strongest sweep available — absolute references
+(immediates excluded), `lea $imm,aN` bases, **`movea.l #$imm,aN` bases**, and derived
+`lea $d(aN),aM` bases, across both listings — confirms the documented structure:
+
+| window | offsets touched |
+|---|---|
+| 0 (`$FF0000`) | `+$00`, `+$04`, `+$08`, `+$0E` |
+| **1** (`$FF0020`) | **never accessed** |
+| 2-5 (`$FF0040`-`$FF00BF`) | `+$04`, `+$08`, `+$0A`, `+$0E` — four registers each, all four windows identical |
+| **6, 7** | **never accessed** |
+
+So "window 1 is architecturally reserved" and "N=6-7 never accessed" both survive a sweep far
+wider than the one that produced them, and the four-registers-per-channel-window structure is
+confirmed independently.
+
+**The missing base form was `movea.l #$imm,aN`.** The XP tasks establish their channel pointers
+that way (`movea.l #$ff004e,a0` / `movea.l #$ff0048,a1` at `$F07E26`/`$F07E2C`), and a sweep that
+treats `movea` only as *invalidating* a base — as mine did for three iterations — sees none of
+their accesses. Each iteration found *fewer* accesses than the last, which was the signal that the
+matcher, not the ROM, was the problem.
+
+### Four offsets the sweep reported are artefacts, and the reason matters
+
+The run also claimed `$FF0002`, `$FF000C`, **`$FF0010`**, `$FF0016` and a "window 8/9" at
+`$FF0114`-`$FF0120`. All are false. `$FF0010` is the instructive one: this project records it as
+"never accessed — not statically, and zero times at runtime", and the sweep put three derefs at
+`$F04B64`/`$F04B7E`. Reading those:
+
+```
+$F04B64  move.w (a0),d1        ; a0 = $FF0008, the SLC stream port
+$F04B7E  move.w (a0),d2
+```
+
+They read `$FF0008`. The sweep said `$FF0010` because it applied `lea $8(a0),a0` **twice** —
+once per textual occurrence — while the code executes it once. **Linear base tracking accumulates
+offsets across loops, and cannot survive a branch or an ISR entry at all**; the "window 8/9"
+results are the same defect at an interrupt handler, where the tracked base is stale from
+whatever was running before.
+
+So the rule to carry forward: **base tracking is sound only for straight-line code between a base
+load and its use.** A derived base (`lea $d(aN),aM`) compounds the error, because it inherits any
+staleness in its source. Where the two disagree, the documented negative won — and it won because
+it was checkable against a specific pair of instructions.
