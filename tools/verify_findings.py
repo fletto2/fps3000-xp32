@@ -6491,6 +6491,22 @@ check('bit 4 SET expects the $FF0214 latch inert ($5555), clear expects it to re
       _l(0xF097DE) == 0x00005555 and _w(0xF097E2) == 0x3D7C and _w(0xF097E4) == 0x0010
       and _w(0xF097F4) == 0x2401 and _w(0xF097F6) == 0x426E and _w(0xF097F8) == 0x0216)
 
+check('op $3 computes page = addr>>20 into $FF0210 and offset = (addr & $FFFFF)<<2',
+      _w(0xF04D70) == 0x7414 and _w(0xF04D72) == 0xE4A9
+      and _w(0xF04D74) == 0x3141 and _w(0xF04D76) == 0x0210
+      and _l(0xF04D80) == 0x000FFFFF and _w(0xF04D84) == 0xE589)
+check('...and its $400000 fallback arm is DEAD: max offset $3FFFFC is always below $400000',
+      (0xFFFFF << 2) < 0x400000 and _w(0xF04D88) == 0xB3FC and _l(0xF04D8A) == 0x00400000
+      and (insn(0xF04D8E) or '').startswith('bge'))
+check('op $3 read: bit 6 set performs the read and returns the HIGH word from $E70',
+      _w(0xF04D96) == 0x23F1 and _w(0xF04DA6) == 0x33F9 and _l(0xF04DA8) == 0x00000E70)
+check('...and bit 6 clear returns the cached LOW word $E72 with no bus access',
+      _w(0xF04DB2) == 0x33F9 and _l(0xF04DB4) == 0x00000E72)
+check('op $3 write: bit 6 set only stashes the high half; bit 6 clear stores the longword',
+      _w(0xF04DCA) == 0x33E8 and _l(0xF04DCE) == 0x00000E70
+      and _w(0xF04DD6) == 0x33E8 and _l(0xF04DDA) == 0x00000E72
+      and _w(0xF04E0A) == 0x23B9 and _l(0xF04E0C) == 0x00000E70)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

@@ -29676,3 +29676,53 @@ on the third, with `CHANNEL_SELECT` parked on the corresponding minor phase.
 
 Note the test never exercises a 16-bit *read* in either mode, so the mux's read-side behaviour is
 unconstrained by the firmware — a genuine gap that only hardware can close.
+
+## Chassis op `$3` fully specifies the `$400000` window protocol (2026-07-31)
+
+The paging formula this project records — `page = addr >> 20`, `offset = (addr & $FFFFF) << 2`
+— is confirmed verbatim in the code, and the surrounding logic turns out to specify the whole
+32-bit-through-a-16-bit-port protocol.
+
+```
+$F04D6A  d1 = $E58                 ; the 32-bit address the chassis set with op $1
+$F04D70  d2 = $14                  ; = 20
+$F04D72  lsr.l  d2,d1
+$F04D74  move.w d1,$210(a0)        ; XLTR_MODE2 <- page
+$F04D7E  andi.l #$fffff,d1         ; low 20 bits ...
+$F04D84  lsl.l  #$2,d1             ; ... times 4
+$F04D96  move.l (a1,d1.l),$e70     ; access at $400000 + offset
+```
+
+**The window is longword-granular.** The `<< 2` means one chassis address unit is four SBC
+bytes, so the chassis names *longwords* and the 4 MB window `$400000`-`$7FFFFF` holds 1M of them
+per page. That is consistent with the self-test walking the window with a stride of 4, and it is
+the reason a byte or word access inside the window addresses a *half* of a chassis word — which
+is exactly what the phase-`$1900` mux test manipulates.
+
+**`$F04DA0` and `$F04E14` are dead code.** Both arms guard with `cmpa.l #$400000,a1` / `bge`,
+falling back to using the computed offset as an absolute address. But the offset is at most
+`$FFFFF << 2 = $3FFFFC`, which is always below `$400000` on a signed compare, so the branch can
+never be taken. Defensive code for an address form the arithmetic cannot produce.
+
+### `$E87` bits 5 and 6 give the 16-bit port a 32-bit transaction
+
+`$E87` bit 5 is the direction and bit 6 is the half select — both already recorded — but the
+*sequencing* is the part worth having, because it says which access carries the bus cycle:
+
+| direction | bit 6 | what happens |
+|---|:-:|---|
+| **read** (bit 5 = 1) | **set** | perform the 32-bit read into `$E70`, return its **high** word in `$E74` |
+| **read** | clear | return `$E72`, the **low** word of the value already read — **no bus access** |
+| **write** (bit 5 = 0) | **set** | stash `$FF0204` into `$E70` (high half) — **no bus access** |
+| **write** | clear | stash `$FF0204` into `$E72` (low half), then perform the 32-bit store of `$E70` |
+
+So `$E70`/`$E72` are the high and low halves of one staging longword, and **the bus transaction
+happens on the high half for reads and on the low half for writes**. That ordering is forced:
+a read must fetch before it can return anything, and a write must have both halves before it can
+store. A chassis driving this port therefore issues *two* op-`$3` commands per 32-bit word, and
+the pair is not symmetric — which half triggers the cycle depends on the direction.
+
+**Emulator consequence.** A model that performs a bus access on every op `$3` doubles the
+traffic and, on the write side, stores a half-formed longword. The read side is the easier trap:
+the second read must return the cached `$E72` and must *not* re-read chassis memory, or a chassis
+word that changes between the two halves is returned torn.
