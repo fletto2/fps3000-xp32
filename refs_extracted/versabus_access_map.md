@@ -26616,14 +26616,20 @@ the size. Entries start at `+$14` like convention B, but nothing counts them —
 is the size at `+$10`. It is a hybrid of the two conventions rather than a member of
 either, so the split described above is a useful generalisation, not a law.
 
-**The edge worth checking on hardware.** The loop links a slot whenever the *next* pointer
-is still below the end, so with a single 256-byte page it links **8 slots** and the eighth
-spans offsets 230-259 — four bytes past the page. With two pages it links 17 and the last
-fits. This project's notes record "8 free slots of `$1E` bytes", which matches the
-one-page case, so either `!PAT` is allocated two pages (and there are more slots than
-recorded) or the eighth slot's tail lies in the next structure's page.
+**The last slot always straddles the end of the block, at any page count.** The loop links
+a slot whenever its *start* is below the end pointer, and `(size - $14)` is not a multiple
+of `$1E` for any whole number of 256-byte pages — one page links 8 slots with the eighth
+spanning 230-259, two pages link 17 with the last spanning 500-529. (An earlier draft of
+this paragraph said two pages would make it fit; the arithmetic above disproves that, and
+it was written before I ran it.)
 
-That is decidable from a single RAM dump: read `$1F710` for the size field. It is stated
-here as a question rather than a finding because the ROM alone does not settle which page
-count the allocator was asked for — the constant feeding that allocation is not one of the
-seven this project has already tied to its structure.
+**This is latent, not live.** The build only touches `+$00` and `+$04` of each slot — the
+link and the `$FFFFFFFF` free marker — and both are within bounds even for the last one.
+The overrun would only occur if a slot were *used*, and using one requires directive `$1D`
+`RQSTPA`, which this firmware never issues; the active lists stay empty. So a stock machine
+never writes past the block.
+
+It matters for two readers: a model that pre-fills `!PAT` slots would corrupt the adjacent
+structure, and host-loaded software that does issue `RQSTPA` enough times to reach the last
+free slot would too. The slot count is decidable from a single RAM dump — read the size
+field at `$1F710` — which this project's "8 free slots" note implies is one page.

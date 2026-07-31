@@ -5548,6 +5548,15 @@ check('the allocator writes the !IOV tag and its END address at +$04',
 check('the counted convention is used by exactly the two name-searched tables',
       insn(0xF01806) == 'move.w $e(a1), d0' and insn(0xF01886) == 'move.w $e(a1), d2')
 
+check('!PAT header: tag, free-list head at +$04, size at +$10, slots from +$14',
+      insn(0xF09FB2) == 'move.l #$21504154, (a0)' and insn(0xF09FC6) == 'lea.l $4(a0), a4'
+      and insn(0xF09FBA) == 'move.l d2, $10(a0)' and insn(0xF09FC2) == 'lea.l $14(a0), a1')
+check('...free slots are marked $FFFFFFFF at +$04 and the list is terminated',
+      insn(0xF09FCC) == 'move.l #$ffffffff, $4(a1)' and insn(0xF09FE0) == 'clr.l (a4)')
+check('...stride $1E, and (size - $14) is never a multiple of it -- the last slot straddles',
+      insn(0xF09FD6) == 'lea.l $1e(a1), a1'
+      and all((p * 256 - 0x14) % 0x1E != 0 for p in (1, 2, 3, 4)))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
