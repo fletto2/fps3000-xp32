@@ -5163,6 +5163,12 @@ check('...and $271 is never preceded by $29', _dadj[('271', '29')] == 0)
 check('XP4I emits $271 right after its two $2B SGSEM traps',
       insn(0xF06070) == 'moveq #$2b, d0' and insn(0xF0607A) == 'move.w #$271, d0'
       and insn(0xF06098) == 'moveq #$2b, d0' and insn(0xF060A0) == 'move.w #$271, d0')
+check('the USER-lifecycle codes map to GTSEG/CNCTIRQ/CRTCB/GTSEG/START/TERMT/RESUME',
+      insn(0xF046FC) == 'move.w #$276, d0' and insn(0xF0471C) == 'move.w #$277, d0'
+      and insn(0xF04780) == 'move.w #$278, d0' and insn(0xF0479A) == 'move.w #$279, d0'
+      and insn(0xF047CC) == 'move.w #$27a, d0' and insn(0xF047F6) == 'move.w #$27b, d0')
+check('$27D has a second emitter inside TCBIO1I, not only RDHC',
+      insn(0xF04890) == 'move.w #$27d, d0' and insn(0xF05D42) == 'move.w #$27d, d0')
 
 
 # ---------------------------------------------------------------------------

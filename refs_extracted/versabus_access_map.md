@@ -22255,3 +22255,29 @@ came from matching a shape rather than following the data.
 renders XP1I's entry point as `ori.b #$1,d0` instead of `moveq #$1,d0`. Decoded from the entry
 point the TDTI table supplies (`$F07D4A`), the directive is plainly `$01`. This is the same
 `$7001` artefact that once hid three task entry points in `fps3k.asm`.
+
+### The `USER`-lifecycle family verified by the same method — all seven correct (2026-07-31)
+
+Applying adjacency to `$276`-`$27D` confirms every mapping this project had derived by pattern:
+
+| code | directive | site |
+|---|---|---|
+| `$276` | `$01` GTSEG | `$F046FC` |
+| `$277` | `$4C` CNCTIRQ | `$F0471C` |
+| `$278` | `$0B` CRTCB | `$F04780` |
+| `$279` | `$01` GTSEG | `$F0479A` |
+| `$27A` | `$0D` START | `$F047CC` |
+| `$27B` | `$10` TERMT | `$F047F6` |
+| `$27D` | `$12` RESUME | `$F04890` **and `$F05D42`** |
+
+**Seven for seven.** That matters for calibrating the `$271` correction: the pattern-based
+derivation was right everywhere it could be checked *except* the one place where two candidate
+directives shared the same multiplicity. So the error was not systematic sloppiness — it was the
+single case where counting could not discriminate, which is exactly where a different method was
+needed.
+
+One addition: **`$27D` has a second emitter at `$F05D42`, inside TCBIO1I**, not just RDHC's at
+`$F04890`. So `$12` RESUME failing is reported from two tasks, and `$27D` joins `$26E`/`$270` as
+a code shared across tasks rather than identifying one — which slightly qualifies the
+"(task, directive)" reading established for `$27E`-`$280`: the *newer* TCBIO1I codes are
+task-specific, the older shared ones are not.
