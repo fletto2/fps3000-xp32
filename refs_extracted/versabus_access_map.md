@@ -18065,3 +18065,42 @@ reporter per call site, in the XP tasks and in RDHC/IO1I respectively — which 
 neither block is per-channel despite the `PCMD_CH*`/`PCMD_INIT_STEP*` names once given to
 them. And the only codes that are *not* either a channel operation or a failure report are
 `$281`/`$282`, the two host-byte requests.
+
+## TCBIO1I decoded end to end — the smallest task, and the prologue pattern in clean form
+
+At 512 bytes declared (`$F05D00-$F05EFF`) IO1I is the smallest task, and its body is short
+enough to read whole. It is the task prologue pattern with nothing else on top:
+
+```
+$F05D36  $01 GTSEG  ($F05D14)      -> $27D on failure
+$F05D50  a7 = $10A(a0)             ; stack from the segment just granted
+         a6 = a0,  a5 = $A(a6)
+$F05D62  copy words BACKWARDS from $F05D34 down to $F05D2C into -(a5)
+$F05D6E  $2D CRSEM  (a5)           -> $27E on failure
+$F05D8C  $4C CNCTIRQ ($F05D00)     -> $27F on failure
+$F05DB8  $FF0254 <- $5F            ; arm its own BIM channel, level 7
+$F05DBE  $13 WAIT                  ; block
+$F05DC2  $2B SGSEM  (a6)           -> $280 on failure
+$F05DD4  bra back to the WAIT
+```
+
+So **TCBIO1I is a semaphore relay**: block on the host-link interrupt, signal `HIO1`, repeat.
+Everything else in the host path is in the ISR and in whoever waits on that semaphore.
+
+**The 10-byte semaphore descriptor is a ROM template that `CRSEM` completes.** The backwards
+copy moves `$F05D2C-$F05D35` into the task's stack-block base, and comparing the two:
+
+```
+ROM  $F05D2C : 48494F31 00000000 0002     "HIO1", longword 0,   type 2
+RAM  $1DF00  : 48494F31 000000C4 0002     "HIO1", longword $C4, type 2
+```
+
+The name and type come from ROM; **the longword is an output** the RTOS fills in at `CRSEM`
+time. That is why descriptors read differently in the image and in a dump, and it confirms
+the `{4-byte name, longword, word}` shape from a third direction — after the descriptors at
+the block bases and the `CRSEM`/`ATSEM` declared parameter size of 10.
+
+*Minor artefact worth recording:* `$F05DAC` and `$F05DAE` are two consecutive `beq`s with no
+intervening test. The first skips the second, and if it is not taken the second cannot be
+either, so **`beq.w $F05DD6` — a branch straight into the ISR entry — is unreachable**. It
+reads like a vestige of an earlier loop that re-entered the handler directly.
