@@ -6909,6 +6909,23 @@ check('...and reads back every BIM register, requiring the distinct value $C0+n'
 check('...so with bit 4 set the walk ends on $FF025E with value $D7',
       0x230 + 2 * (0xD8 - 0xC0 - 1) == 0x25E)
 
+check('the outbound bulk loop is a bare move.w (a1)+,(a0) with NO handshake',
+      _w(0xF04C50) == 0x207C and _l(0xF04C52) == 0x00FF0000
+      and _w(0xF04C56) == 0x41E8 and _w(0xF04C58) == 0x0008
+      and _w(0xF04C62) == 0x3099 and _w(0xF04C64) == 0x5280
+      and _w(0xF04C66) == 0xB0B9 and (insn(0xF04C6C) or '').startswith('ble'))
+check('...while the inbound staging loop polls $FF0218 bit 15 before every word',
+      _w(0xF04AE2) == 0x3B7C and _w(0xF04AE4) == 0x0400
+      and _w(0xF04AEC) == 0x0807 and _w(0xF04AEE) == 0x000F
+      and _w(0xF04AF8) == 0x32D0)
+check('...and the SLC loop does TWO full handshakes per iteration, one per hex character',
+      _w(0xF04B4E) == 0x3B7C and _w(0xF04B50) == 0x0400
+      and _w(0xF04B68) == 0x3B7C and _w(0xF04B6A) == 0x0400
+      and _w(0xF04B64) == 0x3210 and _w(0xF04B7E) == 0x3410)
+check('all three bulk loops transfer exactly $E64 words (no off-by-one)',
+      _l(0xF04AFE) == 0x00000E64 and _l(0xF04C44) == 0x00000E64
+      and _l(0xF04C68) == 0x00000E64)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

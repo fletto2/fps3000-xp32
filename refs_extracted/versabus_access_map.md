@@ -30827,3 +30827,46 @@ at power-up and never reconfigured, and only a schematic or a probe will say wha
 For contrast, the other three bits of the nibble are all dynamic: bit 4 is bracketed around
 `CPLOAD`, bit 5 gates the window and is toggled by the self-test, bit 7 is cleared for the
 duration of every op `$6`.
+
+## The three bulk-transfer loops, and the one that has no flow control (2026-07-31)
+
+The SBC moves bulk data through `$FF0008` in three distinct loops. All three transfer exactly
+`$E64` words — the `ble`/`blt` difference is compensated by different starting values, so there is
+no off-by-one between them:
+
+| loop | direction | per iteration | count test |
+|---|---|---|---|
+| `$F04AE0` (`$28` direct staging) | **in** | arm `$400`, poll bit 15, clear, `move.w (a0),(a1)+` | `d0` from **1**, `ble` |
+| `$F04B4C` (SLC stream) | **in** | **two** full handshakes, `move.w (a0),dN` each | `d0` from **0**, `blt`, `+1` twice |
+| `$F04C60` (outbound) | **out** | `move.w (a1)+,(a0)` — **nothing else** | `d0` from **1**, `ble` |
+
+### The SLC loop takes two handshakes per data byte
+
+`$F04B4E`-`$F04B82` arms, polls and clears `$FF0218` **twice**, reading one word each time, then
+calls the ASCII-to-binary converter at `$F05150`. That is the wire format this project records —
+"two ASCII hex characters per 16-bit word = one data byte" — visible in the handshake structure:
+each hex character arrives as its own 16-bit word with its own ready handshake, and `d0` counts
+*words*, not bytes. A 55 KB microcode bank therefore costs ~113,000 handshakes.
+
+### The outbound loop has no flow control at all
+
+```
+$F04C50  movea.l #$ff0000,a0
+$F04C56  lea     $8(a0),a0        ; the bulk port
+$F04C5A  movea.l $e58.l,a1        ; source, chassis-supplied, never range-checked
+$F04C62  move.w  (a1)+,(a0)       ; <-- the entire loop body
+$F04C66  cmp.l   $e64.l,d0 / ble
+```
+
+No `$FF0004` ready poll, no `$FF0218` arm-and-wait, no status check of any kind — the SBC writes
+words to the port as fast as a 68000 can issue them, one every ~12 cycles at 8 MHz, or roughly
+**660 kwords/s**.
+
+**That is a hard requirement on a chassis model: writes to `$FF0008` must always be accepted.**
+There is no back-pressure mechanism the firmware would honour, so a model with a finite FIFO has
+no way to say "wait" — it can only drop words silently. Either the real hardware's receiver keeps
+up unconditionally, or the transfer is lossy by design and something downstream re-requests; the
+firmware provides for neither, which argues for the former.
+
+It also means the outbound direction cannot be modelled as the mirror of the inbound one. Inbound,
+`$FF0218` bit 15 is the chassis saying "a word is ready"; outbound, nothing plays that role.
