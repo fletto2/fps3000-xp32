@@ -189,6 +189,56 @@ if _bad:
         sys.exit(2)
 
 
+# --- STRUCTURAL SELF-AUDIT #6: redefined module-level helpers ---------------
+# `_t1` was bound three times at module level -- a dict from _dirs_wide(), a
+# function at ~4038, and a third def spliced in later.  The third shadowed the
+# second and a later caller died with "'function' object is not subscriptable",
+# ~40 minutes into a run.  None of guards #1-#5 look for redefinition.  A file
+# assembled by splicing blocks accumulates namespace pressure; this catches it.
+_defs = {}
+_redef = []
+
+
+def _audit6(_body):
+    for _n in _body:
+        if isinstance(_n, (_ast_g.FunctionDef, _ast_g.AsyncFunctionDef)):
+            if _n.name in _defs:
+                _redef.append((_n.lineno, _n.name, _defs[_n.name]))
+            _defs[_n.name] = _n.lineno
+            continue                       # do not descend into function bodies
+        if isinstance(_n, _ast_g.ClassDef):
+            continue
+        if isinstance(_n, _ast_g.Assign):
+            for _t in _n.targets:
+                if isinstance(_t, _ast_g.Name):
+                    _defs.setdefault(_t.id, _n.lineno)
+        for _f in ('body', 'orelse', 'finalbody'):
+            if hasattr(_n, _f) and not isinstance(_n, _ast_g.Assign):
+                _audit6(getattr(_n, _f))
+
+
+_audit6(_tree_g.body)
+# Three collisions predate this guard and are benign in practice -- in each the
+# earlier binding is fully consumed before the later def replaces it.  They are
+# allowlisted BY COUNT, so adding one more definition of the same name still
+# aborts, which is exactly the mistake that cost a run.
+_KNOWN_REDEF = {'_t1': 1, '_t0': 1, '_win': 1}
+_bad6 = []
+_seen6 = {}
+for _a, _n2, _b in _redef:
+    _seen6[_n2] = _seen6.get(_n2, 0) + 1
+    if _seen6[_n2] > _KNOWN_REDEF.get(_n2, 0):
+        _bad6.append((_a, _n2, _b))
+if _bad6:
+    print('  FATAL: module-level helper(s) redefined beyond the known set:',
+          [(f'line {a}', n, f'first bound line {b}') for a, n, b in _bad6[:4]])
+    print('         (splicing blocks into one file collides names -- use a unique prefix)')
+    sys.exit(2)
+if _redef:
+    print(f'  NOTE: {len(_redef)} known benign helper redefinition(s):',
+          sorted({n for _, n, _ in _redef}))
+
+
 # --- STRUCTURAL SELF-AUDIT #5: module-level use-before-definition -----------
 # Guard #2 audits only the emulator block.  This file is built by splicing new
 # blocks in above a fixed anchor, so insertion order and SOURCE order diverge:
