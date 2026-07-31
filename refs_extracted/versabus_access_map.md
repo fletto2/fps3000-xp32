@@ -36483,3 +36483,37 @@ the transfer — rather than the decrement half.
 For modelling purposes that is arguably the more important half: a model must make `$FF0000` reach
 zero to terminate a transfer, and the recorded requirement ("a constant non-zero value hangs the
 firmware") is now explained by hardware rather than only by the firmware's loop.
+
+## Sheet 15 `CONTROL REG` — a 16-bit control register with named bits (2026-07-31)
+
+**Four `25S08` quad D registers** (E12, D11, E25, E26) = a **16-bit control register**, loaded from
+the register bus `RGBS01`-`RGBS15` and clocked by `CTLCLKE#`/`CNTLCLK`. Individual outputs are named
+per bit: **`CTL01`, `CTL02`, `CTL03`, `CTL05`, `CTL09A`, `CTL0A`, `CTL0AM`, `CTL12`, `CTL13`,
+`CTL14`, `CTL15`, `CTL5M`**, plus `INDMINT#`.
+
+**`RDCTL#` is the read strobe**: asserting it drives the register back onto `IFDB00`-`IFDB15` through
+`F9`/`F23` `74LS244` buffers. So the same physical register is written by the controlling processor
+and read back by it — which is exactly the behaviour the firmware assumes of **`+$0E`**, where it
+writes `$8004`/`$8005` and reads status bits from the same address.
+
+### Two inputs that bear on the status bits the firmware polls
+
+- **`OVFLW#` (pin A-70)** and **`UNFLW#` (pin A-72)** — FIFO **overflow** and **underflow**, brought
+  onto this sheet as inputs. Hardware error conditions, available to be latched into a
+  processor-readable register.
+- **`WC-0`** — the word-count-zero condition (the same signal sheet 10 turns into `DMADONE`) is also
+  an input here, so **transfer-complete is readable as a register bit**, not only as an internal
+  terminator.
+
+That is a strong candidate explanation for the two status bits the firmware polls at `+$0E`: it spins
+on **bit 14 = DONE** and **bit 13 = ERROR** for 1000 iterations. A register fed by `WC-0` and by
+`OVFLW#`/`UNFLW#` supplies precisely a done bit and an error bit.
+
+**Stated as a correspondence, not an identification.** `512-3448-010` is not this chassis's
+`612-4448`, no addresses appear on these sheets, and I have not traced which `CTL` bit lands in which
+position. What the sheet establishes is that a register of the right *shape* exists, fed by signals of
+the right *meaning* — which is considerably more than the firmware alone could show, and the first
+hardware-side account of where DONE and ERROR could come from.
+
+Also on this sheet: `I+H09`, `I+H10`, `I+H13`, `I+H14` driven out to connector pins **B-44, B-46,
+B-80, B-82** — four more host-cable signals, bringing the mapped total to nine.
