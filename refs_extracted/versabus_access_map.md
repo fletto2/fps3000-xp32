@@ -32536,3 +32536,44 @@ $F04004  jsr     (a0)             ; ... and call it
 That is a second dispatch-through-a-registered-pointer mechanism, distinct from the `$F00B74` one
 found earlier, and it lives in the `CMR` neighbourhood — the channel-request directive this
 firmware never issues.
+
+## The `$F03FEE` dispatch is `CMR`, and it adds a fourth facet to one dormant feature (2026-07-31)
+
+The second table-dispatch turns out to be inside **`CMR`**, directive `$3C`, and reading it whole
+confirms this project's runtime-thunk finding instruction for instruction:
+
+```
+$F03FD4  move.w #$4eb9,$4a(a1)      ; the jsr abs.l OPCODE, written as data
+$F03FDA  move.l #$f044a2,$4c(a1)    ; ... and its target: the FPS TRACE HOOK
+$F03FE2  lea    $4a(a1),a4
+$F03FE6  move.l a4,(a3)             ; register the ADDRESS OF THE THUNK
+$F03FEA  move.b $18(a2),d0          ; a vector number
+$F03FEE  movea.l $c66.w,a0
+$F03FF2  move.b #$ff,(a0,d0.w)      ; claim that vector as SYSTEM-OWNED in !VCT
+$F03FF8  movea.l $1a(a1),a0
+$F03FFC  adda.l $8(a0),a0           ; follow the driver-chain link at +$8
+$F04004  jsr    (a0)
+```
+
+`CMR` therefore does **three** things: builds a `jsr $F044A2` thunk at CCB+`$4A`/`+`$4C`, registers
+the thunk's address, and **claims an interrupt vector in `!VCT`**.
+
+This project already unified three observations — "**`!CCB`-has-no-instance, the 18 undecoded bytes,
+and the dark trace hook are ONE fact, not three**". The `!VCT` system-claim found this turn is a
+**fourth facet of the same fact**:
+
+| observation | why |
+|---|---|
+| `!CCB` has no instance | only `CMR` creates one, and `CMR` is never issued |
+| 18 bytes at `$F044A2` never decode | reachable only through a thunk `CMR` builds at runtime — no static path exists |
+| the FPS trace hook is dark | same reason, *and* the trace mask is zero |
+| **no `!VCT` entry is claimed by `$F03FF2`** | that claim is `CMR`'s |
+
+All four are "`CMR` is never issued". That is worth having as one statement rather than four,
+because each looked like an independent puzzle: a missing structure, undecodable bytes, a dead
+hook, and an unused writer.
+
+It also sharpens the runtime-thunk hazard already recorded for emulation. The kernel writes
+`$4EB9` **as data** and then jumps to it — so any model that caches decoded instructions must
+invalidate on RAM writes. The site is `CMR`, it is dormant here, and it would come alive the moment
+host-loaded software issued directive `$3C`.

@@ -7358,6 +7358,15 @@ check('$F03FEE claims a vector then dispatches through a link at +$8',
       and _w(0xF03FFC) == 0xD1E8 and _w(0xF03FFE) == 0x0008
       and _w(0xF04004) == 0x4E90)
 
+check('CMR builds a jsr $F044A2 thunk and registers its address',
+      _w(0xF03FD4) == 0x337C and _w(0xF03FD6) == 0x4EB9 and _w(0xF03FD8) == 0x004A
+      and _w(0xF03FDA) == 0x237C and _l(0xF03FDC) == 0x00F044A2 and _w(0xF03FE0) == 0x004C
+      and _w(0xF03FE2) == 0x49E9 and _w(0xF03FE6) == 0x268C)
+check('...and in the same routine claims a vector as system-owned in !VCT',
+      _w(0xF03FEA) == 0x102A and _w(0xF03FEC) == 0x0018
+      and _w(0xF03FEE) == 0x2078 and _w(0xF03FF0) == 0x0C66
+      and _w(0xF03FF2) == 0x11BC and _w(0xF03FF4) == 0x00FF)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
