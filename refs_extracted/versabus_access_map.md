@@ -19405,3 +19405,51 @@ ended at `$F00518` in the scheduler rather than the idle loop.
 set — same index global, same auto-increment bit, adjacent opcodes, both described as "read
 an array". The difference is one comparison, and it does not show up in any behaviour until
 someone auto-increments past the end.
+
+## Operation `$6` is an unbounded peek/poke at any address the chassis names
+
+`$F04F30` is two instructions: `movea.l $E58,a1` and a branch into the shared access routine.
+`$E58` is the 32-bit address the chassis supplied via operation `$1` (two halves, bit 6
+selecting which), and **nothing validates it**. The shared routine `$F04EA0`:
+
+```
+$F04EA0  d0 = $FF0216 ; d1 = d0
+$F04EA6  bclr #$7,d0 / $FF0216 = d0        ; drop bit 7 for the duration
+$F04EAE  btst #$5,$E87
+   set   -> $E74 = (a1)                    ; READ  the named address
+   clear -> (a1) = $FF0204                 ; WRITE CHANNEL_SELECT there
+$F04ECC  btst #$4,$E87 -> addq.l #$2,$E58  ; auto-increment by 2
+$F04EDC  $FF0216 = d1                      ; restore bit 7
+```
+
+So operation `$6` is a **general 16-bit peek/poke at an arbitrary 32-bit address, with
+auto-increment** — no range check, no alignment check, no distinction between RAM, ROM space
+and device registers. This is the mechanism behind the documented `$10AA` demonstration
+(`FPS3K_SEQ="01:10AA,06:0002"` → `write 0010AA <- 00`); what is new is that the address is
+completely unconstrained, so that demonstration is a special case of "the chassis can touch
+anything".
+
+**`$FF0216` bit 7 is cleared for the duration of the access and restored afterwards.** That
+is a new role for the register: this file records bit 5 as gating the `$400000` chassis
+window and bit 4 as the 16→32 width mux; bit 7 is dropped specifically around a
+chassis-directed access to the SBC's own address space. Whether it gates visibility,
+arbitration or something else is not established — but the *pattern* (save, clear, access,
+restore) is unambiguous and is what a chassis model must reproduce.
+
+### The trust model, stated
+
+Taken with the previous finding, the chassis interface has **three unbounded primitives and
+several carefully bounded ones**, in the same command set:
+
+| bounded | unbounded |
+|---|---|
+| `$0` transfer arm (`0..$10` or `$28`) | **`$6` — arbitrary peek/poke at `$E58`** |
+| `$4`, `$5` channel against `$105E` | **`$C` — `$101E` + a sign-extended word index** |
+| `$A` array index `0..12` (panel `$25D`) | **`$1` — sets the `$6` address, unvalidated** |
+| `$D` CHANNEL_SELECT `0..$F` | |
+
+The SBC validates every *channel number* and every *array index*, and validates no
+*address* at all. That is a coherent design if the chassis is trusted hardware on the same
+backplane — which it is — but it means **an emulator's chassis model is, in effect, a
+debugger with full access to the SBC**, and any model that lets a stray index or address
+through will corrupt the machine silently rather than being rejected.
