@@ -24815,14 +24815,46 @@ $F098EA  rte
 ```
 
 After the `lea`, the remaining frame is `{SR word, PC longword}`, so `$4(a7)` is the **low word of
-the stacked PC** and `addq.w #$4` advances it by four bytes — skipping a 4-byte faulting
-instruction and resuming after it.
+the stacked PC** and `addq.w #$4` advances it by four bytes.
 
-**That is a hard requirement on the exception frame.** A model whose group-0 frame places the PC
-anywhere else makes this handler resume **mid-instruction**, and the three sites that use it are
-the `$FF0216` gate probes of phases `$1700`, `$1800` and `$1900` — the tests that establish the
-`$400000` window gate and the 16->32 width mux. Getting the frame layout wrong corrupts exactly
-the tests that document the chassis data path.
+**But the faulting instructions are only TWO bytes**, which is the interesting part. The probe
+subroutines are:
+
+```
+$F096AC  move.w (a1),d0    2 bytes -- the READ probe
+$F096AE  nop / nop / nop / nop
+$F096B6  rts
+
+$F096B8  clr.w  (a1)       2 bytes -- the WRITE probe
+$F096BA  nop / nop / nop / nop
+$F096C2  rts
+```
+
+**Four `nop`s follow every probe.** A fixed `+4` advance applied to a 2-byte instruction lands
+one nop past it — harmlessly. That is what the padding is for: **the firmware does not rely on
+the stacked PC being exact.** The 68000 is notoriously imprecise about the PC it stacks on a bus
+error, and this code accommodates that by advancing a fixed amount and providing a four-nop
+landing zone so that any resume within the window is safe.
+
+**This is more forgiving of an emulator than a strict reading suggests, and worth correcting.** A
+first draft of this section said the handler "skips a 4-byte faulting instruction", which
+over-stated the requirement. The real constraint is only that the stacked PC point *somewhere at
+or just after the faulting instruction*, close enough that `+4` lands inside the nops. A model
+does not need byte-exact bus-error PC semantics — which is fortunate, because faithful 68000
+bus-error PC behaviour is difficult to reproduce and this firmware was written by someone who
+knew that.
+
+The three sites using this handler are the `$FF0216` gate probes of phases `$1700`, `$1800` and
+`$1900`. Their expectations differ, which pins the bit semantics:
+
+| `$FF0216` written | probe | expects |
+|---|---|---|
+| `$20` (bit 5) | `move.w (a1),d0` at `$400000` | **a fault** (`tst.w d1 / bne`) |
+| `$40` (bit 6) | same | **no fault** (`tst.w d1 / beq`) |
+| `$80` (bit 7) | `$F098C4`, which touches `$FF020C`/`$FF0218`/`$FF000E`, not the window | — |
+
+So **bit 5 set makes the `$400000` window fault and bit 6 does not**, confirming the documented
+gate and establishing that bit 6 is *not* a second gate.
 
 It also confirms the Musashi 68000-frame patch a third time: `$F08902` needs the 14-byte frame to
 balance its `lea $8(a7),a7` + `rte`, `$F08F06` the same, and `$F098E0` needs the PC at a known

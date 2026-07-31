@@ -5558,6 +5558,17 @@ check('$F08F06 only flags -- no PC adjustment',
 check('$F08902 counts rather than flagging', insn(0xF0890A) == 'addq.l #$1, $1f800.l')
 check('the skip handler is installed three times, each with a restore',
       all(insn(a) == 'move.l #$f098e0, $8.w' for a in (0xF0960A, 0xF096CC, 0xF0983A)))
+check('the probes are TWO-byte instructions followed by four nops',
+      insn(0xF096AC) == 'move.w (a1), d0' and insn(0xF096B8) == 'clr.w (a1)'
+      and all(insn(0xF096AE + 2 * k) == 'nop' for k in range(4))
+      and all(insn(0xF096BA + 2 * k) == 'nop' for k in range(4)))
+check('...so a fixed +4 advance lands inside the nop padding, not on an exact boundary',
+      True)
+check('bit 5 set expects a FAULT and bit 6 expects none',
+      insn(0xF09626) == 'move.w #$20, $216(a6)' and insn(0xF09630) == 'bne.b $f09638'
+      and insn(0xF096E8) == 'move.w #$40, $216(a6)' and insn(0xF096F4) == 'beq.b $f096fc')
+check('the bit-7 probe touches the AP I/F, not the window',
+      insn(0xF098C4) == 'move.w #$ff, $20c(a6)' and insn(0xF098D0) == 'tst.w $e(a6)')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
