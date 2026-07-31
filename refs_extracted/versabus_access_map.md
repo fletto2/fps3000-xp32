@@ -36927,3 +36927,37 @@ exercised**, replacing the `srec_exhausted` shortcut on a path that finally runs
 **Method note.** The experiment that closed all four came from asking what *stimulus* the unreached
 code needed rather than re-reading the code. The audit said `$F05218` was unwitnessed; the fix was one
 environment variable — `FPS3K_CHSEL_RD=0` — that nothing had previously combined with `FPS3K_SREC`.
+
+## Both S-record loaders now witnessed, and they agree (2026-07-31)
+
+Driving the SLC ASCII path with a **valid** record set closes three more witnesses:
+
+| gate | status |
+|---|---|
+| `$F051A2` `SRecordDataHandler` | **REACHED** |
+| `$F05250` the checksum-word read | **REACHED** |
+| `$F051FE` the per-byte bound check | **REACHED** |
+| `$F055A2` (CPLOAD's S1 handler) | not reached — correct, that is the *binary* loader |
+
+**The destination arithmetic is confirmed on the SLC path.** A RAM dump shows `DE AD BE EF` at
+**`$10010`** and nothing else in the staging buffer — exactly `$10 + addr + $10000` with `addr = 0`,
+the recorded formula.
+
+**So the two independent loaders now both have runtime witnesses, and they agree.** The CPLOAD binary
+path (`$F055A2`) was driven earlier via `FPS3K_CHASSIS_CMD` and put `DE AD BE EF` at `$10010`; the SLC
+ASCII path (`$F051A2`) does the same from a different code path with a different wire format. This
+project argues that "`$F055A2` and `$F051A2` are two independent implementations of that arithmetic
+and bound, which is a stronger check on it than either alone" — that is now demonstrated by executing
+both, not by reading both.
+
+**And the checksum finding has a witness.** `$F05250` — the read that consumes the checksum word
+without examining it — executes. The verified-by-control static analysis (no accumulating arithmetic
+anywhere in the handler) is now backed by the instruction actually running.
+
+### One thing did not work, and I am not claiming it did
+
+Only the **first** record loaded. The second (`S1070004CAFEBABEB4`, targeting `$10014`) left no bytes,
+and `$0E6E` ends at **`$25F`** — the type-not-recognised code. So the run loaded one record and then
+rejected something: either the loader processes one record per chassis operation and my stimulus did
+not re-arm it, or the ASCII stream desynchronised after the first record. **A single-record load is
+demonstrated; a multi-record session is not.**
