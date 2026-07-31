@@ -5565,6 +5565,17 @@ check('...so 8 slots are linked and the eighth ends 4 bytes past the block',
 check('...and a zero page count would leave $0C2C aimed at scratch RAM $800',
       insn(0xF09F90) == 'move.l #$800, $c2c.w' and insn(0xF09F9C) == 'beq.b $f09fe2')
 
+check('the trace handler requires a current task, state bit 6 and a class enable',
+      insn(0xF00D18) == 'movea.l $c0c.w, a6' and insn(0xF00D2C) == 'btst.b #$6, $29(a6)'
+      and insn(0xF00D38) == 'andi.b #$38, d1')
+check('...and its non-trace exit is the $0C36 rts-indirect, the second of only two',
+      insn(0xF00D52) == 'move.l $c36.w, -(a7)' and insn(0xF00D56) == 'rts')
+check("the 'BE' canary sits at $12(a7), the last word of a 20-byte block",
+      insn(0xF00D00) == 'cmpi.w #$4245, $12(a7)' and insn(0xF00D0C) == 'adda.l #$14, a7'
+      and 0x12 + 2 == 0x14)
+check('...and a failed canary goes to the kernel-fatal path',
+      insn(0xF00D08) == 'bsr.w $f00186')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

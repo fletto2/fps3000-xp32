@@ -26645,3 +26645,59 @@ first, and a zero page count branches straight past the allocator, leaving the t
 pointer aimed at scratch RAM `$800`. That is the same defensive pattern as the display
 pointer and the kernel relocator — a configurable feature that degrades to a harmless
 address rather than to zero.
+
+## The trace-exception path, decoded end to end (2026-07-31)
+
+`$F00D14`-`$F00D56` is the handler behind the per-task single-step capability, and it
+gates on four separate conditions before it will do anything:
+
+```
+move.l  d1,(a7) / move.l a6,-(a7)
+movea.l $c0c.w,a6            ; (1) there must be a CURRENT TASK
+cmpa.l  #$0,a6 / beq out
+btst.b  #$d,$e(a7)           ; (2) a bit in the stacked frame
+bne     out
+btst.b  #$6,$29(a6)          ; (3) state bit 6 -- context saved
+beq     out
+move.b  $148(a6),d1 / andi.b #$38,d1   ; (4) TCB+$148 bits 3-5, the class enables
+beq     out
+bset.b  #$f,$148(a6)         ; arm/pending
+movea.l (a7)+,a6 / move.l (a7)+,d1
+bclr.b  #$f,(a7)             ; clear the stacked SR's TRACE bit
+rte
+out:
+movea.l (a7)+,a6 / move.l (a7)+,d1
+move.l  $c36.w,-(a7) / rts   ; the exception-monitor exit, through $0C36
+```
+
+The `out` path is the second of the ROM's **two `rts`-indirect jumps**, going through
+`$0C36` (config `$F0A542` = `$F000BC`, a NOP slide ending on `$F00100`). It executes zero
+times in a clean boot, which is consistent: all four gates fail on a machine where nothing
+has armed tracing.
+
+**So per-task single-stepping needs three things set, not one**: the task must have its
+context saved (state bit 6), at least one class enabled in `TCB+$148` bits 3-5, and the
+traced exit at `$F005B6` must be selected. A model that implements the T bit but not this
+handler will single-step *through* the kernel instead of reporting to it.
+
+### The `'BE'` stack canary
+
+`$F00D00` is the release side of a guarded scratch block:
+
+```
+cmpi.w #$4245,$12(a7)   ; 'BE' -- the guard word
+beq    ok
+bsr.w  $f00186          ; ...otherwise the KERNEL-FATAL path
+ok: adda.l #$14,a7      ; release 20 bytes
+    rts
+```
+
+The canary sits at `$12(a7)` — offset 18 of a **20-byte** block, i.e. its last word — and
+is verified immediately before the block is released. That is a deliberate stack-overrun
+guard, and it is the only one in the image.
+
+**Emulator consequence.** If a model corrupts the supervisor stack by even two bytes at
+this depth, the failure does not present as a crash at the point of corruption: it presents
+as `PCMD_KERNEL_FATAL` (`$2B2`) from `$F00186`, with `$0848` and `$084C` holding `a1` and
+the bus-error vector. That is a *good* failure mode to know about, because it names the
+mechanism rather than leaving a silent divergence.
