@@ -7801,6 +7801,21 @@ check('stage 3: $FF0216 cleared => the read must NOT fault',
       _w(0xF098A0) == 0x426E and _w(0xF098A2) == 0x0216
       and _w(0xF098A6) >> 8 == 0x67)
 
+check('the window probes are a word READ and a word WRITE with 4 nops',
+      _w(0xF096AC) == 0x3011 and all(_w(0xF096AE + 2*_i) == 0x4E71 for _i in range(4))
+      and _w(0xF096B8) == 0x4251 and all(_w(0xF096BA + 2*_i) == 0x4E71 for _i in range(4)))
+check('bit 5 gates the window for BOTH reads and writes',
+      # set+read -> bne skips fault (must fault); clear+read -> beq (must not)
+      _w(0xF09630) >> 8 == 0x66 and _w(0xF09650) >> 8 == 0x67
+      # set+write -> bne ; clear+write -> beq
+      and _w(0xF09672) >> 8 == 0x66 and _w(0xF09692) >> 8 == 0x67)
+check('bit 6 requires NO fault in all four combinations',
+      all(_w(_a) >> 8 == 0x67 for _a in (0xF096F4, 0xF09716, 0xF0973A, 0xF0975C)))
+check('the bit-4 stage is a width-mux data test, not a fault test',
+      _w(0xF09806) == 0x2080 and _w(0xF09808) == 0x3081
+      and _w(0xF0980A) == 0xB490 and _w(0xF0980C) >> 8 == 0x67
+      and _w(0xF097B2) == 0x243C and _l(0xF097B4) == 0xAAAA5555)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

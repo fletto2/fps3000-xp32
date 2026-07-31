@@ -33853,3 +33853,53 @@ retry-forever loops, so neither reports anything beyond a stalled phase counter.
 **Caveat on scope.** Every stage probes `$FF000E` only. Whether the gate covers the whole AP I/F
 window or just the command port is **not** established by this test, and nothing else in the image
 exercises it. A model may reasonably implement the narrow reading until hardware says otherwise.
+
+## `$FF0216` bits 4/5/6 fully specified against the `$400000` window (2026-07-31)
+
+Three stages, each installing the skip-handler `$F098E0` at vector 2 and probing `$400000` at page 0
+with `$F096AC` (`move.w (a1),d0` — READ) and `$F096B8` (`clr.w (a1)` — WRITE), four `nop`s after each
+for latency. Every outcome below was read off the branch after the `tst`, **by hand**.
+
+### bit 5 — the window gate, in BOTH directions
+
+| bit 5 | probe | required |
+|---|---|---|
+| set | read | **FAULT** |
+| clear | read | no fault |
+| set | write | **FAULT** |
+| clear | write | no fault |
+
+This confirms the recorded "bit 5 gates the `$400000` window (set ⇒ BERR)" and **extends** it: the
+gate applies to writes as well as reads, which the four-way structure establishes and a read-only
+test could not.
+
+### bit 6 — proven NOT to be a window gate
+
+All four combinations (set/clear x read/write) require **no fault**. So the register's last
+unidentified bit is now known negatively: whatever bit 6 does, it is orthogonal to `$400000` access.
+The stage exists precisely to prove that orthogonality — it has no other outcome.
+
+### bit 4 — not a fault test at all; the width mux, seen directly
+
+The bit-4 stage never examines `d1`. Its probe `$F09806` is:
+
+```
+move.l d0,(a0)      ; write a LONGWORD
+move.w d1,(a0)      ; then a WORD to the SAME address
+cmp.l  (a0),d2      ; the merged result must equal d2
+```
+
+run with `d2` = `$AAAA5555` and then `$5555`. **That is the 16->32 width conversion stated as an
+equation**: a subsequent 16-bit write merges into the low half of a previously written 32-bit
+location, and the firmware names the expected merged value. The recorded reading — "bit 4 is the
+16->32 width mux with `$FF0214` as low-half latch" — is confirmed and made concrete enough to
+implement.
+
+### A tooling note, because it nearly produced three wrong rows
+
+An automated pass over these twelve sub-stages returned "bit 5 clear + read ⇒ MUST FAULT" and marked
+all four bit-4 rows "MUST FAULT". Both were artefacts: the firmware **alternates `tst.w d1` and
+`tst.l d1`** between sub-stages, so a matcher keyed to one form falls through to the *retry* branch
+after `tst.l d7`; and the bit-4 stage has no `d1` test at all, so every row matched the retry branch.
+The disagreement with the already-documented bit-5 behaviour is what exposed it. Same rule as the
+register-census failures: when an extractor contradicts a known-good control, believe the control.
