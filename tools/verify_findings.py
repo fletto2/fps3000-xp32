@@ -5178,6 +5178,19 @@ check('...so it can only arrive from outside the ROM',
       _rom.find(bytes.fromhex('4baa7bfb')) == 0xF039CE - 0xF00000)
 check('$0C04, the target global, has NO writer anywhere in the ROM',
       not any('$c04.w' in o for _, (_, o, _) in _mins.items()))
+check('directive $25 restores a 66-byte context frame off the task stack',
+      insn(0xF027C8) == 'moveq #$42, d5' and insn(0xF027D6) == 'move.l $13c(a6), d6'
+      and insn(0xF027F0) == 'add.l d7, $13c(a6)')
+check('...66 = d0-d7 (32) + a0-a6 (28) + SR (2) + PC (4)', 32 + 28 + 2 + 4 == 0x42)
+check('...installing d0-d7 at TCB+$100 and a0-a6 at TCB+$120',
+      insn(0xF02802) == 'movem.l d0-d7, $100(a6)'
+      and insn(0xF0280C) == 'movem.l d0-d6, $120(a6)')
+check('...and the SR at TCB+$FA', insn(0xF02824) == 'move.w d1, $fa(a6)')
+check("so $3B's key at $120(a6) is the SAVED a0, not a parameter block",
+      insn(0xF039C8) == 'move.l $120(a6), d0'
+      and (_t1[0x3B][1] >> 8) == 0)
+check('...and $3B loads the callee registers from the saved d0-d7 area',
+      insn(0xF03A02) == 'movem.l $100(a6), d0-d7/a0-a4')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

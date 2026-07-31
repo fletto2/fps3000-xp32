@@ -23735,3 +23735,57 @@ register load from `TCB+$100`, or host software exercising it will behave differ
 
 `$0C62`, cleared on completion here and at four other sites and read once at `$F00912`, is the
 flag that marks the call in progress.
+
+## Directive `$25` is a context restore — and it corrects where `$3B`'s key comes from (2026-07-31)
+
+`$25` (handler `$F027C2`) pops a saved CPU context off the task's own stack and installs it into
+the TCB:
+
+```
+$F027C4  movea.l $40(a6),a4            the ASQ pointer
+$F027C8  moveq   #$42,d5               frame = 66 bytes...
+$F027CA  btst.b  #$B,$4(a4) / beq
+$F027D2  moveq   #$6,d5                ...or 6 (SR+PC only)
+$F027D6  move.l  $13C(a6),d6           the task's SAVED SP
+$F027DE  bsr.w   $F0175C               T0LOGPHY translate
+$F027EC  bsr.w   $F00824               (error path) -- the 'EXEC' tagger
+$F027F0  add.l   d7,$13C(a6)           ADVANCE the saved SP past the frame
+$F027FE  movem.l (a3)+,d0-d7  / movem.l d0-d7,$100(a6)
+$F02808  movem.l (a3)+,d0-d6  / movem.l d0-d6,$120(a6)
+$F02812  move.w  (a3)+,d1 ... move.w d1,$FA(a6)
+$F02828  move.l  (a3)+,$A(a7)          the PC, into the caller's exception frame
+$F0284A  bsr.w   $F026A8               the driver dispatch
+```
+
+**66 bytes decomposes exactly**: 8 longwords `d0-d7` (32) + 7 longwords `a0-a6` (28) + SR word (2)
++ PC longword (4) = **66 = `$42`**. So `$25` is RMS68K's **return-from-exception / signal-return**
+directive, and the `'EXEC'` tagger fires only on its failure path.
+
+### It maps three TCB fields
+
+| offset | contents |
+|---|---|
+| **`TCB+$100`** | saved **d0-d7** |
+| **`TCB+$120`** | saved **a0-a6** |
+| **`TCB+$FA`** | saved **SR** |
+
+which sits alongside the fields already derived from usage: `+$2C` state, `+$FC` resume PC,
+`+$102` directive status, `+$13C` saved SP, `+$140`/`+$144` name/session copy, `+$B0` `'EXEC'`.
+
+### The correction to directive `$3B`
+
+`$3B` reads its key with `move.l $120(a6),d0`, which this project describes as "the magic constant
+at `+$120` of its **parameter block**". `a6` is the **TCB**, and `+$120` is the **saved a0** slot
+that `$25` writes. Two independent confirmations:
+
+- `$3B`'s own table entry has flags `$0000`, i.e. **parameter-block size 0** — it declares no
+  block at all, so `+$120` cannot be one;
+- `$25` writes `movem.l d0-d6,$120(a6)`, placing saved `a0` exactly there.
+
+**So the key is passed in `a0`**, like every other directive's argument, and is simply read out of
+the register-save area rather than from `a0` directly. That also makes it *harder* to supply by
+accident and easier to supply deliberately — a caller does `movea.l #$4BAA7BFB,a0` and traps.
+
+Likewise `$3B`'s `movem.l $100(a6),d0-d7/a0-a4` loads the target routine's registers from the
+**saved d0-d7 area** — so a caller controls both the key and the callee's entire register state
+through the ordinary register-save mechanism.
