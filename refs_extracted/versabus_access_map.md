@@ -37032,3 +37032,34 @@ the first symptom being an AC that misbehaves rather than a load that fails.
 **For an emulator** this is a non-requirement — the model need not compute checksums, because the
 firmware never looks at them. But a *host-side* tool feeding this port should validate before
 sending, since nothing downstream will.
+
+## The staging bound tested at the edge — and it writes the VMOD register (2026-07-31)
+
+A record targeting `$1FFF0` with 32 bytes (which would run to `$2000F`):
+
+| observed | |
+|---|---|
+| bytes landed **`$1FFF2`-`$1FFFF`**, 14 of them, `$1FFFF` = `$AF` | **truncated exactly at the end of RAM** |
+| `$0E6E` = **`$025A`** | the recorded "staging address out of range" code |
+| bytes 1 and 2 (`$A0`, `$A1`) **do not appear in the RAM dump** | they went to `$1FFF0`/`$1FFF1` |
+
+**Three recorded facts confirmed in one run.** The per-byte bound (`$F051FE`/`$F05206`, checked
+*inside* the store loop) truncates at `$1FFFF` rather than overrunning; panel code **`$25A`** is
+emitted; and the two missing bytes independently re-confirm that **`$1FFF0`/`$1FFF1` is a register,
+not RAM** — the write went to the VMOD control register and left no trace in memory, which is exactly
+the partition this project derived from the self-test's exclusion list.
+
+### The hazard is real and now demonstrated
+
+This project warns that "the S-record bound is the full `$10000-$1FFFF`, but the live TCBs start at
+`$1E900`, so a record addressed past `$1E8F0` passes the firmware's own check and corrupts RTOS
+state". This run goes further: a sufficiently high address does not merely corrupt RAM, it **writes
+the VMOD control register and drives the chassis** — `$1FFF0` is the VERSAmodule control register
+whose high byte carries the VersaBus transfer-request bits.
+
+So the failure mode of a mis-addressed microcode load is worse than data corruption: **it can assert
+bus control lines**. On hardware that is a good reason to validate S-record addresses host-side before
+sending, in addition to validating checksums (which the firmware also does not do).
+
+The truncation itself is well-behaved — the firmware stops exactly at `$1FFFF` and reports — so the
+danger is entirely in the range `$1E900`-`$1FFFF`, which the check permits.

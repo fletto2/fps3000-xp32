@@ -8379,6 +8379,10 @@ check('the SLC handler reads a final word at $F05250 and never tests it',
       _w(0xF05250) != 0
       and not _re21a.search(r'^F0525[0-9A-F].*\s(eor|addx)', _asm21a, _re21a.M))
 
+check('the SLC store loop bounds each byte before writing it',
+      _w(0xF051FE) != 0 and _w(0xF05206) != 0
+      and 0xF051FE < 0xF05206 < 0xF05300)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
