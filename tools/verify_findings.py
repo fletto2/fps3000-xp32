@@ -4630,8 +4630,14 @@ check('...and it clears the sticky enable bit 12', not (0x8020 >> 12) & 1)
 _pemt = _rom[0xF05C4C - 0xF00000:][:42]
 check('PanelErrorMaskTable abuts the 42-entry dispatch table exactly',
       0xF05BA4 + 42 * 4 == 0xF05C4C)
-check('...and is a 5-entry map, codes $00-$04 -> bits 0,5,4,3,2',
+check('...and is a 5-entry map: CHANNEL 1-4 -> $FF021A bits 5,4,3,2 (entry 0 unused)',
       list(_pemt[:5]) == [0, 5, 4, 3, 2], list(_pemt[:5]))
+check('PanelErrorMaskTable and the XP-side channel map are the SAME table',
+      _rom[0xF05C4C - 0xF00000:][:5] == _rom[0xF084A4 - 0xF00000:][:5] == b'\x00\x05\x04\x03\x02')
+check('...both sitting exactly 168 bytes past their own 42-entry dispatch table',
+      0xF05C4C - 0xF05BA4 == 0xF084A4 - 0xF083FC == 42 * 4)
+check('...so entries 5+ are zero because there are four channels, not four operations',
+      set(_pemt[5:]) == {0})
 check('...with 37 bytes of zero fill behind it', set(_pemt[5:]) == {0})
 check('$FF021A is modified with a bit number from that table, not an immediate',
       insn(0xF0571C) == 'move.b (a5, d4.w), d5' and insn(0xF05720) == 'bclr.b d5, d0')

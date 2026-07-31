@@ -20698,12 +20698,28 @@ and reading it out gives:
 Raw: `00 05 04 03 02` followed by **37 zero bytes**. It is a five-entry table padded to the
 42-entry width of the dispatch table it abuts (`$F05BA4` + 168 = `$F05C4C` exactly).
 
-Two readings follow, and the image cannot separate them:
+**RESOLVED the same day — it is not indexed by operation code, it is indexed by CHANNEL.**
 
-- bit 0 is a **generic "panel operation in progress"** source, masked for every operation that
-  is not one of the four with a dedicated source; or
-- the table was written for the first five operations and **never extended**, so codes `$05`+
-  fall into padding and clear bit 0 by accident.
+`$F05C4C` sits **168 bytes** past RDHC's 42-entry dispatch table at `$F05BA4`. XP1I's copy of
+that dispatch table is at `$F083FC`, and **168 bytes past it is `$F084A4`** — which this project
+already documents, from the XP side and by a completely different route, as the
+**channel -> `$FF021A` bit map: 1->5, 2->4, 3->3, 4->2**. The bytes are identical:
+`00 05 04 03 02`.
+
+So the two are one replicated table, and the index is the **channel number**, 1-4. That disposes
+of both readings offered below: entry 0 is unused because channels are 1-based, and entries
+`$05`+ are zero **because the machine has four channels**, not because a table was left
+unfinished. `d4` at `$F05712` is popped holding a channel, not an opcode.
+
+Two independent derivations of the same five bytes, from RDHC's IRQ-mask arithmetic and from the
+XP tasks' teardown, meeting at the same offset from two different dispatch tables — that is a
+stronger result than either alone, and it retires the polarity caveat attached to the XP-side
+version, since the RDHC side shows the bit being **cleared** (`bclr`) to mask a channel.
+
+*The two readings originally offered here, now superseded:*
+
+- ~~bit 0 is a generic "panel operation in progress" source~~; or
+- ~~the table was written for the first five operations and never extended~~.
 
 The descending run 5,4,3,2 for codes 1,2,3,4 is orderly enough to look deliberate, and the four
 operations it covers are the parameter-setting ones (`$1` address, `$2` count, `$3` chassis
