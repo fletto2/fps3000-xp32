@@ -6189,6 +6189,13 @@ check('the VMOD offset table is 72 bytes: 4 passes of 1 + 8 words',
       insn(0xF0A472) == 'moveq #$3, d4' and insn(0xF0A474) == 'movea.w (a1)+, a2'
       and insn(0xF0A478) == 'moveq #$7, d3' and 4 * 9 * 2 == 72)
 
+check('the $F0A4BE table drives 4 passes of 8 downward word writes',
+      insn(0xF0A474) == 'movea.w (a1)+, a2' and insn(0xF0A476) == 'adda.l d0, a2'
+      and insn(0xF0A47A) == 'move.w (a1)+, -(a2)')
+check('...and its third offset word is NEGATIVE once sign-extended',
+      struct.unpack('>H', _rom[0xF0A4BE - 0xF00000 + 3 * 18:][:2])[0] == 0x8700
+      and (0x8700 - 0x10000) < 0)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

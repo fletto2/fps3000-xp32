@@ -28416,3 +28416,44 @@ candidate addresses through "the listing renders an instruction here" rejects by
 disassembler declined to decode, but cannot reject bytes it decoded **wrongly**. On these
 five regions the filter is blind, which is how `$F08E9A` — inside the VMOD pattern table —
 survived it.
+
+## The `$F0A4BE` table: mechanics established, purpose not (2026-07-31)
+
+The 72-byte extent derived from the reader loop is exact — four passes of one offset word
+plus eight data words, ending precisely at `$F0A505`.
+
+```
+lea.l   $f0a4be(pc),a1
+moveq   #$3,d4
+pass:   movea.w (a1)+,a2        ; <-- movea.w SIGN-EXTENDS
+        adda.l  d0,a2           ; d0 = the 4 KB-rounded RAM top = $1F000
+        moveq   #$7,d3
+        move.w  (a1)+,-(a2)     ; eight words, written DOWNWARD
+        subq.l #$1,d3 / bne
+        subq.l #$1,d4 / bne pass
+```
+
+With `d0 = $1F000`:
+
+| pass | offset word | sign-extended | target range |
+|---|---|---|---|
+| 0 | `$1000` | `+$1000` | `$1FFF0`-`$1FFFE` — **the VMOD block** |
+| 1 | `$008E` | `+$8E` | `$1F07E`-`$1F08C` |
+| 2 | `$008E` | `+$8E` | `$1F07E`-`$1F08C` — the same range again |
+| 3 | `$8700` | **`-$7900`** | `$176F0`-`$176FE` |
+
+**`movea.w` sign-extending is what makes pass 3 go downward** — read as unsigned it would
+target `$27700`, outside RAM entirely. This is the same 16-bit sign-extension hazard that
+governs `moveq` and the semaphore count field.
+
+Pass 0 writes `$0FF0` to `$1FFF0` and `$008E` to the seven words above it.
+
+**What is *not* established is what this table is for.** The values include what look like
+vector numbers (`$8E`, `$93`, `$71`-`$74`) and what look like addresses (`$0FF0`, `$0FE0`,
+`$4600`, `$0C00`), passes 1 and 2 write the same range twice, and passes 1-3 target ordinary
+RAM rather than any device. I can decode the loop exactly and cannot say what it initialises;
+tracing a consumer of `$1F07E` or `$176F0` would settle it.
+
+Recorded this way deliberately. The mechanics are worth having — a model must reproduce these
+writes, and the sign-extension is easy to get wrong — but the pattern of plausible-looking
+values invites a story, and the ROM does not supply one.
