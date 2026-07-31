@@ -30324,3 +30324,68 @@ tick-rate tuning fixes it.
 Note this sits beside the already-recorded prescaler correction (bit 1 was once treated as a `/8`
 on all three timers, making the system tick run 8x slow). The bit has now been wrong in two
 different ways; the second is the one still live.
+
+## `$F0A2EC` is the PTM's graceful-degradation fallback — and `$0800` is now triple-booked (2026-07-31)
+
+The RTOS's PTM programming is wrapped in the bus-error guard this project already knows about
+("one of the seven guards the MC6840 programming"). This is that site, and it has **two** exits
+into the same fallback:
+
+```
+$F0A286  movea.l $F0A52C(pc),a1     ; the config DEVICE BASE = $00F70000
+$F0A28A  move.l  a1,$c4e.w          ; $0C4E <- the device base
+$F0A28E  beq.b   $F0A2EC            ; base is ZERO -> degrade
+$F0A290  pea.l   $F0A2EC(pc)        ; push the continuation ...
+$F0A294  move.w  #$4245,-(a7)       ; ... and the 'BE' marker: a BUS ERROR also degrades
+$F0A298  move.b  #$1,$3(a1)         ; CR2 <- $01
+$F0A29E  move.b  #$1,$1(a1)         ; CR1 <- $01, internal reset
+   ...   compose the latch from $320 (=800, the E clock in kHz) and config $F0A530
+$F0A2C6  movep.w d0,$d(a1)          ; T3 latch
+$F0A2CE  movep.w d0,$5(a1)          ; T1 latch
+$F0A2E4  move.b  #$0,$1(a1)         ; CR1 <- $00, release
+$F0A2EA  bra.b   $F0A2F4
+$F0A2EC  move.l  #$800,$c4e.w       ; DEGRADE: point the PTM base at scratch RAM $0800
+```
+
+So a machine with no PTM, or one whose PTM faults, still boots — its timer accesses land in RAM
+at `$0800` and do nothing. That is the **third** graceful-degradation path in this firmware,
+alongside the display probe and the kernel relocator, and it is the only one of the three that is
+guarded against a *fault* rather than merely testing a config word for zero.
+
+**A correction this forces**: the PTM base is **`$F70000`**, not `$F70001`. The odd-byte
+addressing comes entirely from the displacements (`$1`, `$3`, `$5`, `$D`), and `$0C4E` holds the
+whole device base — which is why the kernel reads **board status** through the very same pointer
+(`$F008CA`, `$18(a0)` = `$F70018`). One pointer serves both devices.
+
+**`$0800` is now known to be triple-booked**, and that is worth flagging:
+
+| user | what lands there |
+|---|---|
+| the CPU exception snapshot | faulting PC at `$0800`, SR at `$0806`, registers `$0808`-`$0847` |
+| the **display** fallback | writes four words at `$4([$0C3A])` = `$0804` |
+| the **PTM** fallback | timer accesses at `$0801`, `$0803`, `$0805`, `$080D` |
+
+On this board the display is unfitted, so its fallback is already live and writing into `$0804` —
+inside the snapshot area, as this project records. If the PTM fallback ever triggered too, three
+mechanisms would be writing the same page. None of them checks, because each is independently a
+"harmless sink". **For post-mortem RAM dumps this matters: a value in `$0800`-`$080F` is not
+necessarily part of the exception snapshot.**
+
+## The µPD7201 SIO is verifiably never touched (2026-07-31)
+
+The claim that the firmware never accesses `$F70010`-`$F70017` is worth more than a grep, since
+this project's standing hazard is that narrow matchers manufacture false negatives. Swept
+across **both** listings, following `lea`-immediate bases *and* pointers loaded from the config
+block and `$0C4E`, every `$F700xx` access in the entire ROM is:
+
+```
+$F70001 x3   $F70003 x9   $F70005 x4   $F70009 x3   $F7000D x6    -- the PTM
+$F70018 x2 (plus 25 more via a dedicated lea base)                -- board status
+$F70030 x1   ($F00A44, the kernel's one dormant access)
+```
+
+**Nothing in `$F70010`-`$F70017`.** The SIO is genuinely free for the monitor to take, which is
+what made that design viable — and the sweep that establishes it now covers the kernel, which an
+earlier version of this same check silently did not: the kernel listing uses a different address
+format (`  f008c6:` rather than `F008C6  `) and the regex matched none of it, so the check was
+passing on the application region alone.

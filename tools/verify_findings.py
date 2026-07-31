@@ -6743,6 +6743,15 @@ check('operationally CR1 is $00: T1 externally clocked AND its interrupt disable
 check('...while the self-test writes CR1 = $C2, switching T1 to the internal clock',
       _w(0xF09112) == 0x10BC and _w(0xF09114) == 0x00C2 and (0xC2 & 0x02))
 
+check('the PTM init degrades on a ZERO base and on a BUS ERROR, both to $F0A2EC',
+      _w(0xF0A28A) == 0x21C9 and _w(0xF0A28C) == 0x0C4E
+      and (insn(0xF0A28E) or '').startswith('beq')
+      and _w(0xF0A290) == 0x487A and _w(0xF0A294) == 0x3F3C and _w(0xF0A296) == 0x4245)
+check('...and the fallback points the PTM base at scratch RAM $0800',
+      _w(0xF0A2EC) == 0x21FC and _l(0xF0A2EE) == 0x00000800 and _w(0xF0A2F2) == 0x0C4E)
+check('...so $0800 is shared by the exception snapshot, the display fallback and this one',
+      _l(0xF0A2EE) == 0x00000800)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
