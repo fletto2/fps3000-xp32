@@ -22222,3 +22222,36 @@ polls two bits, and dispatches on what comes back. **Their meaning lives in the 
 the AP I/F and the XP-32 EXEC, or a dump of the ten 2K x 8 PROMs, is the only way past this point
 — and that is a hardware task, not a disassembly one. Everything on the SBC side of that boundary
 is now accounted for.
+
+## CORRECTION: `$271` reports directive `$2B` SGSEM, not `$29` ATSEM (2026-07-31)
+
+The XP-task directive-failure mapping was derived from **multiplicities** — "`$271` x2 <-> `$29`
+ATSEM x2". Deriving it instead from **adjacency**, by walking back from each emitter to the
+directive number loaded before its `trap #1`, gives:
+
+| panel code | directive | occurrences |
+|---|---|---:|
+| `$26D` | **`$01` GTSEG** | 1 per task |
+| `$26E` | **`$2D` CRSEM** | 2 per task (8 total) |
+| `$26F` | — | never emitted |
+| `$270` | **`$4C` CNCTIRQ** | 1 per task (4 total) |
+| **`$271`** | **`$2B` SGSEM** | 2 per task (**8 total**) |
+
+Three of the five confirm the documented mapping. **The fourth is wrong**, and doubly so:
+
+- the directive immediately preceding every `$271` is `moveq #$2B,d0` — for example `$F06098`
+  (XP4I) and its three template siblings, each followed by `beq` / `move.w #$271,d0`;
+- and `$29` **ATSEM cannot be the answer at all**, because this file already records that `$29`
+  and `$2A` are **RDHC's alone** and never appear in an XP task. A code emitted eight times inside
+  the four XP tasks cannot report a directive those tasks never issue.
+
+The count-matching that produced the error was sound arithmetic on the wrong pairing: `$2B` and
+`$29` both happen to occur twice per relevant task, so the multiplicities matched either way.
+**Adjacency distinguishes them and counting cannot** — the same failure mode as the
+"`PanelErrorMaskTable` is indexed by operation code" reading corrected earlier today, which also
+came from matching a shape rather than following the data.
+
+`$26D` needs one caveat of its own: a sweep that begins disassembling at `$F07D00` drifts and
+renders XP1I's entry point as `ori.b #$1,d0` instead of `moveq #$1,d0`. Decoded from the entry
+point the TDTI table supplies (`$F07D4A`), the directive is plainly `$01`. This is the same
+`$7001` artefact that once hid three task entry points in `fps3k.asm`.
