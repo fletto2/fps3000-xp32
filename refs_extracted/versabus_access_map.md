@@ -22653,3 +22653,50 @@ bit 5 to select between two structurally different transports rather than two di
 That last distinction is the useful one: **on `$3`, `$C` and `$6`, bit 5 reverses the same
 operation; on `$0` it selects a different protocol entirely** — S-record parsing one way, an
 unhandshaken raw copy the other.
+
+## `$F046E0` is the per-channel BIM table, and its user is chassis op `$0` (2026-07-31)
+
+The four-longword table at `$F046E0` is noted in this project only as a disassembly artefact —
+"`$F046EE` is the tail of a four-longword table `$244 $246 $250 $252` — the per-channel BIM CR
+offsets, which `fps3k.asm` already annotates correctly". Its **user** has not been identified
+until now.
+
+It is read by chassis operation `$0`'s per-channel arm:
+
+```
+$F04CAA  addq.l  #$1,d3
+$F04CAC  lsl.l   #$5,d3          (channel + 1) << 5     the documented window arithmetic
+$F04CAE  addi.l  #$E,d3
+$F04CB4  adda.l  d3,a0           a0 = $FF0000 + (ch+1)*32 + $E   -> the channel's +$0E
+$F04CBA  movea.l a0,a1
+$F04CBC  subq.l  #$6,a1          a1 = the same window's +$08
+$F04CBE  move.l  $E60,d3 / subq.l #$1,d3 / lsl.l #$2,d3
+$F04CC8  lea     $F046E0,a3      <- THE TABLE
+$F04CCE  adda.l  d3,a3
+$F04CD0  movea.l (a3),a3         table[channel-1]
+$F04CD2  adda.l  #$FF0000,a3     -> the channel's BIM control register
+$F04CDC  move.l  $E68,d3         the third parameter (chassis op $9)
+$F04CE2  move.l  $E60,d4         the channel
+$F04CE8  jsr     $F056BA         PanelSendAndWait
+```
+
+Contents, read out: **`$0244`, `$0246`, `$0250`, `$0252`** for channels 1-4.
+
+**That is a third independent derivation of the BIM channel assignment.** The first came from the
+BIM programming sites (`move.w #$5F,$244(a5)` and siblings), the second from diffing the XP4I
+template copy against XP1I (where the CR low byte is one of the patched constants, "independently
+re-deriving the documented BIM table, irregular step included"), and now this — a ROM table read
+by a completely different subsystem. All three agree, **including the irregular `$244 $246 $250
+$252` step**, which is the part most likely to be a transcription error if any one of them were
+wrong.
+
+**It also completes op `$0`'s per-channel arm.** The arm computes *three* addresses from the
+channel number: the window's `+$0E` (via `(ch+1)<<5`), the window's `+$08` (that minus 6), and the
+BIM control register (via this table). Those are exactly the three registers `PanelSendAndWait`
+needs — command port, data port, and the BIM whose interrupt it must mask with `$4F` for the
+duration of the transfer.
+
+So the table exists because the window offset is *computable* from the channel and the BIM offset
+is **not** — `$244`, `$246`, `$250`, `$252` has no closed form. A four-entry lookup is the
+cheapest way to express an irregular backplane assignment, and its presence is itself evidence
+that the irregularity is real hardware rather than a documentation slip.

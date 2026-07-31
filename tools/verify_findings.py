@@ -4859,6 +4859,20 @@ check('op $A honours only bit 4 (auto-increment)', _opbits(10) == [4])
 check('op $C honours the full set 4/5/6', _opbits(12) == [4, 5, 6])
 check('the pure commands $5,$7,$8,$9,$D,$E,$F honour NO modifier bits',
       all(_opbits(n) == [] for n in (5, 7, 8, 9, 13, 14, 15)))
+
+# ---- $F046E0 is the per-channel BIM table, used by chassis op $0 (2026-07-31) ----
+_bimtab = [_bst.unpack('>I', _rom[0xF046E0 - 0xF00000 + n * 4:][:4])[0] for n in range(4)]
+check('$F046E0 holds the four per-channel BIM CR offsets, irregular step included',
+      _bimtab == [0x244, 0x246, 0x250, 0x252], [hex(v) for v in _bimtab])
+check('...and it ends exactly where TCBRDHC_Entry begins', 0xF046E0 + 16 == 0xF046F0)
+check("op $0's per-channel arm computes the window from (ch+1)<<5 + $E",
+      insn(0xF04CAA) == 'addq.l #$1, d3' and insn(0xF04CAC) == 'lsl.l #$5, d3'
+      and insn(0xF04CAE) == 'addi.l #$e, d3')
+check('...derives the data port as that minus 6', insn(0xF04CBC) == 'subq.l #$6, a1')
+check('...and looks the BIM up in the table rather than computing it',
+      insn(0xF04CC8) == 'lea.l $f046e0.l, a3' and insn(0xF04CD0) == 'movea.l (a3), a3'
+      and insn(0xF04CD2) == 'adda.l #$ff0000, a3')
+check('...then hands all three to PanelSendAndWait', insn(0xF04CE8) == 'jsr $f056ba.l')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
