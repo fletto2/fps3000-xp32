@@ -29630,3 +29630,49 @@ single latch check, not an exercise of the host link. **The host interface is pr
 not proved working**, and nothing on the far side of it (the counterpart card in the host
 chassis) is touched at all. For a model, that means the AP I/F channel windows have no
 self-test contract to satisfy: they are constrained only by the operational paths.
+
+## Phase `$1900` measures the 16→32 width mux as a 2x2 truth table (2026-07-31)
+
+`CLAUDE.md` records that `$FF0216` bit 4 "muxes the low half of the 32-bit chassis word, with
+`$FF0214` as the low-half latch". The test states the mechanism exactly, including the polarity,
+which was not previously recorded.
+
+Setup: `$FF0210 = 0` (page 0), `a0 = $400000`, `d0 = $55555555`, `d1 = $AAAA`. A baseline
+longword write and read-back runs first, so chassis memory holds `$55555555` at the start of
+every arm. Two access routines are then each run with bit 4 set and clear:
+
+```
+$F09806  move.l d0,(a0)          ; $400000 <- $55555555
+         move.w d1,(a0)          ; a DIRECT 16-bit write to the window
+         cmp.l  (a0),d2          ; read back a longword
+
+$F0981A  move.l d0,(a0)          ; $400000 <- $55555555
+         move.w d1,$214(a6)      ; write $AAAA to the $FF0214 LATCH
+         cmp.w  $2(a0),d2        ; read back the LOW half word
+```
+
+| arm | bit 4 | action | required result | reading |
+|---|:-:|---|---|---|
+| `$F097B8` | **set** | direct word write to `(a0)` | `$AAAA5555` | the write lands in the addressed (high) half — ordinary memory |
+| `$F097CC` | **clear** | direct word write to `(a0)` | `$55555555` | the write is **discarded** |
+| `$F097E2` | **set** | write `$FF0214` | low half still `$5555` | the latch is **inert** |
+| `$F097F6` | **clear** | write `$FF0214` | low half becomes `$AAAA` | the latch **reaches chassis memory's low half** |
+
+So the two states are cleanly complementary, and the mux is a *routing* choice rather than an
+enable:
+
+- **bit 4 set — pass-through.** The window behaves as ordinary 32-bit memory: a 16-bit write
+  addresses the half it names, and `$FF0214` does nothing. This is the mode the SBC needs to
+  compose a 32-bit chassis word out of two 16-bit writes by addressing `$400000` and `$400002`
+  separately, which is why **`CPLOAD` sets it** (`$FF0216` goes `$C0` → `$D0`) and clears it
+  again afterwards.
+- **bit 4 clear — latched.** Direct 16-bit writes to the window are ignored; the low half is
+  supplied by the `$FF0214` latch instead, and writing that latch is what completes the transfer.
+
+**Emulator contract, all four cases required.** A model must discard 16-bit window writes when
+bit 4 is clear (not merely ignore the latch), and must make `$FF0214` inert when bit 4 is set
+(not merely redundant). Getting either half right and the other wrong passes two arms and hangs
+on the third, with `CHANNEL_SELECT` parked on the corresponding minor phase.
+
+Note the test never exercises a 16-bit *read* in either mode, so the mux's read-side behaviour is
+unconstrained by the firmware — a genuine gap that only hardware can close.

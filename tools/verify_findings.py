@@ -6475,6 +6475,22 @@ check('the whole self-test touches the AP I/F at $FF000E only, three sites',
       _w(0xF0987C) == 0x3D7C and _w(0xF09880) == 0x000E
       and _w(0xF09882) == 0x0C6E and _w(0xF09886) == 0x000E)
 
+check('the width-mux test seeds $55555555 / $AAAA and pages the window to 0',
+      _l(0xF09790) == 0x55555555 and _w(0xF09796) == 0xAAAA
+      and _w(0xF09782) == 0x3D7C and _w(0xF09786) == 0x0210
+      and _l(0xF0978A) == 0x00400000)
+check('routine A does a longword then a WORD write to the window, and reads a longword',
+      _w(0xF09806) == 0x2080 and _w(0xF09808) == 0x3081 and _w(0xF0980A) == 0xB490)
+check('routine B writes the $FF0214 LATCH and reads the LOW half at $400002',
+      _w(0xF0981A) == 0x2080 and _w(0xF0981C) == 0x3D41 and _w(0xF0981E) == 0x0214
+      and _w(0xF09820) == 0xB468 and _w(0xF09822) == 0x0002)
+check('bit 4 SET expects the direct word write to land ($AAAA5555), clear expects it discarded',
+      _l(0xF097B4) == 0xAAAA5555 and _w(0xF097B8) == 0x3D7C and _w(0xF097BA) == 0x0010
+      and _w(0xF097CA) == 0x2400 and _w(0xF097CC) == 0x426E and _w(0xF097CE) == 0x0216)
+check('bit 4 SET expects the $FF0214 latch inert ($5555), clear expects it to reach memory',
+      _l(0xF097DE) == 0x00005555 and _w(0xF097E2) == 0x3D7C and _w(0xF097E4) == 0x0010
+      and _w(0xF097F4) == 0x2401 and _w(0xF097F6) == 0x426E and _w(0xF097F8) == 0x0216)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
