@@ -7510,7 +7510,7 @@ check('$44 and $45 gate on state-word bit 10 and share the ownership body $F035E
       and _w(0xF036C4) == 0x082D and _w(0xF036C6) == 0x000A and _w(0xF036C8) == 0x002C
       and _bsrw(0xF03680) == 0xF035E0 and _bsrw(0xF036D6) == 0xF035E0)
 check('...refusing with status $A, and differing only by a d5 selector',
-      _w(0xF03676) == 0x066E and _w(0xF03678) == 0x000A
+      _w(0xF03676) == 0x066d and _w(0xF03678) == 0x000A   # addi.w #$a,$102(a5)
       and _w(0xF0367E) == 0x7A4E and _w(0xF036D4) == 0x7A12)
 check('state bit 10 is set at $F03544, immediately before the owner stamp',
       _w(0xF03544) == 0x08EA and _w(0xF03546) == 0x000A and _w(0xF03548) == 0x002C
