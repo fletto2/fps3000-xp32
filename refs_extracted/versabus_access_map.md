@@ -22151,3 +22151,74 @@ at least two have distinct record formats with distinct search code.
   handler, so bounded by that directive's documented semantics
 
 **Nothing in the ROM is now both undocumented and unattributed.**
+
+## The complete SBC -> AC exchange, traced end to end (2026-07-31)
+
+This is as close to the EU and AU as the ROM ever gets, so it is worth stating in full. The
+normal channel request issues **two back-to-back transactions**, and every field is now read off
+the instructions rather than inferred:
+
+```
+$F08502  move.w  #$FFFF,d0
+$F08506  swap    d0
+$F08508  move.w  #$10,d0          d0 = $FFFF0010  -- mode $FFFF, OPERATION $10
+$F0850C  moveq   #$10,d1                          -- the payload D1_SEND will transmit
+$F0850E  move.w  d4,d2 / subq.w #$1,d2 / lsl.w #$2,d2
+$F08514  movea.w d2,a2
+$F08516  movea.l $1080(a2),a2     the per-channel pointer into the $101E file
+$F0851A  moveq   #$1,d2
+$F0851C  jsr     $F07F12          -- TRANSACTION 1
+
+$F08522  move.w  #$FFFF,d0
+$F08526  swap    d0
+$F08528  move.w  #$E,d0           d0 = $FFFF000E  -- OPERATION $0E
+$F0852C  move.l  -(a2),d1         the PRE-DECREMENTED longword from the file
+$F0852E  moveq   #$10,d2
+$F08530  jsr     $F07F12          -- TRANSACTION 2
+
+$F0853C  move.l  #$0,$1080(a2)    clear the per-channel pointer
+```
+
+and the primitive itself:
+
+```
+$F07F12  move.w  #$4F,(a3)        mask this channel's BIM (IRE cleared)
+$F07F16  move.w  d4,-(a7)
+$F07F18  move.w  #$0,(a1)         +$08  <- $0000        (data HIGH)
+$F07F1C  move.w  d0,d7            keep the operation code
+$F07F1E  move.w  d0,$2(a1)        +$0A  <- OPERATION    (data LOW)
+$F07F22  move.w  #$8004,(a0)      +$0E  <- REQUEST-TRANSFER
+$F07F26  move.l  #$3E8,d5         1000 iterations
+$F07F2C  subq.l  #$1,d5
+$F07F2E  move.w  (a0),d4          poll +$0E
+$F07F30  btst    #$E,d4 / bne     bit 14 = DONE
+$F07F36  cmpi.l  #$0,d5 / bne     ...else keep polling
+$F07F3E  btst    #$D,d4           bit 13 = ERROR
+```
+
+### What this settles
+
+**The operation code travels in `d0`'s LOW word and the payload in `d1`.** `d0`'s high word
+`$FFFF` is the mode selector the `swap d0` in `POLL`/`BLK_XFR` reads — which is why
+`d0 = $FFFF0010` at `$F08500` had no explanation until the pair decode. The primitive writes only
+the operation to the channel; `d1` is transmitted afterwards by `D1_SEND`, which is exactly the
+handler both reachable slots (`$0E` and `$10`) map to.
+
+**The SBC's entire unaided vocabulary toward an AC is three operations: `$10`, `$0E`, `$1B`**,
+plus three trigger words `$8000`, `$8004` (REQUEST-TRANSFER) and `$8005` (CONTINUE-TRANSFER).
+`$10` and `$0E` are the normal two-transaction request; `$1B` is the bit-11 sub-mode arm, present
+in XP1I/XP2I/XP3I and **absent from XP4I**, which does something structurally different there.
+
+**Transaction 1 carries a literal `$10` as its payload and transaction 2 carries a longword
+pre-decremented out of the `$101E` register file** — so the pair reads as "here is a request of
+class `$10`, and here is its argument", with `$1080+(ch-1)*4` acting as a stack pointer into the
+file that is cleared once the pair completes.
+
+### And why nothing further can be learned about the EU or AU from this ROM
+
+The three operation codes are opaque numbers as far as the SBC is concerned: it writes them,
+polls two bits, and dispatches on what comes back. **Their meaning lives in the EXEC card's
+80-bit PROM**, which the SBC cannot read and the self-test never touches. A bus trace between
+the AP I/F and the XP-32 EXEC, or a dump of the ten 2K x 8 PROMs, is the only way past this point
+— and that is a hardware task, not a disassembly one. Everything on the SBC side of that boundary
+is now accounted for.

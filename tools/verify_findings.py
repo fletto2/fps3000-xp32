@@ -5123,6 +5123,25 @@ check('$F02764 rounds a length up to even before taking +$1E and +$22',
       insn(0xF02768) == 'addq.l #$1, d1' and insn(0xF0276A) == 'bclr.b #$0, d1'
       and insn(0xF02776) == 'movea.l $22(a4), a0')
 
+# ---- the complete SBC -> AC exchange (2026-07-31) ----
+check('transaction 1 loads d0 = $FFFF0010: mode $FFFF, operation $10',
+      insn(0xF08502) == 'move.w #$ffff, d0' and insn(0xF08506) == 'swap d0'
+      and insn(0xF08508) == 'move.w #$10, d0')
+check('...with a literal $10 as the D1_SEND payload', insn(0xF0850C) == 'moveq #$10, d1')
+check('transaction 2 uses operation $0E and the PRE-DECREMENTED file longword',
+      insn(0xF08528) == 'move.w #$e, d0' and insn(0xF0852C) == 'move.l -(a2), d1')
+check('...taken through the per-channel pointer at $1080',
+      insn(0xF08516) == 'movea.l $1080(a2), a2' and insn(0xF0853C) == 'move.l #$0, $1080(a2)')
+check('the primitive masks the BIM, zeroes +$08 and writes the OPERATION to +$0A',
+      insn(0xF07F12) == 'move.w #$4f, (a3)' and insn(0xF07F18) == 'move.w #$0, (a1)'
+      and insn(0xF07F1E) == 'move.w d0, $2(a1)')
+check('...then issues $8004 REQUEST-TRANSFER and polls 1000 times for bit 14',
+      insn(0xF07F22) == 'move.w #$8004, (a0)' and insn(0xF07F26) == 'move.l #$3e8, d5'
+      and insn(0xF07F30) == 'btst.b #$e, d4' and insn(0xF07F3E) == 'btst.b #$d, d4')
+check('exactly two callers of the transaction primitive in XP1I',
+      sorted(a for a, (m, o, _) in _mins.items()
+             if m.split('.')[0] in ('jsr', 'bsr') and 'f07f12' in o) == [0xF0851C, 0xF08530])
+
 
 # ---------------------------------------------------------------------------
 # STOP.  ADD NEW check() CALLS *ABOVE* THIS LINE.
