@@ -35579,3 +35579,43 @@ from `#$320` and the config word `$F0A530`.
   register sees `$C6` overwritten by `$00` and loses the T3 configuration entirely.
 
 **T2 is confirmed never programmed** — `$5(a1)` is T1, not T2; only T1 and T3 receive latches.
+
+## The tick ISR read — and the day rollover walks a list (2026-07-31)
+
+```
+$F00ED6  movea.l $c4e.w,a0        ; the PTM base pointer
+$F00EDA  bset.b  #$7,$c5a.w       ; the race flag
+$F00EE4  move.b  $3(a0),d0        ; read PTM STATUS
+$F00EE8  move.b  $d(a0),d0        ; read T3   -- together these clear the interrupt
+$F00EEE  move.w  $c56.w,d1        ; THE PERIOD, from $0C56
+$F00EF2  add.l   d1,$c42.w        ; milliseconds since midnight += period
+$F00EFA  subi.l  #$5265c00,d0     ; 86,400,000
+$F00F00  bmi.b   $f00f3c          ; not a full day yet -> done
+$F00F02  addq.l  #$1,$c3e.w       ; day counter
+$F00F06  move.l  d0,$c42.w        ; wrap the millisecond counter
+$F00F0A  move.l  #$5265c00,d0
+$F00F10  movea.l $c2c.w,a1
+$F00F14  move.w  sr,-(a7) / ori.w #$700,sr        ; mask to level 7
+$F00F1A  movea.l $c(a1),a0
+$F00F1E  loop:  move.l a0,d1 / beq / sub.l d0,$8(a0) / ...
+```
+
+Everything recorded about the tick is confirmed: the race flag at `$0C5A`, the status-then-T3 read
+that clears the interrupt, `$0C42` as milliseconds since midnight, the `$5265C00` = 86,400,000
+comparison, and the day counter at `$0C3E`.
+
+**Two additions.**
+
+- **`$0C56` is the ISR's period source.** Last entry identified `$0C56` as the tick period stashed at
+  init; this is its reader — `move.w $c56.w,d1` — so the ISR adds a *configured* value rather than a
+  literal. Retiming the RTOS really is one config word: `$F0A530` sets the PTM latch **and**, through
+  `$0C56`, the amount the clock advances per tick. Change one without the other and wall-clock time
+  drifts from real time silently.
+- **The day rollover is not just a counter bump.** It masks to level 7, takes a list head from
+  `$0C2C`, follows `+$C`, and walks it subtracting **86,400,000 from `+$8` of every entry** — keeping
+  pending absolute-time entries consistent across midnight. This project records that the rollover
+  "needs 24 hours of simulated time and has never executed in any run here"; this is what it would do
+  if it did, and it is a list traversal under a full interrupt mask, not a one-line increment.
+
+That makes the rollover a real emulation hazard rather than a curiosity: any host software queuing
+absolute-time work depends on a path that no test here has ever taken.

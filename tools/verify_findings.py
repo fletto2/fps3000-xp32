@@ -8231,6 +8231,16 @@ check('...and CR3 <- $C6 then CR1 <- $00 via the CR2 bit-0 address select',
       and _w(0xF0A2DE) == 0x137C and _w(0xF0A2E0) == 0x0001 and _w(0xF0A2E2) == 0x0003
       and _w(0xF0A2E4) == 0x137C and _w(0xF0A2E6) == 0x0000 and _w(0xF0A2E8) == 0x0001)
 
+check('the tick ISR reads its period from $0C56, the word init stashed there',
+      _w(0xF00EEE) == 0x3238 and _w(0xF00EF0) == 0x0C56
+      and _w(0xF00EF2) == 0xD3B8 and _w(0xF00EF4) == 0x0C42)
+check('...and the day rollover walks a list subtracting 86,400,000 under mask level 7',
+      _w(0xF00EFA) == 0x0480 and _l(0xF00EFC) == 0x05265C00
+      and _w(0xF00F02) == 0x52B8 and _w(0xF00F04) == 0x0C3E
+      and _w(0xF00F10) == 0x2278 and _w(0xF00F12) == 0x0C2C
+      and _w(0xF00F16) == 0x007C and _w(0xF00F18) == 0x0700
+      and _w(0xF00F22) == 0x91A8 and _w(0xF00F24) == 0x0008)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
