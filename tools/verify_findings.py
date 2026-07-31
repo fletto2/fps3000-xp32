@@ -7877,6 +7877,10 @@ check('the SCM region is 4096 longwords and the test makes 4 passes',
       and 4096 * 4 * 4 == 65536          # longwords x passes x bytes = measured byte accesses
       and 4096 * 4 * 2 == 32768)         # verify iterations x 2 = $FF0204 writes
 
+check('the SCM loop accounts for essentially all $FF0204 writes',
+      # measured 32967 total; predicted SCM contribution 32768; remainder small
+      32967 - 4096 * 4 * 2 == 199 and 0 < 199 < 500)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

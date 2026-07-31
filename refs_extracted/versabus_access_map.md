@@ -34143,3 +34143,39 @@ That run was capped at 40 M cycles and **ended inside the DRAM test at `$F09A92`
 stage exists. The true figure is 16,388 addresses. A truncated run is indistinguishable from a
 complete one in the output unless the final PC is checked against the expected idle loop — worth
 doing before any "the firmware never touches X" claim drawn from a trace.
+
+## Measured device-access totals over a full boot (2026-07-31)
+
+Bus log aggregated in-stream (the per-access `FPS3K_ACCESSLOG` form produces **3.9 GB** for a full
+boot and should not be written to disk):
+
+| address | dir | count | |
+|---|---|---:|---|
+| **`$F70019`** | RD | **590,333** | board status, polled by `PollBoardStatus` |
+| **`$FF0204`** | WR | **32,967** | the phase counter |
+| `$F7000D` | RD | 19,740 | MC6840 T3 counter |
+| `$F70003` | RD | 19,724 | MC6840 status |
+| `$1FFF1` | RD/WR | 92 / 55 | VMOD control |
+| `$1FFF0` | RD/WR | 39 / 49 | |
+| `$F70018` | RD | 85 | |
+| `$FF0216` | WR | 17 | |
+| `$FF0210` / `$FF0202` | WR | 9 / 9 | |
+| `$FF0204` | RD | **7** | |
+| `$FF0218` / `$FF0214` / `$FF020C` | WR | 5 / 3 / 3 | |
+
+**The `$FF0204` correction is confirmed by measurement.** The predicted contribution from the SCM
+verify loop was revised from 65,536 to **32,768**; the measured total is **32,967**, i.e. the SCM
+loop plus ~200 from every other phase combined. The documented "~33k writes against 7 reads" is
+reproduced exactly, and is now *accounted for* rather than merely observed.
+
+**But "the hottest register in the machine" needs qualifying.** `CLAUDE.md` says that of `$FF0204`.
+By total accesses it is not close: **`$F70019` is read 590,333 times**, eighteen times more often,
+because `PollBoardStatus` runs after every step of every self-test stage and reads it twice per call.
+`$FF0204` is the most-**written** register; `$F70019` is the most-accessed. Both matter for a model,
+and for different reasons — the first is a write-only broadcast whose value never has to be correct,
+the second is a read whose value gates every retry loop in the suite.
+
+**Method caveat.** The aggregator keys on the first 6-hex-digit token per line, so log lines that
+carry a PC rather than an address (`$F09B6C`, `$F08B32`, …) appear as phantom "addresses" in the raw
+output. They are excluded above. Any similar sweep needs the same filter, or it will report ROM
+addresses as devices.
