@@ -4040,6 +4040,13 @@ check('...and it is byte-identical in all four XP tasks',
       len({_rom[a - _B:a - _B + 5]
            for a in (0xF084A4, 0xF07AA4, 0xF070A4, 0xF0668C)}) == 1)
 
+# Op $A's 0..12 bound is structural: [0] the packed nibbles, [1..12] the four
+# per-channel {status, data-hi, data-lo} records at $1066 + (ch-1)*6.
+check('the op-$A array is exactly the status word plus the four channel records',
+      0x1066 + 3 * 6 + 4 == 0x107C
+      and [0x1066 + (c - 1) * 6 for c in range(1, 5)]
+      == [0x1066, 0x106C, 0x1072, 0x1078])
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.

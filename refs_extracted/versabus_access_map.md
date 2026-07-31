@@ -18277,3 +18277,29 @@ The data-low word is the operation the AC is asked to perform. Literals seen: **
 with `a2` pointing at the per-channel `$101E` window that RDHC command 1 publishes, and
 `d1` carrying a payload pre-decremented out of it. Three codes is the whole vocabulary this
 firmware can emit unaided; the rest would come from the host-loaded CP program.
+
+### Operation `$A` reads out the entire channel state — and the `0..12` bound is structural
+
+The array operation `$A` walks is exactly 13 words, `$1064`-`$107C`, and it decomposes
+with no slack:
+
+| index | address | contents |
+|---|---|---|
+| 0 | `$1064` | the packed per-channel status nibbles (four 4-bit codes) |
+| 1-3 | `$1066`,`$1068`,`$106A` | channel 1 `{status, data-high, data-low}` |
+| 4-6 | `$106C`,`$106E`,`$1070` | channel 2 |
+| 7-9 | `$1072`,`$1074`,`$1076` | channel 3 |
+| 10-12 | `$1078`,`$107A`,`$107C` | channel 4 |
+
+`$1066 + (ch-1)*6` is the per-channel record this file already documents as what each ISR
+latches — three words, stride 6. Laid out from `$1064` they occupy indices 1 through 12
+**exactly**, and `$107E`, the sequence counter, begins immediately after the array ends.
+
+So the handler's bound `cmpi.l #$c,$E7A` is not an arbitrary limit: **12 is the last index
+of this structure**. And operation `$A` with its bit-4 auto-increment is the chassis
+reading out *the whole channel state in one walk* — a summary word telling it which
+channels changed, followed by each channel's latched status and 32-bit data.
+
+That closes the readback direction. The chassis writes commands into MODE0 and gets them
+executed; the SBC answers by packing status into `$1064`-`$107C` and letting the chassis
+walk it with operation `$A`.
