@@ -33179,3 +33179,37 @@ For an emulator this is the strongest possible form of cross-check: `!IDV`, `!US
 extents and the six TCBs can all be predicted before the first instruction executes, then compared
 against a dump afterwards. This session did exactly that for `!IDV` (six for six) and `!UST`
 (nine entries, `2/2/2/2/1/0`).
+
+## The 96-byte TDTI record decoded in full (2026-07-31)
+
+```
++$00  "!TCB"        the tag
++$04  "RDHC"        the task NAME              <- differs per record
++$08  0             session
++$14  $00009600     PRIORITY $96 in the high word
++$18  $0010A000     options / attributes
++$1C  $00F046F0     the ENTRY POINT            <- differs per record
++$20  $F046F05C     code segment first/last PAGE, packed  <- differs per record
++$24  $00000001
++$40  "PROG"        the code SEGMENT NAME
++$44  $80000000     segment attributes
+```
+
+**Across all six records, only four field ranges differ**: `+$04`-`$07` (the name), `+$1E`-`$1F`
+(the entry's low word), and `+$21`/`+$23` (the segment page low bytes). Everything else is shared —
+same priority, same options, same segment name, same attributes.
+
+Two confirmations fall out, each from a different direction:
+
+- **`+$14` carries priority `$96`**, and the RAM dump showed `TCB+$26` reading **`$96` in every live
+  TCB**. The ROM record is where that value comes from, and its uniformity across all six explains
+  why the measured priorities were identical.
+- **`+$40` is `"PROG"`**, the code segment's name. This project's `!TST` analysis found "the two live
+  segments are **`PROG`** (the ROM code extent) and **`STCK`** (a two-page RAM block)". The TDTI
+  record names `PROG` with its page extent; the region head's `CRTCB` block names `STCK` with its
+  `$190` request. **Both segments are declared in ROM, in two different tables**, and the runtime
+  `!TST` is the merge of them.
+
+That completes the static picture: `!TST`'s two segments, `!IDV`'s six records, `!UST`'s nine
+entries, the six TCBs' priorities and entry points are **all ROM data**, split across the TDTI table
+and the six region heads. Nothing about the boot-time task configuration is computed.

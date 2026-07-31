@@ -7593,6 +7593,13 @@ check('the TDTI table holds name, entry and code-segment pages for six tasks',
 check('...and each region head sits at the base of the segment that record describes',
       _w(0xF0A600 + 96 * 5 + 0x20) == 0xF07D and _l(0xF07D00) == 0x58503149)
 
+check('the TDTI record carries priority $96 and the PROG segment name',
+      all((_l(0xF0A600 + 96 * _i + 0x14) >> 16) == 0x0096 for _i in range(6))
+      and all(_l(0xF0A600 + 96 * _i + 0x40) == 0x50524F47 for _i in range(6)))
+check('...and the six records differ only in name, entry and segment pages',
+      len({_rom_bytes[0xF0A600 - 0xF00000 + 96 * _i + 0x14] for _i in range(6)}) == 1
+      and len({_rom_bytes[0xF0A600 - 0xF00000 + 96 * _i + 0x04] for _i in range(6)}) > 1)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
