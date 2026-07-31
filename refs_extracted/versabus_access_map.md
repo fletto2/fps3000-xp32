@@ -35305,3 +35305,38 @@ odd-then-even — so "direction pairs" is the right description and "even means 
 **For a chassis model this halves the vocabulary to explain.** There are not 29 live codes with an
 irregular handler assignment; there are ~21 operations, each appearing in a request form and a
 continue form, with the phase selected by which base the firmware jumps through.
+
+## The recorded 42-slot map is CONFIRMED, entry for entry (2026-07-31)
+
+An independent decode of all 42 slots as `jmp d16(pc)` instructions reproduces the recorded map
+exactly:
+
+| handler | codes |
+|---|---|
+| `D1_SEND` (10) | `$02 $03 $04 $05 $06 $07 $0D $0E $0F $10` |
+| `POLL` (9) | `$01 $0A $16 $17 $19 $1B $1F $22 $24` |
+| `BLK_XFR` (9) | `$08 $09 $18 $1A $1C $1D $1E $23 $25` |
+| `D2_FIN` (1) | `$14` |
+| `rts`/`nop` (13) | `$00 $0B $0C $11 $12 $13 $15 $20 $21 $26 $27 $28 $29` |
+
+Ten / nine / nine / one / thirteen — every count and every code as recorded. So the dual-base finding
+**adds to that table rather than correcting it**, and the base-A map above remains the right
+reference for the request phase.
+
+### The translation between the two views
+
+Base-A codes `$15`-`$29` are base-B codes `$00`-`$14`. Applying that to the upper-half entries:
+
+| base-A code | `$16` | `$17` | `$18` | `$19` | `$1A` | `$1B` | `$1C` | `$1D` | `$1E` | `$1F` | `$22` | `$23` | `$24` | `$25` |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| base-B code | `$01` | `$02` | `$03` | `$04` | `$05` | `$06` | `$07` | `$08` | `$09` | `$0A` | `$0D` | `$0E` | `$0F` | `$10` |
+| handler | P | P | B | P | B | P | B | B | B | P | P | B | P | B |
+
+In base-B indexing the direction pairs fall out cleanly — `($02,$03)`, `($04,$05)`, `($06,$07)`,
+`($0D,$0E)`, `($0F,$10)` — each one POLL and one BLK_XFR. That is the same fact the recorded table
+expresses as "interleaving across `$16`-`$25`", seen from the base the firmware actually uses for
+those slots.
+
+**Both descriptions are correct; they differ in which base they read through.** The recorded one is
+what a static reading of the table yields, and it took following an execution into the table to find
+that the firmware ever uses the other origin.
