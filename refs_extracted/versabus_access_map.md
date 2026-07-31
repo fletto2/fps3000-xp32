@@ -32006,3 +32006,41 @@ those bases, not pointers to them.
 - **`TCB+$14` (session) is zero for every task**, so this is a single-session machine — which is
   why `T0GETTCB`'s session comparison never discriminates and why the privilege wildcard has
   nothing to hide.
+
+## Measured: `TCB+$36` points at the task's own `!TST` (2026-07-31)
+
+The RAM dump names what the translation base actually is. For every one of the six tasks:
+
+```
+TCB+$36  ==  TCB + $160
+```
+
+and `TCB+$160` is the **`!TST`, the Task Segment Table** — six of them, one per task, exactly as
+this project records. So `T0LOGPHY` translates a logical address **through the task's own segment
+table**, which is precisely what a logical→physical routine should use and what the `!TST`'s
+`TSTMMU` first/last-page fields exist for.
+
+That closes the identification from both ends: statically, `+$36` is loaded into `a0` before every
+call to `T0LOGPHY`; dynamically, it holds the address of the task's segment table.
+
+### Other fields, measured
+
+| field | all six tasks | reading |
+|---|---|---|
+| `+$2C` state | **`$4000`** — bit 14 only | **WAITING**, matching "all six TCBs reporting `TSKSBLCK`". **No dispatch bits (4, 5, 6, 7) set** — consistent, since a blocked task has nothing pending |
+| `+$28` flags | **`$A081`**, RDHC **`$A001`** | bit 15 = **privilege** (`btst.b #$F` on the byte at `$28`) — **every task is privileged**; bit 6 (ownership) **clear everywhere**; bit 7 set for all *except* RDHC |
+| `+$148` | `$00000000` | **no single-step armed**, as predicted |
+| `+$26` priority | `$96` | uniform |
+| `+$102` status | `$0000` | no pending directive status |
+
+Two of these are worth drawing out.
+
+**Every task carries privilege but none uses it.** This project records that "none of this
+firmware's tasks issues any of the seven [privileged directives]" — the dump shows they all
+*have* the right. So the privilege model is not merely dormant in the sense of being unimplemented;
+it is granted and unexercised, which is what one expects if it exists for host-loaded software.
+
+**RDHC differs from the other five in exactly one flag bit.** Bit 7 is set for the four XP tasks
+and TCBIO1I and clear for RDHC — the master/dispatch task. Its meaning is unestablished, but the
+partition is exactly "the five worker tasks versus the one that drives them", which is a strong
+hint and a cheap thing to test on hardware.
