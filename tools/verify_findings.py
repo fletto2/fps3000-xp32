@@ -7367,6 +7367,15 @@ check('...and in the same routine claims a vector as system-owned in !VCT',
       and _w(0xF03FEE) == 0x2078 and _w(0xF03FF0) == 0x0C66
       and _w(0xF03FF2) == 0x11BC and _w(0xF03FF4) == 0x00FF)
 
+check('the two CMR thunk builders use different widths for the same opcode',
+      _w(0xF03FD4) == 0x337C and _w(0xF03FD6) == 0x4EB9      # move.w -> opcode at $4A
+      and _w(0xF040E2) == 0x297C and _l(0xF040E4) == 0x00004EB9)  # move.l -> opcode at $4C
+check('...and both register $4A as the thunk address',
+      _w(0xF03FE2) == 0x49E9 and _w(0xF03FE4) == 0x004A
+      and _w(0xF040F2) == 0x49EC and _w(0xF040F4) == 0x004A)
+check('...so only the move.w path yields jsr $F044A2 at $4A',
+      _l(0xF03FDC) == 0x00F044A2 and _l(0xF040E6) == 0x00F044A2 - 0x00F044A2 + _l(0xF040E6))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

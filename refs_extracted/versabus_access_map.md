@@ -32577,3 +32577,41 @@ It also sharpens the runtime-thunk hazard already recorded for emulation. The ke
 `$4EB9` **as data** and then jumps to it — so any model that caches decoded instructions must
 invalidate on RAM writes. The site is `CMR`, it is dormant here, and it would come alive the moment
 host-loaded software issued directive `$3C`.
+
+## A latent bug: the second thunk-builder writes an opcode two bytes low (2026-07-31)
+
+The complete self-modifying-code inventory is four sites — three that write a `jsr` opcode as data
+and one that fills NOPs:
+
+| site | writes | target | notes |
+|---|---|---|---|
+| `$F02126` | `move.w #$4eb9,(a3)+` | `$F008FA` (via `lea`/`move.l a0,(a3)+`) | `CNCTIRQ`, into a buffer |
+| `$F03FD4` | `move.w #$4eb9,$4a(a1)` | `$F044A2` at `$4C` | `CMR` |
+| **`$F040E2`** | **`move.l #$4eb9,$4a(a4)`** | `$F044A2` at `$4C` | `CMR`'s second path |
+| `$F047B2` | `move.w #$4e71,(a0)+` | — | RDHC's eight-NOP pre-fill at `$10000` |
+
+**The third site does not build a valid `jsr`.** Writing the opcode with `move.l` puts
+`00 00 4E B9` at `$4A`, so the opcode lands at `$4C` — where the very next instruction overwrites
+it:
+
+```
+$F03FD4  move.w #$4eb9,$4a(a1)   -> $4A: 4E B9 . . . .
+$F03FDA  move.l #$f044a2,$4c(a1) -> $4A: 4E B9 00 F0 44 A2   = jsr $00F044A2   VALID
+
+$F040E2  move.l #$4eb9,$4a(a4)   -> $4A: 00 00 4E B9 . .
+$F040EA  move.l #$f044a2,$4c(a4) -> $4A: 00 00 00 F0 44 A2   = ori.b/neg.l     NOT A JSR
+```
+
+Both paths then do `lea $4a(aN),a4` / `move.l a4,(a3)`, registering **`$4A`** as the thunk address
+— so the consumer jumps to `$4A` in both cases, and in the second it executes
+`ori.b #$F0,d0` / `neg.l -(a2)` instead of a call.
+
+This is unobservable on this machine: both sites are inside **`CMR`**, directive `$3C`, which this
+firmware never issues, so no `!CCB` is ever created and neither thunk is ever built or called. It
+is recorded because it is a **latent defect that host-loaded software could reach** — anything
+issuing `$3C` down the second path would jump into a malformed thunk.
+
+Stated conservatively: the two sites demonstrably produce different byte layouts from the same
+apparent intent, and only the first yields the instruction the code is plainly trying to write.
+Whether the second path is a transcription slip or serves some other consumer cannot be settled
+from the ROM alone — but its own `lea $4A` says it expects the thunk at `$4A`.
