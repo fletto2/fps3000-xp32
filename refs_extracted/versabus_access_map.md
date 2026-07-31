@@ -35908,3 +35908,41 @@ Two recorded facts fall out incidentally: **`adda.l #$10000,a1` appears twice** 
 worth stating only when the detector that failed to find X has been shown to find it somewhere else,
 and when the search covers every form X could take. Both were cheap here; neither was done when the
 claim was first recorded.
+
+## `$FF0010` verified never accessed — and the control caught a broken detector first
+
+Applying the same method to the recorded claim that "`$FF0010` = CMD_ARG_HI is never accessed — not
+statically, and zero times at runtime".
+
+| | absolute | displacement |
+|---|---:|---:|
+| **control** `$FF000E` | 1 | **17** (`$e(aN)`) |
+| **target** `$FF0010` | 0 | 8 (`$10(aN)`) |
+
+The control behaves exactly as this project's central caution predicts — one absolute reference
+against seventeen displacement ones, so a displacement-blind sweep would have called `$FF000E`
+unused too.
+
+The eight `$10(aN)` sites resolve by base register:
+
+```
+F044B8 a7   (stack frame)     F09EAC a0   (allocator block)
+F05464 a6   (task segment)    F09EF2 a0   (allocator block)
+F08ECE a0   (pointer arith)   F09FBA a0   (allocator block)
+F0A09C a3                     F0A3E4 a0
+```
+
+**Not one uses `a5`** — the register the task code loads with `$FF0000` (`movea.l #$ff0000,a5`, seen
+in every task's startup trace). So none of them is a chassis access, and `$FF0010` is genuinely
+untouched in both forms. The recorded claim stands, now with a control behind it.
+
+### The control earned its keep
+
+My first attempt reported **zero** displacement hits for *both* the control and the target — shell
+escaping had mangled the pattern — while a raw grep two lines later listed eight sites. Had I not run
+the control, I would have recorded "0 and 0, therefore never accessed" and been right by accident,
+with a detector that finds nothing at all.
+
+That is the failure mode worth naming: **a broken detector produces a correct-looking negative**, and
+only a positive control distinguishes "X is absent" from "the search is dead". Every "never accessed"
+in this file predates that discipline.

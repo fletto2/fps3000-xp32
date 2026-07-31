@@ -8306,6 +8306,13 @@ check('...and adds $10000 to the record address in both arms',
       _w(0xF051DC) == 0xD3FC and _l(0xF051DE) == 0x00010000
       and _w(0xF052D0) == 0xD3FC and _l(0xF052D2) == 0x00010000)
 
+check('$FF000E has 1 absolute and 17 displacement references (the control)',
+      len(_re21a.findall(r'\$ff000e', _asm21a)) == 1
+      and len(_re21a.findall(r'\$e\(a[0-7]\)', _asm21a)) == 17)
+check('...while no $10(aN) site uses a5, the chassis base register',
+      not _re21a.search(r'\$10\(a5\)', _asm21a)
+      and len(_re21a.findall(r'\$ff0010', _asm21a)) == 0)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
