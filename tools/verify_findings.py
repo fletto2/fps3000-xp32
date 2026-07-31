@@ -5562,8 +5562,13 @@ check('the probes are TWO-byte instructions followed by four nops',
       insn(0xF096AC) == 'move.w (a1), d0' and insn(0xF096B8) == 'clr.w (a1)'
       and all(insn(0xF096AE + 2 * k) == 'nop' for k in range(4))
       and all(insn(0xF096BA + 2 * k) == 'nop' for k in range(4)))
+# A real assertion, not `True`: the probe is 2 bytes at $F096AC, so a stacked PC
+# anywhere in [probe, probe+2] plus the handler's +4 lands in [$F096B0,$F096B2] --
+# both inside the nop run $F096AE..$F096B4.  The landing zone is what makes an
+# imprecise bus-error PC safe.
 check('...so a fixed +4 advance lands inside the nop padding, not on an exact boundary',
-      True)
+      all(insn(0xF096AC + p + 4) == 'nop' for p in (0, 2))
+      and all(insn(0xF096B8 + p + 4) == 'nop' for p in (0, 2)))
 check('bit 5 set expects a FAULT and bit 6 expects none',
       insn(0xF09626) == 'move.w #$20, $216(a6)' and insn(0xF09630) == 'bne.b $f09638'
       and insn(0xF096E8) == 'move.w #$40, $216(a6)' and insn(0xF096F4) == 'beq.b $f096fc')
