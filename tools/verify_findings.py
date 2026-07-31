@@ -7729,6 +7729,24 @@ check('...and SET once a non-zero level is written',
       _w(0xF09482) == 0x082C and _w(0xF09484) == 0x0002
       and _w(0xF09488) >> 8 == 0x66)
 
+check('the bit-1 stage installs vector $53 at $1FFE6 and slot $14C',
+      _w(0xF09256) == 0x303C and _w(0xF09258) == 0x014C
+      and _w(0xF0925A) == 0xE448
+      and _w(0xF0925C) == 0x3B40 and _w(0xF0925E) == 0xFFF6
+      and _w(0xF09260) == 0x23CB and _l(0xF09262) == 0x0000014C)
+check('...tests $F70019 bit 1 against $1FFF1 bit 5: set=>1, clear=>0',
+      _w(0xF0926E) == 0x08ED and _w(0xF09270) == 0x0005
+      and _w(0xF0927A) >> 8 == 0x66
+      and _w(0xF09290) == 0x08AD and _w(0xF09292) == 0x0005
+      and _w(0xF0929C) >> 8 == 0x67)
+check('...then clears $1FFF0 BIT 0 (bclr #$8 = mod 8) and requires bit 1 SET',
+      _w(0xF092B2) == 0x0895 and _w(0xF092B4) == 0x0008
+      and _w(0xF092BC) == 0x08ED and _w(0xF092BE) == 0x0005
+      and _w(0xF092D6) >> 8 == 0x66)
+check('...allowing a 16-iteration dbeq settling budget for the readback',
+      _w(0xF092C2) == 0x303C and _w(0xF092C4) == 0x000F
+      and _w(0xF092CC) == 0x57C8)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

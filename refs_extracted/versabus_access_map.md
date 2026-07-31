@@ -33683,3 +33683,46 @@ Worth reconciling against the stage the original equation was fitted to before c
 The same preamble is the concrete instance of two things this project records abstractly: the
 "four interrupt handlers installed by tests that set `a5` and then lower the CPU mask", and
 `$1FFE4`/`$1FFF2` receiving vector numbers `$52`/`$50` — here written one instruction apart.
+
+## The bit-1 equation is fully derived, including its second term (2026-07-31)
+
+The four literal bit-1 tests at `$F0924A` supply what the `$F0919C` group does not. Preamble:
+
+```
+lea $f70018.l,a4
+lea $F09330.l,a3
+move.w #$14c,d0 / lsr.w #$2,d0     ; d0 = $53, a VECTOR NUMBER
+move.w d0,-$a(a5)                  ; $1FFE6 <- $53
+move.l a3,$14c.l                   ; install the handler at vector $53
+```
+
+| # | action | required `$F70019` bit 1 |
+|---:|---|---|
+| 1 | `bset #$5,$1(a5)` — `$1FFF1` bit 5 set | **1** (`bne`) |
+| 2 | `bclr #$5,$1(a5)` — bit 5 clear | **0** (`beq`) |
+| 3 | **`bclr.b #$8,(a5)`** = `$1FFF0` **bit 0** clear, `bset` bit 7, `bset` bit 5, settle | **1** (`bne`) |
+
+Compare the emulator's equation, previously an empirical fit:
+
+```
+bit 1 of $F70019 = NOT(bit 4 of $1FFF1) OR (bit 5 AND NOT bit 0 of $1FFF0)
+```
+
+**Every term is now accounted for.** The `$F0919C` group establishes `NOT(bit 4)` by inversion.
+Test 2 here requires bit 1 = 0 while bit 5 is clear, which forces bit 4 to be **set** at that point —
+consistent. And **test 3 is precisely the second term**: it deliberately clears `$1FFF0` bit 0 and
+sets `$1FFF1` bit 5, then demands bit 1 = 1. The `AND NOT bit 0 of $1FFF0` conjunct, which reads as
+arbitrary in the model, is exactly what this test isolates. The equation is confirmed, not merely
+compatible.
+
+**Three details worth carrying into the model:**
+
+1. **`bclr.b #$8,(a5)` is bit 0**, not bit 8 — `btst`/`bclr` on memory are byte-sized with the bit
+   number mod 8. This is the project's documented hazard appearing in the one place where it changes
+   which register field is meant (`$1FFF0` low bit, the VERSAbus transfer-request byte).
+2. **`$1FFE6` is a third interrupter vector register**, taking `$53`, alongside the recorded
+   `$1FFE4` ← `$52` and `$1FFF2` ← `$50`. Each is written as `vector_number = handler_slot >> 2`
+   immediately before the matching `move.l handler,$<slot>.l`, so the pairing is unambiguous.
+3. **`$F092C6` spins `dbeq` up to 16 times** waiting for `$1FFF1` bit 5 to read back before testing
+   the response. The firmware allows the bit **settling time**; a model that answers instantly is
+   fine, but one that answers *late* has a 16-iteration budget and no more.
