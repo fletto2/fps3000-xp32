@@ -4434,6 +4434,21 @@ check('...and $F000BC-$F000FF is zero-fill landing exactly on the $F00100 trampo
       not any(_rom[0xF000BC - _B:0xF00100 - _B])
       and _rom[0xF00100 - _B] != 0)
 
+# --- the boot locates its vector table by scanning ROM for the !VCT tag --
+check('the scan base comes from config $F0A4F6 = $F00100',
+      struct.unpack('>I', _rom[0xF0A4F6 - _B:0xF0A4FA - _B])[0] == 0xF00100
+      and insn(0xF09C96) == 'movea.l $f0a4f6(pc), a2')
+check('...and it is a 2-byte scan: cmp.l (a2)+ then subq.l #$2,a2 on mismatch',
+      insn(0xF09CA4) == 'cmp.l (a2)+, d0'
+      and insn(0xF09CA8) == 'subq.l #$2, a2')
+check('...reaching the ROM !VCT tag at $F0011A on the 14th compare',
+      0xF00100 + 2 * 13 == 0xF0011A
+      and _rom[0xF0011A - _B:0xF0011E - _B] == b'!VCT')
+# The absent markers each have exactly one write site, none of which executes.
+check('!DLY, !CCB and !ASQ each have exactly one write site in the ROM',
+      all(_rom.count(struct.pack('>I', t)) == n
+          for t, n in ((0x21444C59, 1), (0x21434342, 1), (0x21415351, 2))))
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
