@@ -36883,3 +36883,47 @@ runtime behaviour grounds a model and documents corroborate it. Here it is the o
 **To get a witness** the SLC ASCII S-record path must be driven to a *rejected* record — the drain
 loops are error paths, so a well-formed record never reaches them. That is a specific, achievable
 experiment: feed an over-long or wrongly-typed record through `FPS3K_SREC` and check `$F05218`.
+
+## The SLC path DRIVEN for the first time — four results in one experiment (2026-07-31)
+
+Configuration: `FPS3K_SREC=<file> FPS3K_RESP=0x00 FPS3K_CHSEL_RD=0 FPS3K_XPIRQ=6`, with a
+deliberately malformed record:
+
+```
+S00600004844521B
+S4130000DEADBEEFCAFEBABE00112233445566      <- S4 is not a valid type here
+S9030000FC
+```
+
+`FPS3K_CHSEL_RD=0` is the missing ingredient: chassis op `$0` selects the **SLC ASCII loader** only
+when `CHANNEL_SELECT` reads `$0`, which no previous configuration supplied.
+
+**1. The SLC path executes.** `$F04B22` (the handshake) and `$F04B68` (the record dispatcher) are
+**reached** — both listed as unwitnessed in this session's audit an hour ago.
+
+**2. The ASCII wire format is confirmed from the bus log.** Reads of `$FF0008` return
+`$5330 $3036 $3030 $3030 $3438 $3434` — `"S0"`, `"06"`, `"00"`, `"00"`, `"48"`, `"44"` — my header
+record, **two ASCII hex characters per 16-bit word**, exactly as recorded.
+
+**3. `$FF0000` gets its FIRST RUNTIME WITNESS: 26 reads.** The register that had zero reads in every
+prior configuration is read 26 times here, in the drain loop, exactly as the static decode predicted.
+
+**4. Panel code `$25F` is confirmed by construction.** `$0E6E` reads **`$025F`** — "S-record **type**
+not recognised" — produced by feeding an `S4` record to a handler that accepts `S0`-`S3` and `S7`-`S9`.
+The recorded meaning is now demonstrated by deliberately triggering it, not inferred from adjacency.
+
+### And the faithful WC counter works
+
+With `FPS3K_WC=8` the same run logs
+
+```
+RD FF0000 = 0007  0006  0005  0004  0003  0002  0001  0000
+```
+
+— a genuine countdown, with the firmware's `while ($FF0000 > 0)` loop terminating on zero. So the
+counter this project's schematics describe (four `25LS2569`s, sheet 16) is now **implemented and
+exercised**, replacing the `srec_exhausted` shortcut on a path that finally runs.
+
+**Method note.** The experiment that closed all four came from asking what *stimulus* the unreached
+code needed rather than re-reading the code. The audit said `$F05218` was unwitnessed; the fix was one
+environment variable — `FPS3K_CHSEL_RD=0` — that nothing had previously combined with `FPS3K_SREC`.

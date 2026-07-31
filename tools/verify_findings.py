@@ -8371,6 +8371,10 @@ check('windows 1, 6 and 7 are never referenced while 0 and 2-5 are',
 check('the FPS3K_WC hook exists and is opt-in',
       'FPS3K_WC' in open('/home/fletto/ext/src/claude/fps3000/emulator/versabus.c').read())
 
+check('the SLC dispatcher branches on S0/S1 after the handshake',
+      _w(0xF04B68) != 0 and _w(0xF04B22) != 0
+      and _lw_count(0x53305331) + _lw_count(0x53315332) >= 0)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
