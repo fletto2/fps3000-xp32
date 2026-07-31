@@ -5925,6 +5925,7 @@ check('$FF0218 takes only $0400 and $0000, in equal numbers',
 check('no 32-bit operation touches $FF0214 or $FF0216 anywhere',
       not [x for x in range(0xF00000, 0xF10000, 2)
            if ((insn(x) or ' ').split() or [''])[0].endswith('.l')
+           and not (insn(x) or '').startswith(('lea', 'pea'))
            and _mre.search(r'(?<!-)\$21[46]\(a\d\)', (insn(x) or '').lower())])
 check('...$FF0214 has exactly one site, a word write in the self-test',
       [x for x in range(0xF00000, 0xF10000, 2)
@@ -5939,6 +5940,7 @@ check('the $240/$25E hits are misaligned decodes, not instruction boundaries',
 check('$FF0210 has no 32-bit access either -- 18 sites, all word',
       not [x for x in range(0xF00000, 0xF10000, 2)
            if ((insn(x) or ' ').split() or [''])[0].endswith('.l')
+           and not (insn(x) or '').startswith(('lea', 'pea'))
            and _mre.search(r'(?<!-)\$210\(a\d\)', (insn(x) or '').lower())])
 check('small displacements are NOT distinctive: $4(aN) occurs all over the firmware',
       len([x for x in range(0xF00000, 0xF10000, 2)
@@ -5963,6 +5965,7 @@ check('btst/tst/cmp put their memory operand last but do NOT write',
 check('no 32-bit operation touches ANY XLTR register',
       not [x for x in range(0xF00000, 0xF10000, 2)
            if ((insn(x) or ' ').split() or [''])[0].endswith('.l')
+           and not (insn(x) or '').startswith(('lea', 'pea'))
            and _mre.search(r'(?<!-)\$2[0-5][0-9a-f]\(a\d\)', (insn(x) or '').lower())])
 
 check("op $3's window arithmetic reaches $7FFFFC -- 4 MB, not 1",
