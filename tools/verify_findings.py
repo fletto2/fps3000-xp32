@@ -4356,6 +4356,19 @@ check('...and the mask that disables it is the ROM word $F0A52A = $0000',
 check('RDHC\'s command table at $F05358 is 6-byte jmp entries',
       insn(0xF0535E) == 'jmp $f054a2.l' and insn(0xF05364) == 'jmp $f054e8.l')
 
+# The top-of-RAM initialiser: three descending runs bracketing $1FFF0.
+check('the initialiser rounds the RAM top down to 4 KB and runs three groups',
+      insn(0xF0A462) == 'andi.l #$fffff000, d0'
+      and insn(0xF0A472) == 'moveq #$3, d4'
+      and insn(0xF0A478) == 'moveq #$7, d3')
+check('...writing seven words downward per group from a table base',
+      insn(0xF0A474) == 'movea.w (a1)+, a2'
+      and insn(0xF0A47A) == 'move.w (a1)+, -(a2)')
+check('...whose bases $1000/$0FF0/$0FE0 bracket the VMOD register at $1FFF0',
+      [struct.unpack('>H', _rom[0xF0A4BE - _B + 16 * k:0xF0A4BE - _B + 16 * k + 2])[0]
+       for k in range(3)] == [0x1000, 0x0FF0, 0x0FE0]
+      and 0x20000 - 2 * 7 == 0x1FFF2 and 0x1FFF0 - 2 == 0x1FFEE)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
