@@ -31220,3 +31220,41 @@ both — **there is no single correct shift**, which is the quantitative form of
 The practical consequence for reading the disassembly: **an address computed by applying any fixed
 XP4I offset is unreliable across the `$100`-`$1C0` band** and reliable outside it. Anything derived
 that way in that band should be re-derived from the `!TST` segment bounds or from the code itself.
+
+## Self-similarity sweep: the ROM has exactly two construction styles (2026-07-31)
+
+Scanning the whole application region for 32-byte sequences that occur more than once (skipping
+mostly-zero windows) finds 1,298 repeated sequences, clustering into **30 replicated regions of
+64 bytes or more**. Every one falls inside `$F05684`-`$F086FF`, and they line up as four parallel
+sets:
+
+| region | replicated spans |
+|---|---|
+| RDHC `$F056xx`-`$F05C52` | the source copies |
+| XP4I `$F0623A`-`$F068E7` | |
+| XP3I `$F06C51`-`$F072FF` | |
+| XP2I `$F07651`-`$F07CFF` | |
+| XP1I `$F08051`-`$F086FF` | |
+
+with strides confirming the layout independently: **XP1I − XP2I = XP2I − XP3I = exactly `$A00`**,
+while **XP3I − XP4I = `$A17`** — XP4I sitting ~`$17`-`$18` off the grid, the same drift the
+windowed shift scan measured.
+
+**Two things this establishes, both negatives worth having:**
+
+1. **No unidentified template copy exists.** Every replicated block ≥64 bytes is accounted for by
+   the known five-copy transaction/dispatch structure and the four XP task bodies. There is no
+   sixth copy, and no replicated helper hiding in a region nobody has read.
+2. **Nothing in the self-test or init regions is replicated at all.** `$F0870x`-`$F0A82x` — the
+   whole diagnostic suite, the RTOS init, the exception reporters, the config block — contains no
+   64-byte sequence that appears twice.
+
+So the ROM is built in exactly **two styles**: the kernel, self-test and init are **bespoke**,
+written once; the task layer is **replicated template**, one source and four hand-patched copies.
+That is a clean structural statement about the whole 64 KB, and it explains why the two halves of
+this project have needed different techniques — diffing works on the task layer and tells you
+nothing about the diagnostics.
+
+It also bounds where template-alignment reasoning is even applicable: **only inside
+`$F05684`-`$F086FF`**. Any attempt to apply a per-task offset outside that range is meaningless,
+because there is nothing there to be a copy of.

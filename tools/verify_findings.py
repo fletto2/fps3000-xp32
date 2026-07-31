@@ -7033,6 +7033,21 @@ check('...and its TAIL matches at -$18 with only constant patches',
       sum(1 for _i in range(0x1C0, 0xA00)
           if _x1t[_i] != _xseg(0xF05F00, -0x18, 0, 0xA00)[_i]) < 120)
 
+import collections as _cwin
+_win = _cwin.defaultdict(list)
+for _i in range(0xF04488 - 0xF00000, 0xF0A825 - 0xF00000 - 32):
+    _sg = _rom_bytes[_i:_i + 32]
+    if _sg.count(0) > 16: continue
+    _win[_sg].append(_i + 0xF00000)
+_reps = sorted(a2 for _v in _win.values() if len(_v) > 1 for a2 in _v)
+check('every replicated 32-byte block lies inside $F05684-$F086FF (the task layer)',
+      _reps and min(_reps) >= 0xF05600 and max(_reps) <= 0xF086FF)
+check('...so the self-test and init regions contain NO replicated code',
+      not any(0xF08700 <= a2 <= 0xF0A824 for a2 in _reps))
+check('...and XP1I/XP2I/XP3I sit at exactly $A00 stride while XP4I is off-grid',
+      0xF08051 - 0xF07651 == 0xA00 and 0xF07651 - 0xF06C51 == 0xA00
+      and 0xF06C51 - 0xF0623A == 0xA17)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
