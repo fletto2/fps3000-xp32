@@ -4449,6 +4449,20 @@ check('!DLY, !CCB and !ASQ each have exactly one write site in the ROM',
       all(_rom.count(struct.pack('>I', t)) == n
           for t, n in ((0x21444C59, 1), (0x21434342, 1), (0x21415351, 2))))
 
+# --- the kernel-relocation mechanism, disabled by config $F0A546 ---------
+check('the relocator takes its source from config $F0A546, which is zero',
+      insn(0xF09C66) == 'move.l $f0a546(pc), d1'
+      and struct.unpack('>I', _rom[0xF0A546 - _B:0xF0A54A - _B])[0] == 0)
+check('...its destination from $F0A4F6 = $F00100, the same as the entry pointer',
+      insn(0xF09C6C) == 'movea.l $f0a4f6(pc), a3'
+      and struct.unpack('>I', _rom[0xF0A4F6 - _B:0xF0A4FA - _B])[0]
+      == struct.unpack('>I', _rom[0xF0A512 - _B:0xF0A516 - _B])[0])
+check('...installs a temporary bus-error handler at vector 2 around the copy',
+      insn(0xF09C88) == 'move.l a1, $8.w'
+      and insn(0xF09C8C) == 'move.l (a2)+, (a3)+')
+check('...and the whole path is skipped: copy loop 0, skip target 1',
+      _dpcs['F09C8C'] == 0 and _dpcs['F09C96'] == 1 and _dpcs['F09C66'] == 1)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
