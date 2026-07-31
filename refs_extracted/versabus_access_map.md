@@ -18456,7 +18456,13 @@ are not registers.
 
 What survives is only this: `a3` in the callback is the longword at **offset `$3C` of the
 RSTATE block**, which is the sixteenth longword copied from `<target TCB>+$100` — i.e.
-`<target TCB>+$13C`. **Its meaning is not established.** `TCB.EQ` calls that a pad, and this
+`<target TCB>+$13C`. **Its meaning is not established.**
+
+> **RESOLVED later in this file** — see "`TCB+$13C` is the saved stack pointer". The field
+> has a pointer stored into it, is dereferenced from it, and gets exactly `subq.l #$6` (a
+> 68000 exception frame) and `subi.l #$3c` (`movem.l d0-d7/a0-a6`) subtracted on suspend.
+> It is the task's saved SP, so the *conclusion* that `a3` is the target's stack pointer is
+> correct after all — only the register-save-area reasoning was wrong. `TCB.EQ` calls that a pad, and this
 project separately records that `TCB.EQ` is displaced in this region, so neither source
 settles it.
 
