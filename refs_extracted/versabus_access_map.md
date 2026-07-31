@@ -26447,3 +26447,47 @@ with the one live value this project measured: `USTFENT = $1FB14`, which is exac
 
 So a reader of a RAM dump can walk any of these tables without knowing which it is: counts
 at `+$0C`/`+$0E`, entries from `+$14`, stride from the table's own `USTMENT`-equivalent.
+
+### `$0C7C` is a 5-entry table that ends exactly where the server registry begins
+
+```
+lea.l  $c7c.w,a1
+loop:  move.w #$1,(a1)      ; each record starts {word = 1, ...}
+       clr.l  $2(a1)        ; ...longword = 0
+       addq.l #$6,a1        ; stride 6
+       cmpa.l #$c9a,a1
+       blt    loop
+```
+
+`$0C9A - $0C7C = $1E = 30` bytes = **exactly five 6-byte records**, and the loop bound is
+the **server slot-state array**, so the two structures are adjacent with no gap. Each
+record is initialised `{$0001, $00000000}` — the same "state 1" convention the server
+registry uses for its two pre-reserved slots.
+
+Its consumer is not identified: `$0C7C` is referenced exactly once in the whole image, by
+this `lea`, so anything that uses the table reaches it through a pointer rather than by
+name. What can be stated is exact — five records, six bytes each, `$0C7C`-`$0C99`,
+initialised to `{1, null}` — which is enough to recognise it in a RAM dump and enough for
+a model to reproduce it.
+
+### `$0CC0` IS a global
+
+An earlier draft of this section claimed `$0CC0` was a misaligned decode. That was wrong:
+`$F004EC` **is** an instruction boundary in the validated listings. The mistake came from a
+display helper that failed to render the site, which I read as "not a boundary" instead of
+checking membership directly — the check and the rendering are different questions.
+
+So of the 44 candidate globals, **two** were decode artefacts, not three: `$0C41` is not an
+address at all, and `$0C40` is a real address but the low word of `$0C3E` rather than a
+separate field. `$0CC0` stands.
+
+`$F004EC` does `move.w (a6),$cc0.w` — it copies the **first word of the current TCB** into
+`$0CC0`, in the code immediately preceding the scheduler entry at `$F0050C`. The global
+has **one write and no reads** anywhere in the image, so nothing in this firmware consumes
+it. It joins `!DLY`, `!CCB` and `'EXEC'` in the small set of things this ROM writes and
+never looks at — worth knowing precisely because a RAM dump will show a plausible value
+there that no code depends on.
+
+(The bytes between that instruction and `$F0050C` do not decode cleanly from it; the
+scheduler entry itself is a known boundary, so the region contains either data or a
+different alignment. Noted rather than guessed at.)
