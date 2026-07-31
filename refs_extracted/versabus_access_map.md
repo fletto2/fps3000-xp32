@@ -32135,3 +32135,42 @@ This closes the correction made earlier today. `CLAUDE.md` recorded `'EXEC'` as 
 marker ... written and never read"; it is a **rename to `{EXEC, blank session}`** on the
 termination path, and the RAM-dump test now has a second discriminator: a renamed TCB reads
 `45 58 45 43` at `+$B0` **and `20 20 20 20` at `+$B4`**.
+
+## Directives `$1A` and `$1B` are the handler-table registration pair (2026-07-31)
+
+Resolving the two registration handlers through the TRAP #1 table names them:
+
+| directive | handler | flags word | parameter block | sets |
+|---|---|---|---:|---|
+| **`$1A`** (26) | `$F0312E` | `$2480` | **36 bytes** | `TCB+$48`, enable bit 4 |
+| **`$1B`** (27) | `$F0313C` | `$3880` | **56 bytes** | `TCB+$4C`, enable bit 3 |
+
+The flags words decode by this project's own rule — high byte = parameter-block size, low byte =
+flags, bit 7 = "has a parameter block" — giving 36 and 56 bytes with bit 7 set in both, consistent
+with a non-zero declared size.
+
+**Both are singleton sizes.** This project's analysis of the size distribution found seven clusters
+covering 51 of 60 live directives, and **nine singletons — 4, 6, 9, 14, 18, 20, 22, 36, 56** —
+noted as belonging "to no family" and being "where individual decoding would have to start". Two
+of the nine are now decoded, and they are a *pair*: the same operation for two different table
+slots, differing only in which TCB pointer and which enable bit they set. Their sizes differ (36
+against 56) despite the near-identical handlers, which is a useful caution — **a shared
+implementation does not imply a shared parameter block**.
+
+## `$29` ATSEM and `$2D` CRSEM confirm the semaphore-registration bit
+
+The same table lookup places the two semaphore directives immediately before the registration code:
+
+| directive | handler |
+|---|---|
+| `$2D` `CRSEM` | `$F0314A` |
+| `$29` `ATSEM` | `$F03150` |
+
+Both fall into `$F031F0`, which sets `TCB+$29` bit 7 and writes the task's `{name, session}` into a
+table. That confirms from the *directive* side what the RAM dump showed from the *data* side: the
+bit means "this task has registered a semaphore", the five tasks that issue `CRSEM` have it, and
+RDHC — which issues neither — does not.
+
+Three independent routes now agree on that bit: the setter's neighbourhood (name/session
+registration), the measured per-task values (`$A081` vs `$A001`), and the declaration counts
+(2/2/2/2/1/0).

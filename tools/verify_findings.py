@@ -7261,6 +7261,18 @@ check("the termination path writes 'EXEC' to +$B0 AND four spaces to +$B4",
       _l(0xF0083A) == 0x45584543 and _w(0xF0083E) == 0x00B0
       and _l(0xF00842) == 0x20202020 and _w(0xF00846) == 0x00B4)
 
+def _t1(_n):
+    _e = 0xF003D8 + 4 * _n
+    _o = _w(_e)
+    return _e + (_o - 0x10000 if _o >= 0x8000 else _o), _w(_e + 2)
+check('TRAP #1 $1A and $1B are the handler-table registration pair',
+      _t1(0x1A)[0] == 0xF0312E and _t1(0x1B)[0] == 0xF0313C)
+check('...declaring 36- and 56-byte parameter blocks, both singleton sizes',
+      (_t1(0x1A)[1] >> 8) == 36 and (_t1(0x1B)[1] >> 8) == 56
+      and (_t1(0x1A)[1] & 0x80) and (_t1(0x1B)[1] & 0x80))
+check('$2D CRSEM and $29 ATSEM sit immediately before the semaphore registration',
+      _t1(0x2D)[0] == 0xF0314A and _t1(0x29)[0] == 0xF03150)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
