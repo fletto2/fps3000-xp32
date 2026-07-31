@@ -29569,7 +29569,7 @@ latches and returns the last value written.** A model that makes it write-only, 
 chassis overwrite it asynchronously, fails here — which constrains the "the chassis presents
 `$28` in CHANNEL_SELECT" mechanism to happen only outside this phase.
 
-## `$FF0216` bit 7 gates whether `$FF000E` RESPONDS ON THE BUS (2026-07-31)
+## `$FF0216` bit 7 CONDITIONALLY gates a bus fault on `$FF000E` (2026-07-31)
 
 The bit-7 test is the last of the four `$FF0216` probes, and it is the only one whose subject is
 the **AP I/F** rather than the chassis window. Its probe routine:
@@ -29597,17 +29597,21 @@ With that, the two arms read:
 | `$F0984C` | `$80` **set** | `bne` — `d1` nonzero | accessing `$FF000E` **MUST bus-error** |
 | `$F098A0` | **cleared** | `beq` — `d1` zero | accessing `$FF000E` **must not** fault |
 
-So **bit 7 controls whether the AP I/F command/status port acknowledges on the bus** — set, the
-access times out into the watchdog; clear, it completes. This is the first time this bit has
-been tied to a bus-level effect rather than to its use around chassis op `$6` (which clears it
-for the duration of a raw peek/poke and restores it afterwards).
+So bit 7 has a **bus-level** effect, which is new — previously it was known only by its use
+around chassis op `$6`. But the effect is **conditional, not absolute**, and two independent
+observations force that qualification:
 
-**One caveat, stated rather than papered over.** The middle arm at `$F09872` sets bit 7, writes
-`$AAAA` to `$FF000E` and requires it to read back — which under a plain "bit 7 ⇒ no response"
-reading should have faulted. The difference is that the middle arm writes **`$FF0218` ← `$0`**
-while the probe writes **`$400`**, and the probe also sets `$FF020C` ← `$FF`. So the fault is
-gated by bit 7 *in combination with* the XLTR state, and this test does not isolate which. What
-is proven is that bit 7 flips the outcome with everything else held constant.
+1. The middle arm at `$F09872` sets bit 7, writes `$AAAA` to `$FF000E` and requires it to read
+   back. Under a plain "bit 7 ⇒ no response" reading that should have faulted. The difference is
+   that the middle arm writes **`$FF0218` ← `$0`** while the probe writes **`$400`** (and the
+   probe also sets `$FF020C` ← `$FF`).
+2. **Operationally bit 7 is set at rest.** `$FF0216` reads `$C0` — bits 7 and 6 — in normal
+   running, and all eight panel-command issuers write `$FF000E` constantly without faulting.
+
+So the honest statement is: **with the XLTR armed as the probe arms it (`$FF0218 = $400`,
+`$FF020C = $FF`), bit 7 determines whether an access to `$FF000E` faults.** Bit 7 alone does
+not disable the port, and any model that makes it do so breaks every panel command. Which of
+`$FF0218` and `$FF020C` supplies the enabling condition is not isolated by this test.
 
 ## The AP I/F gets almost no self-test coverage (2026-07-31)
 
@@ -29726,3 +29730,29 @@ the pair is not symmetric — which half triggers the cycle depends on the direc
 traffic and, on the write side, stores a half-formed longword. The read side is the easier trap:
 the second read must return the cached `$E72` and must *not* re-read chassis memory, or a chassis
 word that changes between the two halves is returned torn.
+
+
+## Op `$6` brackets its arbitrary access by clearing `$FF0216` bit 7 (2026-07-31)
+
+```
+$F04EA0  d0 = $FF0216 ; d1 = d0        ; SAVE the original word
+$F04EA6  bclr #$7,d0 ; $FF0216 = d0    ; clear bit 7 for the duration
+$F04EAE  btst #$5,$E87 / beq
+$F04EB8  $E74 = (a1)                   ; READ 16 bits from an arbitrary address
+$F04EC0  (a1) = $FF0204                ; or WRITE 16 bits there
+$F04ECC  btst #$4,$E87 / beq
+$F04ED6  $E58 += 2                     ; auto-increment
+$F04EDC  $FF0216 = d1                  ; RESTORE the whole original word
+```
+
+Read alongside the phase finding, the bracketing has an evident purpose: op `$6` dereferences an
+address **the chassis chose**, with no range, alignment or region check, so it may land anywhere
+— including on `$FF000E` itself. Clearing bit 7 first is a blanket guarantee that the access
+cannot trip whatever fault condition bit 7 participates in. The firmware cannot know which
+address it is about to touch, so it removes the hazard rather than testing for it.
+
+Two details worth keeping. The save/restore is of the **whole word**, not just bit 7, so op `$6`
+is transparent to every other bit of `$FF0216` — including the width mux, which a `CPLOAD` in
+progress may be relying on. And the read arm stores to `$E74` while the write arm **zeroes**
+`$E74`, so the chassis can distinguish "here is the value you asked for" from "your write is
+done" by reading the same result register.

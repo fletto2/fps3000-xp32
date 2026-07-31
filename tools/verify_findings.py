@@ -6507,6 +6507,17 @@ check('op $3 write: bit 6 set only stashes the high half; bit 6 clear stores the
       and _w(0xF04DD6) == 0x33E8 and _l(0xF04DDA) == 0x00000E72
       and _w(0xF04E0A) == 0x23B9 and _l(0xF04E0C) == 0x00000E70)
 
+check('op $6 saves $FF0216, clears bit 7 for the access, and restores the WHOLE word',
+      _w(0xF04EA0) == 0x3028 and _w(0xF04EA2) == 0x0216 and _w(0xF04EA4) == 0x3200
+      and _w(0xF04EA6) == 0x0880 and _w(0xF04EA8) == 0x0007
+      and _w(0xF04EDC) == 0x3141 and _w(0xF04EDE) == 0x0216)
+check('...its read arm fills $E74 and its write arm ZEROES $E74',
+      _w(0xF04EB8) == 0x33D1 and _l(0xF04EBA) == 0x00000E74
+      and _w(0xF04EC0) == 0x32A8 and _w(0xF04EC4) == 0x33FC and _w(0xF04EC6) == 0x0000)
+check('...and bit 4 of $E87 auto-increments the address by 2',
+      _w(0xF04ECC) == 0x0839 and _w(0xF04ECE) == 0x0004
+      and _w(0xF04ED6) == 0x54B9 and _l(0xF04ED8) == 0x00000E58)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
