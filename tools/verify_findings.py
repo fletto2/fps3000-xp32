@@ -5246,6 +5246,22 @@ check('...and the self-test migrates the fault count from $1F800 to $400 before 
       insn(0xF0888A) == 'move.l $1f800.l, $400.w')
 check('...matching the handler picking its counter by cmpa.l #$10000,a7',
       insn(0xF08902) == 'cmpa.l #$10000, a7' and insn(0xF08912) == 'addq.l #$1, $400.w')
+
+# ---- three BIM registers have no explicit reference (2026-07-31) ----
+def _bimrefs(off):
+    return sum(1 for _, (_, o, _) in _mins.items()
+               if _mre.search(r'\$%x\(a\d\)' % off, o) or ('ff%04x' % off) in o)
+check('$FF0240 (BIM1 CR0) has no reference of any kind', _bimrefs(0x240) == 0)
+check('$FF0248 (BIM1 VR0) has no reference of any kind', _bimrefs(0x248) == 0)
+check('$FF025E (BIM2 VR3) has no reference of any kind', _bimrefs(0x25E) == 0)
+check('...against a known-positive control, $FF0244 has references', _bimrefs(0x244) >= 2)
+check('so 21 of 24 BIM registers are explicitly named, not 23',
+      sum(1 for off in range(0x230, 0x260, 2) if _bimrefs(off)) == 21,
+      sum(1 for off in range(0x230, 0x260, 2) if _bimrefs(off)))
+check('...and the two BIM1 absences are the SAME channel, CR0 and VR0',
+      0x248 - 0x240 == 8)
+check('BIM2 CR3 IS programmed while its VR is not -- a configured channel with no vector',
+      _bimrefs(0x256) >= 1 and _bimrefs(0x25E) == 0)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

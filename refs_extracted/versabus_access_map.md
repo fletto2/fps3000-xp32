@@ -23953,3 +23953,43 @@ The fault handler at `$F08902` chooses its counter by testing `cmpa.l #$10000,a7
 the stack is high, `$400` when it has been moved low. Here is the self-test **migrating the
 accumulated count** immediately before doing exactly that. Two halves of one mechanism, found
 independently: the handler's choice of counter, and the moment the count is carried across.
+
+## CORRECTION: THREE BIM registers have no explicit reference, not one (2026-07-31)
+
+Provenance-tracking every displacement from the 62 sites that load `$FF0000` gives **49 distinct
+registers**, and mapping the BIM block to channels shows which are programmed and by whom:
+
+| | CR0 | CR1 | CR2 | CR3 | VR0 | VR1 | VR2 | VR3 |
+|---|---|---|---|---|---|---|---|---|
+| **BIM0** `$230` | RDHC | init | init | init | init | init | init | init |
+| **BIM1** `$240` | **NONE** | init | XP1I | XP2I | **NONE** | init | init | init |
+| **BIM2** `$250` | XP3I | XP4I | IO1I+init | init | init | init | init | **NONE** |
+
+- **`$FF0240` (BIM1 CR0)** — no reference of any kind
+- **`$FF0248` (BIM1 VR0)** — no reference of any kind
+- **`$FF025E` (BIM2 VR3)** — no reference of any kind
+
+Verified against a known-positive control: the same sweep finds `$FF0244` with 1 absolute and 1
+displacement reference, so a zero result is a real absence and not a broken matcher.
+
+**This corrects "23 of the 24 are used; only `$FF025E` (BIM2 VR3) is never touched".** Three are
+untouched, and **two of them are the same channel** — BIM1 channel 0's control *and* vector
+register. That is a whole interrupt channel skipped, not a stray vector register, and it is a
+different kind of fact: an unprogrammed VR beside a programmed CR would be a configured channel
+with an undefined vector; an unprogrammed CR *and* VR is a channel deliberately left alone.
+
+`$FF025E` remains genuinely singular — BIM2 CR3 at `$FF0256` **is** programmed by the init
+routine while its vector register is not, so that channel *is* configured with no vector.
+
+### The caveat, stated precisely
+
+This census counts **explicit references**. Self-test phase `$1600` walks the BIM block with
+**computed addressing** in a loop, so it may read or write registers that appear here as
+unreferenced — the loop bound is what decides, and that is the `$FF0218` bit-4 two-BIM/three-BIM
+selector this project already documents as mismodelled.
+
+So the correct statement is: **three BIM registers are never named by any instruction**, and the
+firmware's operational configuration touches 21 of 24. What the self-test's walk covers is a
+separate question, answerable only from a run, and the runtime observation that `$FF025E` "is
+never touched" was made with the model presenting two BIMs — where the walk covers 16 registers
+and stops before BIM2 entirely.
