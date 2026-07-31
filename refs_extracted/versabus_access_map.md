@@ -37100,3 +37100,29 @@ mechanisms nobody had thought to drive.
 recorded `FPS3K_SEQ="01:0000,41:0001,02:0008,42:0000,00:0028"` form. That is consistent with this
 project's own warning that "**long `FPS3K_SEQ` scripts silently drop their tail**" — the five-code
 script does not deliver its last code. Where a `CHSEL_RD` equivalent exists, prefer it.
+
+## Coverage from the SLC stimulus (2026-07-31)
+
+The SLC ASCII loader had never been driven before today. Driving it:
+
+| region | default boot | SLC-driven |
+|---|---|---|
+| **RDHC** | 16/1509 = **1.1%** | 235/1509 = **15.6%** |
+| kernel | — | +48 PCs |
+
+**One stimulus takes the master task from 1.1% to 15.6%** — 219 new instructions, all behind the
+`WAIT` that RDHC parks in when nothing drives it. That is the largest single-stimulus gain recorded
+for RDHC.
+
+Union across the four configurations run today (default, `XPIRQ=1`, `CHASSIS_CMD`, SLC): **3334 PCs**,
+giving RDHC 320/1509 = **21.2%** and the application region 2635/6780 = **38.9%**.
+
+**In context, not as a record.** This project's recorded figures are higher — "RDHC 1% -> 34%" and
+"36% to 47%" — because they union **sixteen** driving configurations, each targeting one chassis
+operation, against my four. My numbers are not a regression; they are a smaller union that happens to
+include one stimulus the sixteen did not.
+
+**What the SLC stimulus adds that the others do not** is the whole ASCII record path: the handshake,
+the character-pair conversion, the record dispatcher, `SRecordDataHandler`, the bound check and the
+checksum consumption. Those 219 instructions are the microcode-staging front end, and until today none
+of them had executed in any configuration this project has run.
