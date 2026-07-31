@@ -6279,6 +6279,12 @@ check('...with bit 4 set expecting $AAAA5555 and clear expecting $55555555',
 check('...and the 16-bit arm expecting $5555 set, $AAAA clear',
       insn(0xF097DC) == 'move.l #$5555, d2' and insn(0xF097F4) == 'move.l d1, d2')
 
+check('the DRAM pattern applier fills upward and verifies DOWNWARD',
+      insn(0xF099BC) == 'move.l d0, (a0)+' and insn(0xF099CE) == 'cmp.l -(a0), d0')
+check('...skipping $1FFF0 forward and $1FFF4 in reverse -- the same four bytes',
+      insn(0xF099BE) == 'cmpa.l #$1fff0, a0' and insn(0xF099C6) == 'lea.l $4(a0), a0'
+      and insn(0xF099E0) == 'cmpa.l #$1ff' + 'f4, a0' and insn(0xF099E8) == 'lea.l -$4(a0), a0')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

@@ -28843,3 +28843,35 @@ outcomes. It also explains why `CPLOAD` **brackets** bit 4 — `bset` at `$F0550
 everything else needs the latch path.
 
 **With this, every phase of sequence B has a stated requirement.**
+
+## Phase `$2400`: fill upward, verify DOWNWARD — and two more `$1FFF0` skips
+
+`$F099B8` applies one pattern and is called six times, once per pattern and complement:
+
+```
+fill:   move.l d0,(a0)+           ; fill UPWARD
+        cmpa.l #$1fff0,a0 / bne .
+        lea.l  $4(a0),a0          ; skip the VMOD register
+        cmpa.l a0,a1 / bne fill
+verify: cmp.l  -(a0),d0           ; verify DOWNWARD, pre-decrementing
+        beq ok / d7 = $F0F0F0F0 / bsr $F089EE
+        cmpa.l #$1fff4,a0 / bne .
+        lea.l  -$4(a0),a0         ; ...skipping the same four bytes in reverse
+        cmpa.l a0,a2 / bne verify
+```
+
+**The verify pass runs in the opposite direction from the fill.** That is not incidental:
+same-direction verification cannot distinguish a cell that never stored the value from one
+that was disturbed by a later write to a neighbour, because it reads each cell immediately
+after the region around it was written. Reversing the pass puts maximum distance between a
+cell's write and its check.
+
+**Two more `$1FFF0` skips**, and they bracket the register from both sides: the forward pass
+tests `a0 == $1FFF0` and adds 4, the reverse pass tests `a0 == $1FFF4` and subtracts 4. Taken
+with phase `$2100`'s pair, that is four of the eight independent skip sites this project
+counts, and all four agree the protected span is exactly `$1FFF0`-`$1FFF3`.
+
+**Emulator requirement**: DRAM must hold all six patterns across the full range and survive a
+reverse-order verification — i.e. no write may disturb a neighbour. A model with plain array
+storage satisfies this trivially, which is worth noting: like the refresh test, this phase
+**cannot fail in a model with perfect RAM**, so passing it is no evidence about the model.
