@@ -33037,3 +33037,37 @@ table is the lookup.
 pattern is the same in each: an early guess became a label, the label became evidence, and the
 evidence outlived the guess. `PanelStatusDispatch` and `PanelSendAndWait` are noted elsewhere as
 similarly provisional names; this is the third to be checked against its own bytes and fail.
+
+## `TCBLookupTable` is the ROM template for RDHC's `!IDV` record (2026-07-31)
+
+`$F04600` reads:
+
+```
+$F04600:  "RDHC"  00000000  00000041  00F04930  00F050FC
+                            vector $41  ISR entry   ISR exit
+```
+
+and the **live `!IDV` record** for RDHC — read from a boot RAM dump — is `{$41, $1F300, $F04930,
+$F050FC}`. The vector, entry and exit match exactly. So `$F04600` is the **ROM source** of that
+record, and `!IDV` is populated by copying these templates rather than by deriving them.
+
+That closes a small loop: the `!IDV` contents were verified live earlier today, and this is where
+they come from. It also means a model can predict `!IDV` statically, without running the boot.
+
+### `TCBDefEntry_RDHC` is mislabelled
+
+The label sits at `$F04614`, which holds **`"USER"`** — the `USER`-task descriptor. RDHC's record
+is the one at `$F04600`. So the label names the wrong entry, by one record.
+
+### Two labels that check out
+
+- **`TCBDefEntry_UPGM`** at `$F046D4` reads `"UPGM" $00010000 $0000D000` — the segment name,
+  logical address and length this project documents for `CPRUN`'s `GTSEG` block ("logical address
+  `$00010000`, length `$0000D000`, 53,248 bytes"). Correct, and it confirms those values from the
+  ROM rather than from a trace.
+- **`TCBDefEntry_STCK`** at `$F046BC` reads `"STCK" ... $00000190` — the stack segment with the
+  `$190` request this project notes "becomes `$200`" after page rounding. Correct.
+
+So of six named tables checked against their own bytes this session, **three were wrong**
+(`TCBDefinitionTable`, `PanelErrorMaskTable`, `TCBDefEntry_RDHC`) and three were right. That ratio
+is worth knowing before trusting a label as evidence.

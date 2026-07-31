@@ -7555,6 +7555,15 @@ check('...and all five copies are byte-identical over those six bytes',
       all([_rom_bytes[_a - 0xF00000 + _i] for _i in range(6)] == [0, 5, 4, 3, 2, 0]
           for _a in (0xF05C4C, 0xF0668C, 0xF070A4, 0xF07AA4, 0xF084A4)))
 
+check('$F04600 is RDHC\'s !IDV template: vector $41, entry $F04930, exit $F050FC',
+      _l(0xF04600) == 0x52444843 and (_l(0xF04608) & 0xFF) == 0x41
+      and _l(0xF0460C) == 0x00F04930 and _l(0xF04610) == 0x00F050FC)
+check('TCBDefEntry_RDHC is mislabelled: $F04614 holds "USER"',
+      _l(0xF04614) == 0x55534552)
+check('TCBDefEntry_UPGM confirms the CPRUN segment: $10000, length $D000',
+      _l(0xF046D4) == 0x5550474D and _l(0xF046D8) == 0x00010000
+      and _l(0xF046DC) == 0x0000D000)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
