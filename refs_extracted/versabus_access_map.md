@@ -33285,3 +33285,42 @@ Nothing in that chain is computed from anything but ROM constants and the alloca
 rounding. **A model can predict `!TST`, `!IDV`, `!UST`, the six TCBs and their saved registers
 before executing a single instruction** — and this session checked each of those predictions
 against a dump.
+
+## Measured: every mechanism found this session is inert in this firmware (2026-07-31)
+
+Reading the fields identified this session out of all six live TCBs — **every one is zero**:
+
+| field | mechanism | live value |
+|---|---|---|
+| `+$2A` | `$0E` `ABORT`'s stored handle | 0 |
+| `+$2E` | saved state word, deferred-work path | 0 |
+| **`+$40`** | **the ASQ pointer** | **0 in all six** |
+| `+$44` | a structure base | 0 |
+| `+$58` | the `DELAY`/`DELAYW` block pointer | 0 |
+| `+$70` | tested by `$3B` | 0 |
+| `+$148` | single-step enable / `EXMMSK` flags | 0 |
+| `+$5E` | staged return status | 0 |
+
+**`+$40` being zero in every TCB is the most consequential.** It means **no task has an ASQ block**,
+so the whole ASQ family — `GTASQ`, `DEASQ`, `SETASQ`, `RDEVNT`, `QEVNT`, `WTEVNT`, `RTEVNT` — would
+fail with **status 4** if issued. This project records that the ASQ directives "appear nowhere in
+this firmware" and that ASQs are used "only from interrupt context via TRAP #0 `$18`"; the dump
+confirms it from the data side.
+
+So the picture is consistent across everything examined:
+
+| subsystem | code | data |
+|---|---|---|
+| exception monitor (`EXMON` family, single-step) | complete | never armed |
+| `EXPVCT`/`TRPVCT` handler dispatch | complete | never registered |
+| `DELAY`/`DELAYW` | complete | no block |
+| ASQ family | complete | **no ASQ in any task** |
+| `CMR` / `!CCB` / the trace hook / the `!VCT` claim | complete | never issued |
+| periodic activation (`!PAT`, `RQSTPA`) | complete | free list only |
+| privilege and ownership | complete | privilege granted to all, ownership never established |
+| `$3B` supervisor call | complete | both gates shut |
+
+**For an emulator this is the useful summary**: none of these paths will ever execute under the
+stock ROM, so a model may implement them lazily — but each is a real, complete mechanism that
+host-loaded software could reach, and several have hazards recorded above (the malformed `CMR`
+thunk, the null-pointer dispatch if tracing is enabled, the unbounded chassis primitives).

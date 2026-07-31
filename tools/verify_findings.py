@@ -7609,6 +7609,11 @@ check('...so the measured $A081 / $A001 are $A000 plus runtime bits 7 and 0',
       (0xA081 & ~0xA000 & 0xFFFF) == 0x0081
       and (0xA001 & ~0xA000 & 0xFFFF) == 0x0001)
 
+check('the ASQ directives would fail with status 4: the null check is $F0267A/$F0242E',
+      _w(0xF0267A) == 0x286E and _w(0xF0267C) == 0x0040
+      and _w(0xF02682) == 0x586E and _w(0xF02684) == 0x0102
+      and _w(0xF02430) == 0x286D and _w(0xF02432) == 0x0040)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
