@@ -27222,10 +27222,12 @@ Re-running the `$FF0000` sweep with and without the cap:
 | distinct offsets | 49 | **50** |
 | MODE2 (`$FF0210`) accesses | 8 | **14** |
 
-**The hidden register is `$FF0214`.** This file records it as "never appears standalone;
-every access is the leading half of a 32-bit access paired with `$FF0216`" — the uncapped
-sweep now sees it through the base register directly, which is a second route to the same
-register rather than a new one.
+**`$FF0214` appeared in the uncapped sweep — and that turned out to be an artefact.**
+See the section below: the uncapped walk crosses unconditional branches into unrelated
+routines, and `$214` is one of two offsets that vanish once the walk is stopped at control
+transfers. The documented statement about `$FF0214` ("never appears standalone; every access
+is the leading half of a 32-bit access paired with `$FF0216`") rests on reading the code and
+is unaffected.
 
 **The structural conclusions survive, which is the point of checking.** Uncapped, the
 AP I/F window map is unchanged —
@@ -27359,3 +27361,43 @@ one-shot: writing `$400` arms, reading returns bit 15 when the operation complet
 
 `$FF021A`'s 30 read-modify-writes are the per-channel bit clears documented in the transfer
 teardown; the only literals are the two `$0FFF` at initialisation.
+
+
+## A linear provenance walk cannot be made both sound and complete (2026-07-31)
+
+Removing the lookahead cap exposed a second, worse flaw in the same sweeps: **the walk
+crosses unconditional control transfers.** After `bra .` at `$F056B8` it continues into
+`$F056BA`, a different routine entered from elsewhere with different register contents, and
+happily attributes that routine's `(a0)` — the channel command port — to the `$FF0000` base.
+
+Adding a stop at `bra`/`jmp`/`rts`/`rte` fixes that and breaks something else:
+
+| | no flow stop | stops at `bra`/`jmp`/`rts`/`rte` |
+|---|---:|---:|
+| access sites | 454 | **156** |
+| distinct offsets | 50 | 48 |
+| accesses attributed to `+$00` | **27** | **3** |
+| `$FF0216` seen | yes | **no** |
+
+The `+$00` count of 27 was inflated by 24 false positives — the flow-stopped figure of 3 is
+right. But the flow-stopped sweep **loses `$FF0216` entirely**, and `$216(aN)` occurs at
+**23 sites** in the image: the base is loaded in one basic block and used in another reached
+by a branch, which is ordinary code. So:
+
+- **without flow stops the sweep over-reports** (foreign routines' registers);
+- **with flow stops it under-reports** (legitimate cross-block uses);
+- **neither variant is trustworthy on its own**, and the fix is real dataflow — following
+  branch targets — not a linear walk with a better stopping rule.
+
+**What survives unchanged is the useful part.** The AP I/F window map is **identical** under
+both variants — window 0 at `+$00/+$04/+$08/+$0E`, windows 2-5 at `+$04/+$08/+$0A/+$0E`,
+windows 1/6/7 untouched. A finding that is invariant across two methods with opposite biases
+is about as well supported as this kind of analysis gets.
+
+**And for mere existence, provenance is unnecessary.** Asking whether `$216(` appears
+anywhere returns 23 sites directly. Provenance is only needed to resolve *which* base a
+displacement belongs to — so the right order is: match the operand form first, and use
+provenance only to disambiguate.
+
+This is the fifth false-negative/false-positive mechanism recorded in base-register analysis
+here, and the first that produces errors in **both** directions from the same tool.
