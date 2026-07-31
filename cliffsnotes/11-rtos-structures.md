@@ -231,3 +231,37 @@ only a free list (`!PAT`), and **four are empty** (`!IOV`, `!UDR`, `!GST`, plus 
 have no instance at all). That is the machine's real shape: the interrupt wiring and the semaphore
 registry are live; segments, user directives, I/O vectors and periodic activations are all
 mechanisms present and unused.
+
+---
+
+## `!TST` measured across all six tasks (2026-07-31)
+
+Every field is identical except the two page ranges:
+
+| field | value |
+|---|---|
+| `+$04` | `$04020024` — **`TSTNSEGS=4`, `TSTCSEGS=2`** for all six |
+| `+$08` | `$00440000` for all six |
+| `PROG` attributes | `$80000000` for all six — from the TDTI record's `+$44` |
+| `STCK` attributes | `$8000FF00` for all six |
+| `PROG` pages | **per task**, byte-identical to the TDTI record's `+$20` |
+| `STCK` pages | **per task**, two pages, allocated descending |
+
+The `STCK` allocation is a clean descending tile, two pages each from the `$190` request in every
+region head's `CRTCB` block:
+
+| task | pages | bytes |
+|---|---|---|
+| XP1I | `$1E7`-`$1E8` | `$1E700`-`$1E8FF` |
+| XP2I | `$1E5`-`$1E6` | `$1E500`-`$1E6FF` |
+| XP3I | `$1E3`-`$1E4` | `$1E300`-`$1E4FF` |
+| XP4I | `$1E1`-`$1E2` | `$1E100`-`$1E2FF` |
+| IO1I | `$1DF`-`$1E0` | `$1DF00`-`$1E0FF` |
+| RDHC | `$1DD`-`$1DE` | `$1DD00`-`$1DEFF` |
+
+confirming this project's "the blocks tile `$1DD00`-`$1E8FF` at stride `$200` **in reverse task
+order**" — XP1I is allocated first and gets the highest pair. Each base is also the task's
+`TCB+$138` (its saved `a6`), and each `$190` request really does round up to `$200`, six times over.
+
+So `!TST` holds **no per-task information that is not either a ROM constant or a deterministic
+consequence of allocation order.**
