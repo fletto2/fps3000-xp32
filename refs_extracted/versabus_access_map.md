@@ -29876,3 +29876,53 @@ the other:
 That closes MODE0 the way MODE1 was closed: **every bit the firmware touches has an owner, and
 the count of untouched bits is 14.** For a model, the contract is small — preserve bits 0-9 and
 12-15 across SBC writes, and treat 10/11 as the two-way handshake above.
+
+## `$FF021A` is only ever CLEARED, never set — 50 sites to 0 (2026-07-31)
+
+Census of every access:
+
+| form | count | where |
+|---|---:|---|
+| read → `bclr` with a **computed** bit number (`d5`) → write back | **50** | the five `PanelSendAndWait` copies' dispatch handlers |
+| literal write `$FFF` | 1 | phase `$1600` init, `$F09552` |
+| read-back `cmpi.w #$fff` | 1 | phase `$1600` verify, `$F095B0` |
+
+So the register is **12 bits wide, readable, and initialised all-ones** — and after that the
+firmware **only ever clears bits, one at a time, with a bit number computed at run time**. There
+is not a single `bset` on it anywhere in the ROM.
+
+**That asymmetry is a hard structural fact and it has a consequence.** A register that is written
+all-ones exactly once and thereafter monotonically cleared would, over a long run, end up with
+every channel bit at zero and no way back. Either
+
+1. **the chassis re-sets these bits**, exactly as the chassis (not the CPU) turned out to be the
+   only possible writer of a nonzero `$10AA`; or
+2. these 50 sites are on paths that do not run in normal operation — they sit in the
+   transaction-teardown and error handlers, which is consistent with the timeout/error codes
+   dominating this project's execution counts.
+
+Both are testable. The first is a **prediction for a bus trace**: on real hardware, watch for
+writes to `$FF021A` that the SBC did not issue. The second is measurable in the emulator by
+counting executions of the 50 sites over a run that completes channel transactions successfully.
+
+Note also that this makes polarity *inferable* where CLAUDE.md records it as unestablished: init
+drives all twelve bits to 1 and every operational action drives one to 0, so **1 is the resting
+/ permissive state and 0 is the acted-upon state** — whatever the bit means, the firmware's own
+usage orders the two values.
+
+## `$FF020C`'s seven operational sites, confirmed a third time (2026-07-31)
+
+The same census gives `$FF020C` independently:
+
+| value | count | sites |
+|---|---:|---|
+| `$4` | **7** | `$F04AC2`, `$F04B2C` (RDHC) + one per `POLL` copy: `$F05A2C`, `$F0646C`, `$F06E84`, and the remaining two |
+| `$1` | 1 | phase `$1600` init |
+| `$FF` | 1 | the `$FF0216` bit-7 probe `$F098C4` |
+| `cmpi.w #$1` | 1 | phase `$1600` read-back |
+
+**Seven** — the figure this project once "corrected" to six on the strength of a tidy structural
+story (1 + 5) before the harness caught it. This is now a third independent derivation, from a
+census that classifies by operand form and knows nothing about the earlier dispute. Worth
+recording because the failure mode there was specific: 6 decomposes as 1+5 and 7 as 2+5, both
+neatly, so plausibility of the decomposition carried no evidential weight at all.

@@ -6613,6 +6613,16 @@ check('...and exactly the four XP tasks set MODE0 bit 11 in their idle sweep',
       all(_w(x) == 0x08C0 and _w(x + 2) == 0x000B
           for x in (0xF0689E, 0xF072B6, 0xF07CB6, 0xF086B6)))
 
+import re as _re21a
+_asm21a = open('/home/fletto/ext/src/claude/fps3000/fps3k_custom.asm').read()
+_set21a = _re21a.findall(r'bset\.\w+\s+[^,]+,\s*\$21a\(a\d\)', _asm21a)
+_lit21a = _re21a.findall(r'move\.w\s+#\$([0-9a-f]+),\s*\$21a\(a\d\)', _asm21a)
+check('$FF021A has ZERO bset sites and exactly one literal write, $FFF',
+      len(_set21a) == 0 and _lit21a == ['fff'])
+_c20c = _re21a.findall(r'move\.w\s+#\$([0-9a-f]+),\s*\$20c\(a\d\)', _asm21a)
+check('$FF020C is written $4 at exactly SEVEN sites (third independent derivation)',
+      _c20c.count('4') == 7 and _c20c.count('1') == 1 and _c20c.count('ff') == 1)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
