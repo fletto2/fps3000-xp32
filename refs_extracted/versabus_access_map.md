@@ -19164,3 +19164,34 @@ So `+$140`/`+$144` hold a **copy of the owning task's name and session**, writte
 block is set up and compared when another task asks for its state. That is the permission
 model: `RSTATE` succeeds only for a caller whose own `TCBNAME`/`TCBSESSN` match the copy
 stored in the target.
+
+### The callback's argument frame is on the `USER` task's stack, but `a7` is not switched
+
+Now that `a3` is known to be the `USER` task's **saved stack pointer**, the shape of the call
+is exactly specifiable — and it raises one precise question.
+
+The XP task pushes **eleven items, 46 bytes**, onto `a3`:
+
+```
+6 x move.l #$0,-(a3)          24 bytes
+3 x move.l a4,-(a3)           12   the three argument POINTERS
+1 x move.w #$c,-(a3)           2   the count word
+2 x move.l #$0,-(a3)           8
+```
+
+and then `jsr (a2)` **without** writing `a3` back to `TCB+$13C` and **without**
+`movea.l a3,a7`. So the handler is entered running on the **XP task's** stack, while its
+argument frame sits 46 bytes below the **`USER` task's** saved stack pointer, which still
+points above it.
+
+That is internally consistent with everything else known about this interface — the handler
+must not return (the firmware's `rts` is 96 bytes out), and it is reached by a `bra.w` into
+arbitrary program code rather than as a subroutine. A handler that **switches to the `USER`
+stack** would find its arguments exactly where a normal call frame would be, and would never
+come back, which fits both constraints at once.
+
+But that is a reading, not a demonstration. What is demonstrated: **the frame is 46 bytes at
+`[TCB+$13C] - 46`, the saved SP is not updated, and `a7` is not switched.** A CP program's
+handler must therefore locate its arguments from the task's saved SP rather than from its own
+`a7` — which is the single most important thing to know before writing one, and is not
+something the firmware documents by construction.
