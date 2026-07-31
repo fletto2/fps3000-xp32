@@ -35692,3 +35692,36 @@ writing side.
 execute, the PAT service `$F01128` is not among them, and the per-tick path merely tests the null
 active list and skips. The tick's live work is exactly three things — advance `$0C42`, test the PAT
 head, decrement the quantum `$0C52` and set `$0C5B` bit 7 when it expires.
+
+## The inline-parameter idiom VERIFIED, and the trace entry decoded field by field
+
+I inferred that `$F01688` takes its event code from the return address; it does, explicitly:
+
+```
+$F016B6  movea.l $14(a7),a4      ; the RETURN ADDRESS
+$F016BA  move.w  (a4),(a5)       ; the inline word -> entry +$00, the CODE field
+$F016BC  addq.l  #$2,$14(a7)     ; STEP THE RETURN ADDRESS OVER IT
+$F016C0  move.w  $18(a7),$2(a5)  ; caller's SR   -> +$02
+$F016C6  move.l  $1a(a7),$4(a5)  ; caller's PC   -> +$04
+$F016CC  cmpi.w  #$efff,(a5) / bhi $F016D8
+$F016D2  move.l  $20(a7),$8(a5)  ; A0            -> +$08   (CONDITIONAL)
+$F016D8  bsr.w   $f00f96         ; the high-resolution clock
+$F016DC  move.l  d1,$14(a5)      ; time_ms       -> +$14
+$F016E0  ...                     ; time_us from #$F9 / #$FA
+```
+
+Together with the earlier fragment (A6 → `+$0C`, D0 → `+$10`) that is the whole 26-byte entry,
+matching `{code w, SR w, PC l, A0 l, A6 l, D0 l, time_ms l, time_us w}` **term for term and offset
+for offset**. The layout derived from Motorola's `TRACE.EQ` is now confirmed from the code that
+writes it.
+
+**Two details beyond the recorded layout:**
+
+1. **The A0 field is written conditionally** — only when the code word is `<= $EFFF` (`cmpi.w
+   #$efff,(a5)` / `bhi` skips it). Of the six inline codes read out, `$DD08`, `$EE14` and `$EE09`
+   record A0 while `$FF15`, `$FD10` and `$FF13` do not. So **the code's magnitude selects the entry
+   class**, and a reader that assumes A0 is always present will mis-parse high-coded entries.
+2. **`$F00F96` is shared.** This project identifies it as TRAP #0 directive `$1C`'s lock-free
+   high-resolution clock; the trace writer calls the same routine to timestamp every entry. One
+   implementation, two callers — the directive and the tracer — which is why the sub-tick
+   interpolation has to be lock-free: it runs from inside a hook that is itself called at level 7.

@@ -8258,6 +8258,18 @@ check('...writing A0 at +$8 and D0 at +$10, matching TRACE.EQ',
       _w(0xF016AA) == 0x2B40 and _w(0xF016AC) == 0x0010
       and _w(0xF016AE) == 0x2B48 and _w(0xF016B0) == 0x0008)
 
+check('the trace writer reads its inline code and steps the return address over it',
+      _w(0xF016B6) == 0x286F and _w(0xF016B8) == 0x0014
+      and _w(0xF016BA) == 0x3A94
+      and _w(0xF016BC) == 0x54AF and _w(0xF016BE) == 0x0014)
+check('...records A0 only when the code word is <= $EFFF',
+      _w(0xF016CC) == 0x0C55 and _w(0xF016CE) == 0xEFFF
+      and _w(0xF016D0) >> 8 == 0x62
+      and _w(0xF016D2) == 0x2B6F and _w(0xF016D6) == 0x0008)
+check('...and timestamps via $F00F96, the same routine TRAP #0 $1C uses',
+      _w(0xF016D8) == 0x6100 and _bsrw(0xF016D8) == 0xF00F96
+      and _w(0xF016DC) == 0x2B41 and _w(0xF016DE) == 0x0014)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
