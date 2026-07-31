@@ -6210,17 +6210,22 @@ check('the table writes land inside the !TST of the TCB at $1EF00, which TDTI\n'
 # and pass 3's is negative only because movea.w sign-extends.
 _p3 = struct.unpack('>H', _rom[0xF0A4BE - 0xF00000 + 3 * 18:][:2])[0]
 _p0 = struct.unpack('>H', _rom[0xF0A4BE - 0xF00000 + 0 * 18:][:2])[0]
-check('pass 3 lands at $176F0 -- below the heap, so its writes survive boot',
-      0x1F000 + (_p3 - 0x10000) == 0x176F0 and 0x10000 <= 0x176F0 < 0x1DD00)
-check('...and pass 0 lands on the VMOD block, above the heap top',
-      0x1F000 + _p0 - 2 == 0x1FFFE and 0x1FFF0 > 0x1FE00)
+# `move.w (a1)+,-(a2)` PRE-decrements, so the computed a2 is one word ABOVE the
+# highest byte written; eight words then run downward from there.
+_a2p3 = 0x1F000 + (_p3 - 0x10000)          # sign-extended: $8700 -> -$7900
+_a2p0 = 0x1F000 + _p0
+check('pass 3 computes a2 = $17700 and writes $176F0-$176FE, below the heap',
+      _a2p3 == 0x17700 and _a2p3 - 16 == 0x176F0 and 0x10000 <= 0x176F0 < 0x1DD00)
+check('...and pass 0 computes a2 = $20000, writing the VMOD block above the heap top',
+      _a2p0 == 0x20000 and _a2p0 - 16 == 0x1FFF0 and 0x1FFF0 > 0x1FE00)
 
 check('the $03FC breadcrumb is vector $FF, outside the FPS override range',
       0x3FC // 4 == 0xFF and not (0x124 <= 0x3FC <= 0x3F0))
 check('$0400 survives the boot clear, which starts at $800',
       insn(0xF09C10) == 'lea.l $800.l, a0' and 0x400 < 0x800)
 check('$1F800 does NOT survive: it is !IDV\'s base, tagged at init',
-      insn(0xF09F80) == 'move.l a0, $c6e.w')
+      insn(0xF09F78) == 'move.l a0, $c6e.w'
+      and insn(0xF09F80) == 'move.l #$21494456, (a0)')
 
 check('the watchdog test $F08F1C runs at phase $0700, not $0600',
       insn(0xF08792) == 'addi.w #$100, d6' and insn(0xF08796) == 'bsr.w $f08f1c'
