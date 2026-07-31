@@ -35946,3 +35946,32 @@ with a detector that finds nothing at all.
 That is the failure mode worth naming: **a broken detector produces a correct-looking negative**, and
 only a positive control distinguishes "X is absent" from "the search is dead". Every "never accessed"
 in this file predates that discipline.
+
+## TRAP #2-#15 verified free, at byte level (2026-07-31)
+
+The recorded claim — "a sweep of every `TRAP #n` finds **zero** uses of #2-#15, so those fourteen
+vectors are free" — audited two independent ways:
+
+| | listing sweep | raw-image scan (`$4E4x`, even offsets) |
+|---|---:|---:|
+| **control** `trap #$0` | 12 | **12** |
+| **control** `trap #$1` | 71 | **71** |
+| `trap #$2` … `trap #$F` | 0 | **0** |
+| total | 83 | **83** |
+
+Both controls fire, and at exactly the counts this project records independently ("TRAP #0 has 12
+sites… TRAP #1 has 71 sites"). The raw scan matters because it covers bytes the disassembler treated
+as **data** — a `trap` hidden in an undecoded region would be invisible to the listing sweep and
+visible here.
+
+**The two agree exactly (83 = 83)**, which establishes two things at once: TRAP #2-#15 really are
+unused, and **no `trap` opcode lies outside the decoded instruction stream** — a small but real
+completeness result for the listing.
+
+Word alignment makes the even-offset scan sound: 68000 instructions cannot begin at an odd address,
+so a `$4E4x` pair straddling the alignment is not an instruction.
+
+**Practical consequence, now byte-verified rather than swept:** the monitor's `TRAP #14` breakpoints
+cannot collide with firmware use, and thirteen further vectors are available to host-loaded software.
+This project already states that as "confirmed by measurement, not assumption"; it is now confirmed
+by both.

@@ -8313,6 +8313,16 @@ check('...while no $10(aN) site uses a5, the chassis base register',
       not _re21a.search(r'\$10\(a5\)', _asm21a)
       and len(_re21a.findall(r'\$ff0010', _asm21a)) == 0)
 
+check('the raw image contains exactly 12 TRAP #0 and 71 TRAP #1 opcodes',
+      sum(1 for _i in range(0, len(_rom_bytes) - 1, 2)
+          if _rom_bytes[_i] == 0x4E and _rom_bytes[_i+1] == 0x40) == 12
+      and sum(1 for _i in range(0, len(_rom_bytes) - 1, 2)
+              if _rom_bytes[_i] == 0x4E and _rom_bytes[_i+1] == 0x41) == 71)
+check('...and none at all for TRAP #2 through #15',
+      sum(1 for _n in range(2, 16)
+          for _i in range(0, len(_rom_bytes) - 1, 2)
+          if _rom_bytes[_i] == 0x4E and _rom_bytes[_i+1] == (0x40 | _n)) == 0)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
