@@ -4999,3 +4999,18 @@ check('$25F guards the record TYPE, not the width',
       insn(0xF0555A) == 'cmpi.w #$5337, d1' and insn(0xF04C00) == 'cmpi.w #$5338, d1')
 check('...so the two codes are complementary: type vs width',
       insn(0xF0556E) == 'move.w #$25f, d0' and insn(0xF05614) == 'move.w #$260, d0')
+
+# ---- the SLC upload wire format (2026-07-31) ----
+check('the SLC address loop arms $FF0218 with $400 and polls bit 15 PER WORD',
+      insn(0xF0529E) == 'move.w #$400, $218(a5)' and insn(0xF052A8) == 'btst.b #$f, d7'
+      and insn(0xF052AE) == 'move.w #$0, $218(a5)')
+check('...reads one word from the stream port each time', insn(0xF052B4) == 'move.w (a0), d2')
+check('...and converts it as ASCII HEX from the HIGH byte',
+      insn(0xF052B8).startswith('jsr') and insn(0xF05152) == 'lsr.w #$8, d3'
+      and insn(0xF05154) == 'cmpi.b #$40, d3')
+check("...'A'-'F' subtract $37, '0'-'9' subtract $30",
+      insn(0xF0515A) == 'subi.w #$37, d3' and insn(0xF05160) == 'subi.w #$30, d3')
+check('the assembled address gets the +$10000 staging offset and lands in $E7E',
+      insn(0xF052D0) == 'adda.l #$10000, a1' and insn(0xF052D6) == 'move.l a1, $e7e.l')
+check('the shift count steps down by 8 per byte',
+      insn(0xF052C2) == 'lsl.l d5, d2' and insn(0xF052C8) == 'subq.b #$8, d5')

@@ -21755,3 +21755,62 @@ or S9 for termination, and the address is assembled by shifting — so a 4-byte-
 accepted and shifted by 24. Combined with the `+$10000` staging offset and the `$10000`-`$1FFFF`
 bound enforced three ways, the upload path's accepted input set is now fully specified from the
 firmware side, with a distinct diagnostic code for each way of getting it wrong.
+
+## The SLC upload wire format, specified completely (2026-07-31)
+
+`$F05298` is the address-assembly loop of the SLC S-record path, and it pins down the wire
+protocol byte by byte:
+
+```
+$F05298  movea.l #$0,a1                 the accumulator
+loop:
+$F0529E  move.w  #$400,$218(a5)         ARM the XLTR status IRQ
+$F052A4  move.w  $218(a5),d7            poll...
+$F052A8  btst    #$f,d7 / beq loop      ...for bit 15
+$F052AE  move.w  #$0,$218(a5)           clear the arm
+$F052B4  move.w  (a0),d2                read ONE WORD from the stream port
+$F052B6  addq.l  #$1,d0                 count it
+$F052B8  jsr     $F05150(pc)            ASCII-hex -> binary
+$F052C2  lsl.l   d5,d2                  shift into position
+$F052C4  adda.l  d2,a1                  accumulate
+$F052C8  subq.b  #$8,d5                 next byte: 8 fewer bits
+$F052CE  bge     loop
+$F052D0  adda.l  #$10000,a1             THE STAGING OFFSET
+$F052D6  move.l  a1,$E7E                the destination global
+```
+
+Three things this settles:
+
+**1. One handshake per word, not a burst.** Every single character costs a full arm / poll bit 15
+/ clear cycle on `$FF0218`. There is no block mode on this path — the 42 writes of `$0400` and
+`$0000` counted in the XLTR sweep are exactly this loop running.
+
+**2. The payload is ASCII, one character per 16-bit word, in the HIGH byte.** `$F05150` is the
+converter:
+
+```
+$F05150  move.w  d2,d3
+$F05152  lsr.w   #$8,d3          take the HIGH byte of the word
+$F05154  cmpi.b  #$40,d3         above '@' -> a letter
+$F05158  ble.b   $F05160
+$F0515A  subi.w  #$37,d3         'A'-'F' -> 10-15
+$F05160  subi.w  #$30,d3         '0'-'9' -> 0-9
+```
+
+**3. The two S-record parsers differ in ENCODING, not just in code.** This project records
+`$F051A2` and `$F055A2` as "two independent implementations of the same arithmetic and bound",
+and separately notes that the CPLOAD handler `$F055A2` is "binary not ASCII". Now the contrast is
+explicit: **the SLC path consumes ASCII hex characters through the `$FF0218` handshake; the
+CPLOAD path consumes binary words from chassis memory at `$400000`.** Same records, same
+`+$10000` offset, same `$10000`-`$1FFFF` bound, two different wire encodings for two different
+transports.
+
+That is a genuine architectural fact rather than redundancy: the SLC path is the slow,
+character-oriented link a terminal or a simple host can drive; the CPLOAD path is the fast
+block transfer through the chassis memory window. **A host implementation must choose which it is
+speaking, and the firmware will not auto-detect** — the record type checks are identical, so an
+ASCII record fed to the CPLOAD path parses as garbage without any diagnostic.
+
+**Emulator consequence**: `FPS3K_SEQ`-driven uploads exercise the binary path; anything modelling
+the SLC path must present one ASCII character per word in the high byte and complete the
+`$FF0218` handshake for every one of them.
