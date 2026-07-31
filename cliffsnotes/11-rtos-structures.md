@@ -125,3 +125,68 @@ when unfitted), `$0E48` (VERSAmodule control register, address *computed* from R
 The PTM is reached **three ways** — the `$F70001` literal with even displacements
 (self-test only), config `$F0A52C` = `$F70000` with odd displacements (RTOS init), and the
 cached pointer (tick ISR). All five PTM registers are used; **T2 only by the self-test**.
+
+---
+
+## The TCB, re-derived 2026-07-31
+
+A census of all 52 `a6` offsets in the kernel (395 accesses), classified against the two register
+frames. **Nearly half the traffic is register-frame access, not field access** — the distinction
+matters, because writing a field changes kernel state while writing a frame slot changes what the
+task sees in a register when it next runs.
+
+### Register frames — 12 offsets, 179 accesses
+
+| range | contents | used by |
+|---|---|---|
+| `+$74`-`$AF` | `d0`-`d7`/`a0`-`a6` (60 bytes) | the **full-context** dispatch exit (state bit 6) |
+| **`+$FA`-`$FF`** | the **exception frame `{SR, PC}`**; `+$FB` is the CCR byte | copied back onto the task stack before `rte` |
+| `+$100`-`$13F` | `d0`-`d7`/`a0`-`a7` — **`a6` at `+$138`, `a7` at `+$13C`** | the **normal** dispatch exit |
+
+`movem` restores `d0`-`a5`; `a6` and `a7` must be restored separately (`a6` is the TCB pointer,
+`a7` is the USP). The suspend path reserves `6 + $3C = 66` bytes on the task's own stack — exactly
+the exception frame plus the register block.
+
+**`+$102`, the kernel's busiest offset (119 accesses), is `saved d0 + 2`** — which is the whole
+explanation of the status-in-`d0` return convention and of why it is cleared at TRAP #1 entry.
+Likewise `+$77`, `+$94`, `+$120`, `+$122`, `+$123`, `+$124`, `+$130` are saved-register bytes.
+
+### Identity — three `{name, session}` pairs
+
+| pair | role |
+|---|---|
+| `+$10` / `+$14` | the task's **own** identity — `T0GETTCB`'s lookup key |
+| `+$B0` / `+$B4` | a **self-copy**; overwritten with `'EXEC'` on termination, i.e. a **rename** |
+| `+$140` / `+$144` | the **owner's** identity, stamped in from another TCB |
+
+### Flags and state
+
+| offset | bits |
+|---|---|
+| `+$28` (word) | **7 = privilege** (also a session wildcard in `T0GETTCB`); **3, 4 = `$F00B74` dispatch enables** |
+| `+$29` (its low byte) | **6 = an owner is registered at `+$140`/`+$144`** |
+| `+$2C`/`+$2D` (state word) | **4 = on the ready list, 5 = ASQ pending, 6 = context saved, 7 = deferred work** — each selecting a different dispatch exit; plus documented bits 2, 9-14 |
+| `+$2E` | a saved copy of the state word |
+| `+$148` | **bit 7 = one-shot single-step enable** — armed by the exception monitor at `$F00D3E`, consumed at `$F005A8` |
+
+### Other fields
+
+| offset | role |
+|---|---|
+| `+$04`, `+$0C` | all-tasks and ready-list links |
+| `+$20` | semaphore waiter link |
+| `+$25`, `+$26` | priority bytes (both raised to `$F0` in critical sections) |
+| **`+$36`** | **logical→physical translation base** — passed to `T0LOGPHY` at 24 sites |
+| `+$40` | second ASQ pointer |
+| `+$44` | a structure base, only ever `lea`'d |
+| **`+$5E`** | a **staged return status**, later moved into `+$102` and cleared |
+| `+$6C` | entry point |
+| `+$14C`-`$15B` | a mask (`+$14C`), two values, and the **count/limit** longword at `+$158`/`+$15A` |
+| `+$160` | `!TST` |
+
+### What changed
+
+Five items in the previous map were re-attributed: `+$138` is **saved `a6`**, not an ASQ block
+pointer; `+$B0` is a **name field**, not an `'EXEC'` marker slot; `+$102`/`+$114`/`+$120`/`+$123`
+are **register slots**, not independent fields; and `+$00` is **not a field at all** — its 23
+apparent accesses are `lea`/`pea` passing the TCB pointer itself.
