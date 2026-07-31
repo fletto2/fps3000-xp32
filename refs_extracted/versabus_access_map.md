@@ -36297,3 +36297,41 @@ wrong guess produces a hang rather than an error, and they are now checkable aga
 
 **Caveat unchanged:** `512-3448-010` is not this chassis's `612-4448`, so the sheets describe a close
 relative. Structure should transfer; pin-level and address-level detail should not be assumed to.
+
+## Sheet 16 `APMA-WC` read: both counters identified (2026-07-31)
+
+PDF **page number = sheet number** (page 16's title block reads `SHEET 16`, title `APMA-WC`), so the
+block-diagram index maps straight onto the file.
+
+| function | parts | width |
+|---|---|---|
+| **APMA** (AP memory address) | **4 x `74S169`** at E10, E11, E20, E21, each tagged `(APMA)` | **16 bits** |
+| **WC** (word count) | **4 x `25LS2569`** at F10, F11, F20, F21, each tagged `(WC)` | **16 bits** |
+
+Both are synchronous 4-bit **up/down** counters, cascaded four deep. Outputs are buffered:
+APMA through `74LS240`/`74LS244` to connector pins as `DMA00*`-`DMA15*`; WC through `74LS244` onto
+**`IFDB00`-`IFDB15`**, the interface data bus.
+
+**This closes a loop with the board photograph.** The `AM25LS2569PC` I read off `4448_APIF_F.JPG` and
+recorded as "an AMD 4-bit up/down counter, not previously recorded, consistent with block-transfer
+word counting" is **exactly the word counter** — the schematic uses four of the same part for `WC`.
+Photograph and drawing identify the same function independently.
+
+**Control lines visible on the WC counters:** `LDWC#` (load), `WCCLK` (clock), `WCOUT#` (carry/borrow
+out), `WCENB` (enable), plus `WCROM` and `PU3`, with `74S32`/`74S00`/`74S04`/`74S10` gating around
+them.
+
+### What this implies for the decrement question — and what it does not settle
+
+The counter has a **separate clock input `WCCLK`**. It is therefore *not* decremented as a side effect
+of reading the count register; something else drives that clock. The firmware's drain loop —
+`while ($FF0000 > 0) read (a0)` where `(a0)` is the **FIFO port**, not the count port — fits that
+exactly: **the FIFO read advances the transfer, and the transfer clocks WC.**
+
+That refines the recorded model. "A chassis model that streams records must decrement `$FF0000`" is
+right about the *requirement*; the **trigger is the data read, not the count read**. A model that
+decrements on reads of `$FF0000` itself would drain at the wrong rate and could terminate the loop
+without consuming the record.
+
+**Not settled from this sheet alone:** what drives `WCCLK`. That needs sheets 12-14 (`FIFO CONTROL`,
+`DMA HANDSHAKE`, `DMA FIFO`), which the index says hold the FIFO and handshake logic.
