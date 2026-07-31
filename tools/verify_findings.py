@@ -3490,13 +3490,19 @@ with tempfile.TemporaryDirectory() as _tdq:
     check('$0C14 is the ready-queue head and is EMPTY at rest',
           _lw(0x0C14) == 0)
     # The chain is built by six LIFO pushes, so it runs in reverse TDTI order.
+    # $0C10's link is +$04 (TCBALL); $0C14's is +$0C (TCBREADY).  An earlier
+    # version walked $0C10 via +$0C and passed only because the ready-list
+    # values are stale fossils that still equal +$04 -- the dequeue patches the
+    # PREDECESSOR and never clears the departing TCB's own link.
     _chain, _a = [], _lw(0x0C10)
     while 0x1E000 <= _a < 0x20000 and len(_chain) < 10:
         _chain.append(_tcbname(_a))
-        _a = _lw(_a + 0x0C)
+        _a = _lw(_a + 0x04)
     check('the all-tasks chain is six nodes in reverse TDTI creation order',
           _chain == ['XP1I', 'XP2I', 'XP3I', 'XP4I', 'IO1I', 'RDHC'])
     check('...and terminates at zero', _a == 0)
+    check('...while every TCB\'s +$0C still fossilises the same successor',
+          all(_lw(b + 0x04) == _lw(b + 0x0C) for b in _tcbs))
     # An empty ready queue and six blocked tasks are the same fact twice.
     # $4000 is bit 14 = TSKSBLCK, "TASK IS BLOCKED", per Motorola's TCB.EQ.
     check('every task is BLOCKED (TSKSBLCK), which is why the ready queue is empty',

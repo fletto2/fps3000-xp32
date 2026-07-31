@@ -20356,3 +20356,29 @@ machine, but the firmware also supports a front-panel display driven by these pr
 and it is unfitted here rather than absent from the design. On a board that has one, `$BF`
 and `$C0` would be visible boot milestones — and `$0C3A` is also read by the **level-4
 autovector handler** (`$F00ECC`), so the device is used beyond boot.
+
+## RESOLVED: `$0C10` and `$0C14` use *different* link fields — and why they look identical
+
+This file records a caveat: "`+$04` and `+$0C` hold **identical values in all six TCBs**, so
+walking either yields the same six-node chain and this dump cannot distinguish them." The
+dump cannot; the code can.
+
+| head | link field | push site | measured |
+|---|---|---|---|
+| `$0C10` | **`+$04`** (`TCBALL`) | `$F029D6` `move.l $c10.w,$4(a5)` / `$F029DC` `move.l a5,$c10.w` | **6 pushes** |
+| `$0C14` | **`+$0C`** (`TCBREADY`) | `$F0A0BC` `move.l $c14.w,$c(a5)` / `$F0A0C2` `move.l a5,$c14.w` | **6 pushes** |
+
+and the ready list is then emptied: `$F0A062` clears it once, six pushes fill it, and the
+dequeue at `$F00536` runs **6 times** — once per task as each blocks. Which is why `$0C14`
+reads `$00000000` live and all six TCBs report `TSKSBLCK`.
+
+**And that explains the identical values.** Each task is pushed onto *both* lists at creation,
+in the same order, so its `+$04` and `+$0C` receive the same successor. The dequeue then
+unlinks by patching the **predecessor's** link (`move.l $c(a6),$c(a1)`) and never clears the
+departing TCB's own `+$0C` — leaving a stale value that still equals its `+$04`. The two
+fields agree not because they are the same list but because one is a fossil of the other.
+
+**A check of mine passes for the wrong reason.** The harness walks the six-node chain from
+`$0C10` via `+$0C`. `$0C10` is the *all-tasks* head, whose link is `+$04`; the walk only
+succeeds because the stale `+$0C` values happen to match. Corrected to use `+$04`, with the
+`+$0C` coincidence asserted separately so the fossil is documented rather than relied on.
