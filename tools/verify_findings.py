@@ -7329,6 +7329,13 @@ check('...and the four XP tasks share a uniform +$22 entry-to-exit offset',
       0xF07F08 - 0xF07EE6 == 0x22 and 0xF07508 - 0xF074E6 == 0x22
       and 0xF06B08 - 0xF06AE6 == 0x22 and 0xF060F0 - 0xF060CE == 0x22)
 
+check('the !VCT builder writes ten $FF bytes then marks non-default vectors',
+      _w(0xF09F14) == 0x74FF and _w(0xF09F16) == 0x20C2 and _w(0xF09F18) == 0x20C2
+      and _w(0xF09F1A) == 0x30C2
+      and _w(0xF09F1C) == 0x45F8 and _w(0xF09F1E) == 0x0028
+      and _w(0xF09F22) == 0xB9DA and _w(0xF09F26) == 0x1082
+      and _l(0xF09F2E) == 0x00000400)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

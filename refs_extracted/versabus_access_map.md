@@ -32422,3 +32422,46 @@ Two details the table adds:
 
 The four XP exit stubs `$F07508`, `$F06B08`, `$F060F0` and `$F05E4C` had not been enumerated before;
 they complete the set.
+
+## `!VCT` is a three-state map, and the builder says how (2026-07-31)
+
+```
+$F09F10  bsr MemoryClear            ; the whole 256-byte table -> 0
+$F09F16  move.l d2,(a0)+            ; $FF x4
+$F09F18  move.l d2,(a0)+            ; $FF x4
+$F09F1A  move.w d2,(a0)+            ; $FF x2   -- ten bytes, vectors 0-9
+$F09F1C  lea    $28.w,a2            ; then from vector 10 (address $28) ...
+$F09F22  cmpa.l (a2)+,a4            ; ... compare each VECTOR'S CONTENTS against a4
+$F09F24  beq.b  $F09F28             ;     equal -> leave the byte ZERO
+$F09F26  move.b d2,(a0)             ;     differs -> mark $FF
+$F09F2C  cmpa.l #$400,a2 / bne
+```
+
+So the table is **three-state**, and the states are assigned by comparing each vector against a
+reference handler in `a4`:
+
+| byte | meaning |
+|---|---|
+| **`$FF`** | a handler other than the default was already installed at init — kernel or FPS layer |
+| **`0`** | still the default handler; **unclaimed** |
+| **`1`-`6`** | claimed by that task, written later by `$4C` `CNCTIRQ` |
+
+**I first read the measured `$FF` spread as "wider than documented".** It is not — this project's
+description ("ten `$FF` bytes for vectors 0-9, then one byte per vector from `$28` to `$400`") is
+exactly right; I had taken the second phase to write only task numbers, when it also writes `$FF`
+conditionally. The measured spread is the *consequence* of the rule, not a contradiction of it.
+
+Which makes the live table readable as an inventory of who owns what:
+
+- **`$FF`** at vectors `$00`-`$0B` (the group-0/1 exceptions, line-A, line-F), `$18` (spurious),
+  `$1C`/`$1F` (level-4 and level-7 autovectors), `$20`-`$2F` (**the sixteen TRAP vectors**), and
+  `$8D`/`$8E`/`$93` (the FPS panic set) — every vector the system claims.
+- **task numbers** at exactly the six documented sites, all matching: `$41`→6 RDHC, `$45`→1,
+  `$46`→2, `$47`→3, `$48`→4, `$4A`→5.
+- **zero** at the four documented orphans `$42`/`$43`/`$44`/`$49` — confirming "vectored but
+  disabled", carrying a valid vector they can never assert.
+
+**One byte is unexplained**: vector `$2D` (TRAP #13) reads **`$BF`**, which is neither `$FF`, zero,
+nor a task number 1-6 — and it sits inside an otherwise uniform run of `$FF` across the TRAP
+vectors. The builder writes only `$FF` or leaves zero, so something else wrote it. Recorded as an
+anomaly rather than explained; a RAM watchpoint on `$1FA2D` would identify the writer in one run.
