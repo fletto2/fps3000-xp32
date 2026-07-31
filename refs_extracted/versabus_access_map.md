@@ -28035,3 +28035,48 @@ expected ones, and check `d2`. A stray exception anywhere in the suite therefore
   initial SSP from RAM after boot, breaks here.
 - Vectors 2 and 3 are the only ones the fill preserves, which is why the bus-error handler
   installed for the watchdog survives into the tests that follow it.
+
+## The VMOD block must read back eight exact longword patterns (2026-07-31)
+
+The vector-table fill documented above is the *preamble* to a pattern test, not to an
+exception test. With every stray exception armed to flag `d2 = $FFFF`, the suite then does:
+
+```
+lea.l  $1fff0.l,a5          ; the VMOD control block
+lea.l  $f08e8c.l,a4         ; an 8-entry pattern table
+ori.w  #$700,sr / moveq #$7,d3
+loop:  move.l (a4)+,d0
+       move.l d0,(a5)        ; write the LONGWORD
+       move.l (a5),d1        ; ...read it back
+       cmp.l d0,d1 / beq ok / d7 = $F0F0F0F0
+       dbra d3,loop
+```
+
+The eight patterns at `$F08E8C`:
+
+```
+$0010FFFF   $009F00FF   $0F1F0F0F   $33133333
+$AA9AAAAA   $55155555   $FF9FFFFF   $00100000
+```
+
+They are not simple stripes. Each is `{high word → $1FFF0/$1FFF1, low word → $1FFF2/$1FFF3}`,
+and the byte landing in **`$1FFF1`** — the control byte with the request-level field, the
+second-line gate and the arm bit — takes the values `$10, $9F, $1F, $13, $9A, $15, $9F, $10`.
+The low word goes into `$1FFF2`, which is a **vector register**, so the test exercises the
+control byte and a vector register together as one longword.
+
+**Emulator requirement: `$1FFF0`-`$1FFF3` must read back exactly what was written**, for all
+eight patterns, with no bit read-only, auto-clearing or reserved-as-zero. Writing `$9F` into
+`$1FFF1` sets the arm bit and a request level simultaneously and the test still demands an
+exact read-back.
+
+**And that sits awkwardly with a documented claim.** This project records `$1FFF0`/`$1FFF1`
+as "**image-only** per the board manual — reads return a chassis-mediated value", which was
+the basis for warning that modelling it as a latch diverges cumulatively. An exact-read-back
+test over eight arbitrary patterns is hard to reconcile with reads being chassis-mediated,
+unless the mediation is transparent for the bits these patterns touch.
+
+Both cannot be fully true. The test is unambiguous about what the firmware requires, so a
+model that latches the block passes; whether real hardware would is a question only a bus
+trace or the board manual can settle. Recorded as a conflict rather than resolved, because
+the ROM cannot resolve it.

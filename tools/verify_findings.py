@@ -6105,6 +6105,17 @@ check('...starting at vector 4, so vectors 2 and 3 keep the watchdog handler',
 check('address $0000 doubles as scratch for the stack pointer',
       insn(0xF08A5C) == 'move.l a7, $0.w' and insn(0xF08AE8) == 'movea.l $0.w, a7')
 
+_vmodpat = [struct.unpack('>I', _rom[0xF08E8C - 0xF00000 + _n * 4:][:4])[0]
+            for _n in range(8)]
+check('the VMOD longword pattern test uses eight patterns from $F08E8C',
+      _vmodpat == [0x0010FFFF, 0x009F00FF, 0x0F1F0F0F, 0x33133333,
+                   0xAA9AAAAA, 0x55155555, 0xFF9FFFFF, 0x00100000], [hex(x) for x in _vmodpat])
+check('...written and read back as a LONGWORD at $1FFF0',
+      insn(0xF08E32) == 'lea.l $1fff0.l, a5' and insn(0xF08E6A) == 'move.l d0, (a5)'
+      and insn(0xF08E6C) == 'move.l (a5), d1' and insn(0xF08E6E) == 'cmp.l d0, d1')
+check('...covering the control byte and a vector register together',
+      0x1FFF0 + 2 == 0x1FFF2)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
