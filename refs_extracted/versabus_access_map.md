@@ -25299,3 +25299,47 @@ On a 68000 there is no instruction cache, so no invalidation is needed and Musas
 but **any model that caches decoded instructions must invalidate on writes to RAM**, and a
 recompiling or threaded-code emulator would break here without it. Three sites, all in the
 kernel, all building `jsr`s.
+
+## The TDTI table read in full: only three fields differ between tasks (2026-07-31)
+
+Six 96-byte `!TCB` definition records at `$F0A600`. Reading every longword:
+
+| offset | RDHC | IO1I | XP4I | XP3I | XP2I | XP1I |
+|---|---|---|---|---|---|---|
+| `+$00` | `!TCB` | `!TCB` | `!TCB` | `!TCB` | `!TCB` | `!TCB` |
+| **`+$04`** | **`RDHC`** | **`IO1I`** | **`XP4I`** | **`XP3I`** | **`XP2I`** | **`XP1I`** |
+| `+$14` | `$00009600` | *identical* | *identical* | *identical* | *identical* | *identical* |
+| `+$18` | `$0010A000` | *identical* | *identical* | *identical* | *identical* | *identical* |
+| **`+$1C`** | **`$F046F0`** | **`$F05D36`** | **`$F05F4A`** | **`$F0694A`** | **`$F0734A`** | **`$F07D4A`** |
+| **`+$20`** | **`$F046 F05C`** | **`$F05D F05E`** | **`$F05F F068`** | **`$F069 F072`** | **`$F073 F07C`** | **`$F07D F086`** |
+| `+$24` | `$00000001` | *identical* | *identical* | *identical* | *identical* | *identical* |
+| `+$40` | `PROG` | *identical* | *identical* | *identical* | *identical* | *identical* |
+| `+$44` | `$80000000` | *identical* | *identical* | *identical* | *identical* | *identical* |
+| everything else | **zero** | | | | | |
+
+**Of 96 bytes, only nine longwords are non-zero, and only three differ between tasks:** the
+name at `+$04`, the entry point at `+$1C`, and the PROG segment's first/last page words at
+`+$20`.
+
+### What that says about the machine
+
+**All six tasks are created with identical parameters apart from name, entry point and code
+extent.** There is no per-task priority, no per-task stack size, no per-task option word in the
+definition — six constants are shared by every record:
+
+| field | value | |
+|---|---|---|
+| `+$14` | `$00009600` | |
+| `+$18` | `$0010A000` | |
+| `+$24` | `$00000001` | |
+| `+$40`/`+$44` | `PROG` / `$80000000` | the code segment's name and flags, bit 31 set |
+
+This is consistent with the runtime `!TST` finding that all six tasks report `TSTNSEGS=4,
+TSTCSEGS=2` with identical `STCK` segments — **the uniformity is designed in at definition time,
+not an accident of this configuration.** The `STCK` segment does not appear in the TDTI record at
+all; it is allocated at task creation, which is why all six stack blocks are two pages and tile
+`$1DD00`-`$1E8FF` at a uniform stride.
+
+**For emulation the task-creation model needs exactly three per-task values**, and the remaining
+82 bytes of each record can be treated as a fixed template. That is a much smaller surface than a
+96-byte structure suggests.

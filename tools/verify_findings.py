@@ -5717,6 +5717,24 @@ check('so +$4A/+$4C is a six-byte generated jsr, and $1B retargets its operand',
       insn(0xF0313C) == 'move.l $120(a6), $4c(a6)' and 0x4C - 0x4A == 2)
 check('CNCTIRQ builds a thunk to the kernel interrupt prologue $F008FA',
       insn(0xF0212A) == 'lea.l $f008fa(pc), a0')
+
+# ---- the TDTI table: only three fields differ between tasks (2026-07-31) ----
+_tdti = [_rom[0xF0A600 - 0xF00000 + n * 96:][:96] for n in range(6)]
+check('all six TDTI records carry the !TCB marker', all(r[:4] == b'!TCB' for r in _tdti))
+check('...and the PROG segment name at +$40', all(r[0x40:0x44] == b'PROG' for r in _tdti))
+for _off, _label in ((0x14, '$00009600'), (0x18, '$0010A000'),
+                     (0x24, '$00000001'), (0x44, '$80000000')):
+    check('...with an identical constant %s at +$%02X' % (_label, _off),
+          len({r[_off:_off + 4] for r in _tdti}) == 1)
+check('only the name, entry point and PROG pages differ between records',
+      len({r[0x04:0x08] for r in _tdti}) == 6
+      and len({r[0x1C:0x20] for r in _tdti}) == 6
+      and len({r[0x20:0x24] for r in _tdti}) == 6)
+check('...and every other longword is zero',
+      all(all(r[k:k + 4] == b'\x00' * 4
+              for k in range(0, 96, 4)
+              if k not in (0x00, 0x04, 0x14, 0x18, 0x1C, 0x20, 0x24, 0x40, 0x44))
+          for r in _tdti))
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')
