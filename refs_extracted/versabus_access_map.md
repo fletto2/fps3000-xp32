@@ -25651,3 +25651,42 @@ distinguish an immediate from an address.
 That is the same class of error this file records several times over, and the working rule holds:
 **a single anomalous hit in an otherwise clean sweep is more likely a matcher artefact than a
 finding**, and costs one minute to check.
+
+## The chassis window is PAGED, not indexed (2026-07-31)
+
+Every base formed inside `$400000`-`$7FFFFF`, and every access made through it:
+
+| base | formed at | purpose |
+|---|---|---|
+| `$400000` | `$F0531C` | RDHC's command-record fetch — `move.l (a0)+,d1` |
+| `$400000` | `$F0961E`, `$F096E0` | the `$FF0216` bit-5 / bit-6 window-gate probes |
+| `$400000` | `$F09788` | the width-mux test — `(a0)` read and written repeatedly |
+| `$400000` | `$F09AE6`, `$F09B30` | the SCM address-line and pattern tests |
+| `$404000`, `$403FFC` | `$F09B36`, `$F09BA0` | the SCM tests' upper bounds |
+| **`$700000`** | `$F05DE0` | **the host mailbox** |
+
+**Almost every access is at displacement `+$0000`.** The SCM tests walk the window by
+**incrementing the address register**, not by indexing; the probes touch `(a1)` and `(a0)`
+directly; RDHC fetches with `(a0)+`.
+
+**The only non-zero displacements in the entire window are the mailbox's `+$1C` and `+$20`.**
+
+### What that means for a model
+
+**The SBC does not index into the chassis window — it pages it.** `$FF0210` selects what appears
+at `$400000`, and the firmware then accesses the base linearly. So a model needs:
+
+- `$FF0210` to select the page for the whole `$400000`-`$7FFFFF` range;
+- linear access from `$400000` for records, tests and probes;
+- and the mailbox as a **fixed-offset structure** at page `$F`, offsets `$1C` and `$20`.
+
+That is a much smaller surface than a 4 MB window suggests, and it explains why chassis op `$3`'s
+address decode (`page = addr >> 20`, `offset = (addr & $FFFFF) << 2`) exists at all: the *chassis*
+supplies a 32-bit address, and the SBC turns it into a page selection plus a base access rather
+than into a displacement.
+
+**The one asymmetry to model carefully** is that the mailbox and the SCM live in the same window
+at different pages, so a model that answers `$70001C` without consulting `$FF0210` will also
+answer it while the SCM tests have page 0 selected — which this file already records as a
+divergence, and which this census confirms is the *only* place two different structures share the
+window.

@@ -5879,6 +5879,18 @@ check('windows 1, 6 and 7 are touched at NO offset',
       not [o for o in _apw if 0x20 <= o <= 0x3F or 0xC0 <= o <= 0xFF])
 check('the one apparent window-7 reference is a RAM pattern, not an address',
       insn(0xF0998E) == 'move.l #$ff00ff, d0' and insn(0xF09996) == 'not.l d0')
+
+# ---- the chassis window is paged, not indexed (2026-07-31) ----
+check('RDHC fetches its command record linearly from the window base',
+      insn(0xF0531C) == 'movea.l #$400000, a0' and insn(0xF05322).startswith('move.l (a0)+'))
+check('the gate probes touch the base directly, with no displacement',
+      insn(0xF096AC) == 'move.w (a1), d0' and insn(0xF096B8) == 'clr.w (a1)')
+check('the SCM tests walk the window by INCREMENTING the register',
+      insn(0xF09B4A) == 'lea.l (a0, d2.w), a0' or insn(0xF09AF6) == 'move.l d1, (a0, d1.l)')
+check('the mailbox is the ONLY structure accessed by displacement in the window',
+      insn(0xF05DF0) == 'move.l $1c(a4), d1' and insn(0xF05E40) == 'move.l d1, $20(a4)')
+check('...and it is the only base formed outside the $400000-$404000 span',
+      insn(0xF05DE0) == 'movea.l #$700000, a4')
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')
