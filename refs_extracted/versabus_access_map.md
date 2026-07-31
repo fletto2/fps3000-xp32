@@ -24370,3 +24370,43 @@ Saving the stack pointer before touching a device is what you do when the curren
 unusable — so the routine's shape is that of a **fatal-error or watchdog path**, which fits a
 register the firmware never otherwise touches. It remains dormant; what is new is that its
 context makes it look deliberate rather than vestigial.
+
+### `$0C8E` / `$0C9A` / `$0CAA` are one subsystem: a header and a 22-byte-record array
+
+The three remaining high-traffic unexplained globals are all `lea` targets — structure bases
+passed by address, never read as scalars — and their spacing and use fit together:
+
+```
+$F00DC4  mulu.w  #$16,d1            index x 22
+$F00DC8  lea     $CAA.w,a2
+$F00DD2  movea.l (a2,d1.w),a5       the record's longword at +0
+$F00DD6  cmpa.l  a6,a5              ...compared against the CURRENT TCB
+$F00DE2  move.w  $E(a2,d1.w),d2     a word at +$E
+$F00DE6  move.l  $10(a2,d1.w),d3    a longword at +$10
+```
+
+**`$0CAA` is an array of 22-byte (`$16`) records**, each holding a TCB pointer at `+0`, a word at
+`+$E` and a longword at `+$10`. `$0C9A` sits **16 bytes before it** and is initialised at
+`$F0A04E` with `move.l #$01010000,$C9A.w` — the shape of a small header (two byte counts and a
+zeroed word) for the array that follows. `$0C8E` sits **12 bytes before `$0C9A`**.
+
+So the layout is `$0C8E` (12 bytes) + `$0C9A` (16-byte header) + `$0CAA` (22-byte records), which
+at six records reaches `$0D2D`.
+
+### What uses it
+
+**TRAP #0 directive `$13`** (handler `$F00DA6`, pre-trap entry `$F00DA4`) walks the array,
+compares each record's TCB pointer against the current task, and assembles a record from a wide
+spread of TCB fields — `$14`, `$24`, `$28`, `$29`, `$70`, `$73`, `$100`, `$102` — into `d2`-`d7`,
+seeded with the constant `$1C870000`.
+
+**The structural facts are solid**: 22-byte stride, TCB pointer at `+0`, header at `$0C9A`,
+initialiser `$01010000`. **The semantic reading is not.** Building a record out of eight TCB
+fields and a magic constant looks like event or state reporting, and 22 bytes is not the 26-byte
+`TRACE.EQ` entry this project has already identified at `$1F500`, so it is a *different*
+structure. Naming it would be guessing; the layout is recorded so a later dump can settle it.
+
+**Six of the ten unexplained `$0Cxx` globals are now accounted for** — `$0C5C`, `$0C78`, `$0C8E`,
+`$0C9A`, `$0CAA` structurally, and `$0C40` remains a single read at `$F01082` with no other
+reference. `$0C35`, `$0C73` and `$0C7C` are odd-address byte accesses into words already
+identified (`$0C34` trace mask, `$0C72` config, `$0C7C` after the `$0C78` stack pointer).

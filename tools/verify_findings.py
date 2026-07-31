@@ -5394,6 +5394,18 @@ check('$0C78 saves the stack around the $F70030 access, re-entrancy guarded',
       and insn(0xF00A32) == 'movea.l $c78.w, a7' and insn(0xF00A52) == 'clr.l $c78.w')
 check('...masking to level 7 and saving all registers first',
       insn(0xF00A22) == 'ori.w #$7000, sr' and insn(0xF00A26) == 'movem.l d0-d7/a0-a6, -(a7)')
+check('$0CAA is an array of 22-byte records indexed by a scaled register',
+      insn(0xF00DC4) == 'mulu.w #$16, d1' and insn(0xF00DC8) == 'lea.l $caa.w, a2'
+      and insn(0xF00DD2) == 'movea.l (a2, d1.w), a5')
+check('...whose +0 longword is compared against the current TCB',
+      insn(0xF00DD6) == 'cmpa.l a6, a5')
+check('...with further fields at +$E and +$10',
+      insn(0xF00DE2) == 'move.w $e(a2, d1.w), d2'
+      and insn(0xF00DE6) == 'move.l $10(a2, d1.w), d3')
+check('$0C9A sits 16 bytes before it and is initialised to $01010000',
+      0xCAA - 0xC9A == 16 and insn(0xF0A04E) == 'move.l #$1010000, $c9a.w')
+check('...and $0C8E sits 12 bytes before $0C9A', 0xC9A - 0xC8E == 12)
+check('the array is walked by TRAP #0 directive $13', _t0rev.get(0xF00DA4) == 0x13)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
