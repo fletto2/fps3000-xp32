@@ -23879,3 +23879,51 @@ have gone.
 directives from the table alone — size from the high byte, block-validation from bit 7, the
 second translation from bit 6 — without knowing what 34 of them do. Combined with the
 family clustering by size, that is the complete marshalling contract.
+
+## Every base address the firmware forms — the definitive device-reach census (2026-07-31)
+
+Since essentially all I/O on this board goes through a base register, enumerating every
+`movea.l #imm,aN` and `lea abs,aN` enumerates everything the firmware can reach. Excluding ROM
+addresses:
+
+### Devices
+
+| base | uses | device |
+|---|---:|---|
+| **`$00FF0000`** | **62** | AP I/F + XLTR — the dominant base by an order of magnitude |
+| `$0001FFF0` | 13 | VERSAmodule control register |
+| `$00F70018` | 9 | board status register |
+| `$00400000` | 6 | chassis memory window |
+| `$00F70001` | 2 | MC6840 PTM |
+| `$00700000` | 1 | **the host mailbox — inside the chassis window, as established** |
+| `$00403FFC`, `$00404000` | 1 each | SCM test bounds |
+| **`$00F82001`** | **1** | **the bus-watchdog test address** — phase `$600`'s deliberate BERR |
+| `$00FF0048`/`$4E`, `$68`/`$6E`, `$88`/`$8E`, `$A8`/`$AE` | 1-2 each | the four channel windows, absolute form |
+| `$00FF0244`/`$0246`/`$0250`/`$0252` | 1 each | the four BIM control registers |
+
+### RAM and limits
+
+`$0`, `$1`, `$6`, `$10`, `$124`, `$400`, `$800`, `$E58`, `$E8A`, `$101E`, `$EFF8`, `$10000`,
+`$10008`, `$1F000`, `$1F400`, `$20000` (the RAM top), `$3FFFFC`, `$F10000` (the ROM limit used by
+the checksum test).
+
+### What the census establishes
+
+**No device address outside the documented set is ever formed.** In particular:
+
+- **`$F70011`-`$F70017`, the uPD7201 SIO, never appears** — not as a base, not absolutely, not in
+  any form. This upgrades "the firmware never accesses the SIO" from an absence of observed
+  accesses to a **positive property of the instruction stream**: the address is never computed, so
+  no code path however reached can touch it. That is what makes the chip safely available to
+  `monitor/`.
+- `$F70030`, the kernel's one device access, is reached absolutely rather than through a base and
+  so does not appear here — consistent with its documented status as a single dormant read/write.
+- Nothing in `$F80000`-`$FEFFFF` except the single watchdog probe at `$F82001`.
+
+Combined with the runtime access log in `device_communications_map.md` — which records the
+*effective* addresses the CPU put on the bus — the two methods now agree from opposite ends:
+**the log says what was touched, this census says what could be.** Neither finds a device the
+other misses.
+
+**`$FF0000` at 62 uses against the next-highest 13** is also the clearest single measure of where
+this firmware's attention is: the AP I/F and XLTR are the machine, as far as the SBC is concerned.

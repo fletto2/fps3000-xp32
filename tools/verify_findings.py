@@ -5221,6 +5221,25 @@ check('TERM carries both, being blocking AND rescheduling',
       (_t1[0x0F][1] & 0x03) == 0x03)
 check('bit 2 is carried by exactly one directive, $25',
       [n for n in _t1live if _t1[n][1] & 0x04] == [0x25])
+
+# ---- the definitive device-reach census (2026-07-31) ----
+_bases = _mcol.Counter()
+for _a, (_m, _o, _) in _mins.items():
+    _mm = _mre.match(r'#\$([0-9a-f]+), a\d$', _o)
+    if _mm and _m.startswith('movea.l'): _bases[int(_mm.group(1), 16)] += 1
+    _m2 = _mre.match(r'\$([0-9a-f]+)\.l, a\d$', _o)
+    if _m2 and _m.startswith('lea'): _bases[int(_m2.group(1), 16)] += 1
+check('$FF0000 is by far the most-formed base address', _bases[0x00FF0000] == 62,
+      _bases[0x00FF0000])
+check('...ahead of the VMOD control register at 13', _bases[0x0001FFF0] == 13)
+check('the uPD7201 SIO base is NEVER formed, in any variant',
+      not any(0xF70010 <= b <= 0xF70017 for b in _bases))
+check('the bus-watchdog probe address $F82001 is formed exactly once',
+      _bases[0x00F82001] == 1)
+check('the mailbox base $700000 is formed once, inside the chassis window',
+      _bases[0x00700000] == 1 and 0x400000 <= 0x700000 < 0x800000)
+check('no base is formed in $F80000-$FEFFFF except that watchdog probe',
+      [b for b in _bases if 0xF80000 <= b <= 0xFEFFFF] == [0x00F82001])
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
