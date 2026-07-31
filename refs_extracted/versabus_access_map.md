@@ -19492,3 +19492,31 @@ That asymmetry is worth stating plainly because it reads as deliberate rather th
 accidental — the staging pointer is the one a *bug* would corrupt silently and unrecoverably
 (it feeds microcode into an AC), while the peek/poke is a debug facility whose whole purpose
 is to be unrestricted.
+
+### `$E7E` is the S-record destination address — and the staging bound has a third enforcer
+
+`$E7E` has exactly four references, and they resolve it completely:
+
+```
+$F052D6  adda.l #$10000,a1 / move.l a1,$e7e     ; the SLC S-record path
+$F05646  adda.l #$10000,a1 / move.l a1,$e7e     ; the CPLOAD S-record path
+$F04F70  cmpi.l #$10000,$e7e                    ; chassis operation $8
+$F04F7C  cmpi.l #$1ffff,$e7e
+```
+
+Both writers are the **S-record address arithmetic** this file documents — "the record
+address is an OFFSET: `a1 = $10 + addr + $10000`" — in its two independent implementations,
+the SLC parser and `CPLOAD`'s. So **`$E7E` holds the computed microcode-staging destination**,
+and chassis operation `$8` is the chassis asking the SBC to confirm that destination is
+inside `$10000`-`$1FFFF` before proceeding, reporting panel `$25A` if it is not.
+
+That makes **three independent enforcers of the same staging bound**: the SLC parser at
+`$F051FE`/`$F05206`, the `CPLOAD` handler at `$F055A2`, and now operation `$8`. Three sites
+agreeing on one range is a much stronger statement of the design intent than any one of them,
+and it explains why op `$8` is the only chassis operation that range-checks an address —
+it is guarding the microcode upload, not memory in general.
+
+It also refines op `$8`'s description in the operation table. This file lists it as "CH1
+reset when idle"; the reset is conditional on `CHANNEL_SELECT == 0` **and** on the staging
+pointer being valid, so the operation is better read as **"if the channel is idle and the
+staging destination is sane, reset it"** — a pre-upload handshake rather than a bare reset.
