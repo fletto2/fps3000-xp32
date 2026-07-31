@@ -31841,3 +31841,49 @@ That reading explains what the marker reading could not:
 The RAM-dump prediction stands but changes meaning: a TCB that has passed through `$F00824` reads
 `45 58 45 43` at `+$B0` — **and its `+$B4` should hold that task's session**, which a marker
 reading does not predict at all. That is the discriminating test, in one dump.
+
+## Three `{name, session}` pairs per TCB, and `+$29` bit 6 is the ownership flag (2026-07-31)
+
+Chasing the `{name, session}` pattern shows a TCB carries **three** such pairs, each with a
+different role:
+
+| pair | holds | written by | used for |
+|---|---|---|---|
+| `+$10` / `+$14` | **the task's own identity** | task creation | `T0GETTCB`'s lookup key |
+| `+$B0` / `+$B4` | **a self-copy** | `$F02F7C`/`$F02F82` from `+$10`/`+$14` | overwritten with `'EXEC'` on termination — a rename |
+| **`+$140` / `+$144`** | **the OWNER's identity** | `$F0354A`/`$F03550`, from **`a5`** into **`a2`** | the permission check |
+
+The third is the interesting one, because the source and destination are **different TCBs**:
+
+```
+$F0354A  move.l $10(a5),$140(a2)   ; a5 = the caller/owner, a2 = the target
+$F03550  move.l $14(a5),$144(a2)
+```
+
+So a task's `+$140`/`+$144` records **who owns it**, stamped in by the owner at setup. And the
+check that consumes it:
+
+```
+$F035E0  btst.b #$6,$29(a5) / beq -> DENY   ; is an owner registered at all?
+$F035E8  move.l $140(a5),d0 / cmp.l $10(a6),d0 / bne -> DENY   ; owner name == caller's name?
+$F035F2  move.l $144(a5),d0 / cmp.l $14(a6),d0 / bne -> DENY   ; owner session == caller's session?
+```
+
+**`TCB+$29` bit 6 is the "an owner is registered" flag.** That names the field I listed last turn
+as an unidentified flags-word bit used ten times with `bset`×5 / `btst`×4 / `bclr`×1 — the counts
+now read naturally: set when ownership is established, tested on each permission check, cleared
+when released.
+
+So the kernel's permission model has two independent layers, which this project had recorded
+separately without connecting:
+
+1. **Privilege** — `TCB+$28` bit 7, tested by seven directives, and (as found this session) acting
+   as a **session wildcard** in `T0GETTCB`.
+2. **Ownership** — `TCB+$29` bit 6 plus the owner identity at `+$140`/`+$144`, requiring an exact
+   `{name, session}` match against the caller's live `+$10`/`+$14`.
+
+A caller may act on a target either by being privileged or by owning it. That is exactly the shape
+of the two-sided check this project documents for directive `$18` ("`btst #$F,$28(a6)` on the
+caller, then `btst #$F,$28(a0)` on the target"), and it explains why `RSTATE` needs a stored copy
+of an identity that is also live elsewhere in the same TCB: the copy records a *relationship*, not
+a duplicate of the task's own name.

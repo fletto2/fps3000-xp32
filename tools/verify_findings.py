@@ -7202,6 +7202,16 @@ check('...then walks the !PAT structure through slot $0C2C',
 check("...so TCB+$B0 is a NAME copy, and 'EXEC' written there is a rename",
       _l(0xF00838 + 2) == 0x45584543 or _l(0xF00838) == 0x2D7C)
 
+check('TCB+$140/$144 are stamped from ANOTHER TCB (a5 -> a2), so they are the OWNER',
+      _w(0xF0354A) == 0x256D and _w(0xF0354C) == 0x0010 and _w(0xF0354E) == 0x0140
+      and _w(0xF03550) == 0x256D and _w(0xF03552) == 0x0014 and _w(0xF03554) == 0x0144)
+check('...and the check gates on TCB+$29 bit 6 before comparing both halves',
+      _w(0xF035E0) == 0x082D and _w(0xF035E2) == 0x0006 and _w(0xF035E4) == 0x0029
+      and _w(0xF035E8) == 0x202D and _w(0xF035EA) == 0x0140
+      and _w(0xF035EC) == 0xB0AE and _w(0xF035EE) == 0x0010
+      and _w(0xF035F2) == 0x202D and _w(0xF035F4) == 0x0144
+      and _w(0xF035F6) == 0xB0AE and _w(0xF035F8) == 0x0014)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
