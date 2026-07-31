@@ -19520,3 +19520,43 @@ It also refines op `$8`'s description in the operation table. This file lists it
 reset when idle"; the reset is conditional on `CHANNEL_SELECT == 0` **and** on the staging
 pointer being valid, so the operation is better read as **"if the channel is idle and the
 staging destination is sane, reset it"** — a pre-upload handshake rather than a bare reset.
+
+## Operation `$3`'s `cmpa.l #$400000` is DEAD, and its reachable range includes the mailbox
+
+This file describes op `$3`'s address arithmetic and reads its comparison as a bound:
+"`cmpa.l #$400000,a1` — offsets at or beyond 4 MB are NOT windowed". The code does say that.
+**The branch cannot be taken.**
+
+```
+$F04D78  d1 = $E58
+$F04D7E  andi.l #$fffff,d1        ; 20 bits          -> max $FFFFF
+$F04D84  lsl.l  #$2,d1            ; longwords->bytes -> max $3FFFFC
+$F04D86  exg.l  d1,a1
+$F04D88  cmpa.l #$400000,a1
+$F04D8E  bge.b  $f04da0           ; needs a1 >= $400000
+$F04D90  ...windowed: (a1,$400000)
+$F04DA0  ...direct:   (a1)        ; UNREACHABLE
+```
+
+`$3FFFFC` is **four bytes short** of `$400000`, so `bge` never fires and `$F04DA0` — an
+*absolute*, un-windowed access — is dead code. Neither of the two configurations that drive
+op `$3` reaches either arm in a trace, but execution is not needed: the mask and the shift
+bound the value below the comparison by construction.
+
+Two consequences.
+
+**No inference about the chassis window can be drawn from that comparison.** This file
+already cautions that the bound "does NOT establish a 4 MB window"; the sharper statement is
+that it establishes *nothing*, because the code path it guards cannot run. Any reasoning
+about window extent has to come from elsewhere.
+
+**The reachable range is `$400000`-`$7FFFFC`, and that includes the mailbox.** Window base
+plus maximum offset is `$400000 + $3FFFFC = $7FFFFC`, and the host mailbox this project
+documents sits at **`$70001C`** — inside it. So the address the SBC *computes* for a
+sufficiently large index lands on the mailbox region.
+
+That is a real question for a chassis model, not a curiosity: the emulator maps the window
+as 1 MB at `$400000` (an unforced choice, as this file notes) and the mailbox separately at
+`$700000`. A model must decide whether a windowed access at offset `$300000`+ aliases the
+mailbox, is decoded elsewhere by the hardware, or faults — and nothing in the firmware
+answers it, because the firmware never issues an index that large.
