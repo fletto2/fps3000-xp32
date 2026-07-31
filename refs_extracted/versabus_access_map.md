@@ -17856,3 +17856,34 @@ set, and the per-channel status word), **both directions of the SBC↔chassis co
 are now described at register level.** What remains unspecified is not the SBC's half — it
 is what the chassis *chooses* to send, which is the counterpart card's behaviour and is not
 in this ROM.
+
+## The `$10A0` per-channel flag array, decoded (2026-07-30)
+
+`$10A0 + (ch-1)*2` is a per-channel word — this file has recorded writes to it without a
+meaning. Two bits are now identified, from opposite ends of the system:
+
+| bit | set by | tested by | meaning |
+|---|---|---|---|
+| 0 | the **XP task**, `bset #$0,$10A1(a2)` at `$F08608`, when a transfer completes and `$10AE+(ch-1)*4` (the `USER` handle) is **zero** | — | a completion nobody was there to receive |
+| 1 | **RDHC command 1**, `move.w #$2,$10A0(a1)` at `$F053E2` | RDHC command 1 at `$F053AE`, `btst #$1,$10A1(a1)` | host-side notification is enabled for this channel |
+
+When bit 1 is set, RDHC posts to the semaphore whose name it *computes*:
+`d1 = $48585030` (`'HXP0'`) `+ ch`, giving `HXP1`-`HXP4`, then `jsr $F05652`. That confirms
+the note here that those names exist only at runtime, and shows the gate that decides
+whether the post happens at all.
+
+Both writes address the **low byte** of the word (`$10A1 + (ch-1)*2`), so they are
+consistent with each other.
+
+Command 1 also does two things worth recording:
+
+- it defaults the channel from **`$E62`** when the record's channel field is zero — `$E62`
+  being half of the pair written only by operation `$5`, i.e. `XPSEL`. So "select a
+  channel, then issue a command without naming one" works, which is exactly the semantics
+  the published `XPSEL` implies.
+- its `$14` sub-mode stores `$101E` into **`$1080 + (ch-1)*4`**, a per-channel pointer to
+  the 16-longword area that command 2 reads and writes.
+
+And `$F053E8` computes the channel's command port as `((ch+1) << 5) + $FF000E` — for
+channel 1, `$FF004E`. That is the firmware's own window arithmetic, and it is why AP I/F
+**window 1 is skipped**: the formula maps channel *n* to window *n+1*.
