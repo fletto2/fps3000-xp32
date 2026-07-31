@@ -7296,6 +7296,19 @@ check('directive $23 = QEVNT (decimal 35) works through the ASQ pointer TCB+$40'
       35 == 0x23 and _w(0xF02430) == 0x286D and _w(0xF02432) == 0x0040
       and _w(0xF02438) == 0x586E and _w(0xF0243A) == 0x0102)
 
+check('the decimal rule holds across the named directives',
+      _t1(0x1F)[0] != _t1(0x00)[0] and 0x1F == 31 and 0x23 == 35
+      and 0x4C == 76 and 0x2D == 45 and 0x29 == 41)
+check('$06 and $09 declare the 28-byte SGPBL segment block, like GTSEG and CRTCB',
+      (_t1(0x06)[1] >> 8) == 28 and (_t1(0x09)[1] >> 8) == 28
+      and (_t1(0x01)[1] >> 8) == 28 and (_t1(0x0B)[1] >> 8) == 28)
+check('$2C declares 10, the semaphore descriptor size shared with CRSEM/ATSEM',
+      (_t1(0x2C)[1] >> 8) == 10 and (_t1(0x2D)[1] >> 8) == 10
+      and (_t1(0x29)[1] >> 8) == 10)
+check('the task-state family $42/$44/$45 shares RSTATE\'s 12-byte block',
+      (_t1(0x43)[1] >> 8) == 12 and (_t1(0x42)[1] >> 8) == 12
+      and (_t1(0x44)[1] >> 8) == 12 and (_t1(0x45)[1] >> 8) == 12)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

@@ -32280,3 +32280,39 @@ here. The other ASQ directives fall in line: `RDEVNT` 34 = `$22`, `WTEVNT` 36 = 
 The singletons were flagged as "where individual decoding would have to start". All nine now have
 a name or a decode, and the exercise identified two TCB fields along the way (`+$25` the priority
 ceiling, `+$48`/`+$4C` the handler tables).
+
+## The TRAP #1 directive census, complete (2026-07-31)
+
+Applying the decimal-numbering rule uniformly — **the firmware's hex directive number read as
+decimal is Motorola's number** (`$1F` = 31 = `GTASQ`, `$23` = 35 = `QEVNT`, `$4C` = 76 = `CNCTIRQ`)
+— gives an exact state of knowledge:
+
+**60 live directives: 29 named, 31 unnamed.**
+
+The unnamed ones cluster into families by number and parameter-block size, which is a useful map
+for whoever continues:
+
+| range | sizes | likely family |
+|---|---|---|
+| `$03`-`$09` (3-9) | 24, 24, 24, 28, 24, 0, 28 | **segment/memory** — `$01` `GTSEG` and `$02` `DESEG` head it, and **28 is `SGPBL`**, the segment parameter block this project matched to `GTSEG`/`CRTCB` |
+| `$0E`-`$1E` (14-30) | 0, 8, 0, 0, 8, 9, 8, 36, 56, 14, 0 | **task control** — includes the three decoded above (`$18`, `$1A`, `$1B`) |
+| `$21`-`$25` (33-37) | 0, 0 | around the ASQ/event group (`$1F`-`$24`) |
+| `$2C`, `$2E` (44, 46) | 10, 0 | inside the semaphore group — **10 is the semaphore descriptor size** |
+| `$3B`, `$3E` (59, 62) | 0, 4 | configuration/vector — `$3E` decoded above |
+| `$40`-`$45` (64-69) | 16, 16, 12, 12, 12 | **task state** — `$43` = 67 = `RSTATE` sits inside it at size 12, and `$42`/`$44`/`$45` share that size |
+| `$48`, `$4A` (72, 74) | 28, 8 | around `SETTOD` (73) and `CNCTIRQ` (76) |
+
+Two of these groupings are worth acting on. **`$06` and `$09` declare 28 bytes** — the same
+`SGPBL` block as `GTSEG` and `CRTCB` — so they take a full segment descriptor and are almost
+certainly segment operations. And **`$2C` declares 10**, the semaphore descriptor size shared by
+`CRSEM`/`ATSEM`/`START`, placing it in the semaphore family by argument shape as well as by number.
+
+The size-family reasoning has a caveat this session supplied: `$1A` and `$1B` have near-identical
+handlers and *different* sizes (36 and 56), so a shared implementation does not imply a shared
+block — and the converse holds too. Size is a hint, not a proof.
+
+**What this replaces.** This project recorded "14 distinct directives across 65 resolvable ones"
+used by the firmware's own tasks, and separately that "84 directives are now named from `TR1.EQ`".
+Those are different counts of different things — issued-by-this-firmware versus named-in-the-source
+— and neither is the count of *live table slots*. The number that matters for a dispatcher is
+**60 live**, of which 29 can be named from the available equate files and 31 cannot.
