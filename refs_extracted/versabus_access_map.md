@@ -21535,3 +21535,49 @@ per-channel reading could not explain.
 The two labels that survive from the first pass unchanged are `$258` and the `$281`/`$282` pair —
 three of roughly thirty. **The rest were guesses that reading the guard has now either confirmed
 by mechanism or replaced.**
+
+## `$FF0000` is a REMAINING-COUNT register, and the error paths drain against it (2026-07-31)
+
+The AP I/F window-0 table in `device_communications_map.md` lists four registers — `+$00`,
+`+$04` (ready, bit 0), `+$08` (data), `+$0E` (cmd/status) — and assigns a role to three of them.
+`+$00` has had none. Two byte-identical loops give it one:
+
+```
+$F04C22  movea.l #$FF0000,a1          reached when an S-record TYPE is invalid
+$F04C28  cmpi.w  #$0,$0(a1)           <- read $FF0000
+$F04C2E  ble.b   $F04C34
+$F04C30  move.w  (a0),d0              consume one word from the stream
+$F04C32  bra.b   $F04C28
+$F04C34  move.w  #$25F,d0             ...then report
+
+$F05212  movea.l #$FF0000,a1          reached when an S-record ADDRESS is out of range
+$F05218  cmpi.w  #$0,$0(a1)           identical loop
+$F05224  move.w  #$25A,d0             ...then report
+```
+
+Both are on **error** arms — one when the record type is not `S7`-`S9`, the other when the
+destination address leaves `$10000`-`$1FFFF`. Neither advances `a0`. So the loop is:
+
+> while `$FF0000` is greater than zero, read one word from the stream port; then report the error.
+
+That is a **drain**: the firmware finishes consuming the record it has already rejected before
+issuing the panel command, so the chassis is not left mid-stream with a half-read record. And it
+means `$FF0000` is a **count of words remaining**, decremented by the chassis (or by the act of
+reading the port), which the SBC polls to know when the stream is exhausted.
+
+Two details support the reading rather than merely permitting it:
+
+- `move.w (a0),d0` has **no post-increment**, so `a0` is a **FIFO port** whose reads pop, not a
+  memory pointer being walked. A memory pointer would spin forever on one location.
+- The loop's exit condition is `<= 0`, not `== 0`, which is the defensive form for a counter that
+  might already have gone negative — appropriate for a value another device maintains.
+
+**This is the first assigned role for `$FF0000`**, and it completes window 0: `+$00` remaining
+count, `+$04` ready flag, `+$08` data, `+$0E` command/status. All four now have a mechanism
+attached rather than a position in a table.
+
+**Emulator consequence.** A model returning zero for `$FF0000` makes both error paths exit
+immediately, which is harmless; a model returning a constant non-zero value makes them **spin
+forever**, and the symptom would be a hang on a *malformed* S-record only — precisely the case a
+test suite is least likely to exercise. Any chassis model that streams records must decrement
+this register.

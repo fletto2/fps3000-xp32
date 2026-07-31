@@ -4929,3 +4929,17 @@ check('$282 is gated on $10AA being zero', insn(0xF05E12) == 'move.l $10aa.l, d2
 check('the same directive gets different codes in different tasks: $2D is $26E in XP, $27E in IO1I',
       any('#$26e, d0' in o for _, (_, o, _) in _mins.items())
       and any('#$27e, d0' in o for _, (_, o, _) in _mins.items()))
+
+# ---- $FF0000 is a remaining-count register; error paths drain against it ----
+check('the invalid-record-type path drains against $FF0000',
+      insn(0xF04C22) == 'movea.l #$ff0000, a1' and insn(0xF04C28) == 'cmpi.w #$0, $0(a1)'
+      and insn(0xF04C30) == 'move.w (a0), d0' and insn(0xF04C32) == 'bra.b $f04c28')
+check('the out-of-range-address path drains identically',
+      insn(0xF05212) == 'movea.l #$ff0000, a1' and insn(0xF05218) == 'cmpi.w #$0, $0(a1)'
+      and insn(0xF05220) == 'move.w (a0), d0' and insn(0xF05222) == 'bra.b $f05218')
+check('...both exit on <= 0, the defensive form for a counter another device maintains',
+      insn(0xF04C2E) == 'ble.b $f04c34' and insn(0xF0521E) == 'ble.b $f05224')
+check('...and the stream read has NO post-increment -- (a0) is a FIFO port',
+      insn(0xF04C30) == 'move.w (a0), d0' and '+' not in insn(0xF04C30))
+check('the drain happens BEFORE the panel code is issued',
+      insn(0xF04C34) == 'move.w #$25f, d0' and insn(0xF05224) == 'move.w #$25a, d0')
