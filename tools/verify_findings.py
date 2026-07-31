@@ -7438,10 +7438,18 @@ check('...both paths target $4A then $4C; only the width differs',
       and _w(0xF040E8) == 0x004A and _w(0xF040F0) == 0x004C
       and _l(0xF03FDC) == 0x00F044A2 and _l(0xF040EC) == 0x00F044A2)
 
+# bsr.w displacements are SIGNED.  $D22E is negative; adding it unsigned gave
+# $F10186 instead of $F00186.  Helper so this cannot recur.
+def _bsrw(_at):
+    """Target of a bsr.w/bra.w whose opcode word is at _at."""
+    _d = _w(_at + 2)
+    return _at + 2 + (_d - 0x10000 if _d >= 0x8000 else _d)
+
+
 check('directive $0E snapshots via $F00186 when privileged AND flags bit 13 is set',
       _w(0xF02F46) == 0x082E and _w(0xF02F48) == 0x000F and _w(0xF02F4A) == 0x0028
       and _w(0xF02F4E) == 0x082E and _w(0xF02F50) == 0x000D and _w(0xF02F52) == 0x0028
-      and _w(0xF02F56) == 0x6100 and 0xF02F58 + _w(0xF02F58) == 0xF00186)
+      and _w(0xF02F56) == 0x6100 and _bsrw(0xF02F56) == 0xF00186)
 check('...and TCB+$2A takes the low word of a0, with bit 15 marking the zero case',
       _w(0xF02F3A) == 0x3D48 and _w(0xF02F3C) == 0x002A
       and _w(0xF02F40) == 0x08EE and _w(0xF02F42) == 0x000F and _w(0xF02F44) == 0x002A)
