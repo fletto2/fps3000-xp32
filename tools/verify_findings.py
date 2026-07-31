@@ -8294,6 +8294,10 @@ check('the ISR-exit sentinel is move.w #$c,ccr followed by trap #1',
       _w(0xF050FC) == 0x44FC and _w(0xF050FE) == 0x000C
       and _w(0xF05100) == 0x4E41)
 
+check('the two S-record loaders are independent implementations',
+      _l(0xF051A2) != _l(0xF055A2)
+      and 0xF055A2 - 0xF051A2 == 0x400)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

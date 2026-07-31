@@ -35843,3 +35843,38 @@ but those were built with `awk '$1>="F07D00" && $1<="F086FF"'`, filtered to one 
 Kernel addresses **cannot** appear in them by construction, so every kernel row came back "no
 witness". Re-running unfiltered changed four rows. Reusing a derived artefact without re-reading how
 it was derived is the same failure as a narrow matcher, one step removed.
+
+## Three more witnesses closed by driving the chassis command path (2026-07-31)
+
+`FPS3K_RESP=0x94 FPS3K_XPIRQ=6 FPS3K_CHASSIS_CMD=4,8,53310004,0000DEAD,BEEF0000` raises the PC set
+from 2756 to **2924** and reproduces the recorded result **exactly**:
+
+```
+$10010 = DE AD BE EF
+nonzero bytes in $10000-$100FF: 0x10010..0x10013 only
+```
+
+Payload at the right offset, nothing else in the 55 KB buffer disturbed. That closes:
+
+| requirement | gate | now |
+|---|---|---|
+| RDHC fetches its command record from `$400000` | `$F0531C` | **witnessed** |
+| `CPLOAD` (RDHC command 4) | `$F05502` | **witnessed** |
+| the S1 record handler | `$F055A2` | **witnessed** |
+
+### The two S-record loaders, and only one has ever been driven
+
+Still unwitnessed: **`$F05250` and `$F051FE`** — the checksum-consuming read and the per-byte bound
+check of the **SLC ASCII** loader at `$F051A2`. This project records that "`$F055A2` and `$F051A2`
+are two independent implementations of that arithmetic and bound, which is a stronger check on it
+than either alone". True — but only `$F055A2` has ever executed here. The ASCII path, and with it the
+finding that **the S-record checksum is consumed and never verified**, rests on reading alone.
+
+That matters because the checksum claim is a *negative* — "no accumulation exists anywhere in the
+handler" — and negatives of that shape are exactly what this session has repeatedly found to be
+matcher artefacts. It is very likely right; it is not witnessed.
+
+Running total: of the fifteen recorded modelling requirements audited, **eleven now have a live
+witness**, and the four without are the PTM running counter, runtime `jsr` construction, the register
+snapshot, and `$F70030` — plus the group-0 guard, single-stepping, and the SLC loader's two sites,
+which need stimuli not yet run.
