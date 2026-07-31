@@ -20867,3 +20867,70 @@ firmware is hand-written assembly.
 observe all four channels' states from outside without perturbing them, which is what
 `FPS3K_RAMWATCH` on `1064-107C` gives — the whole 13-word status file including the four
 transaction records the ISRs deposit.
+
+## `$0E6E` is a write-only breadcrumb: the last panel command issued (2026-07-31)
+
+Sweeping the chassis-conversation state block `$E58`-`$E8A` for every reference gives one
+unambiguous result among several ambiguous ones:
+
+**`$0E6E`: eight writes, zero reads.** The eight writers are exactly the eight byte-identical
+panel-command issuer copies — `$F04500`, `$F05688`, `$F05E56`, `$F068A8`, `$F072C0`, `$F07CC0`,
+`$F086C0`, `$F0A57E` — each of which takes the command in `d0` and stashes it there before
+driving `$FF000E`. **Nothing in the 64 KB image ever reads it back.**
+
+So `$0E6E` is not state; it is a **post-mortem record**. Together with the exception reporters
+this gives two independent breadcrumbs readable from a single RAM dump of a board that has
+stopped:
+
+| location | what it tells you |
+|---|---|
+| `$FF000E` (last value written) | which CPU exception class killed it (`$29E`-`$2A6`) |
+| **`$0E6E`** | **the last panel command the firmware issued before it stopped** |
+| `$FF0204` | the self-test phase, if it died in the self-test (`$0300` = ROM checksum) |
+| `TCB+$2C`, `TCB+$FC` | per task: why it is stopped and where it parked |
+
+That is a complete "why is this machine dead" procedure requiring no serial port — which
+matters on a board whose RS-232 drivers were unpowered as shipped. The monitor's `m` command
+reads all four.
+
+**Caveat on the rest of that sweep, stated so it is not mistaken for a finding.** Classifying
+read vs write by "is the global the last operand" is wrong for `btst`, which renders as
+`btst #$7, $e87.l` and so counts as a write. `$E87` (22 accesses) and `$E74` (37) are
+mis-signed in that pass; their *counts and sites* are sound, their directions are not. `$E6E`
+is safe because a read would place it first and there are none. The general fix is to take
+direction from the disassembler's operand model rather than from the rendered string, which is
+the same discipline the XLTR sweep needed.
+
+## The chassis-conversation state block, complete (2026-07-31)
+
+Every global in `$0E58`-`$0E8A` is now accounted for, and they fall into six roles:
+
+| global | role |
+|---|---|
+| `$E58` / `$E5A` | transfer address, high / low half (op `$1`, bit 6 selects) |
+| `$E64` / `$E66` | transfer count, high / low half (op `$2`) |
+| `$E68` / `$E6A` | third parameter, high / low (op `$9`) |
+| **`$E5C`, `$E62`, `$E72`, `$E7C`** | **CHANSEL captures** — each is `move.w $204(a0),$exx`, one per operation that needs the chassis-supplied argument |
+| `$E60` / `$E62` | the selected channel (op `$5`, `XPSEL`) — `$E62` doubles as its own capture |
+| `$E70` / `$E72` | the chassis-memory word assembled by op `$3` |
+| `$E74` | the result handed back — 37 accesses, the busiest global in the block |
+| `$E7A` | the auto-increment index (command bit 4) |
+| `$E7E` | the S-record staging pointer, carrying the `+$10000` offset |
+| `$E86` / `$E87` | the latched `XLTR_MODE0` word / its command byte, bit-tested 22 times |
+| **`$E6E`** | **write-only breadcrumb: the last panel command issued** |
+| `$E8A` | the command-3 buffer |
+
+**The recurring shape is "latch the argument, then act on it".** `$FF0204` is not read where it
+is used; each operation copies it into a private global first — `$E5C` for the transfer-arm
+validate, `$E62` for `XPSEL`, `$E72` for chassis-memory read, `$E7C` for clear-busy. That is
+why `$FF0204` shows ~33,000 writes against **7 reads** in a full run: the SBC broadcasts to it
+constantly and samples it only at those four decision points.
+
+For an emulator this pins down exactly *when* the chassis-supplied CHANSEL value is consumed.
+A model that changes `$FF0204` between the operation's dispatch and its latch instruction will
+be read as a different argument; after the latch, changing it has no effect until the next
+operation. Four instructions, four sampling points, and everything in between is don't-care.
+
+That completes the block. With the 16-operation table, the four RDHC commands, the channel
+transaction and the CP callback already mapped, **there is no remaining unidentified state in
+the chassis conversation.**

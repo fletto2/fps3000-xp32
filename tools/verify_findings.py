@@ -4673,3 +4673,17 @@ check('...which is what makes four unlocked writers safe on one word',
       insn(0xF0683A).startswith('and.w') and insn(0xF06840).startswith('or.w'))
 check('the only reader is the chassis op $A indexed read',
       insn(0xF04FE6) == 'move.w $1064(a1), $e74.l')
+
+# ---- the chassis-conversation state block is complete (2026-07-31) ----
+check('$0E6E is written by all eight panel-command issuer copies',
+      sum(1 for a, (m, o, _) in _mins.items() if o.endswith('$e6e.l')) == 8)
+check('...and read by nothing -- it is a post-mortem breadcrumb',
+      not any(o.startswith('$e6e.l') for _, o, _ in _mins.values()))
+check('the four CHANSEL captures each latch $FF0204 into a private global',
+      insn(0xF04F1C) == 'move.w $204(a0), $e62.l'
+      and insn(0xF04DD6) == 'move.w $204(a0), $e72.l'
+      and insn(0xF050B6) == 'move.w $204(a0), $e7c.l')
+check('$E62 is read back and range-checked as the channel',
+      insn(0xF0537E) == 'move.w $e62.l, d4' and insn(0xF05384) == 'cmpi.w #$1, d4')
+check('op $3 stages the chassis word through $E72 into the result $E74',
+      insn(0xF04DB2) == 'move.w $e72.l, $e74.l')
