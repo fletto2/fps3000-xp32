@@ -33392,3 +33392,43 @@ to 1.
 This is the same class of error as `$0C40` and `TCB+$00` earlier today — **reading a structure at
 the wrong width invents data that is not there** — and it is the third instance, which is why the
 discriminator has to be the code that writes the region, not the pattern the bytes make.
+
+## `$10A8` is a HOST-PRESENT flag, probed at boot through page `$F` (2026-07-31)
+
+`$F0A1E0`-`$F0A1FE`, immediately before the documented channel-present probe, is a second probe
+of the same shape:
+
+```
+$F0A1E0  move.w #$f,$210(a0)      ; select chassis window page $F
+$F0A1E6  move.l $70001c.l,d1      ; read the MAILBOX
+$F0A1EC  beq.b  $F0A1F8
+$F0A1EE  move.w #$1,$10a8.l       ; mailbox non-zero -> host present
+$F0A1F8  clr.w  $10a8.l           ; mailbox zero     -> no host
+$F0A1FE  clr.w  $210(a0)          ; restore page 0
+$F0A202  clr.w  d1 / move.w $4e(a0),d0 …   ; the channel-present count into $105E
+```
+
+**So one init routine answers two configuration questions**: *is a host attached* (`$10A8`) and
+*how many ACs are fitted* (`$105E`). This project documented the second and missed the first.
+
+`$10A8` has **exactly two references in the whole image, both of them these writes. Nothing reads
+it** — the same shape as `$E8A`, so it is a boot-time fact recorded for host-loaded software rather
+than something this firmware acts on. Live value in a clean boot is `$0000` against `$105E = 2`,
+which is correct for the emulator's configuration: two ACs, no host.
+
+**Three consequences.**
+
+1. **Emulator contract**: the mailbox must be readable at **page `$F`, offset `$1C`** *before the
+   RTOS starts*. A model that only answers the mailbox once TCBIO1I is running reports "no host"
+   at boot and there is no second probe.
+2. **This is the mailbox's SECOND selector, and it also picks `$F`.** The divergence note in
+   `CLAUDE.md` says "no observable difference today — the ISR always selects `$F`". There are two
+   independent selectors now, both `$F`, in code written for different purposes — which raises
+   page `$F` from an ISR convention to the mailbox's architectural address.
+3. It is a **hardware prediction**: on a machine with the host cable attached and the counterpart
+   card powered, `$10A8` reads 1. On this chassis alone it reads 0.
+
+**Beware the displacement form here.** A sweep for `$a8(aN)` returns `$F060DE`
+(`move.w $a8(a5),$107a`) — which is **not** `$10A8`: `a5` is `$FF0000` there, so it is channel 4's
+data-high port `$FF00A8`. Same lesson as the base-register census rule, in the opposite direction:
+widening a matcher to displacement forms admits false positives unless the base is checked.

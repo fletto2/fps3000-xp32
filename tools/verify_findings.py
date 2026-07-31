@@ -7628,6 +7628,19 @@ check('$0C7C-$0C99 is five 6-byte records, initialised {word 1, longword 0}',
       and _w(0xF09E62) == 0xB3FC and _l(0xF09E64) == 0x00000C9A
       and (0x0C9A - 0x0C7C) // 6 == 5)
 
+check('$F0A1E0 selects window page $F, reads the mailbox, sets/clears $10A8',
+      _l(0xF0A1E0) == 0x317C000F and _w(0xF0A1E4) == 0x0210
+      and _w(0xF0A1E6) == 0x2239 and _l(0xF0A1E8) == 0x0070001C
+      and _w(0xF0A1EE) == 0x33FC and _w(0xF0A1F0) == 0x0001
+      and _l(0xF0A1F2) == 0x000010A8
+      and _w(0xF0A1F8) == 0x4279 and _l(0xF0A1FA) == 0x000010A8
+      and _w(0xF0A1FE) == 0x4268 and _w(0xF0A200) == 0x0210)
+check('...and $10A8 is written twice and never read (a probe for host-loaded software)',
+      len(_re21a.findall(r'\$10a8', _asm21a)) == 2
+      and len(_re21a.findall(r'\$10a8', _k36)) == 0)
+check('...sitting immediately before the $105E channel-present probe',
+      _w(0xF0A202) == 0x4241 and _w(0xF0A204) == 0x3028 and _w(0xF0A206) == 0x004E)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
