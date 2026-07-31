@@ -7212,6 +7212,17 @@ check('...and the check gates on TCB+$29 bit 6 before comparing both halves',
       and _w(0xF035F2) == 0x202D and _w(0xF035F4) == 0x0144
       and _w(0xF035F6) == 0xB0AE and _w(0xF035F8) == 0x0014)
 
+check('single-stepping is ARMED at $F00D3E and CONSUMED at $F005A8',
+      _w(0xF00D3E) == 0x08EE and _w(0xF00D40) == 0x000F and _w(0xF00D42) == 0x0148
+      and _w(0xF005A8) == 0x08AE and _w(0xF005AA) == 0x000F and _w(0xF005AC) == 0x0148)
+check('the count/limit idiom at TCB+$158 appears at a second site',
+      _w(0xF00CE8) == 0x526E and _w(0xF00CEA) == 0x0158
+      and _w(0xF00CEC) == 0x202E and _w(0xF00CEE) == 0x0158
+      and _w(0xF00CF0) == 0xB06E and _w(0xF00CF2) == 0x0158)
+check('TCB+$14C is a mask ANDed into the value from TCB+$154',
+      _w(0xF00CC0) == 0x282E and _w(0xF00CC2) == 0x0154
+      and _w(0xF00CCC) == 0xC8AE and _w(0xF00CCE) == 0x014C)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

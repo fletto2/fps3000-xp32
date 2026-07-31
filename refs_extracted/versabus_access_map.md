@@ -31887,3 +31887,53 @@ of the two-sided check this project documents for directive `$18` ("`btst #$F,$2
 caller, then `btst #$F,$28(a0)` on the target"), and it explains why `RSTATE` needs a stored copy
 of an identity that is also live elsewhere in the same TCB: the copy records a *relationship*, not
 a duplicate of the task's own name.
+
+## Single-stepping: armed at `$F00D3E`, consumed at `$F005A8` (2026-07-31)
+
+Last turn I identified `TCB+$148` bit 7 as the per-task single-step enable, selecting the
+`ori.w #$8000,sr` dispatch exit. Censusing the field finds **both ends**:
+
+| site | operation | role |
+|---|---|---|
+| **`$F00D3E`** | `bset.b #$f,$148(a6)` | **ARM** |
+| `$F005A8` | `bclr.b #$f,$148(a6)` | **CONSUME** — one-shot, on dispatch |
+
+And the arming site's neighbourhood settles what does the arming: `$F00D34` reads `$148(a6)` as a
+byte, `$F00D88` restores the full context from `TCB+$74`, and this project places the **bus-error
+recovery handler at `$F00D00`** and the **exception-monitor exit at `$F00D52`**. So the arm lives
+inside the **exception monitor** — a debugger arming a step before resuming the task, which is
+precisely who would want a one-shot trace bit.
+
+That completes the mechanism this project recorded as "latent here because nothing selects the
+traced exit": **the exception monitor arms it, the dispatcher consumes it, and the reason it never
+fires is that `EXMON`/`DEMON` are directives this firmware never issues** — the same reason
+`$F00D52`'s indirect jump executes zero times.
+
+## `TCB+$14C`-`$15B` is one coherent block, and it confirms the documented count/limit pair
+
+`$F00CA8`-`$F00CF0` uses four adjacent fields together:
+
+```
+$F00CA8  move.l $150(a6),d6
+$F00CC0  move.l $154(a6),d4
+$F00CCC  and.l  $14c(a6),d4      ; +$14C is a MASK
+$F00CD2  move.l d3,$154(a6)
+$F00CE8  addq.w #$1,$158(a6)     ; increment the COUNT
+$F00CEC  move.l $158(a6),d0      ; load count AND limit as one longword ...
+$F00CF0  cmp.w  $158(a6),d0      ; ... and compare the halves
+```
+
+The last two instructions are exactly the idiom this project documents for `+$158`/`+$15A` —
+"count and its limit, loaded together as one longword and compared against each other" — so that
+reading is confirmed from a second site. `+$14C` is a mask applied to `+$154`, and `+$150` is a
+third value in the same block.
+
+### Smaller fields, recorded
+
+- **`+$25`** receives `#$F0` at `$F00816` and is compared at `$F02944` — a **second priority byte**
+  adjacent to the documented `+$26`, which is also raised to `$F0` in kernel critical sections.
+- **`+$2A`** takes `move.w a0,$2a(a6)` twice and `bset.b #$f,$2a(a6)` — a word holding an address
+  with a top-bit flag, written only in the deferred-work path at `$F02F3A`/`$F02F6C`.
+- **`+$44`** is only ever `lea $44(a6),a0` — a structure **base** passed as a pointer, from the
+  FPS-boundary region `$F04230`/`$F0434E`.
+- **`+$70`** is a word, read at `$F02906` and `tst.w`-ed at `$F039D4`.
