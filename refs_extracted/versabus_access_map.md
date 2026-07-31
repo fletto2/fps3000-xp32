@@ -17975,3 +17975,26 @@ So the 16→32 width-conversion mux is armed by the upload path in a real run, n
 the listing. `$FF0216`'s resting value `$C0` and its `$D0` upload value are now both
 accounted for; the register's remaining bits are the page/window controls established by
 self-test phases `$1700`/`$1800`.
+
+### `$FF020C` is written the constant `$4` at every operational site
+
+A complete sweep of the register, attributed against the `!TST` task bounds:
+
+| site | region | value |
+|---|---|---|
+| `$F04AC2`, `$F04B2C`, `$F05A2C` | RDHC (the bulk-transfer paths) | `$4` |
+| `$F0646C`, `$F06E84`, `$F07884`, `$F08284` | XP4I, XP3I, XP2I, XP1I — one each | `$4` |
+| `$F09546` / `$F0959A` | self-test phase `$1600` | `$1`, written then read back |
+| `$F098C4` | self-test | `$FF` |
+
+So in service it is **always `$4`, never read**, and each XP task writes it once per
+transfer rather than once at setup — it is a per-transfer parameter, not global
+configuration. `$1` and `$FF` occur only in the register-file walk, which is a
+write/read-back test and says nothing about meaning.
+
+This file previously called it a "burst/width counter". The sweep supports *that it is a
+transfer parameter* and nothing narrower: **because the operational value never varies,
+the firmware cannot distinguish "4 bytes per burst" (= one 32-bit chassis word, which
+would fit the 16→32 assembly established elsewhere) from "mode 4"**. Both predict exactly
+the observations. Settling it needs a transfer of a different width, which this ROM never
+performs — i.e. a bus trace from a machine running host software, not more reading.
