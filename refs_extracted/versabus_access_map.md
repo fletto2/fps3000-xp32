@@ -19947,3 +19947,30 @@ own clock, and the model has no hand on it.
 
 The probe remains useful for what it is — it exercised the encoder, the sweep, the mode bits
 and the readback, all of which agreed with the decode. It just is not a chassis.
+
+### …and the reason given for immediate acknowledgement does not survive arithmetic
+
+`ch_request_transfer()` justifies acknowledging immediately like this:
+
+> "A 40-cycle delay never elapsed: `versabus_tick` is called once per batch of interpreted
+> instructions, and the ISR's entire 1000-iteration poll fits inside one batch."
+
+The batch is `m68k_execute(1024)` — **1024 cycles**, not instructions. One poll iteration is
+`subq.l` + `move.w (a0),d4` + `btst` + `bne` + `cmpi.l` + `bne`, roughly 45 cycles, so a full
+1000-iteration poll is on the order of **45,000 cycles — about 44 batches**, not one. A
+40-cycle delay would therefore elapse on the *first* `versabus_tick` after the request, long
+inside the poll's budget.
+
+So the stated reason is arithmetically doubtful, and the delay machinery is still present and
+correct (`ch_xfer_delay[]` decremented by `ch_xfer_tick(cycles)`; `ch_xfer_ack[]` set when it
+reaches zero). Something else may have defeated the original attempt — the note records a
+symptom ("the request fired and the acknowledge never did") without the diagnosis.
+
+**This is worth retesting**, because it is the blocker for everything downstream: a delayed
+acknowledgement gives transfers a non-zero outstanding window, which is precisely what MODE1
+bit 7 needs in order to mean anything. If a delay of a few thousand cycles works, the busy
+bit becomes modellable properly rather than as an unconditional probe — and the "needs finer
+tick scheduling" conclusion above would be too pessimistic.
+
+Flagged rather than claimed: **the arithmetic says a delay should work; it has not been
+retested here.**
