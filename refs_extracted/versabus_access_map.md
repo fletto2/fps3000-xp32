@@ -29040,3 +29040,41 @@ emulator behaviour arrived at by tuning; every one is stated by the firmware.
 The remaining documented equations are board bit 2 (`NOT(bit 5) OR (bit 3 AND bit 0)`) and
 bit 4 (busy/ready from MODE1 bit 15), plus bit 5 = `$1FFF1` bit 6 directly. The first should
 be extractable the same way from phase `$1400`.
+
+## Phase `$1400`: board bit 2, and what the equation's terms actually are (2026-07-31)
+
+The phase runs three arms around the level walker `$F094AE` (which clears the request-level
+field, arms bit 7, and requests **level 1**):
+
+| arm | `$1FFF1` state | tested | required |
+|---|---|---|---|
+| `$F0943C` | bit 3 **clear** | `d2` bit 1 (delivery) | **not delivered** |
+| `$F0945E` | bit 3 **set** | `d2` bit 1 | **delivered** |
+| `$F09480` | bit 3 still set, level 1 | **board bit 2** | **set** |
+| `$F0940A` (earlier) | level field cleared | board bit 2 | **clear** |
+
+So board bit 2 is **clear when the request level is zero** and **set when line 2 is gated on
+and a level is programmed**.
+
+**That reframes the documented equation.** This project records
+
+```
+board bit 2 = NOT(bit 5 of $1FFF1)  OR  (bit 3 AND bit 0 of $1FFF1)
+```
+
+as an opaque boolean. The arms show what the second term is: **bit 3 is the second request
+line's gate** (established separately at `$F0943C`/`$F0945E`) and **bit 0 is the low bit of
+the three-bit request-level field** — so `bit 3 AND bit 0` is precisely *"line 2 enabled and
+a level requested"*. The term is not an arbitrary pair of flags; it is the interrupt request
+condition.
+
+That also explains why the equation looked odd next to the bit-1 and bit-3 equations, whose
+terms are plain control bits: bit 2 is a **status** line reporting an interrupt request,
+which is exactly what the `$1300` findings said from the other direction.
+
+**Caveat**: the `NOT(bit 5)` term is not exercised in these arms — bit 5's state carries over
+from phase `$1200` and I have not traced it across the phase boundary. So the first term is
+consistent with the observations but not derived from them, unlike the second.
+
+**Fifth equation extracted**, and the first where the extraction changed the *reading* rather
+than just confirming the formula.

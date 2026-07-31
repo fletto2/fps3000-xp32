@@ -6332,6 +6332,17 @@ check('...arm 3 clears $1FFF0 bit 0 with bclr.b #$8 -- mod 8, the documented cau
       insn(0xF092B2) == 'bclr.b #$8, (a5)' and 0x8 % 8 == 0
       and insn(0xF092D6) == 'bne.b $f092de')
 
+check('phase $1400: bit 3 clear -> no delivery, bit 3 set -> delivery',
+      insn(0xF0943C) == 'bclr.b #$3, $1(a5)' and insn(0xF09448) == 'beq.b $f09450'
+      and insn(0xF0945E) == 'bset.b #$3, $1(a5)' and insn(0xF0946A) == 'bne.b $f09472')
+check('...and with a level requested, board bit 2 must be SET',
+      insn(0xF09480) == 'bsr.b $f094ae' and insn(0xF09482) == 'btst.b #$2, $1(a4)'
+      and insn(0xF09488) == 'bne.b $f09490')
+check('...while a cleared level field requires board bit 2 CLEAR',
+      insn(0xF0941C) == 'andi.w #$fff8, (a5)' and insn(0xF09426) == 'beq.b $f0942e')
+check('the walker requests level 1, so the equation\'s "bit 0" is the level LSB',
+      insn(0xF094BA) == 'ori.w #$1, (a5)')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
