@@ -23180,3 +23180,37 @@ rather than guessed.
 TCB; it is a supervisor-only directive the kernel invokes on the termination path, and its three
 call sites (`$0F` TERM, `$25`, and the dead `$4B` stub) are its *internal* callers reaching it
 through the pre-trap entry point at `$F00824` rather than the trap.
+
+### Kernel subroutine coverage after the directive-table readout (2026-07-31)
+
+Counting kernel call targets (absolute-form `jsr`/`bsr` destinations below `$F04488`):
+
+| | |
+|---|---:|
+| distinct kernel subroutines | **69** |
+| named by the TRAP #0 or TRAP #1 table | **28** |
+| mentioned in the documentation | 33 |
+| covered by either | **41 (59%)** |
+| neither named nor documented | **28** |
+
+Reading the two dispatch tables — 35 TRAP #0 slots and 77 TRAP #1 slots, both with the `-2`
+dual-entry adjustment — **names 28 kernel routines that no amount of reading the code around them
+would have named**, because a directive handler has no distinguishing shape; it looks like any
+other subroutine until you see which table entry points at it.
+
+The residual 28 are directive-*private* helpers: each is reachable from exactly one named
+directive handler, so its role is bounded by that directive's documented semantics even where the
+routine itself has not been read. That is the honest state of kernel coverage — not "unknown",
+but "bounded rather than described".
+
+**Combined with the FPS layer's 110 of 110, the ROM's subroutine-level position is:**
+
+| region | subroutines | identified |
+|---|---:|---:|
+| FPS application | 110 | **110 (100%)** |
+| RMS68K kernel | 69 | **41 (59%)**, remaining 28 bounded by their calling directive |
+
+And the two tables were sitting in the image the whole time. The lesson is the same one the TDTI
+table taught when it supplied three task entry points the disassembler had rendered as
+`DC.W 0x7001`: **this firmware documents itself in its own tables, and reading a table is worth
+more than reading a hundred instructions.**
