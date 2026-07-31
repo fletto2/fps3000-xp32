@@ -37063,3 +37063,40 @@ sending, in addition to validating checksums (which the firmware also does not d
 
 The truncation itself is well-behaved — the firmware stops exactly at `$1FFFF` and reports — so the
 danger is entirely in the range `$1E900`-`$1FFFF`, which the check permits.
+
+## Witness audit, final state after the SLC and bulk-path experiments (2026-07-31)
+
+Started the day with fifteen recorded modelling requirements audited and **nine unwitnessed**. After
+driving the SLC ASCII loader, the CPLOAD binary loader, a channel, and the raw bulk path:
+
+### Now witnessed
+
+| requirement | stimulus |
+|---|---|
+| SCM window, `$FF0216` bit-7 BERR gate, width mux, BIM walk sizing, boot mailbox, IRQ delivery, `tas`, bus watchdog, DRAM refresh | default boot |
+| ISR-exit chain, `!IDV` walk, `T0WAKEUP` | `FPS3K_XPIRQ=1` |
+| RDHC command fetch, `CPLOAD`, the binary S1 handler | `FPS3K_CHASSIS_CMD` |
+| SLC handshake, record dispatcher, `SRecordDataHandler`, **checksum read**, **per-byte bound**, **`$FF0000`** | `FPS3K_SREC` + `FPS3K_CHSEL_RD=0` |
+| **raw bulk transfer via `$FF0008`** | `FPS3K_CHSEL_RD=28 FPS3K_RESP=0x00 FPS3K_DATAIN=1` |
+
+### Still unwitnessed — six, all genuinely dormant
+
+| requirement | why it stays dark |
+|---|---|
+| `$F00F96` PTM T3 running counter | callers are directive `$1C` (never issued) and the trace writer (mask is `$0000`) |
+| runtime `jsr` construction, all three `$4EB9` sites | two are `CMR`'s (`$3C` never issued); the third is unreached |
+| `$F00186` register snapshot | 22 `bsr`s, none on a path a healthy boot takes |
+| `$F00A3A` `$F70030` | a fatal-error/watchdog path |
+| `$F00D00` group-0 frame guard | no guarded probe faults in any run |
+| `$F005B6` per-task single-step | nothing selects the traced dispatch exit |
+
+**Every remaining item is a dead feature or a fault path**, not a gap in stimulus — which is a
+qualitatively different situation from this morning, when the unwitnessed list included live
+mechanisms nobody had thought to drive.
+
+### A practical note on stimulus
+
+`$F04AE2` was reached with **`FPS3K_CHSEL_RD=28 FPS3K_RESP=0x00 FPS3K_DATAIN=1`** but **not** with the
+recorded `FPS3K_SEQ="01:0000,41:0001,02:0008,42:0000,00:0028"` form. That is consistent with this
+project's own warning that "**long `FPS3K_SEQ` scripts silently drop their tail**" — the five-code
+script does not deliver its last code. Where a `CHSEL_RD` equivalent exists, prefer it.
