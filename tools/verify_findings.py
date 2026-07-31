@@ -6014,6 +6014,16 @@ check('...each handler disarms the interrupter before rte',
       insn(0xF094DC) == 'bclr.b #$7, $1(a5)' and insn(0xF094E8) == 'bclr.b #$7, $1(a5)'
       and insn(0xF094EE) == 'rte')
 
+check('the interrupter is programmed with VECTOR NUMBERS, address >> 2',
+      insn(0xF093EA) == 'move.w #$148, d1' and insn(0xF093EE) == 'lsr.w #$2, d1'
+      and insn(0xF093F0) == 'move.w d1, -$c(a5)'
+      and insn(0xF093F4) == 'move.w #$140, d1' and insn(0xF093FA) == 'move.w d1, $2(a5)')
+check('...into $1FFE4 (line 2) and $1FFF2 (line 1)',
+      0x1FFF0 - 0xC == 0x1FFE4 and 0x1FFF0 + 2 == 0x1FFF2)
+check('$1FFF1 bit 3 gates the second request line -- tested both ways',
+      insn(0xF0943C) == 'bclr.b #$3, $1(a5)' and insn(0xF09444) == 'btst.b #$1, d2'
+      and insn(0xF09448) == 'beq.b $f09450' and insn(0xF0945E) == 'bset.b #$3, $1(a5)')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

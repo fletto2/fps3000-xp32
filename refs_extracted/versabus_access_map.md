@@ -27744,3 +27744,42 @@ the ROM does not say. That is the open end of the interrupter model.
 **Emulator requirements from this section:** deliver a VERSAbus interrupt when `$1FFF1`
 bits 0-2 are non-zero and bit 7 is armed; supply vectors `$50` and `$52`; permit nesting; and
 treat `bclr #$7` as withdrawing the request.
+
+### The interrupter has VECTOR REGISTERS, and bit 3 is the second request line
+
+Two things immediately before the handlers are installed close the open end above:
+
+```
+move.w #$148,d1 / lsr.w #$2,d1 / move.w d1,-$c(a5)   ; $1FFE4 <- vector $52
+move.w #$140,d1 / lsr.w #$2,d1 / move.w d1,$2(a5)    ; $1FFF2 <- vector $50
+move.l a3,$148.l / move.l a2,$140.l                  ; ...then the handlers themselves
+```
+
+The firmware converts each **vector address** to a **vector number** (`>> 2`) and writes it
+into a VMOD register before installing the handler at that address. So the VERSAmodule
+interrupter is **vectored and programmable**, with:
+
+| register | holds |
+|---|---|
+| `$1FFF2` | the vector number for request line 1 (`$50`) |
+| `$1FFE4` | the vector number for request line 2 (`$52`) |
+
+**And `$1FFF1` bit 3 enables the second line.** The test proves it by running the walker both
+ways:
+
+```
+bclr.b #$3,$1(a5) / bsr walker / btst #$1,d2 / beq ok    ; bit 3 clear -> NO second delivery
+bset.b #$3,$1(a5) / bsr walker / btst #$2,$1(a4) / bne ok ; bit 3 set  -> the second fires
+```
+
+That answers what raises the second interrupt: not a second level, but a **second request
+line gated by bit 3**, delivering its own programmed vector.
+
+**A tension worth recording.** `$1FFF2` sits inside the register range this project
+documents (`$01FFF0`-`$01FFF3`, "excluded by 8 independent sites"), but **`$1FFE4` does
+not** — the same note observes that nothing skips `$1FFE2`/`$1FFE4`/`$1FFE6`, which was the
+basis for calling them ordinary RAM. A vector register at `$1FFE4` and a RAM test that walks
+over it cannot both be right unless the ordering saves them (the RAM test runs in sequence A,
+the interrupter test in sequence B). The `lsr #$2` and the matching handler install make the
+vector-register reading hard to explain away, so **the RAM/register partition should be
+treated as unsettled below `$1FFF0`** rather than as established.
