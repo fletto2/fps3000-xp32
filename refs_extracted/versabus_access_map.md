@@ -17778,3 +17778,45 @@ table (`$F05102`), the ISR's bit-7 alternative (`$F0495C`), and this main-loop s
 means different things in each, which is why sweeping response values against a single
 table never reached most of the behaviour — and why `$8` is both "CH1 reset when idle" in
 the ISR table and `CPRUN` here.
+
+### Op `$F` resumes the selected XP task — and `$F0467E` is a RESUME block array
+
+RDHC main-loop operation `$F` validates the channel in `$E60` against `$105E` and then
+dispatches on it, issuing **`$12` `RESUME`** with a per-channel parameter block:
+
+```
+d1 == 4 -> RESUME $F04696      d1 == 3 -> RESUME $F0468E
+d1 == 2 -> RESUME $F04686      else    -> RESUME $F0467E
+$27D on failure
+```
+
+`$F0467E` is therefore not a loose "name table" — it is an **array of 8-byte `RESUME`
+parameter blocks**, stride 8, exactly matching `RESUME`'s declared parameter size of 8 in
+its dispatch-table flags word:
+
+| # | address | name |
+|---|---|---|
+| 0 | `$F0467E` | `XP1I` |
+| 1 | `$F04686` | `XP2I` |
+| 2 | `$F0468E` | `XP3I` |
+| 3 | `$F04696` | `XP4I` |
+| 4 | `$F0469E` | `USER` — used by the `RESUME` at `$F04906` |
+| 5 | `$F046A6` | `USER` — doubles as `TERMT`'s 10-byte block |
+
+This explains the previously unexplained "six entries: XP1I XP2I XP3I XP4I USER USER".
+
+### RDHC's main loop *is* the CP-level control interface
+
+Putting the three operations together, RDHC's main loop maps onto the published API almost
+one-to-one:
+
+| op | what it does | published primitive |
+|---|---|---|
+| `$8`, `CHANNEL_SELECT == 0` | create + allocate `UPGM` + start `USER` | **`CPRUN`** |
+| `$8`, `CHANNEL_SELECT != 0` | `TERMT` `USER` | stop the CP program |
+| `$F` | `RESUME` the XP task for the selected channel | **`XPSEL`/`XPRUN`** at task level |
+| bit 7 + `$14` | run a command record from `$400000` | `CPLOAD` / `EXPUT` / `EXGET` |
+
+That is the first time the API table in this project has been grounded in specific opcodes
+rather than in name similarity, and it says what a chassis model must issue to exercise
+each one.

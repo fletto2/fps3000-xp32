@@ -3897,6 +3897,17 @@ check('MODE1 bit 7 (busy) gates whether MODE0 is updated at all',
 check('...and MODE0 bit 10 is the bit RDHC clears to acknowledge an operation',
       insn(0xF048CE) == 'bclr.b #$a, d1')
 
+# $F0467E is an array of 8-byte RESUME parameter blocks indexed by channel --
+# which is what the "six entries XP1I XP2I XP3I XP4I USER USER" table is.
+check('$F0467E is a 6-entry RESUME block array: XP1I..XP4I then USER, USER',
+      [_rom[0xF0467E - _B + 8 * k:0xF0467E - _B + 8 * k + 4] for k in range(6)]
+      == [b'XP1I', b'XP2I', b'XP3I', b'XP4I', b'USER', b'USER'])
+check('...stride 8, matching RESUME\'s declared parameter size of 8',
+      _t1flags(0x12) >> 8 == 8)
+check('op $F resumes the selected channel\'s task with $12 RESUME',
+      insn(0xF04854) == 'moveq #$12, d0'
+      and insn(0xF04884) == 'moveq #$12, d0')
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
