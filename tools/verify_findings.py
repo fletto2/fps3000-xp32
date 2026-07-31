@@ -189,6 +189,91 @@ if _bad:
         sys.exit(2)
 
 
+# --- STRUCTURAL SELF-AUDIT #5: module-level use-before-definition -----------
+# Guard #2 audits only the emulator block.  This file is built by splicing new
+# blocks in above a fixed anchor, so insertion order and SOURCE order diverge:
+# a helper introduced beside its first user can end up defined below a later
+# block that also uses it.  That killed h35 after ~40 minutes with a NameError.
+# Conservative by construction: only names assigned exactly ONCE at module
+# level are considered, so conditionally-rebound names cannot false-positive.
+_ml_store, _ml_load = {}, []
+
+
+def _audit5(_body, _depth=0):
+    for _n in _body:
+        if isinstance(_n, (_ast_g.FunctionDef, _ast_g.AsyncFunctionDef, _ast_g.ClassDef,
+                           _ast_g.Lambda)):
+            if isinstance(_n, (_ast_g.FunctionDef, _ast_g.AsyncFunctionDef)):
+                _ml_store.setdefault(_n.name, []).append(_n.lineno)
+            continue                      # bodies run later; not an ordering hazard
+        if isinstance(_n, _ast_g.Assign):
+            for _t in _n.targets:
+                if isinstance(_t, _ast_g.Name):
+                    _ml_store.setdefault(_t.id, []).append(_n.lineno)
+        elif isinstance(_n, (_ast_g.Import, _ast_g.ImportFrom)):
+            for _al in _n.names:
+                _ml_store.setdefault((_al.asname or _al.name).split('.')[0],
+                                     []).append(_n.lineno)
+        for _sub in _ast_g.walk(_n):
+            if isinstance(_sub, _ast_g.Name) and isinstance(_sub.ctx, _ast_g.Load):
+                _ml_load.append((_sub.id, _sub.lineno))
+        for _f in ('body', 'orelse', 'finalbody'):
+            if hasattr(_n, _f) and not isinstance(_n, _ast_g.Assign):
+                _audit5(getattr(_n, _f), _depth + 1)
+
+
+_audit5(_tree_g.body)
+# Exclude any name ever bound as a loop or comprehension target ANYWHERE in the
+# file.  Comprehension targets do not leak in Python 3, so a load of such a name
+# is always local to its own expression and can never be an ordering hazard --
+# but it looks like one to a line-number comparison.  Six false positives
+# (_al, _x, x, off, ep, ...) came from exactly this before the exclusion.
+_loopvars = set()
+for _n in _ast_g.walk(_tree_g):
+    _tg = []
+    if isinstance(_n, (_ast_g.For, _ast_g.AsyncFor, _ast_g.comprehension)):
+        _tg = [_n.target]
+    elif isinstance(_n, _ast_g.withitem) and _n.optional_vars is not None:
+        _tg = [_n.optional_vars]
+    for _t in _tg:
+        for _sub in _ast_g.walk(_t):
+            if isinstance(_sub, _ast_g.Name):
+                _loopvars.add(_sub.id)
+for _fn in _ast_g.walk(_tree_g):
+    if isinstance(_fn, (_ast_g.FunctionDef, _ast_g.AsyncFunctionDef, _ast_g.Lambda)):
+        for _arg in _ast_g.walk(_fn.args):
+            if isinstance(_arg, _ast_g.arg):
+                _loopvars.add(_arg.arg)
+_ubd = sorted({(_ln, _nm) for _nm, _ln in _ml_load
+               if _nm in _ml_store and len(_ml_store[_nm]) == 1
+               and _nm not in _loopvars and _ln < _ml_store[_nm][0]})
+if _ubd:
+    # ADVISORY, not fatal.  Two rounds of narrowing (comprehension targets,
+    # function parameters) still leave false positives -- names assigned inside
+    # module-level `if`/`for` bodies whose load is lexically earlier but
+    # dynamically later.  Distinguishing those needs real flow analysis, which
+    # is more machinery than the hazard warrants now that the shared helpers are
+    # hoisted.  Printed so a genuine case is visible in the log.
+    print('  NOTE: module-level name(s) possibly used before definition:',
+          _ubd[:6], '(advisory)')
+
+
+# ---- shared helpers, defined EARLY on purpose --------------------------------
+# These were originally introduced beside the first check that needed them.
+# Because every later block was spliced in just above a fixed anchor, insertion
+# order and source order diverged, and a check ended up calling _re21a ~50 lines
+# ABOVE its definition -- killing a 40-minute run with a NameError.  Guard #2
+# only audits the emulator block, so it did not catch this.  Defining them here
+# makes the ordering unconditional.
+import re as _re21a
+_asm21a = open('/home/fletto/ext/src/claude/fps3000/fps3k_custom.asm').read()
+_rom_bytes = open('/home/fletto/ext/src/claude/fps3000/FPS3K_U11_U12_JOIN.bin', 'rb').read()
+
+
+def _lw_count(v):
+    return _rom_bytes.count(v.to_bytes(4, 'big'))
+
+
 def word(a): return struct.unpack('>H', d[a-B:a-B+2])[0]
 def long_(a): return struct.unpack('>I', d[a-B:a-B+4])[0]
 
@@ -6628,8 +6713,6 @@ check('...and exactly the four XP tasks set MODE0 bit 11 in their idle sweep',
       all(_w(x) == 0x08C0 and _w(x + 2) == 0x000B
           for x in (0xF0689E, 0xF072B6, 0xF07CB6, 0xF086B6)))
 
-import re as _re21a
-_asm21a = open('/home/fletto/ext/src/claude/fps3000/fps3k_custom.asm').read()
 _set21a = _re21a.findall(r'bset\.\w+\s+[^,]+,\s*\$21a\(a\d\)', _asm21a)
 _lit21a = _re21a.findall(r'move\.w\s+#\$([0-9a-f]+),\s*\$21a\(a\d\)', _asm21a)
 check('$FF021A has ZERO bset sites and exactly one literal write, $FFF',
@@ -6681,9 +6764,6 @@ check('$0C14 has exactly four references: dead store, clear, then the ready-list
       and _w(0xF09E3C) == 0x21FA and _w(0xF0A062) == 0x42B8
       and _w(0xF0A0BC) == 0x2B78 and _w(0xF0A0C2) == 0x21CD)
 
-_rom_bytes = open('/home/fletto/ext/src/claude/fps3000/FPS3K_U11_U12_JOIN.bin', 'rb').read()
-def _lw_count(v):
-    return _rom_bytes.count(v.to_bytes(4, 'big'))
 check('the bare-rte handler $F088FA appears as a longword exactly 3x (the checkpoints)',
       _lw_count(0xF088FA) == 3)
 check('phase $1300 and phase $1400 install DIFFERENT handler pairs on vectors $50/$52',
