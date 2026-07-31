@@ -59,3 +59,52 @@ any change propagates into that work.
 Note also the fine print in these tables is small; the octal columns above are read from a 1280-wide
 scan and the structural claims are safe, but individual mnemonics in the denser columns
 (SPEC/I/O) should be re-read at higher magnification before being quoted as exact.
+
+## RESOLVED (2026-07-31): the manual is right, the recorded table was wrong on 6 and 7
+
+`SIM100.FTN` settles it from primary source. The S-Pad dispatch is a computed GOTO:
+
+```fortran
+        I=SOPF+1
+        GO TO (13100,20000,13102,13103,13104,13105,13106,13107),I
+```
+
+| `SOPF` | label | what the simulator computes | operation |
+|---:|---|---|---|
+| 0 | 13100 | dispatch on `SPSF-7` — CLR / INC / DEC / COM / MOV | **single-operand set** |
+| 1 | 20000 | branches away to the SPEC handling | **SPEC** |
+| 2 | 13102 | `TCADD(SPDR,SPSR)` | **ADD** |
+| 3 | 13103 | `NEGATE(SPSR)` then `TCADD` | **SUB** |
+| 4 | 13104 | `RMOV(SPSR,SPFN)` | **MOV** |
+| 5 | 13105 | `LAND(SPDR,SPSR)` | **AND** |
+| 6 | 13106 | `LCOM(a)`, `LCOM(b)`, `LAND`, `LCOM` — De Morgan | **OR** |
+| 7 | 13107 | `¬(  (¬a∧b) + (a∧¬b) )` | **EQV** (XNOR) |
+
+So codes 6 and 7 are **`OR`** and **`EQV`**, exactly as the manual's Table A-3 says. The recorded
+`nor`/`xor` were each the complement of the truth — the derivation evidently read the closing `LCOM`
+as negating the result rather than as the final step of a De Morgan construction. And `SPEC` is
+code **1**, with `SPSF` selecting which special operation, which is how every `SOPF.EQ.1.AND.SPSF.EQ.n`
+test in the simulator is written.
+
+Two independent FPS sources — the manual's table and the simulator's arithmetic — now agree, and the
+inferred table was the odd one out.
+
+### Propagation into the recovered microcode: two instructions
+
+Decoding the 227-instruction AP-120B image by `SOPF`:
+
+| `SOPF` | count |
+|---:|---:|
+| 0 | 72 |
+| 1 | 19 |
+| 2 | 61 |
+| 3 | 20 |
+| 4 | 50 |
+| 5 | 3 |
+| **6** | **2** |
+| 7 | 0 |
+
+**Two instructions are affected**, and they should read `OR`, not `NOR`. `SOPF=7` never occurs, so
+the `EQV`/`xor` error has no effect on the recovered listing at all. The blast radius of this
+correction is two instructions out of 227 — worth fixing, and small enough that the recovered
+microcode's overall decode stands.
