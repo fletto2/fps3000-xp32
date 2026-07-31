@@ -5288,9 +5288,11 @@ check('the six task vectors match the documented BIM table',
 check('the walk chooses its bound from $FF0218 bit 4',
       insn(0xF09526) == 'btst.b #$4, d0' and insn(0xF0952C) == 'move.w #$d0, d1'
       and insn(0xF09532) == 'move.w #$d8, d1')
+# NB: written as a single conjunction -- an earlier draft used `A and B or C`,
+# which Python groups as `(A and B) or C` and would pass on C alone.
 check('...starts at value $C0 and address $230',
-      insn(0xF0956C) == 'move.w #$c0, d0' and insn(0xF09570) == 'movea.w #$210, a0'
-      or insn(0xF09570) == 'movea.w #$230, a0')
+      insn(0xF0956C) == 'move.w #$c0, d0'
+      and insn(0xF09570) == 'movea.w #$230, a0')
 check('...and terminates on the VALUE, not the address',
       insn(0xF0957C) == 'addq.w #$1, d0' and insn(0xF0957E) == 'cmp.w d1, d0')
 check('so bit 4 clear walks 16 registers $230-$24E', 0xD0 - 0xC0 == 16
