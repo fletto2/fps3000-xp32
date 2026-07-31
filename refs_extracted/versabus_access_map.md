@@ -29295,7 +29295,7 @@ current stack pointer**: at or above `$10000` it counts at `$1F800`, below it at
 self-test runs on different stacks at different stages, so the pair distinguishes faults taken
 early from faults taken late — one counter per stack regime, not one per fault class.
 
-## `$1FFF2`-`$1FFFF` is a SEVEN-ENTRY VECTOR REGISTER FILE, one per request level (2026-07-31)
+## `$1FFF2` is the VMOD vector register (2026-07-31; a seven-entry file was my over-reach)
 
 The RAM/register partition recorded in `CLAUDE.md` says `$01FFF0-$01FFF3` is register and
 `$01FFF4-$01FFFF` is ordinary RAM. Phase `$1300` (`$F09338`, the panel-bus interrupt
@@ -29323,21 +29323,28 @@ $F093AC  cmpi.w #$8,d1 / blt loop   ; d1 = 1 .. 7
 `a2` starts at `$1FFF2` and post-increments once per iteration while `d1` walks 1 to 7. So
 iteration *k* writes `$1FFF2 + 2k` and then requests level *k+1*:
 
-| request level | vector register |
-|---:|---|
-| 1 | `$1FFF2` |
-| 2 | `$1FFF4` |
-| 3 | `$1FFF6` |
-| 4 | `$1FFF8` |
-| 5 | `$1FFFA` |
-| 6 | `$1FFFC` |
-| 7 | `$1FFFE` |
 
-**The VERSAmodule control block is therefore `$1FFF0`-`$1FFFF`, sixteen bytes**: a control word
-at `$1FFF0`/`$1FFF1` (with the request level in `$1FFF1` bits 0-2) followed by **seven vector
-registers**. That is exactly the shape of an MC68153-style interrupter — one vector per
-request level — and it explains why the machine needs a vector *file* rather than a single
-vector, which the `$50`/`$52` pair had only hinted at.
+**I first read this as a seven-entry vector file at `$1FFF2`-`$1FFFF`, one register per request
+level. That is wrong, and the firmware refutes it two lines later.** The DRAM verify at
+`$F099CE` walks *down* through RAM with `cmp.l -(a0),d0` and skips exactly one longword:
+
+```
+$F099E0  cmpa.l #$1fff4,a0     ; having just read $1FFF4 ...
+$F099E6  bne.b  $F099EC
+$F099E8  lea    -$4(a0),a0     ; ... step down 4, so the NEXT read is $1FFEC
+```
+
+So it reads `$1FFFC`, `$1FFF8`, `$1FFF4`, then skips `$1FFF0`-`$1FFF3` and resumes at
+`$1FFEC`. **`$1FFF4`-`$1FFFF` is pattern-tested as ordinary RAM** — it cannot be a bank of
+interrupt vector registers, or the DRAM test would be reprogramming the interrupter with
+arbitrary patterns. The register block really is the documented four bytes, and this is the
+site that draws the line precisely.
+
+What actually happens is simpler: **`$1FFF2` is a single vector register**, and the loop's
+`(a2)+` walks off it into RAM after the first iteration. Every iteration writes the *same*
+value `$50`, so the register retains `$50` for all seven levels and the test passes regardless
+— the post-increment is inconsequential rather than meaningful. I built a tidy seven-entry
+table out of an addressing mode without checking whether its targets were registers at all.
 
 **What the phase proves, and it is a full contract:** with vector number `$50` written into
 level *N*'s register and a request raised at level *N*, the chassis must deliver an interrupt
@@ -29347,14 +29354,13 @@ from no delivery, and both fail the arm. **Both handlers open with `andi.w #$fff
 clearing the request-level field: that is the interrupt *acknowledge*, done in software by the
 handler, not by an IACK cycle.
 
-**Emulator consequence — this is a real modelling gap.** The current model hardcodes the
-vector as `$50` or `$52` selected by `$1FFF1` bit 3, and uses a fixed `chassis_irq_level`,
-ignoring `$1FFF2`-`$1FFFF` entirely (they fall in plain RAM). That happens to satisfy phases
-`$1300` and `$1400` because the firmware only ever writes `$50` into the file and bit 3 is
-clear throughout `$1300` — but it is passing for the wrong reason, and any host-loaded software
-that programs a different vector would be mismodelled silently. A faithful interrupter takes
-**the level from `$1FFF1` bits 0-2** and **the vector from `$1FFF2 + 2*(level-1)`**.
+**Emulator consequence — a smaller gap than I claimed, but a real one.** The model hardcodes
+the vector as `$50` or `$52` selected by `$1FFF1` bit 3, and never reads `$1FFF2`. It passes
+phases `$1300` and `$1400` because the firmware only ever programs `$50` there and bit 3 is
+clear throughout `$1300`, so the hardcoded value happens to agree — it is passing for the right
+answer by the wrong route. A faithful interrupter takes **the level from `$1FFF1` bits 0-2**
+and **the vector from `$1FFF2`**. Host-loaded software programming any other vector would be
+mismodelled silently.
 
-Note `$F09354`'s write of vector number `$52` to **`$1FFE4`** — twelve bytes *below* the
-control word, outside the file. It is written once, before the file is touched, and nothing in
-phases `$1300` or `$1400` reads it back. Purpose unestablished; recorded rather than guessed.
+`$F09354`'s write of vector number `$52` to **`$1FFE4`** lands in the same ordinary RAM, and
+nothing in phases `$1300` or `$1400` reads it back — scratch, on the same evidence.

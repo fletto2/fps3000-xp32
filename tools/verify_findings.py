@@ -6399,11 +6399,16 @@ check('...installs those two handlers at vectors $50 and $52',
 check('...walks the request level 1..7 in $1FFF1 bits 0-2',
       _w(0xF09378) == 0x7201 and _w(0xF0938A) == 0x8355
       and _w(0xF093AA) == 0x5241 and _w(0xF093AC) == 0x0C41 and _w(0xF093AE) == 0x0008)
-check('...writing a vector into $1FFF2+2n via post-increment, one register per level',
+check('...writing the vector number to $1FFF2 (the post-increment then walks into RAM)',
       _w(0xF0937A) == 0x45ED and _w(0xF0937C) == 0x0002 and _w(0xF09386) == 0x34C0)
 check('...and both ISRs acknowledge by clearing the request field, differing only in d2',
       _w(0xF093BE) == 0x0255 and _w(0xF093C0) == 0xFFF8 and _w(0xF093C2) == 0x343C
       and _w(0xF093C4) == 0xF0F0 and _w(0xF093C8) == 0x0255 and _w(0xF093CC) == 0x4E73)
+
+check('the DRAM verify skips ONLY the longword at $1FFF0, testing $1FFF4-$1FFFF as RAM',
+      _w(0xF099E0) == 0xB1FC and _l(0xF099E2) == 0x0001FFF4
+      and _w(0xF099E8) == 0x41E8 and _w(0xF099EA) == 0xFFFC
+      and (insn(0xF099CE) or '').startswith('cmp.l'))
 
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
