@@ -6206,10 +6206,14 @@ check('the table writes land inside the !TST of the TCB at $1EF00, which TDTI\n'
       0x1EF00 + 0x160 <= 0x1F07E and 0x1F08D <= 0x1EF00 + 0x1AF
       and insn(0xF0A056) == 'bsr.w $f0a44a')
 
-check('pass 3 targets $176F0, below the heap and above the staging bound',
-      0x10000 <= 0x176F0 < 0x1DD00)
-check('...and pass 0 targets the VMOD block, above the heap top',
-      0x1FFF0 > 0x1FE00)
+# Assert the ROM, not the arithmetic: the offsets come from the table itself,
+# and pass 3's is negative only because movea.w sign-extends.
+_p3 = struct.unpack('>H', _rom[0xF0A4BE - 0xF00000 + 3 * 18:][:2])[0]
+_p0 = struct.unpack('>H', _rom[0xF0A4BE - 0xF00000 + 0 * 18:][:2])[0]
+check('pass 3 lands at $176F0 -- below the heap, so its writes survive boot',
+      0x1F000 + (_p3 - 0x10000) == 0x176F0 and 0x10000 <= 0x176F0 < 0x1DD00)
+check('...and pass 0 lands on the VMOD block, above the heap top',
+      0x1F000 + _p0 - 2 == 0x1FFFE and 0x1FFF0 > 0x1FE00)
 
 check('the $03FC breadcrumb is vector $FF, outside the FPS override range',
       0x3FC // 4 == 0xFF and not (0x124 <= 0x3FC <= 0x3F0))
