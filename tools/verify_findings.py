@@ -5358,8 +5358,11 @@ check('...and the two extra ones gate on $0C35, not $0C34',
 check('the logger reads its parameter through the RETURN ADDRESS and skips it',
       insn(0xF016B6) == 'movea.l $14(a7), a4' and insn(0xF016BA) == 'move.w (a4), (a5)'
       and insn(0xF016BC) == 'addq.l #$2, $14(a7)')
-check('...so the word after each bsr is DATA; five of them look like instructions',
-      sum(1 for _, c in _tr if c in (0xDD08, 0xEE14, 0xEE09, 0xEE07, 0xDD07)) == 5)
+# SIX, not five: $EE14 occurs at two call sites ($F0089E and $F044AC), and the
+# first count treated the code multiset as a set.
+check('...so the word after each bsr is DATA; SIX of them look like instructions',
+      sum(1 for _, c in _tr if c in (0xDD08, 0xEE14, 0xEE09, 0xEE07, 0xDD07)) == 6,
+      sorted(hex(c) for _, c in _tr))
 check('the trace entry stride is $1A, matching the documented 26-byte record',
       insn(0xF016A2) == 'lea.l $1a(a5), a4')
 check('event codes above $EFFF log one datum fewer',
@@ -5445,6 +5448,57 @@ check('...whose elements link at +$00 and hold a deadline at +$08',
       insn(0xF00F22) == 'sub.l d0, $8(a0)' and insn(0xF00F26) == 'movea.l (a0), a0')
 check('...and the day rollover rebases every deadline, interrupts masked',
       insn(0xF00F16) == 'ori.w #$700, sr' and insn(0xF00F2A) == 'move.w (a7)+, sr')
+
+check('TCB+$25 is a priority CEILING, set to $F0 at task setup',
+      insn(0xF00816) == 'move.b #$f0, $25(a6)')
+check('...clamped to the creator\'s own ceiling by CRTCB',
+      insn(0xF02944) == 'cmp.b $25(a6), d4' and insn(0xF0294A) == 'move.b $25(a6), d4'
+      and insn(0xF0294E) == 'move.b d4, $25(a5)')
+check('directive $18 bounds the request by the TARGET\'s ceiling',
+      insn(0xF02DD6) == 'move.b $8(a4), d0' and insn(0xF02DDA) == 'cmp.b $25(a0), d0')
+check('...and reports that ceiling back to the refused caller',
+      insn(0xF02DE0) == 'clr.l $120(a6)'
+      and insn(0xF02DE4) == 'move.b $25(a0), $123(a6)'
+      and insn(0xF02DEA) == 'addi.w #$a, $102(a6)')
+check('$18 is the two-sided privilege check: caller then target',
+      insn(0xF02DBE) == 'btst.b #$f, $28(a6)' and insn(0xF02DC6) == 'btst.b #$f, $28(a0)')
+check('$1C translates a 512-byte user buffer and needs bit 15 of $8(a4)',
+      insn(0xF03CD2) == 'move.l #$200, d5' and insn(0xF03CF0) == 'btst.b #$f, $8(a4)'
+      and insn(0xF03CF8) == 'addi.w #$f, $102(a6)')
+
+# --- the allocator directory, slot -> marker tag (2026-07-31) ---------------
+_dirmap = {}
+_slot = None
+_pd = 0xF09E60
+while _pd < 0xF0A060:
+    _di = _mins.get(_pd)
+    if not _di:
+        _pd += 2
+        continue
+    _dm, _do, _dsz = _di
+    _mo = _mre.match(r'a0, \$(c[0-9a-f]{2})\.w$', _do)
+    if _dm.startswith('move.l') and _mo:
+        _slot = int(_mo.group(1), 16)
+    _mt = _mre.match(r'#\$(21[0-9a-f]{6}), ', _do)
+    if _mt and _slot is not None:
+        _dirmap[_slot] = struct.pack('>I', int(_mt.group(1), 16)).decode('latin1')
+        _slot = None
+    _pd += _dsz
+check('$0C20 holds !GST -- it was recorded as unassigned',
+      _dirmap.get(0xC20) == '!GST', _dirmap)
+check('$0C6A holds !IOV -- it was recorded as !PAT',
+      _dirmap.get(0xC6A) == '!IOV', _dirmap.get(0xC6A))
+check('$0C2C holds !PAT -- the table the tick path walks',
+      _dirmap.get(0xC2C) == '!PAT', _dirmap.get(0xC2C))
+check('$0C28 holds !UDR -- !UDR was attributed to $0C20',
+      _dirmap.get(0xC28) == '!UDR', _dirmap.get(0xC28))
+check('$0C24 holds !UST and $0C6E holds !IDV, as recorded',
+      _dirmap.get(0xC24) == '!UST' and _dirmap.get(0xC6E) == '!IDV')
+_alloc = [0x1FD00, 0x1FB00, 0x1FA00, 0x1F900, 0x1F800, 0x1F700, 0x1F600, 0x1F500]
+check('the eight structures tile downward from $1FE00, strictly descending',
+      all(_alloc[i] > _alloc[i + 1] for i in range(7)))
+check('...and the ONLY two-page gap is !UST, matching USTNPAGE = 2',
+      [(_alloc[i] - _alloc[i + 1]) // 0x100 for i in range(7)] == [2, 1, 1, 1, 1, 1, 1])
 
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')

@@ -26342,3 +26342,108 @@ it, and in the right position: **after the 15 registers and the USP**.
 
 This also re-confirms the USP requirement in `chassis_model_spec.md` from a second site —
 a model that does not implement `move usp,an` faithfully reports a wrong frame here.
+
+## The priority model: `TCB+$25` is a ceiling, `TCB+$26` the current value (2026-07-31)
+
+Six instructions touch `TCB+$25`, and together they define a complete privilege-inheritance
+rule:
+
+| site | what |
+|---|---|
+| `$F00816` | `move.b #$f0,$25(a6)` — task setup sets the ceiling to `$F0` |
+| `$F02944`/`$F0294A` | `CRTCB` **clamps the requested value to the creator's own ceiling** |
+| `$F0294E` | `move.b d4,$25(a5)` — ...and stores the clamped result in the child |
+| `$F02DDA` | directive `$18` requires the requested priority `<= $25(a0)` of the target |
+| `$F02DE4` | ...and on failure **reports the target's ceiling back** at `$123(a6)` |
+
+So the pair is:
+
+- **`TCB+$26` = current priority** — raised to `$F0` by `$F0073C` for the duration of a
+  kernel critical section and restored from the saved `d0`;
+- **`TCB+$25` = maximum permitted priority** — set to `$F0` at setup, and **inherited
+  downward**: a task cannot create a child whose ceiling exceeds its own.
+
+**That identifies directive `$18` as "set task priority."** It is one of the seven
+privileged directives, and it is the one with a **two-sided** check (`btst #$F,$28(a6)`
+on the caller, then `btst #$F,$28(a0)` on the target) — which reads exactly right for a
+directive that changes another task's scheduling priority. The error path is unusually
+courteous: it clears `$120(a6)` and writes the target's ceiling into `$123(a6)`, so a
+refused caller is told the limit rather than merely refused. Error code `$A`.
+
+This makes the privilege model concrete rather than structural. Previously it was "seven
+directives test a flag bit"; now one of them is a named operation with an enforced bound,
+an inheritance rule, and a diagnostic return value.
+
+### Directive `$1C`'s shape
+
+`$1C` is privileged, and its body translates a user buffer of **`$200` = 512 bytes** at
+`$A(a4)` through `$F0175C`, failing with error `$C` if the translation fails, then requires
+**bit 15 of the word at `$8(a4)`** and fails with error `$F` if it is clear. Its identity
+is not established from the ROM — nothing here issues it — but its parameter block is now
+specified well enough to drive: a flag word at `+$8` with bit 15 set, and a 512-byte
+buffer pointer at `+$A`.
+
+## The allocator directory decoded — three slot assignments corrected (2026-07-31)
+
+Walking RTOS init **with aligned decoding** (following instruction sizes from a known
+boundary, not scanning at stride 2) pairs each `move.l a0,$0Cxx.w` with the marker the
+same routine then writes into the block:
+
+| slot | tag | RAM address | |
+|---|---|---|---|
+| `$0C20` | **`!GST`** | `$1FD00` | previously recorded as "left unassigned" |
+| `$0C24` | `!UST` | `$1FB00` | agrees |
+| `$0C66` | `!VCT` | `$1FA00` | no tag written — the RAM table never receives one |
+| `$0C6A` | **`!IOV`** | `$1F900` | previously recorded as `!PAT` |
+| `$0C6E` | `!IDV` | `$1F800` | agrees |
+| `$0C2C` | **`!PAT`** | `$1F700` | previously unassigned |
+| `$0C28` | **`!UDR`** | `$1F600` | `!UDR` was attributed to `$0C20` |
+| `$0C30` | trace table | `$1F500` | agrees (8-byte header, no tag) |
+
+**Two independent confirmations, and they agree on all eight.** The first is the tag
+literal each allocation writes (`$21475354` = `!GST`, `$21504154` = `!PAT`, …). The second
+is arithmetic: the page heap grows **downward** from `$1FE00`, so allocation order must
+map to descending addresses — and the eight slots in ROM order land on
+`$1FD00, $1FB00, $1FA00, $1F900, $1F800, $1F700, $1F600, $1F500`, strictly descending,
+exactly the addresses this project measured in live RAM. Neither route was used to derive
+the other.
+
+**This closes the "`$0C20`'s structure is left unassigned" open item, and it names
+directive `$09`.** `$0C20` holds `!GST`, and `$09` was independently characterised as "a
+structure-table search on `$0C20`" — so `$09` is **`T0FNDGSG`, find global segment**, the
+sibling of `$0C` `T0FNDSEM` on `$0C24` and `$07` `T0FNDSEG` on the task's own table. All
+three `T0FND*` routines now have their structures.
+
+It also settles the timer queue: the two lists at `$0C2C+$08`/`+$0C` that the day rollover
+rebases are the **Periodic Activation Table's** — so the PAT is not merely an allocated
+table with a null active list, it is the structure the tick path walks. `$0C28` being
+`!UDR` also explains why the clear at `$F09FE2` (`clr.l $c28.w`) sits inside the PAT setup:
+it is zeroing the *next* structure's slot before allocating it, not clearing a PAT field.
+
+**Methodological note.** The stride-2 scan that first surfaced `!PAT` also produced a page
+of nonsense around it (`bchg.b d1,(a6)+`, `ori.b #$c9,(a6)+`, an `([$2042,a6],d6.w*8,…)`
+that is not even a 68000 addressing mode on this CPU). One true line was legible among
+them by luck. The aligned walk is what turned that into eight verified pairs.
+
+### Directive `$09` is `T0FNDGSG`, and the structure-table header is generic
+
+`$09`'s handler opens `movea.l $c20.w,a1` and `$0C` `T0FNDSEM`'s opens
+`movea.l $c24.w,a1`. With `$0C20` now known to hold `!GST`, `$09` is **`T0FNDGSG` —
+find a global segment** — completing the `T0FND*` family alongside `$07` `T0FNDSEG`
+(the task's own table) and `$0C` `T0FNDSEM`.
+
+The two handlers also share a layout, which generalises to every structure table:
+
+| offset | field |
+|---|---|
+| `+$0C` | maximum entry count |
+| `+$0E` | current entry count |
+| `+$14` | **first entry** |
+
+`$09` reaches the entries with `lea $14(a1),a2`, `$0C` with `moveq #$14,d0`. That
+**confirms the 20-byte header** independently of the vendor equate file — and it agrees
+with the one live value this project measured: `USTFENT = $1FB14`, which is exactly
+`$1FB00 + $14`.
+
+So a reader of a RAM dump can walk any of these tables without knowing which it is: counts
+at `+$0C`/`+$0E`, entries from `+$14`, stride from the table's own `USTMENT`-equivalent.
