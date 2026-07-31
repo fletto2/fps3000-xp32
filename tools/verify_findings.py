@@ -7671,6 +7671,24 @@ check('...and the primitive addresses the ports through a0/a1/$2(a1), not displa
       and _w(0xF07F22) == 0x30BC and _w(0xF07F24) == 0x8004
       and len(_re21a.findall(r'move\.\w\s+\S+,\s*\$(?:4a|6a|8a|aa)\(a[0-7]\)', _asm21a)) == 0)
 
+check('the +$0A channel ports are never named in any form',
+      all(len(_re21a.findall(r'\$ff00' + _p, _asm21a)) == 0
+          for _p in ('4a', '6a', '8a', 'aa')))
+check('...while the +$08 ports are named exactly once each (control)',
+      all(len(_re21a.findall(r'\$ff00' + _p, _asm21a)) == 1
+          for _p in ('48', '68', '88', 'a8')))
+check('$F07E2C is a movea.l pointer load, NOT a write',
+      _w(0xF07E2C) == 0x227C and _l(0xF07E2E) == 0x00FF0048
+      and _w(0xF07E26) == 0x207C and _l(0xF07E28) == 0x00FF004E)
+check('the $1B transaction is move.w #$1b,$2(a1) at three sites, none in XP4I',
+      [_a for _a in (0xF07ECA, 0xF074CA, 0xF06ACA)
+       if _w(_a) == 0x337C and _w(_a + 2) == 0x001B and _w(_a + 4) == 0x0002]
+      == [0xF07ECA, 0xF074CA, 0xF06ACA]
+      and len(_re21a.findall(r'move\.w\s+#\$1b,', _asm21a)) == 3)
+check('...matching the +$0E pointer-load asymmetry: 2 for ch1-3, 1 for ch4',
+      [len(_re21a.findall(r'\$ff00' + _p, _asm21a)) for _p in ('4e', '6e', '8e', 'ae')]
+      == [2, 2, 2, 1])
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

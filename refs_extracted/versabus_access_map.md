@@ -33524,3 +33524,45 @@ routes:**
 load `d0` from an immediate, and the `$1B` path writes its constant inline. Anything else an AC
 ever sees must come from the host-loaded CP program — which is consistent with the CP callback
 being the only route by which host code reaches a channel at all.
+
+## The AP I/F port map closed by a SECOND addressing form, and one attribution corrected (2026-07-31)
+
+Enumerating every `$FF00xx` constant loaded into an address register gives an independent census of
+the channel windows, and it agrees with the base+displacement one exactly:
+
+| port | absolute pointer loads |
+|---|---|
+| `$FF0000` | 62 (the base register form) |
+| `+$08` data high — `$FF0048/68/88/A8` | **1 each, symmetric** |
+| `+$0E` command — `$FF004E/6E/8E/AE` | **2 each for channels 1-3, 1 for channel 4** |
+| `+$0A` data low — `$FF004A/6A/8A/AA` | **ZERO, in any form** |
+| `+$04` | zero (displacement only) |
+
+**Nothing outside `+$04`, `+$08`, `+$0A`, `+$0E` appears in either form.** The window is four
+registers, now confirmed by two independent addressing conventions rather than one sweep.
+
+**`+$0A` is never named anywhere in the image.** It is reached only as `$2(a1)`. That is a
+structural confirmation of the documented "one 32-bit data register, not a data port and a status
+port" reading, arrived at from *addressing form* rather than from usage: the firmware holds one
+pointer to the pair and offsets by 2. Two ports would have two pointers.
+
+**The `$1B` transaction is `move.w #$1b,$2(a1)`, at exactly three sites** — `$F07ECA` (XP1I),
+`$F074CA` (XP2I), `$F06ACA` (XP3I) — and **none in XP4I**, which is the documented structural
+divergence confirmed a second way. It shows up in the census too: the missing site is why channel 4
+has one `+$0E` pointer load where the others have two. At XP4I's corresponding address `$F060C0`
+sits the `$262` ISR-prologue abort instead.
+
+### Correction to `CLAUDE.md`
+
+The host-protocol section says:
+
+> The single absolute reference to it in the whole ROM is F07E2C, in **TCBXP1I** — and that code
+> *writes*: `$FF0048 ← 0`, `$FF004A ← $1B`, `$FF004E ← $8000`.
+
+`$F07E2C` is **`movea.l #$ff0048,a1`** — a pointer load, which writes nothing. The three effects
+are real but happen later through `a0`/`a1`, and **`$FF004A` is not referenced anywhere in the
+image**, so it cannot be the destination of any instruction. This is the file's own documented
+hazard — "`lea`/`pea` compute and access nothing" — applied to `movea.l`, and it matters because
+the conclusion drawn there ("the port belongs to the XP-32 channel-1 task and is an output") rests
+on the *pointer loads* at `$F07E26`/`$F07E2C`, which do establish it. The conclusion survives; the
+instruction attribution does not.
