@@ -30695,3 +30695,54 @@ finding that the self-test's board coverage stops precisely at the XP-32 boundar
 So G6 narrows to: **UNIV FMT is transparent to the control processor and does its work on the
 array-processor side.** That is a statement the ROM alone can support, and it is testable on
 hardware — write a pattern through the SBC window, read it back with an AC, and compare.
+
+## RESOLVED: the machine always has three BIMs; `$FF0218` bit 4 is a test-scope selector (2026-07-31)
+
+This project has carried a long-standing anomaly: the XLTR card physically carries three
+`MC68153P` BIMs, but the emulator "presents a TWO-BIM machine because it reads `$FF0218` bit 4
+clear", and forcing that bit **derails the boot**. The framing was wrong, and the firmware settles
+it outright.
+
+**BIM2 (`$FF0250`-`$FF025F`) is programmed unconditionally**, with no reference to bit 4 anywhere
+near any of these sites:
+
+| site | write | what |
+|---|---|---|
+| `$F0A182` | `$FF0254 ← $0` | init zeroing |
+| `$F0A188` | `$FF0256 ← $0` | init zeroing |
+| `$F0A1B2` | `$FF0258 ← $47` | vector register — **TCBXP3I** |
+| `$F0A1B8` | `$FF025A ← $48` | vector register — **TCBXP4I** |
+| `$F0A1C4` | `$FF025C ← $4A` | vector register — **TCBIO1I** |
+| `$F06A12` | `$FF0250 ← $5F` | control register — TCBXP3I |
+| `$F06018` | `$FF0252 ← $5F` | control register — TCBXP4I |
+| `$F05DB8` | `$FF0254 ← $5F` | control register — TCBIO1I |
+
+**Three of the six live interrupt channels are on BIM2.** If bit 4 clear meant "no third BIM
+fitted", the firmware would be programming a device that isn't there, and XP3I, XP4I and TCBIO1I
+would never receive an interrupt — on a machine that demonstrably boots and runs all six tasks.
+
+So the bit cannot be a presence strap. What phase `$1600` actually does with it is choose **how
+many registers its walk covers** — 16 (`$FF0230`-`$FF024E`) or 24 (`-$FF025E`). That is a
+**test-scope** selector, not a hardware inventory. The machine is a three-BIM machine either way.
+
+### Why `FPS3K_BIMS=3` derails the boot
+
+Combining this with the phase-`$1600` readback finding gives the complete mechanism:
+
+1. `$F09522` samples bit 4 to size the walk.
+2. `$F0954C` writes `$FF0218 ← $400`.
+3. `$F095A2` requires `($FF0218 & $610) == $400` — **bit 4 must now read zero**.
+
+A model that makes bit 4 a sticky strap (which is what `FPS3K_BIMS=3` does) fails step 3, the
+phase takes its fault arm, and — per the fault policy — retries forever. The derailment was never
+evidence about BIM count; it was evidence that **bit 4 is cleared by the arm write**.
+
+Two consequences worth stating plainly:
+
+- **A correct model has three BIMs and bit 4 clear.** Those are not in tension: the third BIM is
+  addressed directly by init and by three tasks, regardless of what the walk covers.
+- **`$FF025E` (BIM2 VR3) is the one register never explicitly programmed** — it is reached only by
+  the walk, and only when bit 4 is set. That is why it looked "never touched", and it is a
+  genuinely unused vector register rather than a modelling gap: `$FF0256` (BIM2 CR3) *is*
+  programmed, so that channel is configured with no vector, exactly as this project already
+  recorded.

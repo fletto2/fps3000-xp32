@@ -6886,6 +6886,15 @@ check('the SCM march requires exact read-back of all four patterns through the w
 check('...so the SBC-side path through UNIV FMT must be bit-transparent',
       _l(0xF09B32) == 0x00400000 and _l(0xF09B38) == 0x00404000)
 
+check('BIM2 vector registers are programmed unconditionally at init: $47/$48/$4A',
+      _w(0xF0A1B2) == 0x317C and _w(0xF0A1B4) == 0x0047 and _w(0xF0A1B6) == 0x0258
+      and _w(0xF0A1B8) == 0x317C and _w(0xF0A1BA) == 0x0048 and _w(0xF0A1BC) == 0x025A
+      and _w(0xF0A1C4) == 0x317C and _w(0xF0A1C6) == 0x004A and _w(0xF0A1C8) == 0x025C)
+check('...and three TASKS write BIM2 control registers, so BIM2 is not optional',
+      _w(0xF06A12) == 0x3B7C and _w(0xF06A14) == 0x005F and _w(0xF06A16) == 0x0250
+      and _w(0xF06018) == 0x3B7C and _w(0xF0601A) == 0x005F and _w(0xF0601C) == 0x0252
+      and _w(0xF05DB8) == 0x3B7C and _w(0xF05DBA) == 0x005F and _w(0xF05DBC) == 0x0254)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
