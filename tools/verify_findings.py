@@ -7231,6 +7231,11 @@ check('$0C8E is only ever lea\'d, never loaded or stored',
       _w(0xF03D38) == 0x41F8 and _w(0xF03D3A) == 0x0C8E
       and _w(0xF0413C) == 0x41F8 and _w(0xF0413E) == 0x0C8E)
 
+check('the XP prologue puts the stack $114 above the segment base',
+      all(_w(e) == 0x4FE8 and _w(e + 2) == 0x0114
+          for e in (0xF05F64, 0xF06964, 0xF07364, 0xF07D64))
+      and _w(0xF05F68) == 0x2C48)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

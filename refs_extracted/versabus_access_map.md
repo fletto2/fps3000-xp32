@@ -31972,3 +31972,37 @@ stated.
 stores** means it is a structure the kernel hands out by address, in the same neighbourhood as the
 server registry at `$0C9A`/`$0CAA` and used by the one directive (`$3C` `CMR`) this firmware never
 issues — so it is very likely another dormant channel-control structure.
+
+## RAM dump confirms the register-frame reading (2026-07-31, measured)
+
+Dumping all six TCBs after a clean boot tests the static inference that `TCB+$138`/`+$13C` are the
+saved `a6`/`a7` rather than an ASQ block pointer pair:
+
+| task | `+$138` | `+$13C` | difference |
+|---|---|---|---:|
+| XP1I | `$1E700` | `$1E814` | **`$114`** |
+| XP2I | `$1E500` | `$1E614` | **`$114`** |
+| XP3I | `$1E300` | `$1E414` | **`$114`** |
+| XP4I | `$1E100` | `$1E214` | **`$114`** |
+| IO1I | `$1DF00` | `$1E00A` | `$10A` |
+| RDHC | `$1DD00` | `$1DE16` | `$116` |
+
+**All four XP tasks show `+$13C` = `+$138` + `$114` exactly** — and `$114` is precisely the
+constant in their prologue, `lea $114(a0),a7`, executed immediately after `movea.l a0,a6`. Two
+independent derivations meeting: the static read of the prologue said "stack at base + `$114`", and
+the live TCBs say the two saved registers differ by exactly that. IO1I and RDHC differ (`$10A`,
+`$116`) because they have their own prologues, as expected.
+
+The `+$138` values themselves match the six `STCK` segment bases this project already recorded
+(`$1E700`, `$1E500`, `$1E300`, `$1E100`, `$1DF00`, `$1DD00`), six for six. So the *values* were
+known; what the dump adds is the **role** — they are saved registers whose values happen to be
+those bases, not pointers to them.
+
+**Two further predictions confirmed in the same dump:**
+
+- **`TCB+$B0` is zero in all six TCBs**, so no task has passed through `$F00824` — confirming this
+  project's own prediction that if none does, "the routine never runs in a normal boot". The
+  `'EXEC'` rename is a termination-path action and nothing terminates during boot.
+- **`TCB+$14` (session) is zero for every task**, so this is a single-session machine — which is
+  why `T0GETTCB`'s session comparison never discriminates and why the privilege wildcard has
+  nothing to hide.
