@@ -34971,3 +34971,46 @@ matching the recorded 2/2/2/2/1/0 semaphore declaration counts.
 So both traced tasks follow the same startup shape — **`GTSEG` → set stack and structure pointer →
 (install semaphore descriptors and `CRSEM` them) → `CNCTIRQ` → arm one BIM channel → `WAIT`** — with
 RDHC skipping the semaphore step entirely, exactly as its zero declaration count predicts.
+
+## All three task startup shapes traced end to end (2026-07-31)
+
+Every task's *entire* executed life in a default boot, from the measured PC set:
+
+| step | RDHC (16 instr) | IO1I (29) | XP1I (45) |
+|---|---|---|---|
+| `GTSEG` | ✓ | ✓ | ✓ |
+| stack at segment base + | **`$116`** | **`$10A`** | **`$114`** |
+| structure pointer `a6` | ✓ | ✓ | ✓ |
+| semaphore templates copied + `CRSEM` | **none** | **1** (`'HIO1'`) | **2** (`'AXP1'`, `'HXP1'`) |
+| `CNCTIRQ` | ✓ | ✓ | ✓ |
+| `$105E` presence gate | — | — | **✓** |
+| channel port init | — | — | `$FF0044 <- 0` |
+| BIM control register | `$FF0230 <- $5E` | `$FF0254 <- $5F` | `$FF0244 <- $5F` |
+| `WAIT` — never returns | ✓ | ✓ | ✓ |
+
+**The descriptor slots are at `+$A` and `+$14` — ten bytes apart**, matching the descriptor size, and
+both templates read `{name, $00000000, $0002}`:
+
+```
+$F07D2C:  'AXP1'  $00000000  $0002       ; AC-side
+$F07D36:  'HXP1'  $00000000  $0002       ; host-side
+```
+
+So the documented `A`+name / `H`+name convention is not a runtime naming scheme — **both names are
+ROM constants**, laid out consecutively, copied into the task's own segment at fixed offsets. That
+also explains why `!UST` shows nine entries with `users=1, type=2, session=0`: the `$0002` is the
+type field, present in every template.
+
+**The three stack offsets differ per task** (`$116`/`$10A`/`$114`) and are hand-set constants, not a
+template value — consistent with this firmware being hand-written assembly with per-task patched
+constants rather than generated from a common source.
+
+**The `$105E` presence gate is `cmpi.w #$1,$105e / blt`**, skipping only the `$FF0044 <- 0` port
+write. Note what it does *not* skip: `CNCTIRQ`, the BIM arm, and the `WAIT` all run regardless. So an
+absent channel still has its interrupt vector connected and its BIM channel enabled — the task is
+"dormant" only in the sense that it never initialises its port and never wakes, not in the sense of
+being disconnected.
+
+That last point matters for a chassis model: **a channel the firmware considers absent will still
+respond to an interrupt** by entering its ISR, because nothing in the gate touches the vector or the
+BIM.

@@ -8081,6 +8081,24 @@ check('...then CRSEM once, CNCTIRQ, BIM2 ch2 CR = $5F, and WAIT',
       and _w(0xF05DB8) == 0x3B7C and _w(0xF05DBA) == 0x005F and _w(0xF05DBC) == 0x0254
       and _w(0xF05DBE) == 0x7013)
 
+check("XP1I's two templates are 'AXP1' and 'HXP1', ten bytes apart",
+      _l(0xF07D2C) == 0x41585031 and _l(0xF07D30) == 0 and _w(0xF07D34) == 0x0002
+      and _l(0xF07D36) == 0x48585031 and _l(0xF07D3A) == 0 and _w(0xF07D3E) == 0x0002
+      and 0xF07D36 - 0xF07D2C == 10)
+check('...installed at segment offsets +$A and +$14',
+      _w(0xF07D6A) == 0x4BEE and _w(0xF07D6C) == 0x000A
+      and _w(0xF07DA0) == 0x4BEE and _w(0xF07DA2) == 0x0014)
+check('the $105E presence gate skips ONLY the port write, not CNCTIRQ or the BIM arm',
+      _w(0xF07DF6) == 0x0C79 and _w(0xF07DF8) == 0x0001
+      and _l(0xF07DFA) == 0x0000105E
+      and _w(0xF07DFE) >> 8 == 0x6D
+      and _w(0xF07E00) == 0x3B7C and _w(0xF07E04) == 0x0044
+      and _w(0xF07E12) == 0x3B7C and _w(0xF07E14) == 0x005F)
+check('the three tasks use different stack offsets: $116 / $10A / $114',
+      _w(0xF0470A) == 0x4FE8 and _w(0xF0470C) == 0x0116
+      and _w(0xF05D50) == 0x4FE8 and _w(0xF05D52) == 0x010A
+      and _w(0xF07D64) == 0x4FE8 and _w(0xF07D66) == 0x0114)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
