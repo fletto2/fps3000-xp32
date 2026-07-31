@@ -19580,3 +19580,36 @@ surrounding arithmetic happens to make impossible, not a stray branch.
 The write path also confirms the documented assembly of the 32-bit word: bit 6 of the
 command selects which half of `$E70`/`$E72` receives the CHANNEL_SELECT value, and the
 completed longword is stored through the window in one `move.l`.
+
+## Operation `$0` is a three-way transfer launcher, not a single "arm"
+
+Op `$0` is the largest of the sixteen (`$F04A84`-`$F04CF2`, ~600 bytes) and this file
+describes it only as "validate/arm transfer (`0..$10` or `$28`)". Its structure is a
+three-way branch on the CHANNEL_SELECT value, which it stashes as a longword at
+`$E5C`/`$E5E`:
+
+```
+$F04A88  0 <= d0 <= $10  or  d0 == $28    else panel $259 and exit
+$F04AA8  $E5C = 0 ; $E5E = d0             ; the variant, as a longword
+$F04AC2  $FF020C = $4
+$F04AC8  if $E5C == $28 -> the direct bulk loop  ($F04AD6: a0=$FF0008, a1=$E58)
+$F04B08  if $E5C == 0   -> bulk port WITH the full XLTR handshake
+$F04C72  else (1..$10)  -> a per-channel transfer
+```
+
+| variant | what it launches |
+|---|---|
+| **`$0`** | bulk port `$FF0008` with the complete handshake: poll `$FF0004` bit 0, set `$FF020C = $4`, arm `$FF0218 = $400`, wait bit 15, clear — twice |
+| **`$1`-`$10`** | a **per-channel** transfer: address from `$E58`, count from `$E64`, channel from `$E60` (validated `1..$105E`, panel `$25C`), and the channel window computed with the familiar `((ch+1) << 5)` |
+| **`$28`** | the direct staging bulk loop this file already documents |
+
+So `0..$10` is not a range of equivalent "arm" values — **`$0` and `$1`-`$10` take different
+paths**, and only the latter consults the channel. That also explains why the validation
+admits exactly seventeen values plus `$28`: sixteen per-channel variants, one bulk-with-
+handshake, and one direct bulk.
+
+With this, **all sixteen chassis operations have a decoded shape**: the four bounded
+validators (`$4`, `$5`, `$D`, `$E`), the two array walkers (`$A` bounded, `$C` not), the
+peek/poke pair (`$1`+`$6`), the window accessor (`$3`, with its dead branch), the parameter
+setters (`$2`, `$9`), the three trivial ones (`$7`, `$B`, `$F`), the pre-upload handshake
+(`$8`), and this transfer launcher.
