@@ -36548,3 +36548,55 @@ drawing office — but the AP side speaks S-Pad/Data-Pad rather than the XP-32's
 DMA/FIFO/word-count machinery should transfer well, because it faces the *host*, which did not change
 as much; anything facing the AP should be treated as a different generation's answer to the same
 problem.
+
+## The 4448 connection list CROSS-VALIDATES the 3448 schematics (2026-07-31)
+
+The owner supplied the full 200-pin connection list for the **4448** board — the AP I/F actually in
+this chassis. Checked against pin assignments read off the `512-3448-010` sheets:
+
+| signal | schematic sheet said | connection list | |
+|---|---|---|---|
+| `OVFL*` | sheet 15, **A-70** | **A70** | ✅ exact |
+| `UNFL*` | sheet 15, **A-72** | **A72** | ✅ exact |
+| `DMASTB` / `DMASTBR` | sheet 12, **B-22 / B-23** | **B22 / B23** | ✅ exact |
+| `SAPX` / `SAPXR` | sheet 12, **B-25 / B-27** | **B25 / B27** | ✅ exact |
+| `I+H09`, `I+H10` | sheet 15, **B-44, B-46** | **B44, B46** | ✅ exact |
+| `I+H13`, `I+H14` | sheet 15, **B-80, B-82** | **B80, B82** | ✅ exact |
+| `SP+DP08`-`SP+DP15` | sheet 7, A-19..A-22, A-31..A-34 | **A19-A22, A31-A34** | ✅ exact |
+| `PNL08*`-`PNL15*` | sheet 7, A-11..A-29 odd | **A11-A29 odd** | ✅ exact |
+| `DA08*`-`DA15*` | sheet 7, A-12..A-30 even | **A12-A30 even** | ✅ exact |
+| `DMA00*`-`DMA03*` | sheet 16, A-62..A-68 | **A62, A64, A66, A68** | ✅ exact |
+| `DMA12*`-`DMA15*` | sheet 16, B-79..B-85 | **B79, B81, B83, B85** | ✅ exact |
+| `IN100` | sheet 7, A-38 | **A38** | ✅ exact |
+| `OUT*` | sheet 7, A-43 | **A43** | ✅ exact |
+| `READY*` | block diagram input | **A5** | ✅ present |
+| `REGSEL<0:5>` | block diagram, 6-bit input | **B54, B56, B57, B59, B61, B65** | ✅ six lines |
+
+**Fifteen independent agreements, several to the exact pin.** So although `512-3448-010` is an
+FPS-100-class drawing and `612-4448` is the XP-32-era board, **the connector assignment is
+substantially shared** — the schematics are a far better guide to this chassis's AP I/F than the
+drawing-number difference suggested, and the caveat I attached to every sheet should be softened
+accordingly for anything connector-facing.
+
+### Two of my pin readings were wrong, and the list corrects them
+
+From sheet 13 I recorded `SHSTX` at **B-33/B-35** and `CTLACK` at **B-3/B-5**. The list gives
+**`SHSTX`/`SHSTXR` at B29/B31** and **`CTLACK`/`CTLACKR` at B5/B6**, with B33 = `B3CLK`, B35 =
+`CHALTINT*` and B3 = GND. My readings came from small text at sheet-overview resolution and are
+withdrawn; the connection list is authoritative.
+
+That is worth noting as a limit on this whole exercise: signal *names* read at overview scale have
+been reliable, **pin numbers have not**. Anything pin-level taken from these sheets should be checked
+against the list.
+
+### New signals of direct interest
+
+- **`WCFQ0*` (B37)** — a word-count-related line brought to the connector; plausibly the `WC = 0`
+  condition exported to the host, complementing the internal `WC-0+HST#` that sheet 10 turns into
+  `DMADONE`.
+- **`HDMAACT`/`HDMAACTR` (B19/B21)** and **`APDMAACT`/`APDMAACTR` (B7/B8)** — DMA-active in both
+  directions, each as a differential pair.
+- **`HST00`-`HST15`** and **`HD00`-`HD15`** — two full 16-bit host-side buses, which is where the
+  32-bit host-transfer reading ultimately lives.
+- **`RUN*` (A93)**, **`HALTINT*` (B34)**, **`!HRSET` (B52)**, **`SYRST*` (B63)** — run/halt/reset
+  control from the host side.
