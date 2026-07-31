@@ -32214,3 +32214,69 @@ That leaves three of the nine singletons unnamed: **`$18`** (size 9, privileged 
 two-sided check), **`$1C`** (size 14, privileged), and **`$23`** (size 18). All three have flags
 `$C0`/`$C2`, i.e. a parameter block plus the second translation — so they take structured arguments
 and would repay the same treatment.
+
+## All nine singleton directives now decoded or named (2026-07-31)
+
+### `$18` — set task priority, and `TCB+$25` is the priority CEILING
+
+```
+$F02DBE  btst.b #$f,$28(a6) / bne    ; the CALLER's privilege
+$F02DC6  btst.b #$f,$28(a0) / beq    ; the TARGET's privilege
+$F02DCE  addi.w #$9,$102(a6) / rte   ; deny
+$F02DD6  move.b $8(a4),d0            ; requested value, parameter block +8
+$F02DDA  cmp.b  $25(a0),d0           ; against the TARGET's TCB+$25
+$F02DDE  bls.b  $F02DF2              ; lower or same -> allowed
+```
+
+The two-sided check is exactly as this project documents it — caller privileged, **or** target
+unprivileged — confirmed instruction for instruction. What is new is the body: a byte at
+parameter-block +8 compared against **`TCB+$25`**, with `bls` allowing lower-or-same.
+
+**So `TCB+$25` is the task's priority ceiling**, and `$18` is a set-priority directive. That
+completes the pair with `+$26`, the live priority byte: `+$25` bounds what `+$26` may become. The
+9-byte parameter block ends exactly at the value it reads.
+
+### `$1C` — a privileged segment operation
+
+```
+$F03CC2  btst.b #$f,$28(a6) / bne ... addi.w #$9 ; privilege required, no second side
+$F03CD2  move.l #$200,d5             ; $200 = two 256-byte pages
+$F03CD8  move.l $a(a4),d6            ; parameter +$0A
+$F03CDC  movea.l $36(a6),a0          ; the task's !TST
+```
+
+Privileged, sized 14, and it reaches for the **translation base** identified earlier plus a
+page-granular constant — a segment or address-space operation. Not named further; recorded with
+its three identifying features.
+
+### `$23` is `QEVNT`
+
+```
+$F0242E  movea.l a4,a3
+$F02430  movea.l $40(a5),a4          ; TCB+$40 -- the ASQ pointer
+$F02436  bne ... addq.w #$4,$102(a6) ; status 4 if there is no ASQ
+$F02440  btst.b #$8,$4(a4) / bne
+$F02448  addi.w #$e,$102(a6)         ; status $E otherwise
+```
+
+It operates on the ASQ through `TCB+$40`. And **decimal 35 = `$23`** — this project's own note that
+"the source numbers directives in decimal while the firmware loads hex" places `QEVNT` (35) exactly
+here. The other ASQ directives fall in line: `RDEVNT` 34 = `$22`, `WTEVNT` 36 = `$24`.
+
+### The nine, complete
+
+| size | directive | status |
+|---:|---|---|
+| 4 | `$3E` | **decoded** — vector ownership via `!VCT` |
+| 6 | `$33` `SERVER` | named |
+| 9 | `$18` | **decoded** — set priority, ceiling at `TCB+$25` |
+| 14 | `$1C` | **partly decoded** — privileged segment operation |
+| 18 | `$23` | **named** — `QEVNT` |
+| 20 | `$36` `AKRQST` | named |
+| 22 | `$1D` `RQSTPA` | named |
+| 36 | `$1A` | **decoded** — register handler table at `TCB+$48` |
+| 56 | `$1B` | **decoded** — register handler table at `TCB+$4C` |
+
+The singletons were flagged as "where individual decoding would have to start". All nine now have
+a name or a decode, and the exercise identified two TCB fields along the way (`+$25` the priority
+ceiling, `+$48`/`+$4C` the handler tables).

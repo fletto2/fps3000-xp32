@@ -7284,6 +7284,18 @@ check('...and validating a task number at +2 against the range 1..6',
       and _w(0xF0229E) == 0x0C43 and _w(0xF022A0) == 0x0006
       and _w(0xF022A4) == 0x3D7C and _w(0xF022A6) == 0x0009)
 
+check('directive $18 is two-sided privileged and bounds a value against TCB+$25',
+      _w(0xF02DBE) == 0x082E and _w(0xF02DC0) == 0x000F and _w(0xF02DC2) == 0x0028
+      and _w(0xF02DC6) == 0x0828 and _w(0xF02DC8) == 0x000F and _w(0xF02DCA) == 0x0028
+      and _w(0xF02DD6) == 0x102C and _w(0xF02DD8) == 0x0008
+      and _w(0xF02DDA) == 0xB028 and _w(0xF02DDC) == 0x0025)
+check('directive $1C is privileged and uses the $200 page constant with the !TST base',
+      _w(0xF03CC2) == 0x082E and _w(0xF03CD2) == 0x2A3C and _l(0xF03CD4) == 0x00000200
+      and _w(0xF03CDC) == 0x206E and _w(0xF03CDE) == 0x0036)
+check('directive $23 = QEVNT (decimal 35) works through the ASQ pointer TCB+$40',
+      35 == 0x23 and _w(0xF02430) == 0x286D and _w(0xF02432) == 0x0040
+      and _w(0xF02438) == 0x586E and _w(0xF0243A) == 0x0102)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
