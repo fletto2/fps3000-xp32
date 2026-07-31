@@ -4500,3 +4500,90 @@ check('...and the same MODE1 bit computation appears in all four XP tasks',
 
 print(f'\n{checks - len(fails)}/{checks} passed')
 sys.exit(1 if fails else 0)
+
+# ---- the boot spine: reset -> self-test -> RTOS init (2026-07-31) ----
+import struct as _bst, capstone as _bcs
+_brsp, _brpc = _bst.unpack(">II", _rom[0:8])
+check('reset vector SP is $00000000 and is never used', _brsp == 0)
+check('reset vector PC is $F09C00', _brpc == 0x00F09C00)
+check('$F09C00 is a bare jmp into the self-test', insn(0xF09C00) == 'jmp $f08700.l')
+check("the self-test's first instruction establishes a7",
+      insn(0xF08700) == 'lea.l $1ffd0.l, a7')
+check('$F088F4 jumps back over it to the RTOS init', insn(0xF088F4) == 'jmp $f09c06.l')
+check('$F09C06 reloads a7 for the RTOS', insn(0xF09C06).startswith('movea.l #$400'))
+check('$F0A4F2 holds the self-test entry address',
+      _bst.unpack(">I", _rom[0xF0A4F2 - 0xF00000:][:4])[0] == 0x00F08700)
+
+# $F0A4F2 is DEAD: its value is stored to $0C14, which is cleared before any reader.
+_bmd = _bcs.Cs(_bcs.CS_ARCH_M68K, _bcs.CS_MODE_M68K_000)
+_bc14, _ba = [], 0xF00000
+while _ba < 0xF0FFF0:
+    try: _bi = next(_bmd.disasm(_rom[_ba - 0xF00000:][:10], _ba, count=1))
+    except StopIteration: _ba += 2; continue
+    if not _bi.size: _ba += 2; continue
+    if '$c14.w' in _bi.op_str: _bc14.append(_bi.address)
+    _ba += _bi.size
+check('$0C14 has exactly four references: config store, clear, push pair',
+      _bc14 == [0xF09E3C, 0xF0A062, 0xF0A0BC, 0xF0A0C2], [hex(x) for x in _bc14])
+check('...so nothing reads $0C14 between the store and the clear -- $F0A4F2 is dead',
+      insn(0xF0A062).startswith('clr.l') and '$c14' in insn(0xF0A062))
+check('$0C10 is linked by +$04, $0C14 by +$0C -- different fields, not one list',
+      insn(0xF029D6).endswith('$4(a5)') and insn(0xF0A0BC).endswith('$c(a5)'))
+
+# ---- the self-test's fault handler, and the stack-adjustment audit (2026-07-31) ----
+check('the self-test installs its own handler on bus AND address error',
+      insn(0xF08706) == 'move.l #$f08902, $8.w' and insn(0xF0870E) == 'move.l #$f08902, $c.w')
+check('...and zeroes its fault counter at $1F800', insn(0xF08716) == 'move.l #$0, $1f800.l')
+check('the handler counts rather than reports', insn(0xF0890A) == 'addq.l #$1, $1f800.l')
+check('it picks the counter by which stack is live', insn(0xF08902) == 'cmpa.l #$10000, a7')
+check('it discards 8 bytes + rte = the 14-byte 68000 group-0 frame',
+      insn(0xF08916) == 'lea.l $8(a7), a7' and insn(0xF0891A) == 'rte')
+
+# every explicit a7 adjustment in the image
+import re as _sre
+_alloc, _free, _sa = [], [], 0xF00000
+while _sa < 0xF0FFF0:
+    try: _si = next(_bmd.disasm(_rom[_sa - 0xF00000:][:10], _sa, count=1))
+    except StopIteration: _sa += 2; continue
+    if not _si.size: _sa += 2; continue
+    _so = _si.op_str.lower()
+    if _si.mnemonic.startswith('lea') and _so.endswith('(a7), a7'):
+        _m = _sre.match(r'(-?)\$([0-9a-f]+)\(a7\)', _so)
+        if _m:
+            _n = int(_m.group(2), 16) * (-1 if _m.group(1) else 1)
+            (_alloc if _n < 0 else _free).append((_si.address, _n))
+    if _si.mnemonic in ('addq.l', 'subq.l') and _so.endswith(', a7'):
+        _n = int(_sre.match(r'#\$([0-9a-f]+)', _so).group(1), 16)
+        (_free if _si.mnemonic == 'addq.l' else _alloc).append(
+            (_si.address, _n if _si.mnemonic == 'addq.l' else -_n))
+    _sa += _si.size
+check('exactly 4 explicit stack allocations in the ROM, all -96, one per XP task',
+      [n for _, n in _alloc] == [-96] * 4, _alloc)
+check('...at the four XP-task RSTATE sites',
+      [a for a, _ in _alloc] == [0xF06762, 0xF0717A, 0xF07B7A, 0xF0857A])
+check('each is followed 24 bytes later by a +12 release of the PARAMETER BLOCK',
+      all(insn(a + 0x18) == 'lea.l $c(a7), a7' for a, _ in _alloc))
+check('...and the 96-byte buffer stays live because $3C(a7) is read next',
+      all(insn(a + 0x1c).startswith('movea.l $3c(a7)') for a, _ in _alloc))
+check('RETRACTED "zero releases": the ROM has 38 explicit releases', len(_free) == 38, len(_free))
+
+# ---- XP4I's divergence is localised, not a uniform shift (2026-07-31) ----
+def _win(o4, o3, n=64):
+    a = _rom[o4 - 0xF00000:][:n]; b = _rom[o3 - 0xF00000:][:n]
+    return sum(1 for x, y in zip(a, b) if x == y)
+_X4, _X3 = 0xF05F00, 0xF06900
+check("XP4I's prologue is NOT displaced: shift 0 matches at offset 0 and $80",
+      _win(_X4, _X3) >= 50 and _win(_X4 + 0x80, _X3 + 0x80) >= 50)
+check('XP4I aligns at -$18 for its whole tail, $200 onward',
+      all(_win(_X4 + w - 24, _X3 + w) >= 58 for w in range(0x200, 0xA00, 0x80)))
+check('...and shift 0 is wrong there', _win(_X4 + 0x500, _X3 + 0x500) < 20)
+check('XP4I alone writes $8020 to XLTR_MODE1 during start-up',
+      insn(0xF06006) == 'move.w #$8020, $202(a5)')
+check('...no other XP task has that instruction at the matching point',
+      insn(0xF06A06) != 'move.w #$8020, $202(a5)'
+      and insn(0xF07406) != 'move.w #$8020, $202(a5)')
+check('XP3I passes the channel in d0 before the helper; XP4I does not',
+      insn(0xF06A5C) == 'move.w #$3, d0' and insn(0xF06062).startswith('jsr'))
+check('...and XP4I\'s helper is the correctly -$18-shifted copy',
+      insn(0xF06A60) == 'jsr $f070aa.l' and insn(0xF06062) == 'jsr $f06692.l'
+      and 0xF070AA - 0xF06692 == 0x18)

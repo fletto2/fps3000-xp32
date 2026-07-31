@@ -19677,7 +19677,8 @@ S-records. *`CPLOAD` demonstrated end to end.*
 arguments from `RSTATE`, `$10DE` the result, read straight back into the channel data pair.
 The frame is 46 bytes at `[TCB+$13C] - 46` — the task's **saved SP** — and `a7` is not
 switched. *Demonstrated: 1466 complete cycles with a 16-byte handler.* Two firmware hazards
-on this path: a **96-byte stack leak** (4 allocations, 0 releases in the whole ROM) and an
+on this path: a **96-byte stack leak** (4 allocations, 0 releases in the whole ROM) 
+**[RETRACTED 2026-07-31 — see "The stack-adjustment audit" below: each allocation IS followed by a `lea $C(a7),a7`, and the 96 bytes are part of the frame handed to the CP program, not a leak.]** and an
 **unchecked `RSTATE` return**.
 
 ## 7. What is structurally out of reach
@@ -20424,3 +20425,191 @@ After both passes, **two longwords are genuinely unread by any form: `$F0A50A` a
 `$F0A50E`**, both zero, both sitting between the display selector and the kernel entry. Two
 reserved configuration slots is the natural reading, and unlike the six false negatives it
 survives the sweep that killed them.
+
+## The boot spine, end to end, and a dead configuration field (2026-07-31)
+
+Five instructions describe the whole path from power-on to the RTOS, and every one is now read
+out of the image rather than inferred:
+
+| | |
+|---|---|
+| reset vector | `SP = $00000000`, `PC = $00F09C00` |
+| `$F09C00` | **`jmp $F08700.l`** — the entire reset entry is one 6-byte jump into the self-test |
+| `$F08700` | **`lea $1FFD0,a7`** — the self-test's *first* instruction establishes the supervisor stack |
+| `$F088F4` | **`jmp $F09C06.l`** — the self-test's exit, back over the jump it arrived through |
+| `$F09C06` | `movea.l #$400,a7` then RTOS init |
+
+**The zero reset SP is real and harmless.** The 68000 loads `a7 = $00000000` from the vector
+and would fault on the first `bsr`; it never gets one, because `$F09C00` jumps directly to an
+instruction that reloads `a7`. Any emulator or hardware bring-up that inserts a push between
+those two points faults. This also means **the reset SP longword is not a usable stack
+hint** — a monitor patched over the reset vector must set its own `a7`, which
+`monitor/monitor.s` already does in `monitor_cold`.
+
+**`$F09C00` exists only to skip `$F09C06`.** The reset entry and the post-self-test
+continuation are adjacent by six bytes, bridged by a jump out and a jump back, which is why the
+padding-detector bug that let `$F09BFE` swallow `$F09C00` destroyed the reset entry itself.
+
+**Consequence: `$F0A4F2 = $00F08700` in the configuration block is DEAD.** It is the self-test
+entry address, and the table entry committed earlier today labels it as such — but the label
+implied a role it does not have. Its single consumer is `$F09E3C`, `move.l $F0A4F2(pc),$C14.w`,
+and `$0C14` has exactly four references in the whole ROM: that store, `$F0A062` `clr.l $C14.w`,
+and the push pair `$F0A0BC`/`$F0A0C2`. **There is no reader between the store and the clear**,
+so the value cannot be observed by anything. The self-test is entered by the reset jump, not by
+this field.
+
+That makes three distinct fates for a configuration field in this block, worth separating when
+reasoning about what a differently-strapped FPS-3000 would do:
+
+- **live** — read and acted on (`$F0A546` relocation, `$F0A532` quantum, `$F0A52A` trace)
+- **dead** — stored to a global that is destroyed before first use (`$F0A4F2`)
+- **unreferenced** — `$F0A50A`, `$F0A50E`, neither read pc-relative nor through a base register
+
+Only the first class can change the machine's behaviour, so a variant-hunting sweep should
+report the three separately rather than counting nonzero fields.
+
+## The self-test's own bus-error handler, and why the Musashi frame patch was load-bearing (2026-07-31)
+
+The self-test's first four instructions are its whole fault-handling setup:
+
+```
+$F08700  lea      $1FFD0,a7            establish the supervisor stack
+$F08706  move.l   #$F08902,$8.w        bus error   -> its own handler
+$F0870E  move.l   #$F08902,$C.w        address error -> the same handler
+$F08716  move.l   #$0,$1F800           zero the fault COUNTER
+```
+
+and the handler at `$F08902` is a **counter, not a reporter**:
+
+```
+$F08902  cmpa.l   #$10000,a7           which stack am I on?
+$F08908  blt.b    $F08912
+$F0890A  addq.l   #$1,$1F800           high stack  -> count at $1F800
+$F08910  bra.b    $F08916
+$F08912  addq.l   #$1,$400.w           low stack   -> count at $400
+$F08916  lea      $8(a7),a7            discard the extra 8 bytes
+$F0891A  rte                           ...and resume
+```
+
+Three things follow, each of which matters to the emulator:
+
+**1. `lea $8(a7),a7` + `rte` = exactly 14 bytes, the 68000 group-0 frame.** `rte` pops SR and
+PC (6), the `lea` discards the function-code word, the access address longword and the
+instruction register word (8). This is a **direct, in-firmware confirmation that the
+68000-format 7-word frame is required** — the patch made to `emulator/musashi/` replacing the
+hard-coded 68010 frame is not a detail, it is what lets the self-test survive its own faults.
+With a 68010 frame the `lea` under-pops and the `rte` returns to garbage on the very first
+deliberate bus error, which is phase `$600`.
+
+**2. `$1F800` is a bus-error counter before it is `!IDV`.** The page later allocated for the
+interrupt-device table is used during the self-test as the fault tally, which is why
+`$F08716` zeroes it explicitly. A RAM watchpoint on `$1F800` therefore sees self-test traffic
+long before the RTOS structure exists, and that traffic is *expected*, not corruption.
+
+**3. The two counters track which stack is live.** `a7 >= $10000` is the normal supervisor
+stack at `$1FFD0`; below it, the DRAM tests have relocated the stack, so the tally moves to
+`$400.w` — inside the vector table region the RAM tests are allowed to disturb. The handler
+needs no state of its own to know which phase it is in; the stack pointer tells it.
+
+Together with the boot spine above, the self-test is now readable as a self-contained program:
+it takes the machine at reset with no stack and no vectors, installs the two it needs, counts
+its own faults, and hands control to the RTOS through a single `jmp`.
+
+## The stack-adjustment audit, and a retraction (2026-07-31)
+
+Every explicit `a7` adjustment in the 64 KB image, found by decoding the whole ROM and matching
+`lea $n(a7),a7` / `addq.l #n,a7` against `lea -$n(a7),a7` / `subq.l #n,a7`:
+
+- **4 allocations**, all `-96`, one per XP task: `$F06762`, `$F0717A`, `$F07B7A`, `$F0857A`
+- **38 releases**, `+2` to `+12`, spread across the kernel, the self-test and the FPS layer
+- net over the image: **-188 bytes**, i.e. 4x96 allocated against 196 released elsewhere
+
+**This retracts the "96-byte stack leak with zero releases" recorded earlier.** Each allocation
+*is* followed, 24 bytes later, by a release — it is just a `+12`, and it releases the wrong
+thing to close the frame:
+
+```
+$F0857A  lea      -$60(a7),a7          96-byte RSTATE result buffer
+$F0857E  pea      (a7)                 -> pointer to it
+$F08580  move.l   #$0,-(a7)
+$F08586  move.l   #'USER',-(a7)        the 12-byte parameter block
+$F0858E  lea      (a7),a0
+$F08590  trap     #$1                  directive $43, RSTATE
+$F08592  lea      $c(a7),a7            releases the PARAMETER BLOCK, not the buffer
+$F08596  movea.l  $3c(a7),a3           reads buffer+$3C -- the target's saved SP
+$F085AA  movem.l  d0-d7/a0-a6,-(a7)    60 more bytes, the callback frame
+```
+
+So the buffer stays live *because it is still being read*, and 60 bytes of register save are
+pushed on top before control passes to the CP-program trampoline at `$10AE`. **The 96 bytes are
+part of the frame the callee receives.** Whether leaving them is a defect depends on the CP
+program's unwind contract, which is not in this ROM — the emulator experiment that carried this
+path to completion supplied its own `lea $A4(a7),a7`, i.e. the *callee* unwound. And with
+`$10AE` zero the whole path is skipped, so the imbalance cannot be observed on this firmware
+alone.
+
+Two lessons, both of which this project has now hit more than once:
+
+- **An absence proved by one matcher shape is not an absence.** "0 releases" came from looking
+  for a `+96`; the release is a `+12`. The general rule already recorded here for `$FFxxxx`
+  base-register accesses applies to stack arithmetic too.
+- **A balanced-frame assumption is an ABI assumption.** Firmware that hands a frame to code it
+  does not contain cannot be audited for balance without that code.
+
+The unchecked `RSTATE` return at `$F08596` is unaffected and stands: no test of the directive
+status before `a3` is dereferenced and 77 bytes written through it.
+
+## XP4I is not a uniform-shift template copy — the divergence localised (2026-07-31)
+
+Earlier work recorded "XP4I aligns at `-$1E`, not `-$18`, with 265 differing bytes" and treated
+that as a whole-task displacement. Sliding XP4I against XP3I in windows shows something more
+specific, and it reconciles the two figures that have both been quoted here:
+
+| XP3I offset | best shift of XP4I | match |
+|---|---:|---|
+| `$000`-`$0C0` | **0** | 55-59/64 — the prologue is NOT displaced |
+| `$0C0`-`$200` | varies | the divergence |
+| `$200`-`$A00` | **-24 = `-$18`** | 62-64/64 for the whole tail |
+
+Shift 0 is exact through `$F069C0`; shift `-$18` is exact from `$F06B06`. **Everything that
+makes XP4I different lives in the `$146` bytes between**, and it is a sequence of small
+insertions and deletions, not one displacement:
+
+**An instruction XP4I has and no other XP task has**, immediately after the channel-arm write:
+
+```
+XP3I   $F069F6  cmpi.w  #$3,$105E        XP4I   $F05FF6  cmpi.w  #$4,$105E
+       $F069FE  blt.b   $F06A06                 $F05FFE  blt.b   $F06006
+       $F06A00  move.w  #$0,$84(a5)              $F06000  move.w  #$0,$A4(a5)
+                                                 $F06006  move.w  #$8020,$202(a5)   <-- EXTRA
+       $F06A06  beq.b   $F06A0C                  $F0600C  beq.b   $F06012
+```
+
+`$8020` into `XLTR_MODE1` is bit 15 (busy) plus bit 5. **The highest-numbered channel, and only
+it, pokes the XLTR mode register during its own start-up.** Nothing else in the four tasks
+writes `$202(a5)` with a literal at this point.
+
+**An instruction XP4I lacks**, four bytes further on:
+
+```
+XP3I   $F06A5C  move.w  #$3,d0           XP4I   (absent)
+       $F06A60  jsr     $F070AA                 $F06062  jsr     $F06692
+```
+
+`$F06692` is `$F070AA - $18`, i.e. the correctly-shifted copy of the same helper — so the
+routine is template-copied but **its caller does not pass the channel number**, implying XP4I's
+copy has the channel wired in rather than taken in `d0`.
+
+Running the offsets: the extra `$8020` puts XP4I **+6** relative to XP3I; the missing `move.w`
+takes it to **+2**; further small deletions in the same window bring it to **-24** by `$200`,
+where it stays for the remaining `$800` bytes.
+
+**So `-$1E` and `-$18` are both real** — `-$1E` (30) is the total *deleted*, `-$18` (24) is the
+net after the 6 bytes XP4I adds back. The earlier note recorded the net-of-one-measurement and
+the total-of-another as competing whole-task alignments; they are two different quantities and
+both are correct.
+
+Consequence for reading the disassembly: **an address in XP4I cannot be mapped to its XP3I
+counterpart by a single constant.** Use offset 0 below `$F05FC0`, `-$18` above `$F06006`, and
+read the window between by hand. Two panel-code attributions in this project's history went
+wrong on exactly this stretch.
