@@ -5240,6 +5240,12 @@ check('the mailbox base $700000 is formed once, inside the chassis window',
       _bases[0x00700000] == 1 and 0x400000 <= 0x700000 < 0x800000)
 check('no base is formed in $F80000-$FEFFFF except that watchdog probe',
       [b for b in _bases if 0xF80000 <= b <= 0xFEFFFF] == [0x00F82001])
+check('the unexplained RAM bases $1F000/$1F400/$EFF8 are all self-test scratch',
+      all(0xF08700 <= a < 0xF09C00 for a in (0xF08872, 0xF08892, 0xF08898, 0xF089B0)))
+check('...and the self-test migrates the fault count from $1F800 to $400 before relocating',
+      insn(0xF0888A) == 'move.l $1f800.l, $400.w')
+check('...matching the handler picking its counter by cmpa.l #$10000,a7',
+      insn(0xF08902) == 'cmpa.l #$10000, a7' and insn(0xF08912) == 'addq.l #$1, $400.w')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

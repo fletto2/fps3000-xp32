@@ -23927,3 +23927,29 @@ other misses.
 
 **`$FF0000` at 62 uses against the next-highest 13** is also the clearest single measure of where
 this firmware's attention is: the AP I/F and XLTR are the machine, as far as the SBC is concerned.
+
+### The three unexplained RAM bases are self-test scratch — and one confirms the fault handler
+
+`$1F000`, `$1F400` and `$EFF8` appear in the base census and in none of the RTOS structure lists.
+All three are formed inside the self-test:
+
+| base | site | use |
+|---|---|---|
+| `$1F000` | `$F08872`, `$F08892` | source buffer for a RAM test |
+| `$1F400` | `$F08898` | destination buffer for the same |
+| `$EFF8` | `$F089B0` | a stack top — `move.l #$FF000102,-(a5)` pushes onto it |
+
+So none is an undocumented structure; the RTOS structure map stands complete at eight
+allocations plus six TCBs and six stack/ASQ blocks.
+
+**And `$F0888A` confirms the self-test's fault-counter design from the other side:**
+
+```
+$F0888A  move.l  $1F800.l,$400.w      copy the fault count DOWN to $400
+$F08892  movea.l #$1F000,a0           ...then run a test that relocates the stack
+```
+
+The fault handler at `$F08902` chooses its counter by testing `cmpa.l #$10000,a7` — `$1F800` when
+the stack is high, `$400` when it has been moved low. Here is the self-test **migrating the
+accumulated count** immediately before doing exactly that. Two halves of one mechanism, found
+independently: the handler's choice of counter, and the moment the count is carried across.
