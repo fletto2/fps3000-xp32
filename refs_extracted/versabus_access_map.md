@@ -28121,3 +28121,44 @@ absorb harmlessly while it polls.
 This also confirms the documented `$D0` checkpoint mechanism from the code side, and shows
 the marker is written as a **word to `$1FFF0`** (`$00` high, `$D0` low), i.e. it lands in
 `$1FFF1` — consistent with the emulator's model of counting `$D0` markers there.
+
+## The checkpoint handshake decoded, and it unifies with the SCM abort (2026-07-31)
+
+All three checkpoints are byte-for-byte the same shape:
+
+```
+addi.w #$100,d6              ; step the MAJOR phase counter
+bsr    <the sequence just finished>    ; $F0905A, $F09832, $F09B20
+move.w #$d0,(a5)             ; the $D0 marker into $1FFF0/$1FFF1
+move.w #$8000,$202(a6)       ; MODE1 <- $8000
+move.l #$f088fa,$154.l       ; arm vector $55 with a bare rte
+moveq  #$4,d4 / moveq #$5,d5 ; the two board-status bits to poll
+poll:  move.w (a4),d3        ; read $F70018/$F70019
+       btst.l d4,d3 / bne b4set
+       btst.l d5,d3 / bne poll        ; bit 5 alone -> keep polling
+       bra  next_sequence             ; BOTH CLEAR -> carry on
+b4set: btst.l d5,d3 / beq poll        ; bit 4 alone -> keep polling
+       jmp  $f09c06                   ; BOTH SET -> finish the self-test
+```
+
+So the handshake is a **two-bit rendezvous** on `$F70019` bits 4 and 5:
+
+| bit 4 | bit 5 | action |
+|:-:|:-:|---|
+| 0 | 0 | continue to the next sequence |
+| 1 | 0 | keep polling |
+| 0 | 1 | keep polling |
+| **1** | **1** | **stop — jump to the boot continuation** |
+
+**This unifies with the SCM finding.** The SCM inner-loop poll (`$F0891C`) aborts the memory
+test when bits 4 **and** 5 are both set, and here both set ends the whole suite. So
+**"bits 4 and 5 together" is the machine's universal stop signal**, honoured both between
+sequences and inside the longest test — not two unrelated conditions as I first recorded it.
+
+**Emulator requirement**: those two bits must not both read as set during normal operation,
+or the self-test terminates early *and silently* — it jumps to `$F09C06`, the ordinary boot
+continuation, so the machine still boots. A model with that bug looks healthy and simply
+never runs most of its diagnostics.
+
+The `$D0` marker and the `MODE1 <- $8000` write are the SBC's half of the rendezvous; the
+chassis is expected to answer by moving those two status bits.

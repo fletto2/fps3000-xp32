@@ -6123,6 +6123,14 @@ check('...written and read back as a LONGWORD at $1FFF0',
 check('...covering the control byte and a vector register together',
       0x1FFF0 + 2 == 0x1FFF2)
 
+check('all three checkpoints share the $D0 / MODE1 / vector-$55 shape',
+      all(insn(x) == 'move.w #$d0, (a5)' for x in (0xF087AA, 0xF08832, 0xF088CC))
+      and all(insn(x) == 'move.w #$8000, $202(a6)' for x in (0xF087AE, 0xF08836, 0xF088D0)))
+check('...and poll board-status bits 4 and 5 as a two-bit rendezvous',
+      insn(0xF087BE) == 'moveq #$4, d4' and insn(0xF087C0) == 'moveq #$5, d5')
+check('...with BOTH set meaning stop -- the same signal that aborts the SCM test',
+      insn(0xF088F4) == 'jmp $f09c06.l' and insn(0xF0894E) == 'bra.w $f088f4')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
