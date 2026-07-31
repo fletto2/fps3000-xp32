@@ -125,7 +125,7 @@ Which is why the in-ROM monitor can co-opt it: the chip is entirely free.
 | `$FF020C` | COUNTER |  | 4 |  |  | 12 |  | 3 |
 | `$FF0210` | MODE2/page |  | 474 |  |  | 975 |  | 15 |
 | `$FF0212` | (probe-only, phase $1600) |  | 4 |  |  | 4 |  | 2 |
-| `$FF0214` | DATA hi half |  | 4 |  |  | 12 |  | 3 |
+| `$FF0214` | DATA **low** half |  | 4 |  |  | 12 |  | 3 |
 | `$FF0216` | BERR/width enables |  | 4 |  |  | 68 |  | 18 |
 | `$FF0218` | STATUS_IRQ |  | 8 |  |  | 20 |  | 6 |
 | `$FF021A` | IRQ_MASK |  | 8 |  |  | 8 |  | 8 |
@@ -231,3 +231,29 @@ same boundary — it exercises SBC, PTM, VMOD, bus watchdog, XLTR, AP I/F and SC
 touches none of those three. They sit behind the chassis, reachable only through the `$400000`
 window and the channel command ports, so no amount of firmware analysis will map them; that needs
 hardware.
+
+
+## Correction: `$FF0214` is the LOW half, not the high half (2026-07-30)
+
+This table labelled `$FF0214` "DATA hi half". The self-test settles it directly. Phase
+`$1900` has two sub-tests, and they differ in exactly this:
+
+```
+$F09806  move.l d0,(a0)      ; write a longword to the $400000 window
+$F09808  move.w d1,(a0)      ; ...then a word to the window's FIRST word
+$F0980A  cmp.l  (a0),d2      ; check the whole longword
+
+$F0981A  move.l d0,(a0)      ; write a longword to the window
+$F0981C  move.w d1,$214(a6)  ; ...then a word to $FF0214
+$F09820  cmp.w  $2(a0),d2    ; check the SECOND word -- the LOW half
+```
+
+A word written to `$FF0214` lands in `$2(a0)`, the low half of the 32-bit chassis word.
+So `$FF0214` is the **low-half write port**, which is what the phase-`$1900` note in
+`versabus_access_map.md` says and what `emulator/versabus.h` already encodes
+(`XLTR_DATA_LO`). Only this table's label was wrong; no code or model depended on it.
+
+The confusion is worth naming, because it will recur: `$FF0214` is also the **leading**
+half of every 32-bit CPU access that pairs it with `$FF0216`, so on the CPU side it is the
+"high" longword half while on the chassis side it latches the "low" data half. Both
+statements are true about different words.

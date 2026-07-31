@@ -3970,6 +3970,17 @@ with tempfile.TemporaryDirectory() as _tdc:
 check('CPLOAD sets $FF0216 bit 4 at runtime: $C0 -> $D0',
       'WR 2-byte FF0216 = 000000D0' in _cpb)
 
+# --- $FF0214 is the LOW half of the 32-bit chassis word ------------------
+# Phase $1900's two sub-tests differ in exactly this: a word written to the
+# window's first word is checked with cmp.l on the whole longword, while a word
+# written to $FF0214 is checked with cmp.w on $2(a0) -- the SECOND word.
+check('a word written to $FF0214 lands in the LOW half of the chassis longword',
+      insn(0xF0981C) == 'move.w d1, $214(a6)'
+      and insn(0xF09820) == 'cmp.w $2(a0), d2')
+check('...whereas a word written to the window itself affects the high half',
+      insn(0xF09808) == 'move.w d1, (a0)'
+      and insn(0xF0980A) == 'cmp.l (a0), d2')
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
