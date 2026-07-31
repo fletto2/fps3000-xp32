@@ -8290,6 +8290,10 @@ check('...and the second CMR thunk uses move.l where move.w was meant',
       and _w(0xF040E2) == 0x297C      # move.l #$00004eb9,$4a(a4) -- opcode two bytes low
       and _w(0xF03FDA) == 0x004A and _w(0xF040E8) == 0x004A)
 
+check('the ISR-exit sentinel is move.w #$c,ccr followed by trap #1',
+      _w(0xF050FC) == 0x44FC and _w(0xF050FE) == 0x000C
+      and _w(0xF05100) == 0x4E41)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

@@ -35804,3 +35804,42 @@ host software issued `$3C` or reached `$F02126`.
 The error was checking the reachability of the *routine I had named* rather than of the *instruction
 that implements the requirement* — the same mistake as reading `$F08614` as the leak discriminator
 when `$F0857A` was.
+
+## The witness audit completed, in three tiers (2026-07-31)
+
+| requirement | gate | default boot | channel-driven |
+|---|---|---|---|
+| SCM window, BERR gate, width mux, BIM sizing, boot mailbox, IRQ delivery, `tas` | various | **yes** | yes |
+| bus watchdog BERR (`$F80001`-`$F82001`) | `$F08F1C` | **yes** | yes |
+| DRAM refresh 0.675 s hold | `$F09A7E` | **yes** | yes |
+| **ISR-exit chain via the CCR sentinel** | `$F00280` | – | **yes** |
+| **`!IDV` walk / `T0WAKEUP`** | `$F0029A`, `$F02C6C` | – | **yes** |
+| PTM T3 running counter | `$F00F96` | – | – |
+| runtime `jsr` construction (`$4EB9` x3) | `$F02126` … | – | – |
+| register snapshot at `$0800` | `$F00186` | – | – |
+| `$F70030` read-modify-write | `$F00A3A` | – | – |
+| group-0 frame is 14 bytes (`'BE'` guard) | `$F00D00` | – | – |
+| per-task single-step | `$F005B6` | – | – |
+| S-record checksum consumed unchecked | `$F05250` | – | – |
+| S-record per-byte bound | `$F051FE` | – | – |
+| bulk transfer via `$FF0008` | `$F04AE2` | – | – |
+| RDHC command fetch from `$400000` | `$F0531C` | – | – |
+
+Driving one channel raises the PC set from **2756 to 3026** and is what witnesses the wake path. The
+last four in the table need the chassis-driving hooks (`FPS3K_SEQ`, `FPS3K_CHASSIS_CMD`) that this
+project records as reaching them; they are not unreachable, just not reached by anything run today.
+
+### Correction: "the ISR-exit chain never runs" was scoped to a default boot
+
+Earlier I recorded `$F00280`, `$F0029A` and `$F002B2` as unreached, and wrote that the ISR-exit chain
+"never runs". That holds only for an undriven boot. **Driving a channel interrupt exercises all
+three** — which is right, since the chain exists precisely to wake a task from its ISR, and an
+undriven machine never has an ISR to exit from.
+
+### And a false negative I produced on the way
+
+My first attempt to check the driven case used the per-task trace files from earlier in the session —
+but those were built with `awk '$1>="F07D00" && $1<="F086FF"'`, filtered to one task's address range.
+Kernel addresses **cannot** appear in them by construction, so every kernel row came back "no
+witness". Re-running unfiltered changed four rows. Reusing a derived artefact without re-reading how
+it was derived is the same failure as a narrow matcher, one step removed.
