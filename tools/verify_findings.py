@@ -4103,12 +4103,24 @@ check('without a trampoline the CP callback never runs',
 check('...and a 4-byte rts stub at $10AE makes RSTATE and the jsr both execute',
       _cb['stub']['F0858C'] >= 1 and _cb['stub']['F085F8'] >= 1)
 
-# --- the callback path's 96-byte stack leak ------------------------------
-# One allocation per XP task and NO release anywhere in the 64 KB image.
+# --- the callback path's 96-byte frame -----------------------------------
+# One allocation per XP task, and the firmware never releases it.
+# NB (2026-07-31): the "96-byte stack LEAK" reading this once carried is
+# RETRACTED.  A full audit of every a7 adjustment (4 allocations, 38 releases)
+# shows each -$60 IS followed by a `lea $C(a7),a7` -- which releases the
+# 12-byte RSTATE parameter block, not the buffer.  The buffer stays live
+# because $3C(a7) is read from it immediately after, and 60 more bytes of
+# register save are pushed on top before control passes to the CP-program
+# trampoline.  The 96 bytes are part of the frame handed to the CALLEE, so
+# whether not releasing them is a defect depends on a contract this ROM does
+# not contain.  The byte counts below are still exactly right.
 check('lea -$60(a7),a7 occurs 4 times, once per XP task',
       _rom.count(b'\x4f\xef\xff\xa0') == 4)
-check('...and lea +$60(a7),a7 occurs ZERO times, so it is never released',
+check('...and no matching lea +$60(a7),a7 exists -- the CALLEE unwinds it',
       _rom.count(b'\x4f\xef\x00\x60') == 0)
+check('...while the +12 that DOES follow releases the RSTATE parameter block',
+      all(insn(a + 0x18) == 'lea.l $c(a7), a7'
+          for a in (0xF06762, 0xF0717A, 0xF07B7A, 0xF0857A)))
 
 # --- a working CP handler runs complete XP-32 channel cycles --------------
 # The handler must NOT return (the firmware's rts is 96 bytes out); it restores
