@@ -29364,3 +29364,49 @@ mismodelled silently.
 
 `$F09354`'s write of vector number `$52` to **`$1FFE4`** lands in the same ordinary RAM, and
 nothing in phases `$1300` or `$1400` reads it back — scratch, on the same evidence.
+
+## `$F09AD6` is the SCM address-line test — the only SBC↔MEM CTL traffic in the ROM (2026-07-31)
+
+Sequence C ends by testing System Common Memory through the `$400000` chassis window. This is
+the one place the firmware exercises the **MEM CTL** card and the **MAIN DATA** array, so it is
+the whole of what the ROM can tell us about that path.
+
+```
+$F09AE2  clr.w $210(a6)          ; XLTR_MODE2 <- 0, i.e. PAGE 0
+$F09AE6  a0 = $400000            ; the chassis window
+$F09AEC  d0 = $4000              ; limit
+$F09AF2  d2 = 4                  ; verify cursor
+$F09AF4  d1 = 4                  ; write cursor
+$F09AF6  move.l d1,(a0,d1.l)     ; write each offset's own value AT that offset
+$F09AFA  lsl.l  #$1,d1
+$F09AFC  cmp.l  d1,d0 / bge      ; d1 = 4, 8, $10 ... $4000
+$F09B00  cmp.l  (a0,d2.l),d2     ; read every one of them back
+$F09B06  d7 = $F0F0F0F0          ; mismatch -> fault (then the usual forever-retry)
+$F09B14  lsl.l  #$1,d2 / bge     ; d2 walks the same powers of two
+```
+
+**It is a walking-ones address-line test**, the standard way to catch a shorted or open address
+line: each power-of-two offset is written with its own value, and only after *all* of them are
+written is any read back. A stuck or swapped line makes two offsets alias, so the second write
+overwrites the first and the read-back mismatches. Offsets run **`$4` to `$4000` by doubling —
+thirteen address lines, bits 2 through 14**, covering 16 KB of the window (4096 longwords).
+
+Three things this pins down for a chassis model:
+
+1. **The window is explicitly paged to 0 first** (`clr.w $FF0210`), confirming `XLTR_MODE2` as
+   the page register on the operational path and not only in chassis op `$3`.
+2. **`$400000`-`$403FFF` at page 0 must be real read/write longword storage.** A model that
+   returns a constant, ignores writes, or aliases within that span fails the read-back.
+3. **Failure is not survivable.** Per the fault policy above, `PollBoardStatus` never clears
+   `d7`, so a mismatch re-runs the arm forever with `CHANNEL_SELECT` parked on this phase. An
+   emulator whose chassis window is not backed by memory does not error here — it hangs.
+
+Note what is *absent*: no data-pattern test of SCM contents beyond this, no size probe, and no
+MEM CTL status or control register anywhere. The SBC reaches System Common Memory purely as
+paged memory through the XLTR window — **there is no MEM CTL register interface in this
+firmware at all**, which is consistent with the board-coverage boundary already recorded (the
+self-test never touches XP-32 EXEC, ARITH or UNIV FMT either).
+
+For completeness, the DRAM refresh test immediately before it (`$F09A82`) skips `$1FFF0` in
+**both** its fill and its verify loop — a ninth and tenth independent site drawing the
+register block at exactly four bytes.

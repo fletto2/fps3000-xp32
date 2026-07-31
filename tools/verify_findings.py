@@ -6410,6 +6410,17 @@ check('the DRAM verify skips ONLY the longword at $1FFF0, testing $1FFF4-$1FFFF 
       and _w(0xF099E8) == 0x41E8 and _w(0xF099EA) == 0xFFFC
       and (insn(0xF099CE) or '').startswith('cmp.l'))
 
+check('the SCM test pages XLTR_MODE2 to 0 and addresses the $400000 window',
+      _w(0xF09AE2) == 0x426E and _w(0xF09AE4) == 0x0210
+      and _w(0xF09AE6) == 0x207C and _l(0xF09AE8) == 0x00400000)
+check('...and is a walking-ones address-line test: powers of two from $4 to $4000',
+      _l(0xF09AEE) == 0x00004000 and _w(0xF09AF2) == 0x7404 and _w(0xF09AF4) == 0x7204
+      and _w(0xF09AF6) == 0x2181 and _w(0xF09AFA) == 0xE389 and _w(0xF09B14) == 0xE38A)
+check('...writing every offset before reading any of them back',
+      _w(0xF09AF8) == 0x1800 and _w(0xF09B00) == 0xB4B0 and _w(0xF09B02) == 0x2800)
+check('the DRAM refresh test skips $1FFF0 in BOTH its fill and its verify loop',
+      _l(0xF09A96) == 0x0001FFF0 and _l(0xF09ABE) == 0x0001FFF0)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
