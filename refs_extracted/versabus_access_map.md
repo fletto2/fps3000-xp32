@@ -22453,3 +22453,31 @@ This closes the last unattributed stretch in the application region. It also exp
 mislabel `TCBDefinitionTable` on `$F0A57E` survived so long: the search *base* and the table are
 genuinely related — one is rounded up to the other — so a label placed on the base is wrong but
 not arbitrary.
+
+## Audit: which published counts were inflated by overlapping scans (2026-07-31)
+
+The board-status bit counts turned out to be double-counted (bit 1 reported as 12, actually 4),
+because nine `lea $F70018,aN` sites produced forward scans that overlapped and the same `btst`
+was tallied once per scan reaching it. Every other count in this file derived the same way has now
+been recomputed **deduplicated by instruction address**:
+
+| sweep | published | deduplicated | verdict |
+|---|---|---|---|
+| `$F70019` bit tests | bit 1 x12, 17 accesses | **bit 1 x4, 11 accesses** | **WRONG — corrected** |
+| `$1FFF0`/`$1FFF1` bit ops | b7 `bclr`x11/`bset`x8, b6 `bclr`x6/`bset`x1, b5 `bset`x3/`bclr`x2/`btst`x2, b3 `bclr`x2/`bset`x1, `$1FFF0` b1 `bclr`x3/`bset`x2, b0 `bclr`x2/`bset`x1, `$D0` x3 | **identical** | **CONFIRMED** |
+| `XLTR_MODE1` bit ops | 21 RMW pairs; b14 13/1, b12 8, b7 1/1, b6 4, b0 1 | **identical** | **CONFIRMED** |
+
+**The difference is one line of code.** The VMOD sweep broke cleanly on register reload
+(`if m.startswith(('lea','movea')) and o.endswith(', ' + reg): break`), so its windows never
+overlapped. The board-status sweep used a convoluted break condition that rarely fired, so its
+scans ran their full 400-instruction budget and stacked on top of each other. The MODE1 sweep
+terminates at the matching write, so its windows are short and self-bounding.
+
+**Rule adopted**: any sweep that starts from multiple base-register loads must key its results by
+**instruction address**, not increment a counter — then overlap is structurally impossible
+regardless of whether the break condition is right. All three sweeps now do this.
+
+That the two independent confirmations came out **byte-exact** is worth stating positively: the
+error was isolated to one sweep with one bad break condition, not a systematic problem with the
+technique. But it was found by a regression check failing, not by inspection — which is the
+argument for the harness that had, until today, been silently not running.

@@ -4799,6 +4799,12 @@ for _st, _rg in _vleas:
         _p += _sz
 check('$1FFF1 bit 7 is the busiest control bit (bclr x11, bset x8)',
       _vbits[(1, 7)]['bclr'] == 11 and _vbits[(1, 7)]['bset'] == 8, dict(_vbits[(1, 7)]))
+# audited 2026-07-31: these counts are identical when deduplicated by instruction
+# address, unlike the board-status sweep which was inflated by overlapping scans.
+check('$1FFF1 bit 6 is cleared 6x and set once', _vbits[(1, 6)]['bclr'] == 6
+      and _vbits[(1, 6)]['bset'] == 1, dict(_vbits[(1, 6)]))
+check('$1FFF0 bit 1 is cleared 3x and set 2x', _vbits[(0, 1)]['bclr'] == 3
+      and _vbits[(0, 1)]['bset'] == 2, dict(_vbits[(0, 1)]))
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
