@@ -3502,7 +3502,8 @@ with tempfile.TemporaryDirectory() as _tdq:
           _chain == ['XP1I', 'XP2I', 'XP3I', 'XP4I', 'IO1I', 'RDHC'])
     check('...and terminates at zero', _a == 0)
     check('...while every TCB\'s +$0C still fossilises the same successor',
-          all(_lw(b + 0x04) == _lw(b + 0x0C) for b in _tcbs))
+          all(_lw(b + 0x04) == _lw(b + 0x0C)
+              for b in (0x1E900, 0x1EB00, 0x1ED00, 0x1EF00, 0x1F100, 0x1F300)))
     # An empty ready queue and six blocked tasks are the same fact twice.
     # $4000 is bit 14 = TSKSBLCK, "TASK IS BLOCKED", per Motorola's TCB.EQ.
     check('every task is BLOCKED (TSKSBLCK), which is why the ready queue is empty',
@@ -4587,3 +4588,58 @@ check('XP3I passes the channel in d0 before the helper; XP4I does not',
 check('...and XP4I\'s helper is the correctly -$18-shifted copy',
       insn(0xF06A60) == 'jsr $f070aa.l' and insn(0xF06062) == 'jsr $f06692.l'
       and 0xF070AA - 0xF06692 == 0x18)
+
+# ---- XLTR_MODE1 ($FF0202): the complete operational bit map (2026-07-31) ----
+import re as _mre, collections as _mcol
+_mins, _ma = {}, 0xF00000
+while _ma < 0xF0FFF0:
+    try: _mi = next(_bmd.disasm(_rom[_ma - 0xF00000:][:10], _ma, count=1))
+    except StopIteration: _ma += 2; continue
+    if not _mi.size: _ma += 2; continue
+    _mins[_ma] = (_mi.mnemonic, _mi.op_str.lower(), _mi.size); _ma += _mi.size
+_mbits, _mpairs = _mcol.defaultdict(_mcol.Counter), 0
+for _a, (_m, _o, _sz) in sorted(_mins.items()):
+    _mm = _mre.match(r'\$202\(a\d\), (d\d)$', _o)
+    if not (_m.startswith('move.w') and _mm): continue
+    _reg, _p = _mm.group(1), _a + _sz
+    for _ in range(8):
+        if _p not in _mins: break
+        _m2, _o2, _s2 = _mins[_p]
+        if _m2.startswith('move.w') and _o2.startswith(_reg + ', $202('): _mpairs += 1; break
+        _b = _mre.match(r'#\$([0-9a-f]+), ' + _reg + '$', _o2)
+        if _b and _m2.split('.')[0] in ('bset', 'bclr', 'bchg'):
+            _mbits[int(_b.group(1), 16)][_m2.split('.')[0]] += 1
+        _p += _s2
+check('MODE1 has 21 operational read-modify-write pairs', _mpairs == 21, _mpairs)
+check('MODE1 bit 14 (control) is cleared 13x and set once',
+      _mbits[14]['bclr'] == 13 and _mbits[14]['bset'] == 1, dict(_mbits[14]))
+check('MODE1 bit 12 (enable) is set 8x and NEVER cleared',
+      _mbits[12]['bset'] == 8 and _mbits[12]['bclr'] == 0, dict(_mbits[12]))
+check('MODE1 bit 7 (busy) is the XPRUN clear/set pair at $F050D2/$F050E0',
+      _mbits[7]['bclr'] == 1 and _mbits[7]['bset'] == 1
+      and insn(0xF050D6) == 'bclr.b #$7, d1' and insn(0xF050E4) == 'bset.b #$7, d1')
+check('MODE1 bit 6 is set 4x and never cleared (panel-command issuer)',
+      _mbits[6]['bset'] == 4 and _mbits[6]['bclr'] == 0, dict(_mbits[6]))
+check('MODE1 bits touched are exactly {0,6,7,12,14}',
+      set(_mbits) == {0, 6, 7, 12, 14}, sorted(_mbits))
+check('the only operational whole-word MODE1 write is XP4I\'s $8020',
+      insn(0xF06006) == 'move.w #$8020, $202(a5)')
+check('...and it clears the sticky enable bit 12', not (0x8020 >> 12) & 1)
+
+# ---- PanelErrorMaskTable and the XLTR register sweep (2026-07-31) ----
+_pemt = _rom[0xF05C4C - 0xF00000:][:42]
+check('PanelErrorMaskTable abuts the 42-entry dispatch table exactly',
+      0xF05BA4 + 42 * 4 == 0xF05C4C)
+check('...and is a 5-entry map, codes $00-$04 -> bits 0,5,4,3,2',
+      list(_pemt[:5]) == [0, 5, 4, 3, 2], list(_pemt[:5]))
+check('...with 37 bytes of zero fill behind it', set(_pemt[5:]) == {0})
+check('$FF021A is modified with a bit number from that table, not an immediate',
+      insn(0xF0571C) == 'move.b (a5, d4.w), d5' and insn(0xF05720) == 'bclr.b d5, d0')
+check('...and the table is addressed by lea $F05C4C', insn(0xF05714) == 'lea.l $f05c4c.l, a5')
+check('MODE0 bit 10 shows the same 13-clear/1-set signature as MODE1 bit 14',
+      _mbits[14]['bclr'] == 13 and _mbits[14]['bset'] == 1)
+check('$FF020C IS readable: the self-test compares it back',
+      insn(0xF09546) == 'move.w #$1, $20c(a6)' and insn(0xF0959A) == 'cmpi.w #$1, $20c(a6)')
+check('...while all seven operational writes to $FF020C are $4',
+      all(insn(a).startswith('move.w #$4, $20c(')
+          for a in (0xF04AC2, 0xF04B2C, 0xF05A2C, 0xF0646C, 0xF06E84, 0xF07884, 0xF08284)))

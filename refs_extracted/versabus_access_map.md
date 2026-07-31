@@ -20613,3 +20613,147 @@ Consequence for reading the disassembly: **an address in XP4I cannot be mapped t
 counterpart by a single constant.** Use offset 0 below `$F05FC0`, `-$18` above `$F06006`, and
 read the window between by hand. Two panel-code attributions in this project's history went
 wrong on exactly this stretch.
+
+## `XLTR_MODE1` ($FF0202) read out in full — and a matcher that lied twice (2026-07-31)
+
+**59 accesses, of which 21 are read-modify-write pairs.** Collecting the `bset`/`bclr` between
+each read and its matching write gives the register's complete operational bit map:
+
+| bit | operations | reading |
+|---:|---|---|
+| **14** | `bclr` x13, `bset` x1 | control/grant — the firmware **releases** it almost everywhere and takes it once |
+| **12** | `bset` x8, **never cleared** | enable — sticky for the life of the machine |
+| **7** | `bclr` x1, `bset` x1 | **busy**; the pair at `$F050D2`/`$F050E0` is op `$E`, the `XPRUN` primitive |
+| **6** | `bset` x4, never cleared | set by the panel-command issuer copies |
+| **0** | `bset` x1 | |
+
+That confirms the three bits this project already had (7 busy, 12 enable, 14 control) from a
+source none of them came from, and adds **bits 6 and 0**, plus the asymmetries: 12 and 6 are
+never cleared, 14 is cleared thirteen times against one set.
+
+### The methodological part, which matters more than the table
+
+Getting here took two sweeps that **contradicted each other**, and both were wrong the first
+time:
+
+1. **Literal-writes-only sweep.** Matching `move.w #$imm,$202(aN)` found four values —
+   `$1000`, `$2000`, `$8000`, `$8020` — and **no bit operations at all**. The conclusion drawn
+   from it, "MODE1 is a write-only command register with four commands and no read-modify-write",
+   was **exactly backwards**. Nine of those eleven literal writes are in the self-test's register
+   walk; the operational firmware does not write literals to MODE1.
+2. **Bit-op sweep, first attempt.** It returned *nothing*, which briefly looked like
+   confirmation of (1). The bug was matching the mnemonic name inside the **operand string** —
+   capstone keeps `bset.b` in `mnemonic` and only `#$e, d1` in `op_str`, so the pattern could
+   never match. A sweep that returns zero is not evidence until it has been run against a known
+   positive; `$F047DE` `bset.b #$e,d1` was sitting in a hand-decode two steps earlier.
+
+This is the same failure this file records for `$FFxxxx` base-register accesses and for the
+"zero stack releases" claim retracted today: **an absence produced by one matcher shape is a
+property of the matcher.** The rule that catches it every time is to disassemble once into an
+address-keyed map and query *that*, rather than regexing the rendering.
+
+### The one operational whole-word write, and it is XP4I's
+
+`$F06006 move.w #$8020,$202(a5)` — the extra instruction XP4I has and no other XP task has — is
+the **only place outside the self-test that writes MODE1 without reading it first**. Every other
+operational site preserves the bits it does not own. This one sets bits 15 and 5 and clears
+everything else, including the sticky enable at bit 12 and whatever bit 14 state the machine was
+in.
+
+Whether that is a deliberate reset by the highest-numbered channel or a hand-patching slip in
+the template copy cannot be settled from the image. It is, though, a concrete and testable
+divergence: **on a 4-AC machine, XP4I's start-up clobbers XLTR_MODE1 for every other channel.**
+On Lovett's 2-AC chassis `$105E` is 2, XP4I gates itself off before reaching it, and the
+instruction never executes — which is why nothing has ever noticed.
+
+## `PanelErrorMaskTable` at `$F05C4C` decoded — operation -> IRQ-mask bit (2026-07-31)
+
+`$FF021A` (`XLTR_IRQMASK`) is the **most read-modify-written register in the machine**: 50 reads,
+50 matching writes. None of them uses an immediate bit number, which is why an immediate-only
+matcher reported the register as having no bit operations at all. The modify step is:
+
+```
+$F0570E  move.w   $21A(a4),d0        read the IRQ mask
+$F05712  move.w   (a7)+,d4           the operation code, popped
+$F05714  lea      $F05C4C,a5         <- PanelErrorMaskTable
+$F0571A  clr.l    d5
+$F0571C  move.b   (a5,d4.w),d5       table[code] = a BIT NUMBER
+$F05720  bclr.b   d5,d0              clear that bit
+         ...      write back to $21A(a4)
+```
+
+`bclr` with the bit number **in a register**. So the table this project has called
+`PanelErrorMaskTable` since the first pass is an **operation-code → interrupt-source-bit map**,
+and reading it out gives:
+
+| operation code | mask bit cleared |
+|---|---|
+| `$00` | 0 |
+| `$01` | **5** |
+| `$02` | **4** |
+| `$03` | **3** |
+| `$04` | **2** |
+| `$05`-`$29` | 0 (zero fill) |
+
+Raw: `00 05 04 03 02` followed by **37 zero bytes**. It is a five-entry table padded to the
+42-entry width of the dispatch table it abuts (`$F05BA4` + 168 = `$F05C4C` exactly).
+
+Two readings follow, and the image cannot separate them:
+
+- bit 0 is a **generic "panel operation in progress"** source, masked for every operation that
+  is not one of the four with a dedicated source; or
+- the table was written for the first five operations and **never extended**, so codes `$05`+
+  fall into padding and clear bit 0 by accident.
+
+The descending run 5,4,3,2 for codes 1,2,3,4 is orderly enough to look deliberate, and the four
+operations it covers are the parameter-setting ones (`$1` address, `$2` count, `$3` chassis
+memory, `$4` channel validate) — the ones that talk to distinct chassis resources. That favours
+the first reading, but a bus trace with the mask readable would settle it in one capture.
+
+**Emulator consequence**: `$FF021A` must be a genuine read/write latch with per-bit
+granularity, not a write-only strobe. The firmware reads it 50 times and each write depends on
+what came back; a model returning a constant makes every panel operation clear the same bit.
+
+**And the methodological point, for the third time today**: the immediate-only sweep of `$21A`
+returned "no bit operations", which read as "this register is written wholesale". It is the
+opposite — the register is *only* ever bit-manipulated, with a computed bit number. Absences
+found by matching on operand shape are properties of the matcher.
+
+## The XLTR register block, every bit the firmware touches (2026-07-31)
+
+One sweep, decoded into an address-keyed instruction map and queried from there, over all nine
+XLTR registers. Reads counted are `move.w $off(aN),dN`; RMW pairs are a read followed within
+eight instructions by a write of the same register back.
+
+| reg | | reads | RMW pairs | literal writes | bits manipulated |
+|---|---|---:|---:|---:|---|
+| `$200` | MODE0 | 19 | **18** | 1 (`$0000`) | b11 `bset`x4/`bclr`x1; **b10 `bclr`x13/`bset`x1** |
+| `$202` | MODE1 | 37 | **21** | 12 | b14 `bclr`x13/`bset`x1; b12 `bset`x8; b7 `bclr`/`bset`; b6 `bset`x4; b0 `bset` |
+| `$204` | CHANSEL | 3 | 0 | 8 (`$0`,`$1`,`$F`,`$100`,`$101`) | none — whole-word only |
+| `$20C` | COUNTER | — | 0 | 10 (`$4`x7 operational, `$1`/`$FF` self-test) | none |
+| `$210` | MODE2/page | 1 | 0 | 4 (`$0`x2, `$F`x2) | none |
+| `$214` | DATA_LO | 0 | 0 | **0** | never accessed in this form at all |
+| `$216` | page/mux | 3 | **3** | 9 (`$10`/`$20`/`$40`/`$80` probes, `$C0`) | b7 `bclr`; **b4 `bclr`/`bset`** |
+| `$218` | STATUS/IRQ | 22 | 0 | 42 — **only `$0000` x20 and `$0400` x22** | none |
+| `$21A` | IRQMASK | 50 | **50** | 2 (`$0FFF`) | **computed bit number** — see the mask table above |
+
+Several things fall straight out:
+
+- **MODE0 bit 10 and MODE1 bit 14 have the identical 13-clear / 1-set signature.** They are
+  manipulated as a pair — the `$F04930` response handler clears MODE0 bit 11 and sets bit 10,
+  and the same routines that release MODE1 bit 14 release MODE0 bit 10. Treat them as one
+  logical control handed back and forth, not two independent bits.
+- **`$218` is a two-command register**: arm with `$0400`, disarm with `$0000`, nothing else, 42
+  writes between them. Its 22 reads are all the bit-15 poll.
+- **`$214` confirms the standing note** that it never appears standalone: zero accesses through
+  a base register in either direction. Every access to it is the leading half of a 32-bit
+  access paired with `$216`.
+- **`$20C` is readable after all.** The register-to-data-register sweep says zero reads, but
+  `$F0959A` is `cmpi.w #$1,$20C(a6)` — a compare reads memory. The self-test writes `$1` and
+  compares it back; the seven operational writes are all `$4`. This is the fourth time today a
+  "never" turned out to be a matcher shape, and the pattern is always the same: **count access
+  *instructions*, not one addressing form**.
+
+Nothing here contradicts the register table in `CLAUDE.md`; it fills in the bits that table
+left as "manipulated" and supplies the counts an emulator needs to know which bits are sticky
+(MODE1 b12, b6 — set, never cleared) and which are transient.
