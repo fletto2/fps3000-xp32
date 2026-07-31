@@ -5738,6 +5738,24 @@ check('CMR ($3C) at $F03D0C is the LAST dispatch handler in the image',
 check('...so the unreachable candidate lies inside CMR, a directive never issued',
       0xF03D0C < 0xF04230 < 0xF04487)
 
+check('the SCM test selects page 0 and covers $400000-$403FFF',
+      insn(0xF09B24) == 'clr.w $210(a6)' and insn(0xF09B30) == 'lea.l $400000.l, a2'
+      and insn(0xF09B36) == 'lea.l $404000.l, a1')
+check('...at longword stride, with complementary pattern pairs',
+      insn(0xF09B2C) == 'move.w #$4, d2'
+      and [struct.unpack('>I', _rom[0xF09BB6 - 0xF00000 + n * 4:][:4])[0] for n in range(4)]
+          == [0x00000000, 0xFFFFFFFF, 0x55555555, 0xAAAAAAAA])
+check('...writing CHANNEL_SELECT with a sub-phase counter on every element',
+      insn(0xF09B54) == 'move.w d6, $204(a6)' and insn(0xF09B6C) == 'move.w d6, $204(a6)')
+check('...reading back the fill, then writing and reading the complement',
+      insn(0xF09B58) == 'cmp.l (a0), d0' and insn(0xF09B70) == 'move.l d1, (a0)'
+      and insn(0xF09B72) == 'cmp.l (a0), d1')
+check('...and repeating the whole set BACKWARDS via neg.w d2',
+      insn(0xF09BA0) == 'lea.l $403ffc.l, a2' and insn(0xF09BA6) == 'lea.l $3ffffc.l, a1'
+      and insn(0xF09BAC) == 'neg.w d2')
+check('a mismatch reports with the marker $F0F0F0F0 in d7',
+      insn(0xF09B5C) == 'move.l #$f0f0f0f0, d7' and insn(0xF09B62) == 'bsr.w $f089ee')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

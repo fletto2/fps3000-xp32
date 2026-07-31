@@ -599,3 +599,55 @@ catch-all at `$F0A142`. It never executes, so the display gets no periodic traff
 nothing overwrites the init reporter's snapshot.
 
 **The display is a boot-only channel**: `$BF`, then `$C0`, or `$A2` looping on failure.
+
+## SBC ↔ SCM: the whole conversation is one self-test routine (2026-07-31)
+
+`$F09B20`-`$F09BB4` is the only code in the ROM that exercises System Common Memory, so it
+is the complete specification of what the SBC ever says to the **MEM CTL** and **MAIN DATA**
+boards on a machine running stock firmware.
+
+```
+clr.w  $210(a6)              ; XLTR_MODE2 = 0  -> chassis window PAGE 0
+move.w #$4,d2                ; stride, longwords
+lea.l  $400000.l,a2          ; window base
+lea.l  $404000.l,a1          ; ...+ $4000  =  16 KB
+lea.l  $f09bb6.l,a3          ; pattern table
+next:  move.l (a3)+,d0 / move.l (a3)+,d1     ; a PAIR of complementary patterns
+fill:  a0 = a2; move.l d0,(a0); a0 += d2; until a0 == a1
+walk:  a0 = a2
+         move.w d6,$204(a6)                  ; CHANNEL_SELECT <- sub-phase counter
+         cmp.l (a0),d0        ; read back the fill
+         addq.b #$1,d6 / move.w d6,$204(a6)
+         move.l d1,(a0) / cmp.l (a0),d1      ; write the COMPLEMENT, read it back
+         a0 += d2; d6 -= 1; until a0 == a1
+       if d1 != $AAAAAAAA -> next pattern pair
+       else: a2 = $403FFC, a1 = $3FFFFC, neg.w d2   ; ...and repeat DOWNWARD
+```
+
+**The pattern table at `$F09BB6`** is `$00000000 / $FFFFFFFF / $55555555 / $AAAAAAAA`,
+followed by two zero longwords that are never reached (the `$AAAAAAAA` test ends the set).
+
+**What a chassis model owes:**
+
+- **`$400000`-`$403FFF` must be read/write memory that returns exactly what was written**,
+  at longword granularity, with `$FF0210` = 0 selecting page 0. Any bit that does not
+  read back sends the test to `$F089EE` with the marker `$F0F0F0F0` in `d7`.
+- **16 KB is tested, not the whole window.** The SBC never touches SCM beyond `$403FFF`
+  during the self-test, so a model need only back that much for a green boot — though the
+  operational path (chassis op `$3`) can page anywhere.
+- **Every element writes `$FF0204`** with a rolling sub-phase counter. This is a large part
+  of why CHANNEL_SELECT is the hottest register on the board, and it means a chassis model
+  sees heavy CHANNEL_SELECT traffic *during memory testing*, not only during commands.
+- **The test runs forwards and then backwards.** `neg.w d2` with the bounds swapped to
+  `$403FFC`/`$3FFFFC` re-runs every pattern descending, which catches address-line faults a
+  single direction would miss. A model that special-cases ascending access patterns breaks
+  on the second pass.
+
+Access volume works out at roughly `4096 x (1 fill + 3 walk) x 2 pairs x 2 directions` ≈
+**65,000 window accesses**, which is consistent with the ">100k chassis-memory accesses,
+always with MODE2 = 0" already measured from the bus log — two independent routes to the
+same behaviour.
+
+**This is the boundary of the SBC's reach into the array processor.** It talks to SCM
+through the XLTR's paged window; it never addresses the XP-32 EXEC, ARITH or UNIV FMT cards
+at all. The machine's own diagnostics draw exactly the same line.
