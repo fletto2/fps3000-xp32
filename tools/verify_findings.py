@@ -6606,7 +6606,7 @@ check('MODE0 is read-modify-written through a data register, never bit-op\'d in 
       and _w(0xF04528) == 0x3141 and _w(0xF0452A) == 0x0200)
 check('the panel-status ISR clears MODE0 bit 11, latches the word, then sets bit 10',
       _w(0xF0493A) == 0x3028 and _w(0xF0493C) == 0x0200
-      and _w(0xF0493E) == 0x0880 and _w(0xF09340 - 0x9340 + 0x4940) == 0x000B
+      and _w(0xF0493E) == 0x0880 and _w(0xF04940) == 0x000B
       and _w(0xF04942) == 0x33C0 and _l(0xF04944) == 0x00000E86
       and _w(0xF04948) == 0x08C0 and _w(0xF0494A) == 0x000A)
 check('...and exactly the four XP tasks set MODE0 bit 11 in their idle sweep',
