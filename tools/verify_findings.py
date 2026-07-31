@@ -5041,3 +5041,12 @@ check('the raw bulk path has NO record framing and no staging bound',
           if a in _mins))
 check('the CPLOAD path sets the width mux on entry and clears it on completion',
       insn(0xF0550E) == 'bset.b #$4, d2' and insn(0xF05586) == 'bclr.b #$4, d2')
+
+# ---- the S0 header is consumed and discarded (2026-07-31) ----
+check('the S0 handler reads d4 words through the handshake and stores nothing',
+      insn(0xF05194) == 'move.w (a0), d1' and insn(0xF05198) == 'subq.w #$1, d4'
+      and insn(0xF0519A) == 'cmpi.w #$0, d4' and insn(0xF051A0) == 'rts')
+check('...and d1 is never used between iterations',
+      insn(0xF05196) == 'addq.l #$1, d0')
+check('the SLC data handler seeds a1 = $10, matching CPLOAD',
+      insn(0xF051A2) == 'movea.l #$10, a1' and insn(0xF055A2) == 'movea.l #$10, a1')

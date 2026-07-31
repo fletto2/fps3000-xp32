@@ -21894,3 +21894,34 @@ Combined with chassis op `$6` (unbounded 16-bit poke) and the register interface
 the SBC validates channel numbers, array indices and record structure meticulously, and validates
 **addresses almost nowhere**. For an emulator this means address-range faults are not a modelling
 concern on these paths — the hardware would simply do it.
+
+## The S0 header record is consumed and DISCARDED (2026-07-31)
+
+`$F0517E`, the SLC path's `S0` handler, is a pure drain:
+
+```
+$F0517E  move.w  #$400,$218(a5)      arm
+$F05184  move.w  $218(a5),d7 / btst #$f / beq    poll bit 15
+$F0518E  move.w  #$0,$218(a5)        clear
+$F05194  move.w  (a0),d1             read a word...
+$F05196  addq.l  #$1,d0              ...count it...
+$F05198  subq.w  #$1,d4              ...decrement the record's word count
+$F0519A  cmpi.w  #$0,d4 / bne        loop
+$F051A0  rts                         ...and return, having stored NOTHING
+```
+
+`d1` is overwritten each iteration and never read. **The module name and version an S0 record
+carries are read off the wire and thrown away.** A host may put anything there — the firmware
+only consumes the right number of words so the stream stays framed.
+
+That also confirms `d4` is the record's remaining-word count, used identically by the data
+handlers.
+
+**Two small corrections to guard against.** Disassembling from `$F0517E` lets the instruction
+stream drift, and `$F051A2` then renders as `movea.l #$aaaaaaaa,a1`. Decoded from its own
+boundary the bytes are `22 7C 00 00 00 10` = **`movea.l #$10,a1`**, confirming the documented
+`a1 = $10` seed for the SLC data handler — the same seed `$F055A2` uses on the CPLOAD side.
+`$aaaaaaaa` and `$-5556` renderings recur throughout this session's ad-hoc dumps and are always
+this artifact; **`$AAAAAAAA` is also a genuine RAM-test pattern in the self-test**, which is
+exactly why the two must be told apart by re-decoding from a known boundary rather than by
+recognising the value.
