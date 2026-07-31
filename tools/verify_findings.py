@@ -8348,6 +8348,20 @@ check('...and the genuine movep sites are the PTM ones only',
       _w(0xF00FA4) == 0x0308 and _w(0xF0A2C6) == 0x0189 and _w(0xF0A2CE) == 0x0189
       and _w(0xF090F4) == 0x0188 and _w(0xF09156) == 0x0189)
 
+check('phase $0600 tests $1FFF0 with eight LONGWORD patterns',
+      [_l(0xF08E8C + 4*_i) for _i in range(8)]
+      == [0x0010FFFF, 0x009F00FF, 0x0F1F0F0F, 0x33133333,
+          0xAA9AAAAA, 0x55155555, 0xFF9FFFFF, 0x00100000]
+      and _w(0xF08E5E) == 0x7607
+      and _w(0xF08E68) == 0x201C and _w(0xF08E6A) == 0x2A80)
+check('...after filling every vector $10-$3FF with a catch-all rte handler',
+      _w(0xF08E3E) == 0x47F9 and _l(0xF08E40) == 0x00F088FC
+      and _w(0xF08E4C) == 0x45F8 and _w(0xF08E4E) == 0x0010
+      and _w(0xF08E50) == 0x43F8 and _w(0xF08E52) == 0x0400
+      and _w(0xF08E54) == 0x24CB)
+check('...and bit 6 of the $1FFF1 byte is clear in all eight patterns',
+      all(((_l(0xF08E8C + 4*_i) >> 16) & 0x40) == 0 for _i in range(8)))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

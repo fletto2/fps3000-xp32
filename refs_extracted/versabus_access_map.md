@@ -36082,3 +36082,44 @@ it is data. Sixteen of the recorded "276 other bytes" are accounted for here.
 (`0000 rrr1 mm00 1aaa`) overlaps the static `btst`/`bchg`/`bclr`/`bset` and immediate forms, so a
 loose raw pattern returns 69 hits against 8 real ones. The `rts`/`rte` technique worked because those
 opcodes are unique single words; this one is not, and the listing is the better source.
+
+## Phase `$0600` decoded: the VMOD longword pattern test (2026-07-31)
+
+`$F08E38` is the recorded "VMOD longword pattern test", and it is now fully read:
+
+```
+$F08E38  lea $F08E8C.l,a4        ; the pattern table
+$F08E3E  lea $F088FC.l,a3        ; a catch-all handler (move.w #$ffff,d2 / rte)
+$F08E44  move.l a3,$0.w / move.l a3,$4.w
+$F08E4C  lea $10.w,a2 / lea $400.w,a1
+$F08E54  move.l a3,(a2)+ / cmpa.l a1,a2 / bne      ; FILL EVERY VECTOR $10-$3FF
+$F08E5A  ori.w #$700,sr           ; mask to level 7
+$F08E5E  moveq #$7,d3             ; eight patterns
+$F08E68  move.l (a4)+,d0          ; take a LONGWORD
+$F08E6A  move.l d0,(a5) / move.l (a5),d1 / cmp.l d0,d1
+```
+
+**The table is eight LONGWORDS, not twelve words** (my previous entry mis-split it):
+
+| # | pattern | high word | low word | byte landing at `$1FFF1` |
+|---:|---|---|---|---|
+| 0 | `$0010FFFF` | `$0010` | `$FFFF` | `$10` |
+| 1 | `$009F00FF` | `$009F` | `$00FF` | **`$9F`** |
+| 2 | `$0F1F0F0F` | `$0F1F` | `$0F0F` | `$1F` |
+| 3 | `$33133333` | `$3313` | `$3333` | `$13` |
+| 4 | `$AA9AAAAA` | `$AA9A` | `$AAAA` | **`$9A`** |
+| 5 | `$55155555` | `$5515` | `$5555` | `$15` |
+| 6 | `$FF9FFFFF` | `$FF9F` | `$FFFF` | **`$9F`** |
+| 7 | `$00100000` | `$0010` | `$0000` | `$10` |
+
+**Each high word is its low word perturbed in bits 4-6 only** — and the second byte of each longword
+is precisely the value that lands at `$1FFF1`. That confirms the reasoning already in
+`emulator/versabus.c` ("every one of the eight patterns has bit 6 of `$1FFF1` clear, but bit 7 varies
+(`$9F`, `$9A` set it)") **from the table's own structure**: bit 6 is clear in all eight, and bit 7 is
+set in exactly the three marked above.
+
+**The vector fill is a safety idiom worth noting.** Before writing longwords to a live chassis
+register, the routine points **every vector from `$10` to `$3FF`** — plus vectors 0 and 1 — at a
+catch-all `rte` handler, then masks to level 7. Any exception the test provokes lands harmlessly.
+That is 252 vectors rewritten for one test, and it is why a model must tolerate the entire vector
+table being overwritten mid-self-test and restored afterwards.
