@@ -19003,3 +19003,27 @@ a **store** of `d0` counted as a test, and a `beq.b` mnemonic not matching a `be
 **The rule that would have caught all three: before believing a comparison, find the most
 recent write to the register.** `d7` is safe inside these handlers because the convention
 reserves it; `d0` is not, because every error and teardown path reloads it.
+
+### Completeness check: the device map stays closed under the deepest configuration
+
+The configurations that closed the device map at 68 addresses never executed the CP-program
+callback, the channel transaction primitive's success path, or the `USER` notify arm. All
+three now run. Re-checking with the working handler driving 1466 complete channel cycles:
+
+```
+FPS3K_XPIRQ=1 FPS3K_CHCMD=C000 FPS3K_POKE=<the 16-byte handler>
+  -> [done] unmapped chassis accesses: 0 reads, 0 writes  (address map complete for this run)
+```
+
+**No new device address appears.** That matters because it is the first configuration in
+which the deepest paths execute — if the firmware touched a register only while servicing a
+completed transaction, this is the run that would have found it, and it did not.
+
+So the 68-address map holds against every path this project can reach. What remains outside
+it is unchanged and structural: the EU and AU, which the SBC cannot address at all (the
+self-test's own board coverage draws the same boundary), and the counterpart card's
+behaviour, which is not in this ROM.
+
+*Method note:* the `FPS3K_ACCESSLOG` file is not a device list — a regex for six-hex-digit
+tokens over it returns ~120,000 "addresses" because it logs RAM as well. The authoritative
+signal is the emulator's own unmapped counter, which is what the line above reports.
