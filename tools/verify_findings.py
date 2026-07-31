@@ -5671,6 +5671,19 @@ check('the model reproduces the MEASURED $0020,$0030,$0013,$0033 for code $C0',
 check('an init failure ($A2) produces the same data pair as the 1 Hz heartbeat',
       _disp(0xA2, 0x10)[2:] == [0x15, 0x35] and insn(0xF009FC) == 'move.w #$15, $4(a1)')
 
+# --- the bus-error recovery protocol ---------------------------------------
+check('the guard is continuation + marker = 6 bytes, and there are 7 sites',
+      sum(1 for x in (0xF01F04, 0xF03E3E, 0xF09D12, 0xF0A294, 0xF0A3A2, 0xF0A418, 0xF0A44E)
+          if insn(x) == 'move.w #$4245, -(a7)') == 7)
+check('...and the handler offsets fall out of the 68000 group-0 frame size',
+      14 + 4 == 0x12 and 14 + 6 == 0x14
+      and insn(0xF00D00) == 'cmpi.w #$4245, $12(a7)'
+      and insn(0xF00D0C) == 'adda.l #$14, a7')
+check('vector 2 in the static table is $F00AD8, which reaches the check',
+      insn(0xF00B30) == 'bne.w $f00d00')
+check('...and a missing marker falls through to the kernel-fatal snapshot',
+      insn(0xF00D08) == 'bsr.w $f00186')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

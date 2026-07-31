@@ -26809,16 +26809,51 @@ Immediately afterwards, `$F0A2F4` installs the scheduler stack, `$F0A2F8` writes
 code **`$C0`** to the display, and `$F0A300`/`$F0A304` perform the documented `rts`-indirect
 handoff into the RTOS.
 
-### A second use of the `'BE'` sentinel — and the two frames are not the same
+### The `'BE'` guard is the firmware's BUS-ERROR RECOVERY protocol
 
-`$4245` is pushed here as a 6-byte guard (`pea` + word) around the PTM access. The check at
-`$F00D00` tests `$12(a7)` and releases **20** bytes, so it belongs to a different, larger
-frame. The sentinel is a convention used at both sites rather than one frame spanning them.
+An earlier draft of this section said the 6-byte guard here and the 20-byte check at
+`$F00D00` "belong to different frames". **They are the same frame** — I had not accounted
+for the exception frame the CPU itself pushes:
 
-This frame is never released: `$F0A2F4` does `movea.l $c08.w,a7`, replacing the stack
-pointer outright, so the guard and its continuation are simply abandoned once initialisation
-succeeds. That is correct — the continuation exists only to catch a fault *during* the PTM
-writes — but it means a model must not expect a matching pop.
+```
+guard pushed by the caller : 4 (continuation address) + 2 ($4245)   =  6
+68000 group-0 frame pushed by the CPU on a bus error                = 14
+                                                              total = 20 = $14
+canary offset seen by the handler                        = 14 + 4   = 18 = $12
+```
+
+`$F00D00` tests exactly `$12(a7)` and releases exactly `$14`. Both numbers fall out of the
+68000's own frame size; neither is arbitrary.
+
+**The full protocol:**
+
+1. A caller about to touch something that may not answer pushes a **continuation address**
+   and the marker `$4245`.
+2. It performs the risky access.
+3. On success it drops the guard — `addq.l #$6,a7`, or by replacing `a7` outright.
+4. On a bus error, vector 2 (`$F00AD8` in the static table) runs; `$F00B30` branches to
+   `$F00D00`, which checks for the marker. **Found** → `adda.l #$14,a7` and `rts`, resuming
+   at the continuation with the fault absorbed. **Not found** → `bsr $F00186`, the
+   kernel-fatal snapshot.
+
+**Seven guarded sites**, each `pea`/`move.l` of a continuation followed by the marker:
+
+| site | continuation | guarding |
+|---|---|---|
+| `$F01F04` | `$F01EA4` | |
+| `$F03E22` region | `$F03E48` | a byte read through a caller-supplied pointer |
+| `$F09D12` | `$F0A306` | → the init-failure reporter |
+| `$F0A294` | `$F0A2EC` | the **MC6840 programming** |
+| `$F0A3A2` | `$F0A3F6` | |
+| `$F0A418` | `$F0A404` | |
+| `$F0A44E` | `$F0A4BC` | |
+
+**This is why the Musashi frame-format patch mattered.** This project patched the vendored
+core to push a **68000-format 7-word** bus-error frame instead of the 68010 format it was
+hard-coded for, and recorded it as a divergence fix. The mechanism is now explicit: with a
+58-byte 68010 frame, `$12(a7)` is not the marker, every guarded access on the machine
+fails its check, and each one turns a recoverable probe into `PCMD_KERNEL_FATAL`. The patch
+was not cosmetic — **seven recovery paths depend on the frame being exactly 14 bytes.**
 
 ## The TDTI record decoded field by field (2026-07-31)
 
