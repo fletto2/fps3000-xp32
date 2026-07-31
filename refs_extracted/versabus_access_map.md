@@ -25343,3 +25343,50 @@ all; it is allocated at task creation, which is why all six stack blocks are two
 **For emulation the task-creation model needs exactly three per-task values**, and the remaining
 82 bytes of each record can be treated as a fixed template. That is a much smaller surface than a
 96-byte structure suggests.
+
+## The directive-issue census confirms 14, after a false positive of my own making (2026-07-31)
+
+Building an adjacency test — "an immediate loaded into `d0` counts as a directive only if a
+`trap #1` follows" — and running it over the whole image first produced **16** distinct
+directives, including `$02` and `$03`, which the documented list of 14 does not contain.
+
+**Both were false positives, and the sites show why:**
+
+```
+$F0745C  move.w #$2,d0          <- XP2I's CHANNEL NUMBER
+$F07460  jsr    $F07AAA         <- passed to a helper
+$F07466  move.w #$2,$1062       <- the channel again
+$F0746E  moveq  #$2B,d0         <- the ACTUAL directive
+$F07474  trap   #$1
+```
+
+The window walked **through the intervening `jsr`** and paired the channel number with a `trap`
+belonging to a later, unrelated load. `$03` is the same thing in XP3I. The first test broke on
+`bra`/`jmp`/`rts`/`rte` but not on `jsr`/`bsr`, and did not notice `d0` being reloaded.
+
+Tightening it — break on **any** control transfer, and on **any reload of `d0`** — gives:
+
+| directive | sites |
+|---|---:|
+| `$2B` SGSEM, `$2D` CRSEM | 9 each |
+| `$0F` TERM, `$13` WAIT, `$4C` CNCTIRQ | 6 each |
+| `$10` TERMT, `$12` RESUME | 5 each |
+| `$11` SUSPND, `$43` RSTATE | 4 each |
+| `$01` GTSEG | 2 |
+| `$0B` CRTCB, `$0D` START, `$29` ATSEM, `$2A` WTSEM | 1 each |
+
+**Exactly 14 distinct directives, every one already named, matching the documented list
+precisely.** The site count of 60 sits inside the documented "71 sites, 65 resolvable" — the
+difference being issues whose `d0` arrives by a route this strict test rejects.
+
+### The lesson, which this session has now met from both directions
+
+Earlier scans failed by being **too narrow** — literal-only, immediate-only, absolute-only — and
+reported things as absent that were present. This one failed by being **too wide**, and reported
+directives as present that were not. The fix in both cases is the same discipline: **decide what
+the pattern must exclude, not only what it must include**, and test the result against a
+known-good set before believing it.
+
+Here the known-good set existed — the documented 14 — and disagreement with it is what prompted
+the check rather than a new finding being written down. **A census that contradicts an
+established figure should be suspected before the figure is.**

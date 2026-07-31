@@ -5756,6 +5756,31 @@ check('...and every other longword is zero',
               for k in range(0, 96, 4)
               if k not in (0x00, 0x04, 0x14, 0x18, 0x1C, 0x20, 0x24, 0x40, 0x44))
           for r in _tdti))
+
+# ---- the directive-issue census, strictly (2026-07-31) ----
+_XFER = ('bra', 'jmp', 'rts', 'rte', 'jsr', 'bsr', 'bcc', 'bne', 'beq',
+         'blt', 'bgt', 'ble', 'bge', 'bmi', 'bpl')
+_iss = _mcol.Counter()
+for _ix, _a in enumerate(_dadr):
+    _m, _o, _ = _mins[_a]
+    _mm = _mre.match(r'#\$([0-9a-f]+), d0$', _o)
+    if not (_mm and _m.split('.')[0] in ('move', 'moveq')): continue
+    for _k in range(_ix + 1, min(_ix + 8, len(_dadr))):
+        _m2, _o2, _ = _mins[_dadr[_k]]
+        if _m2.split('.')[0] in _XFER: break
+        if _o2.endswith(', d0') and _m2.split('.')[0] in ('move', 'moveq', 'clr'): break
+        if _m2 == 'trap':
+            if _o2 == '#$1': _iss[int(_mm.group(1), 16)] += 1
+            break
+check('exactly 14 distinct TRAP #1 directives are issued', len(_iss) == 14,
+      sorted(hex(n) for n in _iss))
+check('...and every one is already named',
+      set(_iss) == {0x01, 0x0B, 0x0D, 0x0F, 0x10, 0x11, 0x12, 0x13,
+                    0x29, 0x2A, 0x2B, 0x2D, 0x43, 0x4C})
+check('SGSEM and CRSEM are the most-issued, nine sites each',
+      _iss[0x2B] == 9 and _iss[0x2D] == 9)
+check('...and $02/$03 are NOT issued -- they are channel numbers, not directives',
+      0x02 not in _iss and 0x03 not in _iss)
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')
