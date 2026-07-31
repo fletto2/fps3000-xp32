@@ -5695,6 +5695,23 @@ check('...and its fault continuation rounds UP TO THE NEXT PAGE and retries',
 check('...re-guarding the single-longword probe, so bad pages are skipped one by one',
       insn(0xF0A414) == 'pea.l $f0a404(pc)' and insn(0xF0A41C) == 'move.l d0, (a3)+')
 
+# --- dead code proven dead, not assumed -------------------------------------
+check('$F0A490 is an unconditional bra that jumps over the VMOD caching',
+      _rom[0xF0A490 - 0xF00000:0xF0A492 - 0xF00000] == b'\x60\x1c'
+      and insn(0xF0A490) == 'bra.b $f0a4ae')
+check('...so $0E48 has ONE writer and it is unreachable',
+      insn(0xF0A492) == 'move.l a2, $e48.l'
+      and not [x for x in range(0xF00000, 0xF10000, 2)
+               if 'f0a492' in (insn(x) or '') and (insn(x) or '')[0] in 'bjd'])
+check('...and the $CD0/$CF0 handshake is entered only by its own loop-back',
+      [x for x in range(0xF00000, 0xF10000, 2)
+       if 'f0a498' in (insn(x) or '') and (insn(x) or '')[0] in 'bjd'] == [0xF0A4AC])
+check('one $0E48 reader guards against null, the other does not',
+      insn(0xF008BA) == 'move.l $e48.w, d0' and insn(0xF008BE) == 'beq.b $f008d4'
+      and insn(0xF009DE) == 'movea.l $e48.w, a0' and insn(0xF009E2) == 'andi.w #$ffdf, (a0)')
+check('...but the unguarded one is vector $93, inside the override range',
+      insn(0xF0A14A) == 'movea.l #$124, a0' and 0x124 <= 0x93 * 4 <= 0x3F0)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
