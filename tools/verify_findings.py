@@ -8333,6 +8333,14 @@ check('...and the image holds 231 rts and 203 rte opcodes',
       and sum(1 for _i in range(0, len(_rom_bytes) - 1, 2)
               if _rom_bytes[_i] == 0x4E and _rom_bytes[_i+1] == 0x73) == 203)
 
+check('the firmware never executes reset, stop, trapv, rtr, illegal or movec',
+      all(sum(1 for _i in range(0, len(_rom_bytes) - 1, 2)
+              if (_rom_bytes[_i] << 8 | _rom_bytes[_i+1]) == _op) == 0
+          for _op in (0x4E70, 0x4E72, 0x4E76, 0x4E77, 0x4AFC, 0x4E7A, 0x4E7B)))
+check('...with tas present at exactly six sites (the control)',
+      sum(1 for _i in range(0, len(_rom_bytes) - 1, 2)
+          if _rom_bytes[_i] == 0x4A and (_rom_bytes[_i+1] & 0xC0) == 0xC0) == 6)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

@@ -36011,3 +36011,40 @@ different question. It works because these opcodes are single words with no oper
 an even offset is either an instruction or a coincidence inside data — and here the only coincidence
 turned out to be a deliberate one. The technique does not generalise to opcodes with operands, where
 raw hits would be dominated by false positives.
+
+## Opcodes the firmware never executes — a census with controls (2026-07-31)
+
+| opcode | count | |
+|---|---:|---|
+| `rts` **control** | 231 | |
+| `nop` **control** | 129 | |
+| `tas` **control** (`$4Ac0`-`$4Aff`) | 6 | the `T0P`/`T0V` spinlock |
+| **`reset`** `$4E70` | **0** | |
+| **`stop`** `$4E72` | **0** | |
+| `trapv` `$4E76` | 0 | |
+| `rtr` `$4E77` | 0 | |
+| `illegal` `$4AFC` | 0 | |
+| `movec` `$4E7A`/`$4E7B` | 0 | |
+
+Three controls fire before any zero is believed, including a positive for `tas` at exactly the six
+sites the semaphore primitives need.
+
+**Four consequences for a model:**
+
+1. **`reset` is never executed, so its peripheral-reset side effect need not be implemented at all.**
+   The firmware never asserts the bus RESET line — every device it initialises, it initialises by
+   writing registers. This is worth knowing because `reset` on a real board would re-initialise the
+   PTM, the SIO and the BIMs simultaneously, and nothing in this ROM ever does that.
+2. **`stop` is never executed either.** The monitor's `mon_dead` uses `stop #$2700`, but that is
+   monitor code, not this image — so in the stock firmware **a halted machine is always a spin loop
+   or a double fault, never a stopped CPU**. That distinguishes two failure modes at a glance.
+3. **`movec` is absent**, confirming a pure MC68000 target with no 68010+ control-register use — which
+   is consistent with the Musashi core needing the 68000-format bus-error frame rather than the
+   68010's.
+4. `trapv`, `rtr` and `illegal` are all unused, so the overflow, CCR-restoring-return and
+   deliberate-illegal paths need no support.
+
+**On `illegal` specifically:** its absence means every illegal-instruction exception this firmware
+can take is a genuine fault, never an intentional trap — so a model raising vector 4 is always
+reporting a real problem, and the `PCMD_EXCEPTION_ILLEGAL_INSTRUCTION` reporter at `$2A0` never fires
+by design.
