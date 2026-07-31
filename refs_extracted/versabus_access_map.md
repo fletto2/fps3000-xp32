@@ -25100,3 +25100,62 @@ write them.
 **The one genuinely odd entry is vector 31**, autovector level 7, pointing at **`$000001`** — an
 odd address, which would raise an address error if ever taken. Level 7 is non-maskable on a 68000,
 so this is the entry a stuck NMI would use, and it is deliberately aimed at a fault.
+
+## A second fan-in table, and the trace handler is a SINGLE-STEP (2026-07-31)
+
+The addresses the static vector table installs are not handlers — they are entries in a **second
+`bsr` fan-in table**, built exactly like the 16-way TRAP one at `$F00A74`:
+
+```
+$F00AD8  bsr.b $F00B2A     vector 2  bus error
+$F00ADA  bsr.b $F00B34     vector 3  address error
+$F00ADC  bsr.b $F00B10     vector 4  illegal
+$F00ADE  bsr.b $F00B10     vector 5  divide by zero
+$F00AE0  bsr.b $F00B10     vector 6  CHK
+$F00AE2  bsr.b $F00B10     vector 7  TRAPV
+$F00AE4  bsr.b $F00B10     vector 8  privilege
+$F00AE6  bsr.b $F00B10     vector 10 line A
+$F00AE8  bsr.b $F00B10     vector 11 line F
+$F00AEA  nop / nop
+$F00AEE  bsr.b $F00AF2     vector 9  TRACE
+```
+
+**Nine two-byte entries fanning into three handlers**: `$F00B10` for the seven ordinary
+exceptions, `$F00B2A`/`$F00B34` for bus and address error, and `$F00AF2` for trace. So the kernel
+implements twelve exception vectors in thirty bytes of table plus three bodies — the same
+space-saving idiom as the TRAP fan-in, and now clearly a house style rather than a one-off.
+
+### The trace handler clears T and resumes — that is a single-step
+
+```
+$F00AF2  move.w $4(a7),-(a7)     the stacked SR
+$F00AF6  andi.b #$7F,(a7)        mask the system byte
+$F00AFA  addq.l #$2,a7
+$F00AFC  beq.b  $F00B4E          came from USER mode -> elsewhere
+$F00AFE  btst.b #$D,$4(a7)
+$F00B04  bne.w  $F00D14
+$F00B08  addq.l #$4,a7
+$F00B0A  bclr.b #$F,(a7)         CLEAR THE TRACE BIT in the stacked SR
+$F00B0E  rte
+```
+
+`bclr.b #$F,(a7)` is bit 7 of the byte at `(a7)` under the mod-8 rule — **bit 15 of the stacked
+SR, the T bit**. So the handler **turns tracing off and resumes**.
+
+**That completes the single-step facility.** `$F005BA` dispatches a task with T set; exactly one
+instruction executes; the trace exception fires; `$F00AF2` clears T and returns. One instruction
+per dispatch, which is precisely single-step semantics — and to step again the scheduler must take
+the traced exit again.
+
+So an emulator supporting host-side debugging of a CP program needs the trace exception to fire
+**once** after the traced instruction and must let the handler clear the stacked T bit. Both are
+standard, but the second is the part a model that reconstructs SR rather than honouring the
+stacked copy would get wrong.
+
+### And the user-mode test is a house idiom
+
+`move.w $4(a7),-(a7)` / `andi.b #$7F,(a7)` — push a copy of the stacked SR, mask the system byte,
+test — appears in **both** fan-in handlers (`$F00A96` for the TRAPs, `$F00AF2` for trace) and in
+TRAP #0's dispatcher at `$F001AE`, which this project documents as "what makes TRAP #0 a
+supervisor-only executive interface". It is the kernel's standard "did this come from user mode?"
+test, used three times, and recognising it saves decoding it again.

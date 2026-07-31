@@ -5646,6 +5646,21 @@ check('...which the FPS layer overrides, so the snapshot is dead in this configu
       insn(0xF0A27A) == 'move.w #$2a6, d0')
 check('vector 31 (autovector 7) points at the ODD address $000001',
       _vd[31] == 0x000001 and (_vd[31] & 1) == 1)
+
+# ---- a second bsr fan-in, and trace is a single-step (2026-07-31) ----
+check('the exception vectors fan in through nine two-byte bsr entries',
+      all(insn(0xF00AD8 + 2 * k).startswith('bsr.b') for k in range(9)))
+check('...seven of them sharing one handler at $F00B10',
+      sum(1 for k in range(9) if insn(0xF00AD8 + 2 * k) == 'bsr.b $f00b10') == 7)
+check('...with bus and address error taking their own',
+      insn(0xF00AD8) == 'bsr.b $f00b2a' and insn(0xF00ADA) == 'bsr.b $f00b34')
+check('the TRACE entry sits past two nops and calls $F00AF2',
+      insn(0xF00AEE) == 'bsr.b $f00af2' and insn(0xF00AEA) == 'nop')
+check('the trace handler CLEARS the stacked T bit and resumes -- a single-step',
+      insn(0xF00B0A) == 'bclr.b #$f, (a7)' and insn(0xF00B0E) == 'rte')
+check('the user-mode test idiom appears in both fan-in handlers',
+      insn(0xF00AF2) == 'move.w $4(a7), -(a7)' and insn(0xF00AF6) == 'andi.b #$7f, (a7)'
+      and insn(0xF00B10) == 'move.w $4(a7), -(a7)')
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')
