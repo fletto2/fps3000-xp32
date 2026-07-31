@@ -7549,6 +7549,12 @@ check('$F0A57E is the panel-command issuer, byte-identical to $F04500',
       all(_w(0xF0A57E + 2 * _i) == _w(0xF04500 + 2 * _i) for _i in range(6))
       and _w(0xF0A57E) == 0x33C0 and _l(0xF0A580) == 0x00000E6E)
 
+check('"PanelErrorMaskTable" holds the channel -> $FF021A bit map, not error masks',
+      [_rom_bytes[0xF05C4C - 0xF00000 + _i] for _i in range(6)] == [0, 5, 4, 3, 2, 0])
+check('...and all five copies are byte-identical over those six bytes',
+      all([_rom_bytes[_a - 0xF00000 + _i] for _i in range(6)] == [0, 5, 4, 3, 2, 0]
+          for _a in (0xF05C4C, 0xF0668C, 0xF070A4, 0xF07AA4, 0xF084A4)))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

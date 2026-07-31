@@ -33000,3 +33000,40 @@ issuer's opening, not a table's.
 This is the same hazard the project already documented once, where a rename was made in the
 generators but the outputs were not regenerated for three days. The generated listings and the
 notes have drifted again on this label.
+
+## `PanelErrorMaskTable` is a misnomer — it is the channel → `$FF021A` bit map (2026-07-31)
+
+The application listing names `$F05C4C` `PanelErrorMaskTable`. Its contents are:
+
+```
+$F05C4C:  00 05 04 03 02 00
+```
+
+which is **exactly** the channel-to-interrupt-mask-bit map this project documents at `$F084A4`:
+**channel 1 → bit 5, 2 → bit 4, 3 → bit 3, 4 → bit 2**. It is not an error mask.
+
+**There are five copies, and they are byte-identical over those six bytes:**
+
+| copy | address |
+|---|---|
+| RDHC | `$F05C4C` |
+| XP4I | `$F0668C` |
+| XP3I | `$F070A4` |
+| XP2I | `$F07AA4` |
+| XP1I | `$F084A4` |
+
+This project records the table as being "byte-identical in all four tasks (not a patched
+constant)". It is **five** — RDHC has one too, and RDHC's is the copy carrying the wrong label. The
+bytes after the sixth differ (`00 00` in RDHC, `0C 40` in the XP tasks), so the table proper is
+six bytes and what follows belongs to something else.
+
+It is `lea`'d into `a5` at six or more sites inside RDHC's transaction handlers, which is
+consistent with its real role: the transaction teardown needs the channel's mask bit, and the
+table is the lookup.
+
+**Three misnomers are now known in the generated listings** — `TCBDefinitionTable` at `$F0A57E`
+(really the eighth panel-command issuer), `PanelErrorMaskTable` here, and the historical
+`ROMChecksumTest` at `$F08DF8` that this project already renamed to `BoardStatusPoll_3F11`. The
+pattern is the same in each: an early guess became a label, the label became evidence, and the
+evidence outlived the guess. `PanelStatusDispatch` and `PanelSendAndWait` are noted elsewhere as
+similarly provisional names; this is the third to be checked against its own bytes and fail.
