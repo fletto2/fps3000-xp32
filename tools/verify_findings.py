@@ -7488,6 +7488,22 @@ check('...translates it, loads the saved register frame, and jsr (a5)',
 check('...then clears $0C62, one of its five clear sites',
       _w(0xF03A0A) == 0x42B8 and _w(0xF03A0C) == 0x0C62)
 
+check('$40 calls the $0D helper with a pair from +$8/+$C, status 7 on failure',
+      _t1slot(0x40)[0] == 0xF034B4
+      and _w(0xF034B6) == 0x206C and _w(0xF034B8) == 0x0008
+      and _w(0xF034BA) == 0x222C and _w(0xF034BC) == 0x000C
+      and _bsrw(0xF034BE) == 0xF016FE
+      and _w(0xF034C4) == 0x5E6E and _w(0xF034C6) == 0x0102)
+check('$41 requires the ownership bit and reports status $A when it is clear',
+      _t1slot(0x41)[0] == 0xF03570
+      and _w(0xF03572) == 0x082A and _w(0xF03574) == 0x0006 and _w(0xF03576) == 0x0029
+      and _w(0xF0357A) == 0x066E and _w(0xF0357C) == 0x000A)
+check('$42 updates TCB+$148 keeping caller bits 0-2 and kernel bits 3-5',
+      _t1slot(0x42)[0] == 0xF035C6
+      and _w(0xF035C6) == 0x1028 and _w(0xF035C8) == 0x0148
+      and _w(0xF035D0) == 0x0200 and _w(0xF035D2) == 0x0038
+      and _w(0xF035D4) == 0x0228 and _w(0xF035D6) == 0x0007)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

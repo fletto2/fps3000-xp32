@@ -32783,3 +32783,55 @@ the `jsr`. Two things the register-frame work adds:
 
 Both gates remain shut on this machine: the key exists only as that one `cmpi.l` operand, and
 `$0C04` has no writer anywhere in the image.
+
+## The task-state directive family `$40`-`$42` (2026-07-31)
+
+### `$40` — a lookup through the `$0D` helper
+
+```
+$F034B6  movea.l $8(a4),a0     ; parameter +$8
+$F034BA  move.l  $c(a4),d1     ; parameter +$C
+$F034BE  bsr.w   $F016FE       ; TRAP #0 $0D's routine
+$F034C4  addq.w  #$7,$102(a6)  ; status 7 on failure
+```
+
+`$F016FE` is the routine this project identifies as TRAP #0 directive `$0D`. `$40` passes it a pair
+from parameter-block offsets `+$8`/`+$C` — the same `{name, session}` shape used throughout — and
+reports **status 7** when it fails.
+
+### `$41` requires ownership, and status `$A` means "not owned"
+
+```
+$F03572  btst.b #$6,$29(a2)     ; the OWNERSHIP flag
+$F03578  bne.b  $F03582
+$F0357A  addi.w #$a,$102(a6)    ; status $A
+$F03580  rte
+```
+
+This is the second consumer of the ownership bit identified today, and it gives the status code a
+meaning: **`$A` = "the target has no registered owner"**, distinct from `$9` (privilege refusal)
+and `$E` ("vector has no owner"). The kernel's 1..16 status space keeps resolving into specific
+refusals rather than generic errors.
+
+### `$42` is a masked update of `TCB+$148`
+
+```
+$F035C6  move.b $148(a0),d0          ; the OLD byte
+$F035CA  move.l $8(a4),$148(a0)      ; overwrite from parameter +$8
+$F035D0  andi.b #$38,d0              ; keep bits 3,4,5 of the OLD
+$F035D4  andi.b #$7,$148(a0)         ; keep bits 0,1,2 of the NEW
+$F035DA  or.b   d0,$148(a0)          ; recombine
+```
+
+So a caller may set **only bits 0-2**; **bits 3-5 are preserved** across the update. Combined with
+the single-step finding earlier today, `TCB+$148`'s low byte partitions cleanly:
+
+| bits | owner |
+|---|---|
+| 0-2 | **caller-settable** via directive `$42` |
+| 3-5 | **kernel-reserved**, preserved across `$42` |
+| 7 | the **one-shot single-step enable**, armed at `$F00D3E`, consumed at `$F005A8` |
+
+That is a well-behaved permission split — a directive that lets a task configure part of a byte
+while the kernel keeps the rest, which is exactly what one wants when a debug enable shares a word
+with task-settable options.
