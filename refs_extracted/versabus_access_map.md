@@ -20382,3 +20382,45 @@ fields agree not because they are the same list but because one is a fossil of t
 `$0C10` via `+$0C`. `$0C10` is the *all-tasks* head, whose link is `+$04`; the walk only
 succeeds because the stale `+$0C` values happen to match. Corrected to use `+$04`, with the
 `+$0C` coincidence asserted separately so the fossil is documented rather than relied on.
+
+## The configuration block at `$F0A4EE`, read out in full (2026-07-30)
+
+Every field the RTOS-init pass consumes, with its value in this image and the site that reads
+it. This is the machine's build-time personality: change a longword here and the firmware
+brings up a different machine.
+
+| field | value | read at | what it selects |
+|---|---|---|---|
+| `$F0A4EE` | `$00000000` | `$F09D3E`, `$F09E36` | session / initial-task option |
+| `$F0A4F2` | `$00F08700` | `$F09E3C` | **self-test entry** |
+| `$F0A4F6` | `$00F00100` | `$F09C6C`, `$F09C96` | kernel base for the relocator |
+| `$F0A4FA` | `$00F04600` | `$F09D26` | **application base** (= RDHC, the first task) |
+| `$F0A4FE` | `$00000C00` | `$F09C2A` | kernel global base |
+| `$F0A502` | `$00000000` | `$F09E42` | |
+| `$F0A506` | `$00000000` | `$F09C38` | display/console device — zero, hence no console |
+| `$F0A512` | `$00F00100` | `$F0A300` | kernel entry after init |
+| `$F0A516` | `$00000001` | `$F09E6E` | |
+| `$F0A51A` | `$00000002` | `$F09EB4` | |
+| `$F0A51E`/`$F0A522`/`$F0A526` | `$1`/`$1`/`$1` | `$F09FE6`/`$F09F98`/`$F0A016` | structure page counts |
+| `$F0A52A` (word) | `$0000` | `$F0A048` | **kernel trace enable — off** |
+| `$F0A52C` | `$00F70000` | | device base |
+| `$F0A530` (word) | `$000A` | `$F0A2B0`, and `$F0A35E` by displacement | |
+| `$F0A532` (word) | `$0002` | `$F09E4E` | **scheduler quantum = 2 ticks = 20 ms** |
+| `$F0A53E` | `$00000000` | `$F09E2A` | |
+| `$F0A542` | `$00F000BC` | `$F09C32`, `$F09E48` | kernel dispatch entry |
+| `$F0A546` | `$00000000` | `$F09C66` | **relocation disable** |
+| `$F0A54A` | `$00000000` | `$F09D16`, `$F0A452` | RAM region descriptor base |
+| `$F0A550` | | `$F09D22`, `$F0A456` (displacement `$6(a1)`) | RAM top |
+
+**Methodological caution, and it is the same one this file records three times already.** A
+pc-relative-only sweep of this block flags six longwords "never read". Four of those are
+**misaligned views of word-sized fields that are read** (`$F0A52E` overlaps `$F0A530`;
+`$F0A536`/`$F0A53A` overlap the page counts; `$F0A552` overlaps `$F0A550`), and one,
+`$F0A550`, is read **only through a displacement** (`lea $F0A54A(pc),a1` / `move.l $6(a1),d0`)
+which a pc-relative regex cannot see — exactly the base-register blindness that produced six
+"never accessed" false negatives on `$FFxxxx` earlier in this project.
+
+After both passes, **two longwords are genuinely unread by any form: `$F0A50A` and
+`$F0A50E`**, both zero, both sitting between the display selector and the kernel entry. Two
+reserved configuration slots is the natural reading, and unlike the six false negatives it
+survives the sweep that killed them.
