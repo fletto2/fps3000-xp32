@@ -21838,3 +21838,59 @@ Both then converge: `adda.l #$10000,a1`, the same staging offset, and the same
 destination rule** — which is why this project found the same arithmetic implemented twice and
 could treat the agreement as a check on the arithmetic. The agreement is real; the redundancy is
 not.
+
+## There are exactly THREE upload transports, and they are now fully separated (2026-07-31)
+
+The microcode-staging path has been documented as one pipeline with two S-record implementations.
+Tracing every entry point shows it is really **three transports sharing one destination rule**:
+
+### 1. SLC — ASCII S-records, one character per handshake
+
+```
+$F04B68  arm $FF0218 = $400 / poll bit 15 / clear      the record-type dispatcher
+$F04B7E  move.w (a0),d2                                one word from the FIFO port
+$F04B82  jsr $F05150                                   ASCII hex -> binary
+$F04B8A  cmpi.w #$5330,d1 -> $F0517E                   'S0'
+$F04B9A  cmpi.w #$5331,d1 -> d5 = 8, jsr $F051A2       'S1', 2-byte address
+         ...                                          S2/S3 via the $F05256 width decoder
+```
+
+Handlers: `$F0517E` (S0), `$F051A2` (S1 data), `$F05256` (address width), `$F05298` (address
+assembly). Every byte costs a full `$FF0218` arm/poll/clear cycle.
+
+### 2. CPLOAD — binary S-records from chassis memory
+
+`$F05502`, RDHC host command 4, dispatching `$5330`-`$5333` and reading **binary words with
+post-increment** from the `$400000` window, page 0, seeded by `$F0531C`. No ASCII conversion, 16
+bits of address per read. Sets `$FF0216` bit 4 (the width mux) on entry and clears it on
+completion.
+
+### 3. Raw bulk — no S-records at all
+
+`$F04AE2`: arm `$FF0218 = $400`, poll bit 15, clear, then `move.w (a0),(a1)+` with
+`a0 = $FF0008` and `a1 = $E58`, repeated `$E64` times. Gated on a `CHANNEL_SELECT` readback of
+`$28`. This is chassis operation `$0`'s third arm, and it carries **no record structure whatever**
+— just words to an address the chassis programmed with ops `$1` and `$2`.
+
+### What they share, and what they do not
+
+| | SLC | CPLOAD | bulk |
+|---|---|---|---|
+| encoding | ASCII hex | binary | raw binary |
+| source | FIFO port, no increment | `$400000` window, post-increment | `$FF0008` |
+| framing | S-records | S-records | none |
+| destination rule | `$10 + addr + $10000` | `$10 + addr + $10000` | `$E58`, chassis-programmed |
+| bound `$10000`-`$1FFFF` | enforced | enforced | **not enforced here** |
+| per-word handshake | yes | no | yes |
+
+**The bound is the important asymmetry.** The staging range is enforced by the two S-record paths
+and by chassis op `$8`'s precondition — three enforcers, as recorded — but the **raw bulk path
+writes wherever `$E58` points**, and `$E58` is set by chassis op `$1` with no range check at all.
+So the "three independent enforcers" protect the *record* paths; the bulk path is unguarded, and
+it is the one that moves the most data.
+
+Combined with chassis op `$6` (unbounded 16-bit poke) and the register interface, that is now the
+**third** unbounded write primitive the chassis holds. The consistent picture across all of them:
+the SBC validates channel numbers, array indices and record structure meticulously, and validates
+**addresses almost nowhere**. For an emulator this means address-range faults are not a modelling
+concern on these paths — the hardware would simply do it.

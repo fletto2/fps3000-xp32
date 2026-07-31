@@ -5027,3 +5027,17 @@ check('both apply the same +$10000 staging offset',
       insn(0xF052D0) == 'adda.l #$10000, a1' and insn(0xF055C4) == 'adda.l #$10000, a1')
 check('...and CPLOAD enforces the same $10000-$1FFFF bound',
       insn(0xF055CC) == 'cmpa.l #$10000, a1' and insn(0xF055D4) == 'cmpa.l #$1ffff, a1')
+
+# ---- three upload transports, one destination rule (2026-07-31) ----
+check('the SLC dispatcher arms $FF0218 and converts before dispatching on record type',
+      insn(0xF04B68) == 'move.w #$400, $218(a5)' and insn(0xF04B82) == 'jsr $f05150.l'
+      and insn(0xF04B8A) == 'cmpi.w #$5330, d1')
+check("...'S1' seeds the shift at 8 and calls the data handler",
+      insn(0xF04B9A) == 'cmpi.w #$5331, d1' and insn(0xF04BA0) == 'move.w #$8, d5'
+      and insn(0xF04BA4) == 'jsr $f051a2.l')
+check('the raw bulk path has NO record framing and no staging bound',
+      insn(0xF04AE2).startswith('move.w') and not any(
+          'cmpa.l #$1ffff' in insn(a) for a in range(0xF04AE2, 0xF04B60, 2)
+          if a in _mins))
+check('the CPLOAD path sets the width mux on entry and clears it on completion',
+      insn(0xF0550E) == 'bset.b #$4, d2' and insn(0xF05586) == 'bclr.b #$4, d2')
