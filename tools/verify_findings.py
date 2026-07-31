@@ -5315,6 +5315,23 @@ check('BIM1 ch0 is inside the 16-register walk though never named operationally'
       0x230 <= 0x240 <= 0x24E and 0x230 <= 0x248 <= 0x24E)
 check('$FF025E alone is both unnamed AND outside the default walk',
       0x25E > 0x24E)
+
+# ---- the RTOS clock interpolates the PTM counter (2026-07-31) ----
+check('directive $1C reads the live MC6840 T3 counter through the $0C4E base',
+      _t0rev.get(0xF00F96) == 0x1C and insn(0xF00F9A) == 'movea.l $c4e.w, a0'
+      and insn(0xF00FA4) == 'movep.w $d(a0), d1')
+check('...negates it and adds the MSB reload from $0C58',
+      insn(0xF00FAC) == 'neg.w d1' and insn(0xF00FAE) == 'add.w $c58.w, d1')
+check('...divides by 4 -- undoing the mulu #4 that composed the latch',
+      insn(0xF00FB2) == 'lsr.w #$2, d1' and insn(0xF0A2B8) == 'mulu.w #$4, d1')
+check('...adds the free-running tick counter at $0C42',
+      insn(0xF00FB4) == 'add.l $c42.w, d1')
+check('...and retries if a tick fired during the read -- a lock-free clock',
+      insn(0xF00FA0) == 'clr.b $c5a.w' and insn(0xF00FB8) == 'tst.b $c5a.w'
+      and insn(0xF00FBC) == 'bne.b $f00f9e')
+check('$F00FC2 computes now + period + 1, a deadline',
+      insn(0xF00FC2) == 'moveq #$1, d1' and insn(0xF00FC4) == 'add.w $c56.w, d1'
+      and insn(0xF00FC8) == 'add.l $c42.w, d1')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

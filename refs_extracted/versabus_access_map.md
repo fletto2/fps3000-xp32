@@ -24101,3 +24101,58 @@ three, and the walk's bound is precisely the `$FF0218` bit-4 selector.
 goes. A model that decoded only 16 registers when reporting two BIMs would fault on a boot where
 the bit reads set, which is the shape of the "three BIMs derails the boot" symptom already
 recorded here and still unexplained.
+
+## The RTOS clock: a lock-free sub-tick read that interpolates the PTM counter (2026-07-31)
+
+`$F00F96` — TRAP #0 directive **`$1C`** — is the kernel's "read the current time", and it does
+more than return a tick count:
+
+```
+$F00F96  move.w   sr,-(a7)          the dual-entry prologue
+$F00F9A  movea.l  $C4E.w,a0         <- the PTM base pointer
+$F00FA0  clr.b    $C5A.w            clear the "a tick fired" flag
+$F00FA4  movep.w  $D(a0),d1         READ THE LIVE T3 COUNTER
+$F00FA8  move.w   d1,d0             keep the full counter
+$F00FAA  lsr.w    #$8,d1            the MSB half
+$F00FAC  neg.w    d1                the counter runs DOWN
+$F00FAE  add.w    $C58.w,d1         + 39, the MSB reload  -> MSB ticks elapsed
+$F00FB2  lsr.w    #$2,d1            / 4                   -> milliseconds
+$F00FB4  add.l    $C42.w,d1         + the free-running tick counter
+$F00FB8  tst.b    $C5A.w / bne      RETRY if a tick fired during the read
+$F00FC0  rte
+```
+
+**This is a lock-free high-resolution clock.** `$0C42` counts whole 10 ms ticks; the routine adds
+the *sub-tick* remainder by reading the MC6840's T3 counter live and converting it back to
+milliseconds. The retry on `$0C5A` is the standard race guard: the tick ISR sets that flag, and if
+it fired between the counter read and its use, the whole read is repeated.
+
+### It confirms the parametric tick from the opposite direction
+
+The tick latch is composed at `$F0A2B8` with **`mulu.w #$4,d1`** — `MSB = 4 * period_ms - 1`.
+Here the same factor is undone with **`lsr.w #$2,d1`** to recover milliseconds from the counter.
+The `*4` and the `/4` are the same design decision seen from the write side and the read side, and
+neither makes sense without the other. That is a stronger check on the tick derivation than
+either site alone.
+
+`$0C58` = 39 is used as the MSB reload in the subtraction, exactly the value `$F0A2BC` computed
+as `4*10 - 1`.
+
+### New globals identified
+
+| global | contents |
+|---|---|
+| **`$0C42`** | the free-running **millisecond tick counter** |
+| **`$0C4E`** | the **MC6840 base pointer** (`$F70001`) |
+| **`$0C5A`** | the **"a tick fired" flag**, the clock read's race guard |
+| `$0C56` | 10 — the period in ms, also used at `$F00FC2` to compute "now + one tick" |
+| `$0C58` | 39 — the MSB reload |
+
+`$F00FC2`'s `moveq #$1,d1` / `add.w $C56.w,d1` / `add.l $C42.w,d1` is **`now + period + 1`** — a
+deadline computation, which is what a timeout or delay directive would need.
+
+**Emulation consequence.** A model whose MC6840 counter does not decrement continuously between
+ticks makes this routine return the same time for the whole 10 ms slice — and, worse, a model
+whose counter is *not* readable mid-period makes `movep.w $D(a0),d1` return garbage that the
+subtraction turns into a wildly wrong millisecond offset. The counter must be a real running
+value, not a reload latch.
