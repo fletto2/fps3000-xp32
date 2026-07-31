@@ -21043,3 +21043,53 @@ firmware expects its own write back, and they are a register-existence test, not
 This also settles the shape of `FPS3K_CHSEL_RD`. Supplying a read value is not "overriding a
 register" — it is standing in for the chassis, and it is the single most load-bearing input the
 chassis model provides, since nine separate pieces of transfer state are latched from it.
+
+## The 10 ms system tick is computed from a config field: `$F0A530` is the period in MILLISECONDS (2026-07-31)
+
+`$F0A2A4`-`$F0A2D8` programs the MC6840, and it is not a table of magic constants — it derives
+the timer latch arithmetically from two numbers:
+
+```
+$F0A2A4  move.l  #$320,d0          800  -- the E clock in kHz
+$F0A2AA  divu.w  #$4,d0
+$F0A2AE  subq.w  #$1,d0            d0 = 800/4 - 1 = 199 = $C7      the LSB
+$F0A2B0  move.w  $F0A530(pc),d1    10   -- FROM THE CONFIG BLOCK
+$F0A2B4  move.w  d1,$C56.w
+$F0A2B8  mulu.w  #$4,d1
+$F0A2BC  subq.w  #$1,d1            d1 = 10*4 - 1 = 39 = $27        the MSB
+$F0A2BE  move.w  d1,$C58.w
+$F0A2C2  lsl.w   #$8,d1
+$F0A2C4  add.w   d1,d0             d0 = $27C7
+$F0A2C6  movep.w d0,$D(a1)         T3 latch  <- $27C7
+$F0A2CA  move.w  #$100,d0
+$F0A2CE  movep.w d0,$5(a1)         T1 latch  <- $0100
+$F0A2D2  move.b  #$0,$3(a1)        CR2 = $00
+$F0A2D8  move.b  #$C6,$1(a1)       CR3 = $C6  (dual 8-bit, bit 2 set)
+```
+
+`$27C7` is exactly the latch value this project measured and used to fix the dual-8-bit mode
+bug. Now its provenance is visible:
+
+- **`#$320` = 800 is the E clock in kHz.** The MC6840 sees E = 800 kHz on this board.
+- **`$F0A530` = 10 is the tick period in milliseconds.**
+- period in E cycles = `(MSB+1) * (LSB+1)` = `(4*10) * (800/4)` = **`800 * 10` = 8000**, i.e.
+  `E_kHz * period_ms`, giving exactly **10.0000 ms**.
+
+The `*4` / `/4` pair cancels — it exists only to split the product across the two 8-bit halves
+so that each stays under 256.
+
+**This closes `$F0A530`**, previously listed in the config-block readout as "read at `$F0A2B0`,
+role unidentified". It is the RMS68K system tick period, in milliseconds, and it is the one
+number to change to retime the whole RTOS. `$0C56` and `$0C58` receive the two derived
+components and are the kernel's own record of them.
+
+**Emulator consequence, and it is a real one.** The tick is not a hard-coded `$27C7`; it is
+`E_kHz x period_ms` split into two bytes. A model that hard-codes the latch will silently
+disagree with any variant ROM that ships a different `$F0A530`, and — more immediately — the
+**800 kHz E clock is now a firmware-stated fact rather than an assumption**, which is what makes
+the 10.0000 ms figure exact rather than nominal. The earlier 27%-slow tick bug came from
+treating the latch as a 16-bit reload; the arithmetic here shows the firmware itself thinks in
+`(MSB+1)*(LSB+1)`.
+
+**T1's latch is `$0100` and CR1 is never given a mode**, consistent with T1 being an
+external-input counter; T2 is not programmed at all. Only T3 is a timebase.

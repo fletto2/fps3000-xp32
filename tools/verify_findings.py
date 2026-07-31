@@ -4723,3 +4723,21 @@ check('nine CHANSEL reads latch into private globals',
       sum(1 for a in _c204r if _cre.search(r'\$204\(a\d\), \$e[0-9a-f]{2}\.l', insn(a))))
 check('the ONLY places the firmware reads back its own $FF0204 write are the self-test compares',
       insn(0xF094FE) == 'cmp.w $204(a6), d6' and insn(0xF09582) == 'cmp.w $204(a6), d6')
+
+# ---- the system tick is E_kHz x period_ms, both firmware-stated (2026-07-31) ----
+check('the PTM setup starts from #$320 = 800, the E clock in kHz',
+      insn(0xF0A2A4) == 'move.l #$320, d0' and insn(0xF0A2AA) == 'divu.w #$4, d0')
+check('...and takes the period from config $F0A530', insn(0xF0A2B0) == 'move.w $f0a530(pc), d1')
+check('$F0A530 is 10 -- the tick period in MILLISECONDS',
+      _bst.unpack(">H", _rom[0xF0A530 - 0xF00000:][:2])[0] == 10)
+check('the two halves are (800/4 - 1) and (4*10 - 1)',
+      insn(0xF0A2AE) == 'subq.w #$1, d0' and insn(0xF0A2B8) == 'mulu.w #$4, d1'
+      and insn(0xF0A2BC) == 'subq.w #$1, d1')
+check('...composed as MSB<<8 | LSB and written to the T3 latch',
+      insn(0xF0A2C2) == 'lsl.w #$8, d1' and insn(0xF0A2C6) == 'movep.w d0, $d(a1)')
+check('the arithmetic yields $27C7, the measured latch value',
+      (((10 * 4 - 1) << 8) + (800 // 4 - 1)) == 0x27C7)
+check('...and a period of E_kHz x period_ms = 8000 E cycles = 10.0000 ms',
+      ((10 * 4 - 1) + 1) * ((800 // 4 - 1) + 1) == 800 * 10 == 8000)
+check('T1 latch is $0100 and CR3 is $C6 (dual 8-bit, bit 2 set)',
+      insn(0xF0A2CA) == 'move.w #$100, d0' and insn(0xF0A2D8) == 'move.b #$c6, $1(a1)')
