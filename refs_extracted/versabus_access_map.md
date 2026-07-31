@@ -21667,3 +21667,49 @@ Note also `$F08AAE lea $FF0000,a6`: **`a6` serves as the VMOD base earlier in th
 and the AP I/F base here.** Base registers are reused across purposes within single routines,
 which is exactly why provenance-tracked sweeps must break on reload and why an offset alone never
 identifies a device in this firmware.
+
+## Every computed dispatch in the ROM is identified — no hidden control flow (2026-07-31)
+
+Indirect jumps and calls are where control flow escapes static analysis, so enumerating **all**
+of them bounds what can still be unknown about this firmware. There are exactly **25**:
+
+| region | count | what they are |
+|---|---:|---|
+| kernel | 7 | `$F003C2 jmp (a0,d0.w)` the **TRAP #1 table**; `$F00376 jmp (a2)` the **`!UDR` user-directive** path; `$F013D0`, `$F03A08`, `$F04004`, `$F04086`, `$F04340` internal handler calls |
+| RDHC | 5 | `$F04A80 jmp (a1,d0.w)` the **16-op chassis table**; `$F05354 jmp (a1,d1.w)` the **4-command host table**; `$F05734` and `$F05A0E` the **42-entry dispatch** and a handler's re-dispatch; `$F044C6 jsr (a1)` the **driver call** (below) |
+| XP1I-XP4I | 3 each | two `jmp (a4,d0.w)` — the task's own 42-entry table and a handler re-dispatch — plus **`jsr (a2)`, the CP-program callback** at `$10AE` |
+| init | 1 | `$F09C94 jmp (a0)`, the kernel relocator's continuation (never taken, `$F0A546` = 0) |
+
+**Every one maps to a mechanism this project has decoded.** The three tables, the user-directive
+path, the callback, the relocator — nothing is left over.
+
+### The last one: `$F044C6` is the RMS68K driver-call convention
+
+```
+$F044B4  movem.l d0/a0-a1/a5,-(a7)
+$F044B8  movea.l $10(a7),a5          the argument, past the four saved longwords
+$F044BC  lea     -$50(a5),a5         back up to the record base
+$F044C0  movea.l $1E(a5),a1          the driver ENTRY POINT, from +$1E
+$F044C4  move.l  a5,-(a7)            pass the record
+$F044C6  jsr     (a1)
+$F044C8  movea.l (a7)+,a5
+$F044CA  bcs.b   $F044D6             <- status returned in the CARRY flag
+```
+
+A function pointer at `+$1E` of a structure, the structure passed on the stack, status in the
+carry — that is Motorola's device-driver calling convention, and the structure is an **`!IOV`**
+record (the I/O vector table this firmware allocates at `$1F900`). It sits immediately after the
+FPS trace hook at `$F044A2`, in the join between the kernel and the application, which is why
+neither region's disassembly claimed it.
+
+### Why the census matters
+
+The recurring worry with a hand-written firmware is a dispatch table nobody has found. **There
+is no room for one**: 25 computed transfers, 25 identified, and the three tables among them
+(16-entry, 4-entry, 42-entry x5) are each fully enumerated. Combined with the byte accounting —
+43,047 bytes of ROM content, nothing unexplained — and the executed-PC boundary property, the
+control-flow map of this ROM is closed.
+
+**What remains unknown is not in the ROM.** It is the counterparty: the CP program that fills
+`$10AE`, and the host-side card the AP I/F talks to. Both are called *through* dispatches that
+are themselves fully understood.

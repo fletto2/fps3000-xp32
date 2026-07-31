@@ -4969,3 +4969,20 @@ check('phase $102 round-trips a 32-bit value through the USP',
       and insn(0xF08AD2) == 'move a5, usp' and insn(0xF08AD6) == 'move usp, a3')
 check('a6 is reused as the VMOD base and then the AP I/F base in one routine',
       insn(0xF08A88) == 'lea.l $1fff0.l, a6' and insn(0xF08AAE) == 'lea.l $ff0000.l, a6')
+
+# ---- every computed dispatch is identified: 25, no hidden control flow ----
+_ind = [a for a, (m, o, _) in sorted(_mins.items())
+        if m.split('.')[0] in ('jmp', 'jsr') and '(' in o
+        and not o.endswith('.l') and not o.endswith('(pc)')]
+check('the ROM contains exactly 25 computed jmp/jsr', len(_ind) == 25, len(_ind))
+check('the three dispatch tables are among them',
+      all(a in _ind for a in (0xF003C2, 0xF04A80, 0xF05354, 0xF05734)))
+check('each XP task has exactly 3: two table dispatches and the CP callback',
+      all(sum(1 for a in _ind if lo <= a < hi) == 3
+          for lo, hi in ((0xF05F00, 0xF06900), (0xF06900, 0xF07300),
+                         (0xF07300, 0xF07D00), (0xF07D00, 0xF08700))))
+check('...and the callback is jsr (a2) in every one',
+      all(insn(a) == 'jsr (a2)' for a in (0xF067E0, 0xF071F8, 0xF07BF8, 0xF085F8)))
+check('$F044C6 is the RMS68K driver call: pointer at +$1E, status in carry',
+      insn(0xF044C0) == 'movea.l $1e(a5), a1' and insn(0xF044C6) == 'jsr (a1)'
+      and insn(0xF044CA) == 'bcs.b $f044d6')
