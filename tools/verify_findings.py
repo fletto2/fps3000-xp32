@@ -5126,6 +5126,12 @@ check('...before T0P ($01) and T0V ($02) respectively',
       _t0rev.get(0xF006E8) == 0x01 and _t0rev.get(0xF00788) == 0x02)
 check('so XP4I writes $1F41/$1F45 into a UST entry field, not arbitrary memory',
       insn(0xF060AA) == 'move.w (a0), d0' and insn(0xF060B2) == 'move.w #$1f41, (a0)')
+check('the UST indexing puts the P/V field at entry+8',
+      0x1FB00 + 0xC + 0x8 == 0x1FB14 and 0x1FB00 + 0xC + 0x10 == 0x1FB14 + 8)
+check('...so AXP4 and HXP4 P/V fields are $1FBA0 and $1FBB6',
+      0x1FB14 + 6 * 22 + 8 == 0x1FBA0 and 0x1FB14 + 7 * 22 + 8 == 0x1FBB6)
+check('...and the nine entries fit inside the two allocated pages',
+      0x1FB14 + 9 * 22 <= 0x1FD00)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

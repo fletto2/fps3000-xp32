@@ -23542,3 +23542,47 @@ XP4I is setting semaphore state by hand.
 That is worth flagging for anyone modelling or modifying this: the `+$10` field has at least two
 writers with different disciplines — `T0P`/`T0V` under the kernel's interrupt masking, and this
 unsynchronised `move.w` in task context.
+
+## The `!UST` entry map, and an exact address to watch for `$1F41`/`$1F45` (2026-07-31)
+
+SGSEM indexes the table as `$8(a1,d3.w)` for the name and `$10(a1,d3.w)` for the field it hands
+to `T0P`/`T0V`, with `a1 = [$0C24] = $1FB00`. The live header reports `USTFENT = $1FB14`, so the
+header is 20 bytes and entries are 22 (`USTMENT`). Solving the indexing:
+
+- `d3` for entry 0 is `$C`, since `$1FB00 + $C + $8 = $1FB14` = the first entry's name
+- therefore **`$10(a1,d3)` is entry + 8** — the P/V field sits 8 bytes into each entry
+
+That gives a complete map of the nine live semaphores:
+
+| semaphore | entry | **P/V field** |
+|---|---|---|
+| `AXP1` | `$1FB14` | `$1FB1C` |
+| `HXP1` | `$1FB2A` | `$1FB32` |
+| `AXP2` | `$1FB40` | `$1FB48` |
+| `HXP2` | `$1FB56` | `$1FB5E` |
+| `AXP3` | `$1FB6C` | `$1FB74` |
+| `HXP3` | `$1FB82` | `$1FB8A` |
+| **`AXP4`** | `$1FB98` | **`$1FBA0`** |
+| **`HXP4`** | `$1FBAE` | **`$1FBB6`** |
+| `HIO1` | `$1FBC4` | `$1FBCC` |
+
+The last entry ends at `$1FBDA`, comfortably inside the two pages (`$1FB00`-`$1FCFF`) the
+allocator gave the table and which `USTNPAGE = 2` reports.
+
+### The prediction
+
+XP4I signals its own semaphore and then writes `$1F41` or `$1F45` through the returned pointer.
+So **the write lands at `$1FBA0` (`AXP4`) or `$1FBB6` (`HXP4`)**, and which one it is identifies
+which semaphore XP4I is manipulating by hand.
+
+This is checkable two ways without new information:
+
+- **in the emulator**, with `FPS3K_CHANNELS=4` to lift the `$105E` presence gate that stops XP4I
+  reaching this code on the real 2-AC machine, plus a RAM watchpoint on `$1FB98`-`$1FBBA`;
+- **on hardware**, in a single RAM dump of `$1FB00`-`$1FBDA`, where a `$1F41` or `$1F45` in one of
+  those two words would confirm the whole chain — the `$0C24` assignment, the entry stride, the
+  `+8` field offset, and the `a0`-survives-`rte` reasoning.
+
+The eight-byte offset also lets a dump be read directly: name at entry+0, the P/V field at
+entry+8, and the `users`/`type`/`session` values documented as 1/2/0 occupying the four bytes
+between.
