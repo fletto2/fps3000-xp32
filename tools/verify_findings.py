@@ -5208,6 +5208,19 @@ check('the task-state family $42/$44/$45 declares 12 like RSTATE',
       all((_t1[n][1] >> 8) == 12 for n in (0x42, 0x44, 0x45, 0x43)))
 check('eight live directives declare no parameter block at all',
       sum(1 for n in _t1live if (_t1[n][1] >> 8) == 0) >= 8)
+check('flags bit 7 is set IFF the declared size is nonzero -- zero exceptions in 60',
+      not [n for n in _t1live
+           if bool(_t1[n][1] & 0x80) != ((_t1[n][1] >> 8) > 0)])
+check('flags bits 3, 4 and 5 are clear in EVERY live slot',
+      not any(_t1[n][1] & 0x38 for n in _t1live))
+check('bit 0 is carried by TERM, SUSPND, WAIT and WTEVNT -- the blocking set',
+      all(_t1[n][1] & 0x01 for n in (0x0F, 0x11, 0x13, 0x24)))
+check('bit 1 is carried by START, TERMT, RESUME and GTASQ -- the rescheduling set',
+      all(_t1[n][1] & 0x02 for n in (0x0D, 0x10, 0x12, 0x1F)))
+check('TERM carries both, being blocking AND rescheduling',
+      (_t1[0x0F][1] & 0x03) == 0x03)
+check('bit 2 is carried by exactly one directive, $25',
+      [n for n in _t1live if _t1[n][1] & 0x04] == [0x25])
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

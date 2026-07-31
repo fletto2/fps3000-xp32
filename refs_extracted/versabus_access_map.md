@@ -23838,3 +23838,44 @@ dispatcher can be written for all 60 live directives without knowing what 34 of 
 declared size matches the structure it is documented to take, eleven for eleven; the unnamed ones
 fall into the same small set of sizes rather than scattering. A misread flags word would produce
 neither property.
+
+## The TRAP #1 flags byte decoded completely (2026-07-31)
+
+The second word of each slot is `{size high byte, flags low byte}`. Reading the flags column
+across all 60 live directives:
+
+| bit | directives | reading |
+|---:|---:|---|
+| **7** | **42** | **"has a parameter block"** — set **if and only if** the declared size is nonzero, **zero exceptions in 60** |
+| 6 | 23 | the second translation at `$F00354` |
+| 5, 4, 3 | **0** | **never used** — three bits of headroom |
+| 2 | **1** | `$25` alone — the context-restore directive |
+| 1 | 9 | `$0D` START, `$0E`, `$0F` TERM, `$10` TERMT, `$12` RESUME, `$14`, `$18`, `$1F` GTASQ, `$23` |
+| 0 | 9 | `$0E`, `$0F` TERM, `$11` SUSPND, `$13` WAIT, `$15`, `$16`, `$1E`, `$24` WTEVNT, `$40` |
+
+**Bit 7 is now proven rather than inferred.** The dispatcher's `btst #$7,d2` was read as "has a
+parameter block to validate/translate" from the code; here is the table agreeing with the size
+column in all 60 cases. A misread of either field would break the correlation.
+
+### Bits 0 and 1 have coherent membership
+
+Bit 0's named members are **TERM, SUSPND, WAIT, WTEVNT** — precisely the directives that **block
+or terminate the calling task**. Bit 1's named members are **START, TERMT, RESUME, GTASQ** —
+directives that **change another task's scheduling state**. `TERM` carries both (`$03`), which is
+right: it stops the caller *and* reschedules.
+
+So the natural reading is **bit 0 = "the caller may not return", bit 1 = "may cause a
+reschedule"**. That is an inference from membership rather than from code — it is not proven the
+way bit 7 is — but every named directive in both sets fits, and no named directive that should be
+in either set is missing.
+
+### And three bits are unused
+
+Bits 3, 4 and 5 are clear in **every** live slot. A dispatcher implementing this table needs to
+handle four flag bits, not eight, and the three spare bits are where a vendor extension would
+have gone.
+
+**Practical consequence**: a faithful TRAP #1 dispatcher can be written for all 60 live
+directives from the table alone — size from the high byte, block-validation from bit 7, the
+second translation from bit 6 — without knowing what 34 of them do. Combined with the
+family clustering by size, that is the complete marshalling contract.
