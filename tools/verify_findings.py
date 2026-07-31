@@ -3491,7 +3491,8 @@ with tempfile.TemporaryDirectory() as _tdq:
           _chain == ['XP1I', 'XP2I', 'XP3I', 'XP4I', 'IO1I', 'RDHC'])
     check('...and terminates at zero', _a == 0)
     # An empty ready queue and six blocked tasks are the same fact twice.
-    check('every task is WAITING, which is why the ready queue is empty',
+    # $4000 is bit 14 = TSKSBLCK, "TASK IS BLOCKED", per Motorola's TCB.EQ.
+    check('every task is BLOCKED (TSKSBLCK), which is why the ready queue is empty',
           all(struct.unpack('>H', _rq[b + 0x2C:b + 0x2E])[0] == 0x4000
               for b in (0x1E900, 0x1EB00, 0x1ED00, 0x1EF00, 0x1F100, 0x1F300)))
 
@@ -3555,6 +3556,52 @@ with tempfile.TemporaryDirectory() as _tdq:
           _udrn == 25 and all(struct.unpack('>I', _rq[_udr + 6 + 10 * k + 6:
                                                       _udr + 6 + 10 * k + 10])[0] == 0
                               for k in range(_udrn)))
+
+# --- the kernel's static vector-installation table at $F00114 ------------
+# A module-level RAM dump; the earlier one is scoped to its own `with` block.
+with tempfile.TemporaryDirectory() as _tdv:
+    subprocess.run([EMU, '-rom', ROM, '-cycles', '150000000',
+                    '-dump-ram', f'{_tdv}/r'], capture_output=True, timeout=400)
+    _rq2 = open(f'{_tdv}/r', 'rb').read()
+
+# Records are {1-byte vector, 3-byte handler}; reading them handler-first is
+# off by one byte and pairs every handler with the wrong vector.
+check('$F00114 is a jsr followed by the !VCT tag',
+      insn(0xF00114) == 'jsr $f00186' and _rom[0xF0011A - _B:0xF0011E - _B] == b'!VCT')
+
+
+def _vtab():
+    out, a = {}, 0xF00122
+    while a < 0xF0017E:
+        v = _rom[a - _B]
+        if v == 0:
+            break
+        out[v] = int.from_bytes(_rom[a + 1 - _B:a + 4 - _B], 'big')
+        a += 4
+    return out
+
+
+_vt = _vtab()
+check('it holds 23 {vector, handler} records',
+      len(_vt) == 23)
+# A third, static source for two addresses this project derives two other ways.
+check('...and it names TRAP #0 $F001AC, TRAP #1 $F00262, TRAP #2 $F00A78',
+      _vt.get(0x20) == 0xF001AC and _vt.get(0x21) == 0xF00262
+      and _vt.get(0x22) == 0xF00A78)
+check('...which is exactly what the vector table holds after boot',
+      all(struct.unpack('>I', _rq2[4 * v:4 * v + 4])[0] == _vt[v]
+          for v in (0x20, 0x21, 0x22)))
+# The mismatches are the FPS layer taking over, not drift.
+check('the FPS layer overrides bus error / illegal / div0 with its reporters',
+      [struct.unpack('>I', _rq2[4 * v:4 * v + 4])[0] for v in (2, 4, 5)]
+      == [0xF0A23A, 0xF0A24A, 0xF0A252]
+      and [_vt[v] for v in (2, 4, 5)] == [0xF00AD8, 0xF00ADC, 0xF00ADE])
+check('...and points spurious/$8D/$8E/$93 at the FPS panic catch-all $F0A27A',
+      all(struct.unpack('>I', _rq2[4 * v:4 * v + 4])[0] == 0xF0A27A
+          for v in (0x18, 0x8D, 0x8E, 0x93)))
+check('...while trace, line-A and the level-4 autovector stay with the kernel',
+      all(struct.unpack('>I', _rq2[4 * v:4 * v + 4])[0] == _vt[v]
+          for v in (0x09, 0x0A, 0x1C)))
 
 check('$0C00 is written once, at $F09D72',
       insn(0xF09D72) == 'move.l a3, $c00.w')

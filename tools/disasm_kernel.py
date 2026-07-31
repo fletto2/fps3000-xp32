@@ -305,9 +305,15 @@ def recover_gaps(rom, code, visited, rounds=4):
         gained = 0
         # Gap starts: an even, unvisited byte whose predecessor is visited or
         # which begins the region.
+        # Every even unvisited address is a candidate start, not just the
+        # first byte of a gap.  A gap often opens with a few words of table or
+        # with the tail of a preceding instruction ($F04088's `fffe` is the
+        # case that forced this), so anchoring only at the gap head loses the
+        # real entry point a few words later.  Trying interiors is safe
+        # BECAUSE acceptance still requires the run to reconnect; a wrong
+        # start almost never lands back on an instruction boundary.
         starts = [a for a in range(START, END, 2)
-                  if not visited[a - START] and not is_data(a)
-                  and (a == START or visited[a - 1 - START])]
+                  if not visited[a - START] and not is_data(a)]
         for g in starts:
             run, a, ok = [], g, False
             while valid(a) and not visited[a - START]:

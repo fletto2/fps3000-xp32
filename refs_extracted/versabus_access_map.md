@@ -17055,3 +17055,72 @@ RDHC block $1DD00:  (all zeros)
 
 2/2/2/2/1/0 — the declared counts, exactly. So the existing claim is right about the
 descriptors and imprecise only about the indirection.
+
+## The kernel's static vector table at `$F00114`, and the FPS override (2026-07-30)
+
+Driving `disasm_kernel.py`'s residue down to 144 bytes left one 106-byte block that
+would not decode as code: `$F00114`, which contains the ASCII `!VCT`. It is a
+**vector-installation table**, and it decodes exactly:
+
+```
+$F00114  4EB9 00F00186     jsr $F00186
+$F0011A  "!VCT"
+$F0011E  00F00896          (longword)
+$F00122  records: {1-byte vector number, 3-byte handler}, terminated by a zero vector
+```
+
+The record split is **vector first**; reading it handler-first is off by one byte and
+produces a table that looks plausible but pairs every handler with the wrong vector —
+which is what it did here first, until `$F001AC` came out attached to vector `$21`
+instead of `$20`.
+
+| vector | | ROM default | live in RAM |
+|---|---|---|---|
+| `$02` | bus error | `$F00AD8` | **`$F0A23A`** |
+| `$04` | illegal instruction | `$F00ADC` | **`$F0A24A`** |
+| `$05` | divide by zero | `$F00ADE` | **`$F0A252`** |
+| `$09` | trace | `$F00AEE` | = |
+| `$0A` | line-A emulator | `$F00AE6` | = |
+| `$18` | spurious interrupt | `$F009EA` | **`$F0A27A`** |
+| `$1C` | level-4 autovector | `$F00EC8` | = |
+| `$20` | **TRAP #0** | `$F001AC` | = |
+| `$21` | **TRAP #1** | `$F00262` | = |
+| `$22` | **TRAP #2** | `$F00A78` | = |
+| `$8D`, `$8E`, `$93` | | `$F00A58`, `$F00186`, `$F009DC` | **`$F0A27A`** |
+
+Two things fall out.
+
+**It independently confirms the trap handlers.** `$F001AC` for TRAP #0 and `$F00262` for
+TRAP #1 are derived elsewhere in this project from the dispatcher code and from the
+runtime vector table; here they are stated by a third, static source, and all three
+agree. `$F00A78` for TRAP #2 likewise confirms that the TRAP #2-#15 vectors are **not**
+free — the fan-in ladder there services them.
+
+**The seven mismatches are not drift, they are the FPS layer taking over.** Every
+overridden entry lands on `$F0A23A`/`$F0A24A`/`$F0A252` — the 9-entry FPS exception
+reporter table that issues the `PCMD_EXCEPTION_*` codes — or on `$F0A27A`, the FPS panic
+catch-all. So the boot sequence is: RMS68K installs its own defaults from this table,
+then the FPS layer replaces the ones it wants to report through the chassis command port
+and leaves the rest (trace, line-A, the traps, the level-4 autovector) to the kernel.
+That is the concrete join between the two halves of the firmware.
+
+### Kernel coverage: 81.5% -> 96.7%
+
+Two additions to `disasm_kernel.py`, both requiring a `DATA_REGIONS` guard folded into
+`valid()` (the dispatch tables disassemble cleanly as `ori.b`/`move.b`, and the
+**recursive descent was already decoding 14 bytes of the TRAP #1 table before any sweep
+existed** — guarding only the new pass would have missed it):
+
+1. a **gap-recovery sweep**, accepting a run only if it reconnects to a known
+   instruction boundary or a terminator, trying **every** even address in a gap rather
+   than only the gap head (gaps often open with a few words of table or the tail of a
+   preceding instruction; `$F04088` is the case that forced it, and the real entry point
+   was `$F04096`);
+2. **`FPS3K_DIS_TRACE`**, seeding from executed PCs — the strongest seed source there
+   is, since an executed PC is an instruction boundary by construction.
+
+Validation is not the coverage number: **all 620 executed kernel PCs decode as
+instruction boundaries, zero misses**, and both dispatch tables are clean. The 580
+remaining `DC.W` bytes are 448 of dispatch table, 106 of this vector table, 6 of reset
+vector, and ~20 of small offset tables and padding — i.e. the kernel is now essentially
+fully accounted for.
