@@ -26701,3 +26701,50 @@ this depth, the failure does not present as a crash at the point of corruption: 
 as `PCMD_KERNEL_FATAL` (`$2B2`) from `$F00186`, with `$0848` and `$084C` holding `a1` and
 the bus-error vector. That is a *good* failure mode to know about, because it names the
 mechanism rather than leaving a silent divergence.
+
+## The post-mortem snapshot IS reachable — correcting a reachability conclusion (2026-07-31)
+
+`$F00186` writes the **entire** low-RAM snapshot in one routine:
+
+```
+movem.l d0-d7/a0-a7,$808.w   ; ALL SIXTEEN registers, $0808-$0847
+move.w  sr,$806.w            ; the SR
+move.l  (a7),$800.w          ; the top of stack -- the faulting return address
+move    usp,a1
+move.l  a1,$848.w            ; the USER STACK POINTER
+move.l  $8.w,$84c.w          ; the bus-error vector's current contents
+move.w  #$2b2,d0
+jsr     $f04500.l            ; PCMD_KERNEL_FATAL
+bra.b   $f001aa              ; ...and hang
+```
+
+**Two corrections follow.**
+
+**1. `$0848` holds the USP, not `a1`.** This document has recorded it as "a1"; `a1` is only
+the transfer register for `move usp,a1`, which is the sole way a 68000 can read the USP.
+The distinction matters on a machine where the failing task's user stack is the thing you
+want to inspect.
+
+**2. The snapshot is NOT unreachable on a stock machine.** This project concluded that
+`$0800`/`$0806`/`$0808`-`$0847` could not be reached because they are written by
+`$F00A58` = vector 141 and `$0848`/`$084C` by `$F00196` = vector 142, and the FPS layer
+overrides vectors 141, 142, 147 and spurious with the panic catch-all `$F0A27A`. That
+reasoning only considered the **vector** path. `$F00186` is reached by **22 ordinary
+`bsr` instructions from inside the kernel** — verified against an instruction-only listing
+set — plus the `jsr` at the head of the static vector table at `$F00114`:
+
+```
+$F002C2 $F00768 $F00950 $F009B4 $F00AAC $F00B26 $F00B4A $F00D08 $F01490 $F019F6
+$F01AFE $F01B56 $F01BDE $F01CAE $F01D64 $F01E1A $F02428 $F02F56 $F0310E $F040C8
+$F0412A $F04150
+```
+
+These are the kernel's internal consistency checks — the `'BE'` canary release at
+`$F00D08`, the `!IDV` walk falling off the end at `$F002C2`, structure-validation failures
+in the segment and TCB directives. **Any of them produces a full register dump at `$0800`
+on a running machine**, with no host-loaded code and no vector reinstallation.
+
+So the practical guidance inverts: on a board that dies with `$2B2` at `$FF000E`, the
+snapshot at `$0800`-`$084F` **is** expected to be valid, and `$084C` additionally tells you
+which bus-error handler was installed at the time — distinguishing a fault during the
+self-test from one after the RTOS took over.

@@ -5576,6 +5576,18 @@ check("the 'BE' canary sits at $12(a7), the last word of a 20-byte block",
 check('...and a failed canary goes to the kernel-fatal path',
       insn(0xF00D08) == 'bsr.w $f00186')
 
+check('$F00186 writes the WHOLE snapshot: 16 regs, SR, PC, USP, bus-error vector',
+      insn(0xF00186) == 'movem.l d0-d7/a0-a7, $808.w' and insn(0xF0018C) == 'move.w sr, $806.w'
+      and insn(0xF00190) == 'move.l (a7), $800.w' and insn(0xF0019A) == 'move.l $8.w, $84c.w')
+check('...and $0848 is the USP, reached the only way a 68000 can',
+      insn(0xF00194) == 'move usp, a1' and insn(0xF00196) == 'move.l a1, $848.w')
+_fatal = [x for x in range(0xF00000, 0xF10000, 2)
+          if (insn(x) or '').startswith('bsr') and 'f00186' in (insn(x) or '')]
+check('the kernel-fatal reporter has 22 ordinary bsr callers -- it is NOT vector-only',
+      len(_fatal) == 22, len(_fatal))
+check('...one of which is the BE canary release',
+      0xF00D08 in _fatal)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
