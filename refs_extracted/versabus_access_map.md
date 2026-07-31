@@ -31264,3 +31264,43 @@ So the ROM is built in two styles — bespoke (kernel, self-test, init) and repl
 task layer) — but the replication is not confined to the task layer; it is merely *large* only
 there. Template-alignment reasoning across a `$A00` stride applies only inside
 `$F05684`-`$F086FF`; the other repeats are local pairs, not strided copies.
+
+## The XP4I prediction, settled statically after a runtime test failed to reach the path (2026-07-31)
+
+I predicted XP4I can never issue the `$0000001B` channel transaction its siblings issue, and tried
+to confirm it by driving all four channels in the emulator. **That measurement was inconclusive**:
+no channel-window access appeared in the bus log at all, so the transaction code was never reached
+in any configuration tried — consistent with this project's own note that driving all four
+channels at once gives poor coverage because the tasks contend. The 37 apparent `$1B` hits turned
+out to be **board-status reads returning `$1B`**, not channel writes.
+
+**A static absence proof settles it outright.** Searching for every `#$1b` word immediate
+(`move.w`, in all three encodings) by region:
+
+| region | count | site |
+|---|---:|---|
+| RDHC | 0 | |
+| **XP4I** | **0** | — |
+| XP3I | 1 | `$F06ACA` |
+| XP2I | 1 | `$F074CA` |
+| XP1I | 1 | `$F07ECA` |
+
+The three sites sit at exactly the `$A00` task stride, and **XP4I has none**. So the prediction is
+not merely likely, it is **structurally guaranteed**: the instruction does not exist in XP4I's
+code, and no configuration, chassis behaviour or host action can make it execute one.
+
+**The methodological point is the useful part.** For a question of the form "can X ever happen?",
+a **static absence proof beats a runtime negative** — the runtime result only says X did not happen
+in the configurations tried, and here it could not distinguish "XP4I never does this" from "I
+failed to drive the path at all". The two claims look identical in a bus log and are entirely
+different facts.
+
+This inverts the tool-selection rule recorded earlier for *direction* questions, where execution is
+authoritative and static analysis under-reports. The rule is not "prefer one tool" but:
+
+| question | tool | why |
+|---|---|---|
+| can X ever happen? | **static absence** | a runtime negative cannot distinguish "never" from "not this time" |
+| does X happen, how often, how wide? | **runtime log** | static analysis under-reports through indirection |
+| what is the structure? | **sound static sweep** | everything it reports is real |
+| is X touched anywhere? | **loose static sweep** | if even an over-reporting sweep finds nothing, nothing is there |

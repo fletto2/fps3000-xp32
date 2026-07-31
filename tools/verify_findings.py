@@ -7060,6 +7060,18 @@ check('...and XP1I/XP2I/XP3I sit at exactly $A00 stride while XP4I is off-grid',
       0xF08051 - 0xF07651 == 0xA00 and 0xF07651 - 0xF06C51 == 0xA00
       and 0xF06C51 - 0xF0623A == 0xA17)
 
+_i1b = [bytes.fromhex('303c001b'), bytes.fromhex('333c001b'), bytes.fromhex('337c001b')]
+def _cnt1b(lo, hi):
+    _sg = _rom_bytes[lo - 0xF00000:hi - 0xF00000 + 1]
+    return sum(_sg.count(_p) for _p in _i1b)
+check('XP4I contains ZERO #$1b immediates while XP1I/2/3 have exactly one each',
+      _cnt1b(0xF05F00, 0xF068FF) == 0
+      and _cnt1b(0xF06900, 0xF072FF) == 1
+      and _cnt1b(0xF07300, 0xF07CFF) == 1
+      and _cnt1b(0xF07D00, 0xF086FF) == 1)
+check('...at exactly the $A00 stride, so XP4I cannot issue the $1B transaction',
+      0xF07ECA - 0xF074CA == 0xA00 and 0xF074CA - 0xF06ACA == 0xA00)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
