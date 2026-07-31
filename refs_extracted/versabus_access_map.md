@@ -23329,3 +23329,73 @@ throughout this file, now decomposed.
 So **43% of all task code is five copies of one 1,431-byte subsystem**, and of the 25,501-byte
 application region it is 28%. Understanding that block once — which is done — accounts for a
 large fraction of everything the tasks do.
+
+## The FPS pre-task glue region read out in full — the last region closed (2026-07-31)
+
+`$F04488`-`$F045FF` is 376 bytes, the smallest region and the join between the RMS68K kernel and
+the FPS application. Reading all of it:
+
+| extent | bytes | what |
+|---|---:|---|
+| `$F04488`-`$F044A0` | 25 | **the ASQ-post-from-interrupt wrapper** |
+| `$F044A2`-`$F044DC` | 59 | the FPS trace hook + **the driver-chain walker** |
+| `$F044E0`-`$F044FF` | 32 | zero padding |
+| `$F04500`-`$F04531` | 50 | **panel-command issuer copy 1** (48 bytes + `bra .`) |
+| `$F04532`-`$F045FF` | 206 | zero padding |
+
+### `$F04488` is the ASQ post
+
+```
+$F04488  movem.l a3-a6,-(a7)
+$F0448C  movea.l $34(a5),a0        the ASQ pointer, from +$34 of a structure
+$F04490  moveq   #$18,d0
+$F04492  trap    #$0               TRAP #0 directive $18 = T0QEVNTI
+$F04496  movem.l (a7)+,a3-a6 / rts
+```
+
+This project records that the firmware "uses ASQs only from interrupt context via TRAP #0 `$18`",
+and that the real ASQ directives (`GTASQ`, `RDEVNT`, `QEVNT`, `WTEVNT`) appear nowhere. **Here is
+the one site that does it**, and it identifies `+$34` as the structure field holding the ASQ
+pointer.
+
+### `$F044C0` is a chain WALKER, not a single driver call
+
+The routine documented earlier as "the RMS68K driver call" is a loop:
+
+```
+$F044C0  movea.l $1E(a5),a1        this record's driver entry point
+$F044C4  move.l  a5,-(a7)
+$F044C6  jsr     (a1)              call it
+$F044C8  movea.l (a7)+,a5
+$F044CA  bcs.b   $F044D6           carry set -> stop
+$F044CC  move.l  $8(a5),d0         else follow +$8 to the NEXT record
+$F044D0  beq.b   $F044D6           null -> stop
+$F044D2  movea.l d0,a5
+$F044D4  bra.b   $F044C0           ...and call that one too
+$F044DC  bra.w   $F008B6           return into the kernel
+```
+
+So it **walks a linked list of driver records**, calling each one's `+$1E` entry with the record
+as its argument, stopping on carry-set or a null `+$8` link. That is a driver *chain*, and the
+record layout — entry point at `+$1E`, next-link at `+$8` — matches the `!IOV` structure this
+firmware allocates at `$1F900` and the `+$1E`/`+$22` fields two kernel helpers dereference.
+
+The trace hook immediately above it (`btst.b #$e,$C34.w`, i.e. **bit 6 of the byte at `$0C34`**
+under the documented mod-8 rule) is the 18 bytes of real code the byte accounting flagged as
+"invisible to the executed-PC check because the trace mask is zero" — and now its context is
+clear: **the trace hook fires on entry to the driver chain**, which is exactly where an RTOS
+would want an event trace.
+
+### Every region of the ROM has now been read end to end
+
+| region | status |
+|---|---|
+| kernel `$F00000`-`$F04487` | directive tables read out; 41 of 69 subroutines named, rest bounded |
+| **FPS glue `$F04488`-`$F045FF`** | **read in full — this section** |
+| six task segments `$F04600`-`$F086FF` | all six; TCBIO1I instruction by instruction |
+| self-test `$F08700`-`$F09BFF` | all 42 subroutines; phase counter decoded |
+| init `$F09C00`-`$F0A824` | boot spine, relocator, config block, TDTI, exception stubs |
+| blank tail `$F0A825`-`$F0FFFD` | verified all zero |
+| checksum `$F0FFFE` | verified |
+
+There is no region of this image left unexamined.

@@ -5077,6 +5077,27 @@ check('the application content region decomposes to 25501',
 check('the replicated block is 43% of all task bytes',
       (1431 * 5 * 100) // 16640 == 42 or (1431 * 5 * 100) // 16640 == 43,
       (1431 * 5 * 100) // 16640)
+
+# ---- the FPS glue region, read in full (2026-07-31) ----
+check('$F04488 is the ASQ-post-from-interrupt wrapper (TRAP #0 $18 = T0QEVNTI)',
+      insn(0xF04488) == 'movem.l a3-a6, -(a7)' and insn(0xF0448C) == 'movea.l $34(a5), a0'
+      and insn(0xF04490) == 'moveq #$18, d0' and insn(0xF04492) == 'trap #$0')
+check('$F044C0 is a driver CHAIN walker, not a single call',
+      insn(0xF044C0) == 'movea.l $1e(a5), a1' and insn(0xF044C6) == 'jsr (a1)'
+      and insn(0xF044CA) == 'bcs.b $f044d6' and insn(0xF044CC) == 'move.l $8(a5), d0'
+      and insn(0xF044D2) == 'movea.l d0, a5' and insn(0xF044D4) == 'bra.b $f044c0')
+check('...following +$8 to the next record and stopping on carry or null',
+      insn(0xF044D0) == 'beq.b $f044d6')
+check('...and returning into the kernel at $F008B6', insn(0xF044DC) == 'bra.w $f008b6')
+check('the trace hook guards the chain, testing bit 6 of the byte at $0C34',
+      insn(0xF044A2) == 'btst.b #$e, $c34.w' and insn(0xF044A8) == 'beq.b $f044b4')
+check('the glue region holds panel-command issuer copy 1 at $F04500',
+      _rom[0xF04500 - 0xF00000:0xF04500 - 0xF00000 + 48]
+      == _rom[0xF05688 - 0xF00000:0xF05688 - 0xF00000 + 48])
+check('...and 238 bytes of the 376 are zero padding',
+      set(_rom[0xF044E0 - 0xF00000:0xF04500 - 0xF00000]) == {0}
+      and set(_rom[0xF04532 - 0xF00000:0xF04600 - 0xF00000]) == {0}
+      and (0xF04500 - 0xF044E0) + (0xF04600 - 0xF04532) == 238)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
