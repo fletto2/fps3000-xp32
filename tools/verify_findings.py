@@ -7040,10 +7040,22 @@ for _i in range(0xF04488 - 0xF00000, 0xF0A825 - 0xF00000 - 32):
     if _sg.count(0) > 16: continue
     _win[_sg].append(_i + 0xF00000)
 _reps = sorted(a2 for _v in _win.values() if len(_v) > 1 for a2 in _v)
-check('every replicated 32-byte block lies inside $F05684-$F086FF (the task layer)',
-      _reps and min(_reps) >= 0xF05600 and max(_reps) <= 0xF086FF)
-check('...so the self-test and init regions contain NO replicated code',
-      not any(0xF08700 <= a2 <= 0xF0A824 for a2 in _reps))
+# CORRECTED: replication outside the task layer DOES exist (panel-command
+# issuers, op $3's two arms, the bit-5/bit-6 harnesses) -- it is only the
+# >= 64-byte runs that are confined to the task layer.
+_runs64 = []
+for _a2 in _reps:
+    if _runs64 and _a2 - _runs64[-1][1] <= 32: _runs64[-1][1] = _a2
+    else: _runs64.append([_a2, _a2])
+_big64 = [_r for _r in _runs64 if _r[1] + 32 - _r[0] >= 64]
+check('every replicated run of >= 64 bytes lies inside the task layer',
+      _big64 and all(0xF05600 <= _r[0] and _r[1] <= 0xF086FF for _r in _big64))
+check('...but the panel-command issuers replicate outside it, at $F04500 and $F0A57E',
+      any(_r[0] <= 0xF04500 <= _r[1] + 32 for _r in _runs64)
+      and any(_r[0] <= 0xF0A57E <= _r[1] + 32 for _r in _runs64))
+check('...and the $FF0216 bit-5 and bit-6 harnesses are byte-level replicas',
+      any(_r[0] <= 0xF09610 <= _r[1] + 32 for _r in _runs64)
+      and any(_r[0] <= 0xF096D0 <= _r[1] + 32 for _r in _runs64))
 check('...and XP1I/XP2I/XP3I sit at exactly $A00 stride while XP4I is off-grid',
       0xF08051 - 0xF07651 == 0xA00 and 0xF07651 - 0xF06C51 == 0xA00
       and 0xF06C51 - 0xF0623A == 0xA17)

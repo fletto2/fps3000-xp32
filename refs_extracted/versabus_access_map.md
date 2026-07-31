@@ -31240,21 +31240,27 @@ with strides confirming the layout independently: **XP1I − XP2I = XP2I − XP3
 while **XP3I − XP4I = `$A17`** — XP4I sitting ~`$17`-`$18` off the grid, the same drift the
 windowed shift scan measured.
 
-**Two things this establishes, both negatives worth having:**
+**All the ≥64-byte replication is in the task layer, and it is fully accounted for**: the known
+five-copy transaction/dispatch structure and the four XP task bodies. There is no sixth copy and
+no large replicated helper hiding in an unread region.
 
-1. **No unidentified template copy exists.** Every replicated block ≥64 bytes is accounted for by
-   the known five-copy transaction/dispatch structure and the four XP task bodies. There is no
-   sixth copy, and no replicated helper hiding in a region nobody has read.
-2. **Nothing in the self-test or init regions is replicated at all.** `$F0870x`-`$F0A82x` — the
-   whole diagnostic suite, the RTOS init, the exception reporters, the config block — contains no
-   64-byte sequence that appears twice.
+**I first wrote that nothing outside the task layer is replicated at all. That is false** — it was
+true only of runs ≥64 bytes, and dropping that filter finds four more replicated pairs, each of
+which is a known or newly-confirmed structure:
 
-So the ROM is built in exactly **two styles**: the kernel, self-test and init are **bespoke**,
-written once; the task layer is **replicated template**, one source and four hand-patched copies.
-That is a clean structural statement about the whole 64 KB, and it explains why the two halves of
-this project have needed different techniques — diffing works on the task layer and tells you
-nothing about the diagnostics.
+| span | what |
+|---|---|
+| `$F044F6`-`$F0453F` and `$F0A574`-`$F0A5BD` (73 bytes) | two of the **eight panel-command issuers** (`$F04500`, `$F0A57E`) — 48 bytes identical plus matching context |
+| `$F04D6A`-`$F04D97` and `$F04DDE`-`$F04E0B` (45 bytes) | **op `$3`'s read and write arms**, which share the page/offset computation verbatim |
+| `$F09600`-`$F09629` and `$F096C2`-`$F096EB` (41 bytes) | **the `$FF0216` bit-5 and bit-6 test harnesses** |
+| `$F0482C`, `$F04E3A` (32 bytes) | smaller repeats inside RDHC |
 
-It also bounds where template-alignment reasoning is even applicable: **only inside
-`$F05684`-`$F086FF`**. Any attempt to apply a per-task offset outside that range is meaningless,
-because there is nothing there to be a copy of.
+The third entry is worth pausing on: this session established from *reading* the code that the
+bit-5 and bit-6 probes share one harness with inverted expectations. The self-similarity sweep
+finds the same fact **mechanically**, from bytes alone, having been told nothing about either
+test. Two routes to one conclusion.
+
+So the ROM is built in two styles — bespoke (kernel, self-test, init) and replicated template (the
+task layer) — but the replication is not confined to the task layer; it is merely *large* only
+there. Template-alignment reasoning across a `$A00` stride applies only inside
+`$F05684`-`$F086FF`; the other repeats are local pairs, not strided copies.
