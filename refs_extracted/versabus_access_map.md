@@ -18515,3 +18515,26 @@ empirically ("panel responses gated on MODE1 bit 12 so they stop corrupting MODE
 register walks"); reading the issuer end to end reaches the same bit for a stated reason.
 Implementation and specification agree, which is the useful outcome — the six-step sequence
 above is now the written form of what the emulator already does.
+
+### The stub's failure mode is itself evidence
+
+Two one-word stubs, same configuration:
+
+| stub at `$10AE` | `jsr` taken | result write-back `$F08604` | distinct PCs reached |
+|---|---|---|---|
+| `$4E75` `rts` | 1 | **1** | 2,925 |
+| `$4E71` `nop` | 1 | 0 | **32,512** |
+
+With `rts` the call returns and the task goes on to read `$10DE` and write it into the
+channel data pair — **a complete callback cycle**, the first in any emulator run. With `nop`
+control falls off the end of the 4-byte slot into `$10B2`, which is argument-array space
+holding zeros, and the machine runs away across RAM: 32,512 distinct PCs against 2,925.
+
+The runaway is not a nuisance, it is confirmation. If `$10AE` held a *pointer* that the
+firmware dereferenced, the contents `$4E71` versus `$4E75` would both be nonsense addresses
+and would fail identically. They fail *differently*, in exactly the way two different
+**instructions** would. That is independent of the `lea`/`movea` byte-level argument and
+reaches the same conclusion.
+
+It also sets the requirement for a chassis model precisely: the slot needs a stub that
+**returns**, and four bytes is enough for one.
