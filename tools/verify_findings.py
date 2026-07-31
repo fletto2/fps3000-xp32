@@ -7084,12 +7084,14 @@ check('...and its TAIL matches at -$18 with only constant patches',
           if _x1t[_i] != _xseg(0xF05F00, -0x18, 0, 0xA00)[_i]) < 120)
 
 import collections as _cwin
-_win = _cwin.defaultdict(list)
+# Renamed from `_win`: that name is already an assignment at ~2152 and a def at
+# ~4897.  Mine was the third binding.  Unique prefix, per guard #6's lesson.
+_selfsim = _cwin.defaultdict(list)
 for _i in range(0xF04488 - 0xF00000, 0xF0A825 - 0xF00000 - 32):
     _sg = _rom_bytes[_i:_i + 32]
     if _sg.count(0) > 16: continue
-    _win[_sg].append(_i + 0xF00000)
-_reps = sorted(a2 for _v in _win.values() if len(_v) > 1 for a2 in _v)
+    _selfsim[_sg].append(_i + 0xF00000)
+_reps = sorted(a2 for _v in _selfsim.values() if len(_v) > 1 for a2 in _v)
 # CORRECTED: replication outside the task layer DOES exist (panel-command
 # issuers, op $3's two arms, the bit-5/bit-6 harnesses) -- it is only the
 # >= 64-byte runs that are confined to the task layer.
