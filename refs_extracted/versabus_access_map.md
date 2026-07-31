@@ -25241,3 +25241,61 @@ Almost certainly the tail of a longer word — the marker is stored as a word an
 characters fit. `$4245` reads as the first two letters of something the author had in mind; the
 kernel's other tags are four characters (`!TCB`, `EXEC`) because they are longwords. Nothing in
 the image disambiguates it, and it does not matter: the value is a magic constant, not a name.
+
+## The kernel BUILDS `jsr` instructions at runtime (2026-07-31)
+
+An immediate census turned up **`$4EB9` written as data at three sites**. `$4EB9` is the
+**`jsr abs.l` opcode**, and in each case the very next instruction writes a longword target
+immediately after it:
+
+```
+CMR, $F03FD4:
+  move.w #$4EB9,$4A(a1)          the JSR OPCODE at +$4A
+  move.l #$F044A2,$4C(a1)        the TARGET at +$4C
+  lea    $4A(a1),a4              take the ADDRESS OF THE GENERATED INSTRUCTION
+  move.l a4,(a3)                 ...and register that
+
+CMR, $F040E2:  the same, on a different structure
+
+CNCTIRQ region, $F02126:
+  move.w #$4EB9,(a3)+            the opcode
+  lea    $F008FA(pc),a0
+  move.l a0,(a3)+                the target -- jsr $F008FA
+```
+
+**So `+$4A`/`+$4C` is not a pointer pair — it is a six-byte generated `jsr` instruction**, and
+what gets registered elsewhere is the *address of the thunk*, to be executed rather than
+dereferenced.
+
+### This corrects the driver-walker registration
+
+This file records "`CMR` registers the FPS driver-chain walker at CCB+`$4C`". More precisely:
+**`+$4A` holds the `jsr` opcode and `+$4C` holds its operand**, together forming
+`jsr $F044A2`, and the CCB field that other code follows points at `+$4A` — the instruction, not
+the address.
+
+### And it unifies directives `$1A` and `$1B`
+
+`$1B` writes the caller's pointer to **`+$4C`** — which is exactly the *operand* of the generated
+`jsr` at `+$4A`. So `$1B` does not install a pointer; it **retargets an existing thunk**. The
+opcode stays, the callee changes. `$1A` writes `+$48`, two bytes lower, consistent with a second
+thunk one longword down.
+
+That explains why those directives are three instructions long and why they set a flag bit rather
+than validating anything: the executable scaffolding already exists, and the directive only
+changes where it points.
+
+### `CNCTIRQ` builds an interrupt thunk
+
+`$F02126` generates `jsr $F008FA` into a buffer walked with `(a3)+`. `$F008FA` is inside the
+kernel's interrupt-exit region, so **connecting an interrupt vector constructs a call thunk** to
+the shared prologue rather than storing a handler address. That is the missing mechanism behind
+the `!IDV` records and the six ISR entry/exit fields: the vector points at generated code.
+
+### Emulation requirement
+
+**This firmware is self-modifying**: it writes instruction bytes into RAM and then executes them.
+On a 68000 there is no instruction cache, so no invalidation is needed and Musashi is unaffected —
+but **any model that caches decoded instructions must invalidate on writes to RAM**, and a
+recompiling or threaded-code emulator would break here without it. Three sites, all in the
+kernel, all building `jsr`s.

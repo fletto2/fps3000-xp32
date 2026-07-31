@@ -5701,6 +5701,22 @@ check('the push idiom is pea <continuation> then the marker',
       insn(0xF01F00) == 'pea.l $f01ea4(pc)' and insn(0xF01F04) == 'move.w #$4245, -(a7)')
 check('so $2B2 on a stock machine means STACK CORRUPTION, reachable despite the vector override',
       insn(0xF001A0) == 'move.w #$2b2, d0')
+
+# ---- the kernel builds jsr instructions at runtime (2026-07-31) ----
+check('$4EB9, the jsr abs.l opcode, is written as DATA at three sites',
+      insn(0xF02126) == 'move.w #$4eb9, (a3)+'
+      and insn(0xF03FD4) == 'move.w #$4eb9, $4a(a1)'
+      and insn(0xF040E2) == 'move.l #$4eb9, $4a(a4)')
+check('...each immediately followed by a longword TARGET',
+      insn(0xF0212E) == 'move.l a0, (a3)+'
+      and insn(0xF03FDA) == 'move.l #$f044a2, $4c(a1)'
+      and insn(0xF040EA) == 'move.l #$f044a2, $4c(a4)')
+check('...and CMR registers the ADDRESS of the generated instruction, not a pointer',
+      insn(0xF03FE2) == 'lea.l $4a(a1), a4' and insn(0xF03FE6) == 'move.l a4, (a3)')
+check('so +$4A/+$4C is a six-byte generated jsr, and $1B retargets its operand',
+      insn(0xF0313C) == 'move.l $120(a6), $4c(a6)' and 0x4C - 0x4A == 2)
+check('CNCTIRQ builds a thunk to the kernel interrupt prologue $F008FA',
+      insn(0xF0212A) == 'lea.l $f008fa(pc), a0')
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')
