@@ -22561,3 +22561,54 @@ the firmware will then expect ASCII hex through `$FF0008`, two characters per wo
 `$FF0218` handshake each. Presenting `$28` starts a raw word transfer to a chassis-programmed
 address. The two are not variants of one transfer — they are different protocols selected by the
 same operation code.
+
+## A FOURTH transport: SBC -> chassis readback, raw and unhandshaken (2026-07-31)
+
+`$E87` bit 5 is the direction bit, and on chassis operation `$0` it selects an entirely different
+transfer that this file has not previously described. `$F04B1E btst.b #$5,$E87 / bne $F04C50`
+leads to:
+
+```
+$F04C50  movea.l #$FF0000,a0
+$F04C56  lea     $8(a0),a0        -> $FF0008, the same shared port
+$F04C5A  movea.l $E58,a1          SOURCE = the chassis-programmed SBC address
+$F04C60  moveq   #$1,d0
+$F04C62  move.w  (a1)+,(a0)       SBC RAM -> the port
+$F04C64  addq.l  #$1,d0
+$F04C66  cmp.l   $E64,d0          ...for $E64 words
+$F04C6C  ble.b   $F04C62
+```
+
+**There is no handshake in this loop at all** — no `$FF0218` arm, no bit-15 poll, no `$FF0004`
+ready check. It is a tight `move.w (a1)+,(a0)` copy running at bus speed.
+
+Compare the inbound raw path (`$E5C = $28`), which does exactly the mirror-image copy
+`move.w (a0),(a1)+` but **wraps every single word in a full `$FF0218` arm/poll/clear cycle**. The
+two directions are not symmetric: **the chassis is flow-controlled when writing to the SBC and
+not flow-controlled when reading from it.**
+
+That asymmetry makes sense if the port is a hardware FIFO the chassis drains on its own schedule
+— the SBC must wait for data to arrive but need not wait to push. It is, though, a hard
+requirement on any model: **a chassis that expects a per-word handshake in this direction will
+never see the data**, and one that models `$FF0008` as a register rather than a queue will see
+only the last word of every transfer.
+
+### It is the fourth unbounded chassis primitive
+
+`$E58` is set by chassis op `$1` with no range check, and this loop dereferences it as a source
+for `$E64` words. So the chassis can **read any SBC memory** through it, exactly as op `$6` can
+poke any address and the raw inbound path can write any address. Together with the register
+interface, the capability list is now:
+
+| primitive | direction | bounds |
+|---|---|---|
+| op `$6` | read/write, 16-bit, any address | **none** |
+| op `$0` `$E5C = $28` | chassis -> SBC, `$E64` words | **none** |
+| **op `$0` bit 5 set** | **SBC -> chassis, `$E64` words** | **none** |
+| bit-7 dispatcher | read/write every CPU register + USP | index `0..$14` only |
+| op `$3` | read/write chassis memory | page/offset only |
+
+**Four unbounded memory primitives and full register access.** The consistent design is that the
+SBC validates *structure* — channel numbers, array indices, record framing, register indices —
+and validates *addresses* essentially nowhere. For emulation that means address faults on these
+paths are not a modelling concern; the hardware would simply perform them.

@@ -4822,6 +4822,23 @@ check("chassis op $0's middle arm falls through into the SLC S-record dispatcher
       and insn(0xF04B12) == 'bne.w $f04c72'
       and insn(0xF04B68) == 'move.w #$400, $218(a5)'
       and insn(0xF04B82) == 'jsr $f05150.l' and insn(0xF04B8A) == 'cmpi.w #$5330, d1')
+
+# ---- the fourth transport: SBC -> chassis, raw, NO handshake (2026-07-31) ----
+check('$E87 bit 5 selects a reverse-direction arm on op $0',
+      insn(0xF04B16) == 'btst.b #$5, $e87.l' and insn(0xF04B1E) == 'bne.w $f04c50')
+check('...which copies SBC RAM to the port with no handshake whatever',
+      insn(0xF04C50) == 'movea.l #$ff0000, a0' and insn(0xF04C56) == 'lea.l $8(a0), a0'
+      and insn(0xF04C5A) == 'movea.l $e58.l, a1' and insn(0xF04C62) == 'move.w (a1)+, (a0)')
+check('...for $E64 words', insn(0xF04C66) == 'cmp.l $e64.l, d0'
+      and insn(0xF04C6C) == 'ble.b $f04c62')
+check('the INBOUND raw path is the mirror image but IS handshaken per word',
+      insn(0xF04AF8) == 'move.w (a0), (a1)+' and insn(0xF04AE2) == 'move.w #$400, $218(a5)'
+      and insn(0xF04AEC) == 'btst.b #$f, d7')
+check('no $FF0218 access appears inside the outbound loop',
+      not any('$218(' in insn(a) for a in range(0xF04C50, 0xF04C6E, 2)
+              if a in _mins))
+check('the per-channel arm validates the channel and reports $25C',
+      insn(0xF04C94) == 'cmp.w $105e.l, d3' and insn(0xF04C9C) == 'move.w #$25c, d0')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
