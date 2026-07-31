@@ -28250,3 +28250,60 @@ the UNIV FMT path, or a direction/enable the operational code sets but never pro
 **Emulator requirements**: bit 5 set must fault both reads and writes at `$400000`; bit 6
 must be inert with respect to that window; bit 7 set with `$FF0218` armed must fault
 `$FF000E`. All three are testable in a model without any chassis behaviour beyond the fault.
+
+## `$FF0212` IS a register — and the indexed sweep that missed it (2026-07-31)
+
+Phase `$1600`'s register-file test writes a walking bit across four consecutive XLTR
+registers and reads every one back:
+
+```
+move.w #$10,d0 / movea.w #$210,a0
+write:  move.w d0,(a6,a0.w)      ; a6 = $FF0000
+        lea $2(a0),a0
+        lsl.b #$1,d0 / bcc write
+...
+verify: move.w #$10,d0 / movea.w #$210,a0
+loop:   cmp.w (a6,a0.w),d0 / bne fail
+        lea $2(a0),a0 / lsl.b #$1,d0 / bcc loop
+```
+
+| register | written | verified |
+|---|---|---|
+| `$FF0210` | `$10` | yes |
+| **`$FF0212`** | **`$20`** | **yes** |
+| `$FF0214` | `$40` | yes |
+| `$FF0216` | `$80` | yes |
+
+**So `$FF0212` is a real, readable/writable register.** This project records it as "**not a
+register** — its bus-log accesses are the second half of 32-bit accesses to `$FF0210`, split
+by the logger". That is now doubly wrong: no 32-bit access to `$FF0210` exists anywhere
+(established earlier), and `$FF0212` is independently written and verified here. The bus-log
+pairing is explained instead by **this loop**, which touches `$210`, `$212`, `$214`, `$216`
+as consecutive words in quick succession.
+
+`$FF0214` likewise has more accesses than the earlier census found — I recorded "exactly one
+access site, a word write in the self-test", and this loop adds a write and a read.
+
+The same routine also verifies:
+
+| register | required read-back |
+|---|---|
+| `$FF0202` MODE1 | `$2000` |
+| `$FF0200` MODE0 | low byte zero |
+| `$FF020C` COUNTER | `$0001` |
+| `$FF0218` STATUS | masked `$610` equals `$400` |
+| `$FF021A` IRQ MASK | `$0FFF` |
+| `$FF0204` CHANNEL_SELECT | equals the phase counter `d6` |
+| `$FF0230`+ BIM block | incrementing `$C0`, `$C1`, `$C2`, … |
+
+### Hazard seven: the index register can be an ADDRESS register
+
+My indexed-addressing sweep matched `\(aN, dM\.[wl]\)` — a **data**-register index. These
+accesses use `(a6, a0.w)`, an **address**-register index, and were invisible to it. Redoing
+the sweep for both forms finds seven address-indexed sites in the image, four of which are
+this test.
+
+That is the seventh distinct mechanism by which a sweep here has produced a confident wrong
+answer, and the second involving indexed addressing specifically. **Both index register
+classes must be matched**, and the earlier "indexed addressing reaches the channel windows"
+finding should be read as *incomplete* rather than wrong.

@@ -6160,6 +6160,15 @@ check('the bit-7 arm requires a fault, the clear arm requires none',
 check('all three probes end in a nop landing zone, so PC semantics need not be exact',
       insn(0xF096AE) == 'nop' and insn(0xF096BA) == 'nop' and insn(0xF098D4) == 'nop')
 
+check('phase $1600 writes a walking bit across $FF0210-$FF0216 and reads it back',
+      insn(0xF09558) == 'move.w #$10, d0' and insn(0xF0955C) == 'movea.w #$210, a0'
+      and insn(0xF09560) == 'move.w d0, (a6, a0.w)' and insn(0xF095C0) == 'cmp.w (a6, a0.w), d0')
+check('...so $FF0212 is a real register, written $20 and verified',
+      insn(0xF09568) == 'lsl.b #$1, d0' and insn(0xF0956A) == 'bcc.b $f09560')
+check('...and the register-file test verifies six more registers by literal',
+      insn(0xF09588) == 'cmpi.w #$2000, $202(a6)' and insn(0xF0959A) == 'cmpi.w #$1, $20c(a6)'
+      and insn(0xF095B0) == 'cmpi.w #$fff, $21a(a6)' and insn(0xF095AA) == 'cmpi.w #$400, d0')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
