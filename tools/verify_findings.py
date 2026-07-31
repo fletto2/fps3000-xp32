@@ -4047,6 +4047,22 @@ check('the op-$A array is exactly the status word plus the four channel records'
       and [0x1066 + (c - 1) * 6 for c in range(1, 5)]
       == [0x1066, 0x106C, 0x1072, 0x1078])
 
+# --- op $C: bidirectional, half-selectable access to the $101E file ------
+# Confirms the command-byte bit assignments on a THIRD operation.
+check('op $C tests bit 5 (direction), bit 6 (half select), bit 4 (auto-inc)',
+      insn(0xF05036) == 'btst.b #$5, $e87.l'
+      and insn(0xF05040) == 'btst.b #$6, $e87.l'
+      and insn(0xF0507E) == 'btst.b #$4, $e87.l')
+check('...reading $101E (high word) or $1020 (low word) into $E74',
+      insn(0xF05054) == 'move.w $101e(a1), $e74.l'
+      and insn(0xF0504A) == 'move.w $1020(a1), $e74.l')
+check('...and writing either half from CHANNEL_SELECT',
+      insn(0xF05070) == 'move.w $204(a0), $101e(a1)'
+      and insn(0xF05068) == 'move.w $204(a0), $1020(a1)')
+# The 16-longword file ends exactly where the channel-present count begins.
+check('$101E + 16*4 == $105E, the channel-present count',
+      0x101E + 16 * 4 == 0x105E)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.

@@ -18303,3 +18303,39 @@ channels changed, followed by each channel's latched status and 32-bit data.
 That closes the readback direction. The chassis writes commands into MODE0 and gets them
 executed; the SBC answers by packing status into `$1064`-`$107C` and letting the chassis
 walk it with operation `$A`.
+
+## `$101E` is the machine's shared register file, reachable four ways (2026-07-30)
+
+Chassis operation `$C` (`$F0502C`) decodes completely, and it is not a read-only array walk:
+
+```
+a1 = $E7A * 4                       ; the index
+bit 5 of the command : direction    ; set = READ out to $E74, clear = WRITE from $FF0204
+bit 6 of the command : half select  ; set -> $101E(a1)  (high word)
+                                    ; clear -> $1020(a1) (low word)
+bit 4 of the command : auto-increment the index
+```
+
+That is the **same 16-longword file RDHC host command 2 windows**, and it confirms the
+command-byte bit assignments this file documents (bit 4 auto-increment, bit 5 direction,
+bit 6 half select) on a third operation.
+
+So `$101E` — 16 longwords, `$101E`-`$105D` — is the central data-exchange area of the
+machine, and **four different mechanisms reach it**:
+
+| reached by | granularity | direction |
+|---|---|---|
+| chassis operation `$C` | one **word**, half-selected by bit 6 | either, bit 5 |
+| RDHC host command 2 | a **window of longwords**, `index+count <= 16` | either, flag |
+| RDHC host command 1, `$14` sub-mode | publishes its address at `$1080+(ch-1)*4` | — |
+| the XP transaction primitive | `a2 = $1080(a2)`, then `move.l -(a2),d1` | read |
+
+The chassis pokes it a word at a time, the host moves longword blocks in and out, and the
+XP tasks pull operands from it to send to the AC. That is the whole data path for
+parameters, and it is why the same area appears in three otherwise unrelated dispatchers.
+
+**And it tiles.** `$101E + 16*4 = $105E`, which is `$105E` — the channel-present count the
+firmware probes at `$F0A202` and every task gates on. The register file ends exactly where
+that counter begins, the same way the op-`$A` status array ends exactly where its sequence
+counter begins. The low-RAM globals are laid out as adjacent, exactly-sized structures
+rather than scattered.
