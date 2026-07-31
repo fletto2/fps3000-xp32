@@ -6362,6 +6362,29 @@ check('the $D0 marker sets both $1FFF1 bits 7 and 6; $50 and the $9F/$9A pattern
       (0xD0 >> 7) & 1 and (0xD0 >> 6) & 1
       and not ((0x50 >> 7) & 1) and not ((0x9F >> 6) & 1) and not ((0x9A >> 6) & 1))
 
+check('PollBoardStatus $F0891C tests board bits 4 and 5, and both set jumps to $F088F4',
+      _b(0xF08926) == 0x082A and _b(0xF0892E) == 0x082A
+      and (insn(0xF08934) or '').startswith('bne') and (insn(0xF0894E) or '').startswith('bra'))
+check('...it NEVER clears d7: no clr/moveq-to-d7 anywhere in $F0891C-$F08956',
+      not any('d7' in (insn(a) or '') and (insn(a) or '').split()[0] in ('clr.l','moveq')
+              for a in range(0xF0891C, 0xF08958, 2)))
+check('...on a fault it clears $1FFF1 bit 6 and writes MODE1 <- $1000',
+      _l(0xF0893C) == 0x0001FFF0 and _w(0xF08948) == 0x1000 and _w(0xF0894A) == 0x0202)
+check('$F088FC is an ISR that sets ALL of d2 and returns: move.w #$ffff,d2 / rte',
+      _w(0xF088FC) == 0x343C and _w(0xF088FE) == 0xFFFF and _w(0xF08900) == 0x4E73)
+check('the phase $1400 helper spins BOUNDED on d2 via dbne with d3 = 15',
+      _w(0xF094BE) == 0x363C and _w(0xF094C0) == 0x000F
+      and (insn(0xF094C6) or '').startswith('dbne'))
+check('phase $1400 arms 1 and 2 are complementary: bclr/beq then bset/bne on VMOD bit 3',
+      _w(0xF0943C) == 0x08AD and _w(0xF0945E) == 0x08ED
+      and _l(0xF0943E) == 0x00030001 and _l(0xF09460) == 0x00030001
+      and (insn(0xF09448) or '').startswith('beq') and (insn(0xF0946A) or '').startswith('bne'))
+check('$F08902 is a group-0 handler: it discards 8 bytes before rte (14-byte frame)',
+      _w(0xF08916) == 0x4FEF and _w(0xF08918) == 0x0008 and _w(0xF0891A) == 0x4E73)
+check('...and selects its fault counter by stack pointer: >=$10000 -> $1F800, else $400',
+      _w(0xF08902) == 0xBFFC and _l(0xF08904) == 0x00010000
+      and _l(0xF0890C) == 0x0001F800 and _w(0xF08914) == 0x0400)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

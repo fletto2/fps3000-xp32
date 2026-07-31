@@ -29160,3 +29160,110 @@ Mid-test, `$1FFF1` bit 6 is clear (phase `$0200` clears it, and only vector `$51
 sets it), so board bit 5 stays clear and the bits-4-and-5 abort cannot fire during phase
 `$1400`. That leaves the unbounded retry there still unexplained without real interrupt
 delivery.
+
+## A failed self-test retries FOREVER, announcing the fault, until the chassis says stop (2026-07-31)
+
+`PollBoardStatus` is `$F0891C`, and reading it settles what happens when a diagnostic fails.
+Every test arm has the same shape: on failure load `d7 = $F0F0F0F0`, call `PollBoardStatus`,
+then `tst.l d7` / `bne` back to the top of the arm.
+
+```
+$F0891C  movem.l a1-a2,-(a7)
+$F08926  btst #$4,$1(a2)          ; board status bit 4
+$F0892C  beq  $F08936             ;   clear -> skip the bit-5 test
+$F0892E  btst #$5,$1(a2)          ; board status bit 5
+$F08934  bne  $F0894E             ;   BOTH set -> abort
+$F08936  tst.l d7
+$F08938  beq  $F08952             ; no fault -> just return
+$F0893A  bclr #$6,$1(a1)          ; FAULT: clear $1FFF1 bit 6 ...
+$F08946  move.w #$1000,$202(a6)   ; ... and write MODE1 <- $1000
+$F0894C  bra  $F08952
+$F0894E  bra  $F088F4             ; -> jmp Phase2Init
+```
+
+**`d7` is never cleared here.** Once an arm sets the fault marker, `tst.l d7` is nonzero on
+every subsequent pass, so the arm's own `bne` retries it indefinitely. There is no counter, no
+timeout and no failure exit inside any test. **The only way out of a failing diagnostic is the
+abort at `$F0894E`, which fires when board-status bits 4 *and* 5 are both set** — and that
+jumps to `Phase2Init`, i.e. **abandon the diagnostics and boot anyway**.
+
+So the firmware's fault policy is not "halt" and not "report and continue". It is:
+
+1. **Announce the fault to the chassis on every retry** — clear `$1FFF1` bit 6 and write
+   **MODE1 = `$1000`** (bit 12, the "a command is valid" bit) — and
+2. **keep re-running the failing test** until the chassis authorises giving up.
+
+That is a service-mode design: a technician's chassis can hold the machine inside the failing
+test indefinitely with a scope on the failing line, then release it by raising bit 5. It also
+means **a stalled board is not necessarily dead** — `CHANNEL_SELECT` will be sitting on the
+exact major/minor phase code of the test that is looping, which is precisely the beacon the
+two-level phase counter exists to provide.
+
+**Emulator consequence, and it is a sharp one.** A model that never raises board bit 5 turns
+any diagnostic failure into a silent infinite loop rather than a visible error. Worse, the
+fault path *clears* `$1FFF1` bit 6, so under the emulator's `bit5 = bit7 AND bit6` derivation
+board bit 5 goes **clear** exactly when a fault occurs — the abort becomes unreachable by
+construction. **A faithful chassis must drive bit 5 independently of VMOD**, which is what the
+emulator's own source comment concluded on other grounds ("an INDEPENDENT chassis line, not
+derived from VMOD at all") before the AND was adopted.
+
+## `d2` is an interrupt-to-mainline signalling register (2026-07-31)
+
+Phase `$1400`'s helper at `$F094AE` arms the VMOD interrupter and then spins on `d2`:
+
+```
+$F094AE  andi.w #$fff8,(a5)     ; clear the request-level field
+$F094B2  clr.l  d2
+$F094B4  bset   #$7,$1(a5)
+$F094BA  ori.w  #$1,(a5)        ; request level 1
+$F094BE  move.w #$f,d3
+$F094C2  btst   #$0,d2
+$F094C6  dbne   d3,$F094C2      ; BOUNDED: 16 iterations
+$F094CA  rts
+```
+
+`d2` is cleared by the main line and set by the **interrupt handler** — nothing else writes
+it between the two. The handlers are right beside `PollBoardStatus`: `$F088FA` is a bare
+`rte`, and **`$F088FC` is `move.w #$ffff,d2` / `rte`** — an ISR whose entire job is to set
+every bit of `d2` so the interrupted main line can see that delivery happened. On a 68000
+there is no register bank switch, so an ISR that deliberately does *not* preserve a register
+is signalling through it. `$F094CC` is the other half: it sets `d2` bit 0 and then waits on
+bit 1, a two-stage handshake between nested deliveries.
+
+**Both spins are bounded** (`dbne` with `d3 = 15`), so a missing interrupt does not hang
+*here* — it falls through with `d2 = 0` and the caller's arm records the fault instead, which
+is what then loops forever per the section above.
+
+## Phase `$1400` tests that `$1FFF1` bit 3 is the interrupt MASK (2026-07-31)
+
+The two middle arms are complementary, which is what identifies the bit:
+
+| arm | VMOD bit 3 | test | required |
+|---|---|---|---|
+| `$F0943C` | **`bclr`** — clear | `btst #$1,d2` / `beq` skips the fault | delivery must **NOT** happen |
+| `$F0945E` | **`bset`** — set | `btst #$1,d2` / `bne` skips the fault | delivery **MUST** happen |
+
+Same helper, same signal, opposite expectations — so the arms isolate exactly one variable
+and **`$1FFF1` bit 3 is the enable/mask for the VMOD interrupt request**. The outer two arms
+(`$F09420`, `$F09482`) test `$F70019` **bit 2** instead, so the board-status bit reflects the
+request line. The handler is installed at `$F09404` as `move.l a2,$140` — **vector `$50`**,
+which is the base of the VMOD vector register file.
+
+## `$F08902` is the self-test's bus-error counter (2026-07-31)
+
+```
+$F08902  cmpa.l #$10000,a7
+$F08908  blt.b  $F08912
+$F0890A  addq.l #$1,$1f800.l
+$F08910  bra.b  $F08916
+$F08912  addq.l #$1,$400.w
+$F08916  lea.l  $8(a7),a7
+$F0891A  rte
+```
+
+`lea $8(a7),a7` before an `rte` that pops 6 more bytes accounts for **14 bytes — the 68000
+group-0 frame**, so this is a bus/address-error handler, and it is the writer of the two
+fault counters this project records at `$0400` and `$1F800`. **Which counter is chosen by the
+current stack pointer**: at or above `$10000` it counts at `$1F800`, below it at `$400`. The
+self-test runs on different stacks at different stages, so the pair distinguishes faults taken
+early from faults taken late — one counter per stack regime, not one per fault class.
