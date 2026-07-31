@@ -30660,3 +30660,38 @@ That completes the tool-selection rule this session arrived at:
 | is X ever touched? | the loose, over-reporting static sweep |
 | what offsets exist / what is the layout? | the sound block-scoped static sweep |
 | is X read or written, how wide, how often? | the runtime access log |
+
+## G6 — what the firmware proves about UNIV FMT, without a schematic (2026-07-31)
+
+Open issue G6 asks what the UNIV FMT card does. The card photo argues for floating-point format
+conversion (two `74S181` ALUs, `74F350` shifters, heavy multiplexing). The firmware cannot say
+what it *does*, but it constrains it sharply, and the argument is short:
+
+1. The architecture is `XLTR → UNIV FMT → XP32 bus`, and System Common Memory hangs off that bus
+   via MEM CTL. So an SBC access through the `$400000` window **traverses UNIV FMT**.
+2. The self-test's SCM march (`$F09B20`) fills 16 KB with `$00000000`, `$FFFFFFFF`, `$55555555`
+   and `$AAAAAAAA` and requires **exact longword read-back** of each, in both traversal
+   directions. The address-line test before it requires each power-of-two offset to read back its
+   own value.
+3. **The machine boots on real hardware** — the stock ROM is confirmed running on the owner's
+   board. Per the fault policy, a failure here would retry forever, so those tests pass on iron.
+
+Therefore: **UNIV FMT is bit-transparent for SBC-initiated accesses through the `$400000`
+window.** Any float-format conversion it performs is not applied on that path — a converter that
+touched `$AAAAAAAA` or `$55555555` would fail the march test and the machine would never boot.
+
+The only transformation the SBC *can* enable in that path is the **16→32 width mux**
+(`$FF0216` bit 4), and the firmware brackets it tightly: set at the start of `CPLOAD`, cleared at
+the end (`$F0550A` / `$F05582`), and the phase-`$1900` truth table shows it routes halves rather
+than transforming values. Even that is width, not format.
+
+**What this does not settle**, and it is the interesting half: nothing here constrains
+**AC-initiated** traffic. The XP-32 arithmetic cards read and write SCM through the same bus
+without the SBC's involvement, and that is exactly where a format converter would earn its
+`74S181`s — converting between the host's word format and the AU's IEEE-754 on the fly as vectors
+stream. The SBC's diagnostics never observe that path, which is consistent with the broader
+finding that the self-test's board coverage stops precisely at the XP-32 boundary.
+
+So G6 narrows to: **UNIV FMT is transparent to the control processor and does its work on the
+array-processor side.** That is a statement the ROM alone can support, and it is testable on
+hardware — write a pattern through the SBC window, read it back with an AC, and compare.

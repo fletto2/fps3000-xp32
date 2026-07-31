@@ -6879,6 +6879,13 @@ check('...and AP I/F windows 1, 6 and 7 appear nowhere as an ADDRESS',
       not any(_re21a.search(r'(?<!#)\$ff00%02x(?![0-9a-f])' % _o, _asm21a)
               for _o in list(range(0x20, 0x40)) + list(range(0xC0, 0x100))))
 
+check('the SCM march requires exact read-back of all four patterns through the window',
+      _l(0xF09BB6) == 0x00000000 and _l(0xF09BBA) == 0xFFFFFFFF
+      and _l(0xF09BBE) == 0x55555555 and _l(0xF09BC2) == 0xAAAAAAAA
+      and _w(0xF09B58) == 0xB090 and _w(0xF09B72) == 0xB290)
+check('...so the SBC-side path through UNIV FMT must be bit-transparent',
+      _l(0xF09B32) == 0x00400000 and _l(0xF09B38) == 0x00404000)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

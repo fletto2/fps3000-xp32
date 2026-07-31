@@ -84,7 +84,7 @@ true conditions. Both classes now guarded.
 | G3 | Bomem DA3 chain-of-custody for FPS-3000 | Open — ask Lovett |
 | G4 | "Am29116 sequencer" terminology | ✓ **Applied 2026-07-25** across CLAUDE.md + cliffsnotes: the chip is the "EU controller", not a microprogram sequencer. Remaining "sequencer" uses are contrastive (Am2910 / ADSP-1401, which genuinely are) |
 | G5 | EU control store: PROM vs SRAM | **Mostly closed** — Hockney p. 241 text + WEITEK datasheet confirm EU=PROM, AU=WCS. Chip-to-role mapping on the physical card still needs photo re-inspection. |
-| G6 | UNIV FMT card role | Open — investigation |
+| G6 | UNIV FMT card role | **Narrowed 2026-07-31 by inference** — the SCM march test requires exact read-back of `$00000000`/`$FFFFFFFF`/`$55555555`/`$AAAAAAAA` through the `$400000` window, and the machine boots on iron, so **UNIV FMT is bit-transparent to the SBC**. Any format conversion happens on AC-initiated traffic, which the SBC's diagnostics never observe. Testable: write a pattern via the SBC, read it with an AC |
 | G7 | AP I/F variant suffix convention | Open — read Board Revision List |
 | G8 | VersaBUS bandwidth analysis | Open — low priority |
 | G9 | Cable doc "validation" overclaim | ✓ Done (softened to "high-confidence-hypothesis verification") |
