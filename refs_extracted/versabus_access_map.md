@@ -17199,3 +17199,30 @@ the result is a property rather than a percentage:
 Every byte the CPU was observed to execute is decoded, in both regions, at the right
 boundary. Coverage percentages move around as mis-attributed bytes are correctly
 demoted to data; this property does not, and it is the one worth regression-testing.
+
+## The TRAP #1 slot's second word is `{parameter-block size, flags}` (2026-07-30)
+
+Each 4-byte slot is `{self-relative offset word, flags word}`, and the flags word decodes.
+The dispatcher does `move.w $2(a2),d2` / `move.w d2,-(a7)` / `btst #$7,d2` /
+`move.b (a7),d5` — and `(a7)` on a pushed word is its **high** byte. So the high byte is a
+**parameter-block size** in bytes, and the low byte is flags: bit 7 = "this directive has a
+parameter block to validate/translate" (the `$F0033A` path), bit 6 = a second translation
+at `$F00354`.
+
+| directive | size | bit 7 | |
+|---|---:|:---:|---|
+| `TERM`, `SUSPND`, `WAIT`, `RDEVNT`, `CMR` | 0 | 0 | take no parameter block |
+| `RESUME` | 8 | 1 | |
+| `WTSEM`, `SGSEM` | 8 | 1 | name + longword |
+| **`CRSEM`, `ATSEM`** | **10** | 1 | **the 10-byte semaphore descriptor** |
+| `START`, `TERMT` | 10 | 1 | |
+| `RSTATE` | 12 | 1 | |
+| `$4C` `CNCTIRQ` | 16 | 1 | |
+| `GTASQ` | 24 | 1 | |
+| `GTSEG`, `CRTCB` | 28 | 1 | |
+
+The check on this reading is that it has to come out right for directives whose parameter
+shape is already known, and it does: the four that take **no** parameters read size 0 with
+bit 7 clear, and **`CRSEM`/`ATSEM` read 10** — independently confirming, from the dispatch
+table, the 10-byte `{4-byte name, longword, word}` block derived elsewhere in this file from
+the descriptors sitting at each task's block base. Two unrelated routes, same number.

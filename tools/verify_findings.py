@@ -3557,6 +3557,38 @@ with tempfile.TemporaryDirectory() as _tdq:
                                                       _udr + 6 + 10 * k + 10])[0] == 0
                               for k in range(_udrn)))
 
+# --- the disassembly's correctness property ------------------------------
+# Coverage percentages move around whenever mis-attributed bytes are correctly
+# demoted to data, so they make a poor regression target.  This does not: a PC
+# the CPU executed is an instruction boundary by construction, so every one of
+# them must appear in the listing as an instruction, at exactly that address.
+if os.path.exists('fps3k_kernel.asm'):
+    _kasm = {}
+    for _ln in open('fps3k_kernel.asm'):
+        _m = re.match(r'\s*([0-9a-f]{6}):\s+((?:[0-9a-f]{2} )+)\s*(\S+)', _ln)
+        if _m:
+            _kasm[int(_m.group(1), 16)] = _m.group(3).upper()
+    with tempfile.TemporaryDirectory() as _tdk:
+        subprocess.run([EMU, '-rom', ROM, '-cycles', '300000000',
+                        '-trace', f'{_tdk}/t'], capture_output=True, timeout=400)
+        _kpcs = {int(x, 16) for x in
+                 re.findall(r'[0-9A-F]{6}', open(f'{_tdk}/t').read())
+                 if 0xF00000 <= int(x, 16) < 0xF04488}
+    check('every executed kernel PC decodes as an instruction in fps3k_kernel.asm',
+          _kpcs and all(_kasm.get(p, 'DC.W') != 'DC.W' for p in _kpcs))
+    # The padding rule that made that true, stated as its own evidence.
+    check('no instruction with opcode word $0000-$0007 was ever executed',
+          not any(struct.unpack('>H', _rom[p - _B:p - _B + 2])[0] <= 0x0007
+                  for p in _kpcs))
+    check('$F09BFE is a $0000 pad and $F09C00, the reset entry, is `jmp $F08700`',
+          struct.unpack('>H', _rom[0xF09BFE - _B:0xF09C00 - _B])[0] == 0
+          and struct.unpack('>I', _rom[4:8])[0] == 0xF09C00
+          and insn(0xF09C00) == 'jmp $f08700.l')
+    check('$F046E0 is four longwords of BIM CR offsets, not code',
+          list(struct.unpack('>4I', _rom[0xF046E0 - _B:0xF046F0 - _B]))
+          == [0x244, 0x246, 0x250, 0x252]
+          and insn(0xF046F0) == 'moveq #$1, d0')
+
 # --- the kernel's static vector-installation table at $F00114 ------------
 # A module-level RAM dump; the earlier one is scoped to its own `with` block.
 with tempfile.TemporaryDirectory() as _tdv:
