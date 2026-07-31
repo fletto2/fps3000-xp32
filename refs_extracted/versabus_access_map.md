@@ -35232,3 +35232,40 @@ Two consequences.
 
 The 42 slots are still one table of `jmp d16(pc)` instructions; what is new is that the firmware
 indexes it from two different origins, which no static reading of the table alone would reveal.
+
+## The dual-base dispatch is systematic across all five copies (2026-07-31)
+
+Sweeping every indexed jump in the image finds **twelve**: two per task body, plus the chassis
+16-operation table (`$F04A80`) and RDHC's four-command table (`$F05354`). The ten task-body sites
+pair up exactly, and **every pair is 84 bytes (21 slots) apart**:
+
+| task | base A (request) | base B (continue) | delta |
+|---|---|---|---:|
+| RDHC | `$F05BA4` | `$F05BF8` | 84 |
+| XP4I | `$F065E4` | `$F06638` | 84 |
+| XP3I | `$F06FFC` | `$F07050` | 84 |
+| XP2I | `$F079FC` | `$F07A50` | 84 |
+| XP1I | `$F083FC` | `$F08450` | 84 |
+
+So the two-origin structure is **architectural, not an XP1I quirk** — it is replicated in all five
+copies with an identical offset, exactly like the four handlers and the 42 slots themselves. Any
+description of this table as "42 entries indexed by a response code" is incomplete without the base:
+the same slot means one thing at `+0` and another at `+84`.
+
+### A check-hardening note worth recording
+
+The harness failure that surfaced alongside this was self-inflicted and instructive. My original
+check for the self-test bypass read
+
+```python
+0xF0873E + _w(0xF0873C) == 0xF088F6
+```
+
+which is wrong twice over — wrong base (`$F0873E` instead of the displacement word's own address)
+**and** wrong expected target (`$F088F6` instead of `$F088F4`). The two errors cancelled, so the
+check passed. Replacing the arithmetic with `_bsrw()` fixed the base and immediately exposed the
+constant.
+
+**A passing check is not evidence the constant in it is right** when the arithmetic around it is
+also unverified. This is the second time today that hardening a correct-looking expression turned up
+a latent wrong value underneath it.

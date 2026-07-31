@@ -7923,7 +7923,7 @@ check('$F08732 bit 5 set branches past the entire self-test suite',
       _w(0xF08732) == 0x0839 and _w(0xF08734) == 0x0005
       and _l(0xF08736) == 0x00F70019
       and _w(0xF0873A) == 0x6600
-      and _bsrw(0xF0873A) == 0xF088F6
+      and _bsrw(0xF0873A) == 0xF088F4
       and _w(0xF088F4) == 0x4EF9 and _l(0xF088F6) == 0x00F09C06)
 
 check('sequence C tests low RAM and $1F000 as each other\'s save area',
@@ -8149,6 +8149,11 @@ check('...and its two live targets are relative slots $0E and $10',
       (0xF08488 - 0xF08450) // 4 == 0x0E
       and (0xF08490 - 0xF08450) // 4 == 0x10
       and _w(0xF08488) == 0x4EFA and _w(0xF08490) == 0x4EFA)
+
+check('all five dispatch-table pairs are exactly 84 bytes (21 slots) apart',
+      all(_b - _a == 84 for _a, _b in
+          ((0xF05BA4, 0xF05BF8), (0xF065E4, 0xF06638), (0xF06FFC, 0xF07050),
+           (0xF079FC, 0xF07A50), (0xF083FC, 0xF08450))))
 
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
