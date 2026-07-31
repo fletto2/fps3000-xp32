@@ -13,6 +13,40 @@ extracted. Further progress requires either:
 
 ## Solved
 
+### Session of 2026-07-31 — SBC-side analysis closed at every level examined
+
+**Completeness results** (each from two or more independent methods):
+- **Control flow closed**: 25 computed dispatches, 22 static jump-table runs (3 structures),
+  2 `bsr` fan-in tables — all identified, none unaccounted.
+- **Device reach closed**: base-address census + pointer-global census + provenance-tracked
+  window sweeps + runtime access log all agree. **Exactly three cached device pointers**
+  (`$0C3A` display, `$0C4E` PTM, `$0E48` VMOD). The SIO base is **never formed**, which is a
+  positive property of the instruction stream, not an absence of observations.
+- **AP I/F settled**: 5 populated windows x exactly 4 registers each; windows 1, 6, 7 have
+  **zero references by any addressing form**.
+- **Byte accounting**: 7 contiguous regions tiling 65,536 exactly; every region read end to end.
+- **Subroutines**: FPS layer 110/110 identified; kernel 41/69 named from the directive tables,
+  remaining 28 each bounded by their calling directive.
+
+**Mechanisms found this session**: the remote register-access interface (chassis can read/write
+every CPU register incl. USP), a **stack canary** (`$4245`='BE', 7 pushes / 1 check / kernel-fatal
+on mismatch), **runtime code generation** (the kernel builds `jsr` thunks in 3 places), a real
+**time-of-day clock** with lock-free sub-tick interpolation, a **privilege model** (7 gated
+directives), **per-task single-step** (trace-enabled dispatch + T-clearing handler), and a
+**second unmapped-space test** covering `$20000`-`$EFFFFF` that runs before the documented
+watchdog.
+
+**Corrections made**: `$26C` is the timeout code and `$26A` an error code (were inverted);
+`$271` reports `$2B` SGSEM not `$29` ATSEM; `$259`-`$260` are validation failures not per-channel
+ops; `PanelErrorMaskTable` is indexed by channel not opcode; the 96-byte "stack leak" retracted;
+BIM registers are 21 of 24 named not 23; board-status counts were inflated by overlapping scans.
+
+**Verification**: `tools/verify_findings.py` at ~1,560 checks. Two harness defects fixed —
+**193 checks were sitting below `sys.exit()` and never ran**, and five checks asserted vacuously
+true conditions. Both classes now guarded.
+
+## Solved
+
 - 64 KB SBC ROM disassembled and annotated (~22K lines, ~80%
   understood)
 - VersaBUS/XLTR protocol reconstructed

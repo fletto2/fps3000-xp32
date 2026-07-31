@@ -5716,7 +5716,7 @@ check('...seven pushes and exactly one check',
 check('the check validates it 18 bytes up the stack',
       insn(0xF00D00) == 'cmpi.w #$4245, $12(a7)')
 check('...and calls the KERNEL-FATAL path when it is wrong',
-      insn(0xF00D06) == 'beq.b $f00d0c' and insn(0xF00D08) == 'bsr.w $f00186.l')
+      insn(0xF00D06) == 'beq.b $f00d0c' and insn(0xF00D08) == 'bsr.w $f00186')
 check('...then discards a 20-byte frame on success', insn(0xF00D0C) == 'adda.l #$14, a7')
 check('the push idiom is pea <continuation> then the marker',
       insn(0xF01F00) == 'pea.l $f01ea4(pc)' and insn(0xF01F04) == 'move.w #$4245, -(a7)')
