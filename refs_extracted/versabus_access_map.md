@@ -23249,3 +23249,43 @@ self-test is heavily branched (`$F0873A` alone skips the entire suite on a board
 address order is not execution order, and because it conflates the major and minor increments.
 **The measured phase values from emulator runs remain the authority**; this table explains *how*
 those values are produced, and should not be used to predict them.
+
+## Per-task segment usage, and the patch budget (2026-07-31)
+
+Every task region ends in zero padding to its `!TST` segment boundary. Measuring used bytes
+against allocated:
+
+| task | segment | size | used | padding | free at |
+|---|---|---:|---:|---:|---|
+| RDHC | `$F04600`-`$F05CFF` | 5888 | 5713 | **175** | `$F05C51` |
+| IO1I | `$F05D00`-`$F05EFF` | 512 | 392 | **120** | `$F05E88` |
+| XP4I | `$F05F00`-`$F068FF` | 2560 | 2522 | **38** | `$F068DA` |
+| XP3I | `$F06900`-`$F072FF` | 2560 | 2546 | **14** | `$F072F2` |
+| XP2I | `$F07300`-`$F07CFF` | 2560 | 2546 | **14** | `$F07CF2` |
+| XP1I | `$F07D00`-`$F086FF` | 2560 | 2546 | **14** | `$F086F2` |
+| | | **16,640** | **16,265** | **375** | |
+
+### A fifth confirmation of XP4I's `-$18` shift
+
+XP1I, XP2I and XP3I each leave **14** bytes; XP4I leaves **38**. The difference is **24 bytes =
+`$18`** — exactly the tail shift measured four other ways (the byte-diff alignment, the
+dispatch-table offset, the helper-call address, and the transaction primitive's position). XP4I's
+code is 24 bytes shorter, so its padding is 24 bytes longer. Five independent derivations of the
+same number, the last one from counting trailing zeros.
+
+### The patch budget is tight
+
+**The three symmetric XP tasks have 14 bytes of slack each** in a 2,560-byte segment — 0.5%. Any
+modification to XP1I, XP2I or XP3I that adds more than 14 bytes requires relocating the task or
+moving code into the 22 KB blank tail at `$F0A825` and reaching it by a jump.
+
+That interacts directly with the replication finding: a fix to the transaction logic must be
+applied **five times**, and in three of those five there is room for **fourteen bytes**. A
+`jsr`/`rts` pair to shared code in the blank tail costs 6 bytes at each site plus the shared body
+— which fits, and is the natural way to patch this ROM.
+
+RDHC's 175 bytes and TCBIO1I's 120 are comfortable by comparison, and TCBIO1I is the only task
+with real headroom in proportion (23% of its segment).
+
+**None of this constrains the monitor**, which lives in the blank tail and is reached through the
+reset or panic vector — but it does constrain any in-place change to task behaviour.

@@ -5039,6 +5039,24 @@ check('the MINOR sub-phase step is addq.b #$1,d6, used 33 times',
 check('...so CHANNEL_SELECT carries {major phase, minor sub-phase}',
       _d6[('addi.w', '#$100, d6')] > 0 and _d6[('addq.b', '#$1, d6')] > 0)
 check('the sequence A base is loaded at $F08764', insn(0xF08764) == 'move.l #$200, d6')
+
+# ---- per-task segment usage and the patch budget (2026-07-31) ----
+def _pad(lo, hi):
+    _l = hi - 1
+    while _l >= lo and _rom[_l - 0xF00000] == 0: _l -= 1
+    return hi - 1 - _l
+_pads = {n: _pad(lo, hi) for n, lo, hi in
+         (('RDHC', 0xF04600, 0xF05D00), ('IO1I', 0xF05D00, 0xF05F00),
+          ('XP4I', 0xF05F00, 0xF06900), ('XP3I', 0xF06900, 0xF07300),
+          ('XP2I', 0xF07300, 0xF07D00), ('XP1I', 0xF07D00, 0xF08700))}
+check('the three symmetric XP tasks leave exactly 14 bytes each',
+      _pads['XP1I'] == _pads['XP2I'] == _pads['XP3I'] == 14, _pads)
+check('XP4I leaves 38 -- exactly 24 = $18 more, a fifth confirmation of its shift',
+      _pads['XP4I'] == 38 and _pads['XP4I'] - _pads['XP1I'] == 0x18)
+check('RDHC leaves 175 and TCBIO1I 120',
+      _pads['RDHC'] == 175 and _pads['IO1I'] == 120)
+check('...so a >14-byte in-place patch to XP1I/2/3 is impossible without relocating',
+      _pads['XP1I'] < 16)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
