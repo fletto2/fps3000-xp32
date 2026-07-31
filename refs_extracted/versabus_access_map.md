@@ -32706,3 +32706,52 @@ $F02DBC  rte
 — privileged, size 0, non-returning — hands its own TCB to the termination path. That makes it a
 third termination entry alongside `$0F` `TERM` and `$10` `TERMT`; what distinguishes it is not
 determinable from the ROM alone.
+
+## Four more directives, and a correction to `$3B`'s key location (2026-07-31)
+
+### `$08` is `SNPTRC`, confirmed
+
+```
+$F03764  move.l  a0,d6 ; movea.l a0,a5        ; the USER BUFFER, passed in a0
+$F03768  movea.l $c30.l,a1                    ; $0C30 = the trace-table slot
+$F03772  movea.l $4(a1),a0 ; suba.l a1,a0     ; extent from the header (TRCPTR/TRCLNG)
+```
+
+This project names `$08` as `SNPTRC`, "move trace table to user buffer", and the handler does
+exactly that — reading the table through slot `$0C30` and computing its extent from the two header
+longwords. **Its declared parameter block is 0 bytes because the buffer arrives in `a0`**, which is
+why a size-based family analysis could not place it.
+
+### `$21` is an unnamed ASQ directive
+
+`movea.l $40(a6),a4` then status **4** if the pointer is null — byte-for-byte the shape of `$23`
+`QEVNT`. `$21` is **33 decimal**, and Motorola's ASQ numbers run `GTASQ` 31, `DEASQ` 32, `RDEVNT`
+34, `QEVNT` 35, `WTEVNT` 36 — **33 is absent from the list this project has**. So `$21` is a sixth
+ASQ operation with no available name, sitting between `DEASQ` and `RDEVNT`.
+
+### `$3B`'s magic key is in the SAVED `a0`, not a parameter block
+
+```
+$F039C2  move.w #$1,$102(a6)          ; default status
+$F039C8  move.l $120(a6),d0           ; <- TCB+$120 = the task's SAVED a0
+$F039CC  cmpi.l #$4baa7bfb,d0         ; the magic constant
+$F039D2  bne.b  $F03A12
+```
+
+This project records `$3B` as "gated by the magic constant `$4BAA7BFB` **at `+$120` of its
+parameter block**". **`$120` is not a parameter-block offset — it is `TCB+$120`, the saved `a0`**
+in the register frame mapped earlier today. And `$3B`'s declared parameter-block size is **0**,
+so there is no parameter block for an offset to be into.
+
+So the gate is: **pass the key in `a0`**. That is a materially different interface — a caller needs
+one register, not a 292-byte structure — and it makes the directive far more usable by host
+software than the documented reading suggested, which matters given this project's assessment that
+`$3B` is "a second route to what the chassis already has": arbitrary supervisor execution.
+
+The handler then tests **`TCB+$70`** (an unidentified field) and reads the display pointer `$0C3A`.
+
+### `$2E` shares code with a TRAP #0 handler
+
+`movea.l a6,a4` / `bra` into the routine the listing labels `TRAP0_dir_10` — so the same
+implementation serves a TRAP #1 directive and a TRAP #0 one, entered two bytes apart in the usual
+dual-entry style.

@@ -7466,6 +7466,18 @@ check('directive $16 hands its own TCB to the termination path at $F00804',
       _t1slot(0x16)[0] == 0xF02DB6
       and _w(0xF02DB6) == 0x41D6 and _bsrw(0xF02DB8) == 0xF00804)
 
+check('$08 SNPTRC reads the trace table through slot $0C30, buffer in a0',
+      _t1slot(0x08)[0] == 0xF03764 and (_t1slot(0x08)[1] >> 8) == 0
+      and _w(0xF03764) == 0x2C08 and _w(0xF03768) == 0x2279 and _l(0xF0376A) == 0x00000C30)
+check('$3B takes its magic key from TCB+$120 (saved a0), with NO parameter block',
+      (_t1slot(0x3B)[1] >> 8) == 0
+      and _w(0xF039C8) == 0x202E and _w(0xF039CA) == 0x0120
+      and _w(0xF039CC) == 0x0C80 and _l(0xF039CE) == 0x4BAA7BFB)
+check('$21 has QEVNT\'s shape: ASQ pointer TCB+$40, status 4 when null',
+      _t1slot(0x21)[0] == 0xF0267A
+      and _w(0xF0267A) == 0x286E and _w(0xF0267C) == 0x0040
+      and _w(0xF02682) == 0x586E and _w(0xF02684) == 0x0102)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
