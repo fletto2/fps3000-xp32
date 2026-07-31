@@ -34881,3 +34881,54 @@ compatible with, and should be read alongside, the fact that the site never exec
 executed application instructions — 89% — are in `$F08700`-`$F0A824`. The six tasks together
 contribute 226. That is the honest shape of a green boot: it is overwhelmingly a hardware
 diagnostic, and the RTOS application layer barely starts.
+
+## RDHC's entire executed life is 16 instructions — and both its parameter blocks decode (2026-07-31)
+
+The 16 executed RDHC instructions, in order:
+
+```
+$F046F0  moveq #$1,d0 / lea $F046B0,a0 / trap #1    ; GTSEG  — get the task segment
+$F0470A  lea $116(a0),a7                             ; stack at segment base + $116
+$F0470E  lea (a0),a6                                 ; a6 = segment base (the structure pointer)
+$F04710  moveq #$4c,d0 / lea $F04600,a0 / trap #1    ; CNCTIRQ — connect the interrupt vector
+$F0472A  movea.l #$ff0000,a5
+$F04730  move.w #$5e,$230(a5)                        ; BIM0 CR0 = $5E, level 6
+$F0473C  moveq #$13,d0 / trap #1                     ; WAIT — and it never returns
+```
+
+Allocate a segment, set the stack, connect a vector, arm one BIM channel, block. Everything else in
+RDHC's 1509-instruction region is behind that `WAIT`.
+
+### `TCBLookupTable` at `$F04600` is misnamed — it is the CNCTIRQ parameter block
+
+```
++$00  $52444843  'RDHC'      task name
++$04  $00000000              session
++$08  $00000041              VECTOR $41
++$0C  $00F04930              HANDLER $F04930
+```
+
+Sixteen bytes, which is exactly the size `CNCTIRQ` (`$4C`) declares in the TRAP #1 table, and the
+vector/handler pair is precisely the one recorded for RDHC (BIM0 VR `$FF0238` = `$41`, ISR
+`$F04930`) — derived here from the *BIM programming* and now confirmed from the *directive's own
+parameter block*, two independent routes. The name should be `RDHC_CnctIrqBlock` or similar; it is
+the same class of error as `TCBDefinitionTable` at `$F0A57E` (really a panel-command issuer) and
+`PanelErrorMaskTable`, all recorded as suspect.
+
+### The GTSEG block at `$F046B0` confirms three documented facts at once
+
+```
++$00  'RDHC'        task
++$04  0             session
++$08  $20000000     options/attributes
++$0C  'STCK'        SEGMENT NAME
++$10  0             logical address
++$14  $00000190     LENGTH = 400 bytes
++$18  'USER'
+```
+
+28 bytes, matching `SGPBL` exactly. **`'STCK'`** is the stack-segment name this project derived from
+the runtime `!TST`; **`$190`** is the very number recorded for the allocator's rounding ("`$190` of
+requested stack becomes `$200`"), here seen as the *request* rather than inferred from the result;
+and `'USER'` sits at `+$18`. Three facts established by other means, all visible in one 28-byte ROM
+constant.

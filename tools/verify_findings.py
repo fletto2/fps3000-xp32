@@ -8058,6 +8058,15 @@ check('...and the four XP task regions are each exactly $A00 bytes',
           ((0xF05F00, 0xF068FF), (0xF06900, 0xF072FF),
            (0xF07300, 0xF07CFF), (0xF07D00, 0xF086FF))))
 
+check('$F04600 is RDHC\'s CNCTIRQ block: name, session, vector $41, handler $F04930',
+      _l(0xF04600) == 0x52444843 and _l(0xF04604) == 0
+      and _l(0xF04608) == 0x00000041 and _l(0xF0460C) == 0x00F04930)
+check('$F046B0 is RDHC\'s GTSEG block: RDHC / STCK / length $190 / USER',
+      _l(0xF046B0) == 0x52444843 and _l(0xF046BC) == 0x5354434B
+      and _l(0xF046C4) == 0x00000190 and _l(0xF046C8) == 0x55534552)
+check('...and $190 rounds up to exactly one 256-byte page pair ($200)',
+      (0x190 + 0xFF) // 0x100 * 0x100 == 0x200)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
