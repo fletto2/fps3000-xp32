@@ -5830,7 +5830,16 @@ check('the register-save areas +$100 and +$120 are both heavily used',
 check('TCB+$10 is copied into another TCB\'s saved-a0 slot -- a name used as an argument',
       sum(1 for _a, (_m, _o, _) in _mins.items()
           if _o == '$10(a5), $120(a6)') == 3)
-check('...consistent with the documented task name at TCB+$10', True is (0x10 < 0x14))
+# A real assertion: +$10 and +$14 are an ADJACENT LONGWORD PAIR, both accessed
+# as longwords, which is what a {name, session} pair looks like.  (An earlier
+# draft asserted `True is (0x10 < 0x14)`, which is vacuous -- the fourth such
+# slip this session, all caught by re-reading rather than by the harness, since
+# a vacuous check PASSES.)
+check('...and +$10/+$14 are an adjacent longword pair, both accessed as longwords',
+      0x14 - 0x10 == 4
+      and sum(1 for _a, (_m, _o, _) in _mins.items()
+              if _a < 0xF04488 and _m.startswith('move.l')
+              and _mre.search(r'\$1[04]\((a5|a6)\)', _o)) >= 20)
 check('TCB+$14 is overwhelmingly READ and COMPARED, as a session id would be',
       sum(1 for _a, (_m, _o, _) in _mins.items()
           if _a < 0xF04488 and _mre.search(r'\$14\((a5|a6)\), d\d$', _o)) >= 11)
