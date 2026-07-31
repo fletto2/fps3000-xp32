@@ -477,3 +477,41 @@ that arm is not reached. Both are worth knowing.
 The fix is small and principled: back `$1FFE2`, `$1FFE4`, `$1FFE6`, `$1FFEA` and `$1FFF2`
 as device registers, and supply their contents as the vector when the corresponding request
 line is acknowledged.
+
+## An unresolved discrepancy: phase `$1400` requires an interrupt the model cannot deliver
+
+Phase `$1400` arm 2 is unambiguous:
+
+```
+$F0945E  bset.b #$3,$1(a5)      ; gate request line 2 on
+$F09464  bsr.b  $f094ae         ; arm bit 7, request level 1, spin for delivery
+$F09466  btst.b #$1,d2          ; d2 bit 1 is set ONLY by the handler at vector $52
+$F0946A  bne.b  $f09472         ; ...bne skips the fault marker, so bne is the OK path
+$F0946C  move.l #$f0f0f0f0,d7
+$F09478  bne.b  $f0945e         ; UNBOUNDED retry
+```
+
+Without a real interrupt reaching `$F094E4`, `d2` stays zero and this arm retries forever.
+
+**The emulator has no VMOD interrupter path.** Its only `m68k_set_irq` sources are
+`versabus_bim_pending_level()` (the MC68153 BIMs), the PTM, and two fixed fallbacks. Nothing
+derives an interrupt from `vmod_ctrl` bits 0-2 or bit 7, and the vector registers that would
+supply `$50`-`$54` are modelled as RAM.
+
+Yet this project records the emulator reaching phases `$0100`-`$1A00` and `$2000`. **Both
+cannot be true**, so one of these holds:
+
+1. an interrupt from another source (a BIM, or a fallback level) happens to land on vector
+   `$52` and set `d2` bit 1 — accidental success;
+2. the suite **aborts** out of phase `$1400` via `$F0891C`, whose bits-4-and-5 test jumps to
+   `$F088F4` → `$F09C06` and ends the self-test — in which case "phases reached" counts phase
+   *codes broadcast*, not phases *passed*, and the later codes come from somewhere else;
+3. phase `$1400` is not actually reached and the recorded range is optimistic.
+
+**This is directly measurable** — count executions of `$F094E4` (the vector-`$52` handler)
+and of `$F088F4` (the abort) in a normal run. I have not run it here because a regression
+pass was in flight, so this is recorded as a discrepancy rather than resolved.
+
+It matters beyond bookkeeping: if the answer is (2), then **the abort path is load-bearing in
+the current model** — the boot completes because the self-test gives up, not because it
+passes. That would make several "the emulator reaches X" claims weaker than they read.
