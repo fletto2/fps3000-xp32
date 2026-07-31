@@ -26136,7 +26136,16 @@ separate globals at all:
 | `$0C7C` | a table base taken by `lea` at init |
 | `$0CC0` | written once from `(a6)` at `$F004EC` |
 
-### `$0C5C` is a 100-tick divider that drives the display once a second
+### `$0C5C` — RETRACTED as a "1 Hz heartbeat" (corrected later the same day)
+
+> **The section below is wrong and is kept for the record.** `$F009EA` is not reached from
+> the tick path at all: it has **no code reference anywhere**, and is the target of
+> **vector `$18` = 24, the SPURIOUS-INTERRUPT vector**. The FPS layer then installs the
+> panic catch-all `$F0A27A` at vector address `$60` (`$F0A142`), which *is* vector 24 — so
+> the block never executes on this machine. `$0C5C` counts spurious interrupts, not ticks,
+> and the display gets no periodic traffic. See "The display is a boot-only channel" below.
+
+#### (superseded) `$0C5C` as a 100-tick divider
 
 ```
 addq.w  #$1,$c5c.w
@@ -27005,3 +27014,58 @@ continuation is itself guarded, so a run of bad pages is skipped one page at a t
 - **RAM is zeroed by this pass**, which is the deeper reason the firmware "never reads a byte
   it has not written": low RAM is explicitly cleared at boot, so the parity hazard recorded
   in the divergence table is avoided by the firmware rather than by luck.
+
+
+## The display is a boot-only channel, and two RMS68K handlers are dead (2026-07-31)
+
+Tracing which vectors the FPS layer overrides settles three things at once, and **corrects a
+claim I made earlier in this same session**.
+
+`$F0A11A`-`$F0A160` installs the FPS handlers, and the relevant parts are:
+
+```
+lea.l $f0a27a(pc),a1
+move.l a1,$60.w          ; vector 24 = SPURIOUS  -> the panic catch-all
+move.w #$b6,d0
+movea.l #$124,a0         ; vector 73 ...
+loop: cmpa.l #$230,a0    ; ... skipping vector 140 ...
+      beq skip
+      move.l a1,(a0)+
+skip: addq.l #$4,a0
+      dbra d0,loop       ; ... through vector 252
+```
+
+**1. The "1 Hz display heartbeat" does not exist.** `$F009EA` — the `$0C5C` divider and the
+four display writes — has **no code reference in the image** and is reached only as
+**vector 24, the spurious-interrupt handler**. Vector 24 is overridden at `$F0A142`. So
+`$0C5C` counts spurious interrupts, the divider never reaches 100 in normal operation, and
+the display receives nothing after boot. My earlier claim that the panel is "written once a
+second for as long as the machine runs" was wrong: I inferred "tick" from the divider's
+value of 100 against the 10 ms tick without checking what invoked the handler.
+
+**The display is therefore a boot-only channel** with exactly three codes — `$BF` and `$C0`
+during initialisation, and `$A2` looping on init failure. That also removes the `$0804`
+collision I described: with the heartbeat dead, nothing overwrites the init reporter's SR.
+
+**2. There is a null-pointer read-modify-write, and it is also dead.** `$F009DC` does
+`movea.l $e48.w,a0` / `andi.w #$ffdf,(a0)` with **no zero check**. Its sibling at `$F008BA`
+*does* check (`move.l $e48.w,d0` / `beq`). Since `$0E48` is never written (below), a0 is
+zero and the instruction would clear bit 5 of address `$0000`. It never runs: `$F009DC` is
+**vector `$93` = 147**, which falls inside the override loop's range.
+
+**3. `$0E48` is never written — the VMOD handshake is unreachable code.** `$0E48` has
+exactly one writer, `$F0A492`, and `$F0A490` is `60 1C` = an **unconditional `bra.b` to
+`$F0A4AE`** that jumps over it. Nothing branches to `$F0A492` (zero references) and
+`$F0A498` is referenced only by its own loop-back. The project's own listing already renders
+`$F0A492` as `DC.W 0x23ca`, having reached the same conclusion.
+
+**So this file's description of "the boot's first chassis handshake" — alternating
+`$CD0`/`$CF0` into the VMOD register until `$F70019` bit 1 responds, with the note that a
+model failing it "hangs at `$F0A498`" — describes code that cannot execute.** What actually
+runs is the single `move.w #$cd0,(a2)` at `$F0A48C`, and then the branch. A chassis model
+therefore does **not** need to satisfy that handshake, and any emulator hang observed at
+`$F0A498` must have had another cause.
+
+What the surviving code does do is write **four blocks of eight words** through a small
+offset table at `$F0A4BE`, based at the 4 KB-rounded RAM top — that part is live, and it is
+what a model must reproduce.
