@@ -4125,6 +4125,35 @@ check('...with no return-to-zero and no illegal-instruction exception',
 check('...and the machine ends in the RTOS idle loop, not a spin',
       bool(_hpc) and 0xF00F00 <= int(_hpc.group(1), 16) <= 0xF01000)
 
+# --- the 42-slot dispatch tables, recounted ------------------------------
+_TABS = {'RDHC': 0xF05BA4, 'XP4I': 0xF065E4, 'XP3I': 0xF06FFC,
+         'XP2I': 0xF079FC, 'XP1I': 0xF083FC}
+
+
+def _tabsig(T):
+    """Signature of a 42-slot table: '-' for a no-op slot, else a letter per
+    distinct jump target in first-appearance order."""
+    sig, order = [], {}
+    for n in range(42):
+        a = T + 4 * n
+        if _rom[a - _B:a - _B + 4] == bytes.fromhex('4e754e71'):
+            sig.append('-')
+            continue
+        m = re.search(r'\$([0-9a-f]+)', insn(a))
+        t = int(m.group(1), 16) if m else 0
+        sig.append(order.setdefault(t, chr(ord('A') + len(order))))
+    return ''.join(sig)
+
+
+check('all five 42-slot tables share one index-to-handler pattern',
+      len({_tabsig(T) for T in _TABS.values()}) == 1)
+check('...and the slots with no handler are 4E75 4E71 (rts/nop), 13 of them',
+      _tabsig(0xF083FC).count('-') == 13)
+# Only slots 14 ($0E) and 16 ($10) are reachable from the normal request path,
+# and both are D1_SEND -- "send the operation, then send the operand".
+check('slots 14 and 16 both dispatch to D1_SEND ($F0810A)',
+      all('f0810a' in insn(0xF083FC + 4 * n) for n in (14, 16)))
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
