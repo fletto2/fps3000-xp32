@@ -29007,3 +29007,36 @@ Two smaller results fall out:
 **This is the third equation-level requirement extracted from the suite**, after the
 `$FF0216` gate table and the width-mux truth table. All three were previously recorded as
 empirically-tuned emulator behaviour; all three are actually stated by the firmware.
+
+## Phase `$1200` derives the board-bit-1 equation's second term (2026-07-31)
+
+Three arms, each setting VMOD state and requiring a specific board-bit-1 reading:
+
+| arm | VMOD state | branch | board `$F70019` bit 1 |
+|---|---|---|---|
+| `$F0926E` | `$1FFF1` bit 5 **set** | `bne` | **set** |
+| `$F09290` | `$1FFF1` bit 5 **clear** | `beq` | **clear** |
+| `$F092B2` | `$1FFF0` bit 0 **clear**, `$1FFF1` bits 7 and 5 **set** | `bne` | **set** |
+
+The documented equation is
+
+```
+board bit 1 = NOT(bit 4 of $1FFF1)  OR  (bit 5 AND NOT bit 0 of $1FFF0)
+```
+
+and with bit 4 left set by phase `$1100`, the first term is zero, so the reading reduces to
+`bit 5 AND NOT bit 0`. All three arms agree: bit 5 alone drives bit 1, and the third arm
+**explicitly clears `$1FFF0` bit 0** before requiring the set reading — which is the only
+direct evidence in the ROM for that term.
+
+Note the instruction: `bclr.b #$8,(a5)`. On memory the bit number is **mod 8**, so `#$8` is
+**bit 0** — the caution this project records, in live use on `$1FFF0`. Read naively as bit 8
+it would be nonsense on a byte operand, and the term would be unattributable.
+
+**That is the fourth chassis equation extracted from the suite** — after the `$FF0216` gate
+table, the width mux, and board bit 3 at phase `$0800`. Every one had been recorded as
+emulator behaviour arrived at by tuning; every one is stated by the firmware.
+
+The remaining documented equations are board bit 2 (`NOT(bit 5) OR (bit 3 AND bit 0)`) and
+bit 4 (busy/ready from MODE1 bit 15), plus bit 5 = `$1FFF1` bit 6 directly. The first should
+be extractable the same way from phase `$1400`.

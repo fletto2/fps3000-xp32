@@ -6323,6 +6323,15 @@ check('...via a helper that clears bit 6 and polls board bit 3 sixteen times',
       insn(0xF0903C) == 'bclr.b #$6, $1(a5)' and insn(0xF09042) == 'move.w #$f, d0'
       and insn(0xF09046) == 'btst.b #$3, $1(a4)' and insn(0xF0904C) == 'dbeq d0, $f09046')
 
+check('phase $1200 arm 1: VMOD bit 5 set requires board bit 1 set',
+      insn(0xF0926E) == 'bset.b #$5, $1(a5)' and insn(0xF09274) == 'btst.b #$1, $1(a4)'
+      and insn(0xF0927A) == 'bne.b $f09282')
+check('...arm 2: bit 5 clear requires board bit 1 clear',
+      insn(0xF09290) == 'bclr.b #$5, $1(a5)' and insn(0xF0929C) == 'beq.b $f092a4')
+check('...arm 3 clears $1FFF0 bit 0 with bclr.b #$8 -- mod 8, the documented caution',
+      insn(0xF092B2) == 'bclr.b #$8, (a5)' and 0x8 % 8 == 0
+      and insn(0xF092D6) == 'bne.b $f092de')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
