@@ -8099,6 +8099,12 @@ check('the three tasks use different stack offsets: $116 / $10A / $114',
       and _w(0xF05D50) == 0x4FE8 and _w(0xF05D52) == 0x010A
       and _w(0xF07D64) == 0x4FE8 and _w(0xF07D66) == 0x0114)
 
+check('every XP task arms its BIM and connects its vector OUTSIDE the presence gate',
+      # XP1I: gate at $F07DF6, port write $F07E00, BIM arm $F07E12 -- arm is past the gate target
+      _w(0xF07DFE) >> 8 == 0x6D
+      and 0xF07E00 + (_w(0xF07DFE) & 0xFF) == 0xF07E06
+      and 0xF07E12 > 0xF07E06)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

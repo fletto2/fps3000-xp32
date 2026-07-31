@@ -35014,3 +35014,29 @@ being disconnected.
 That last point matters for a chassis model: **a channel the firmware considers absent will still
 respond to an interrupt** by entering its ISR, because nothing in the gate touches the vector or the
 BIM.
+
+## Channel "presence" does NOT gate interrupt delivery — predicted and measured (2026-07-31)
+
+The `$105E` presence gate is `cmpi.w #<own channel>,$105e / blt`, and reading which instructions it
+skips predicts that an "absent" channel is still fully wired for interrupts. Tested directly:
+
+| leg | measured |
+|---|---|
+| `$105E` in the default 2-AC configuration | **2** — so channel 3 is absent |
+| vector `$47` slot (`$11C`) after boot | **`$00F06AE6`** — XP3I's ISR *is* installed |
+| `FPS3K_XPIRQ=3`, breakpoint on `$F06AE6` | **reached**, at 9,148,508 instructions |
+
+So a channel the firmware considers absent has its **vector connected**, its **BIM channel enabled**
+(`$FF0250 <- $5F`), and **enters its ISR** when the interrupt is raised. The gate skips exactly one
+instruction — the `$FF00x4 <- 0` port initialisation — and nothing else.
+
+**Contract for a chassis model:** presence is not isolation. Raising an interrupt on a channel the
+SBC believes is unpopulated will run that channel's ISR, which will then read `+$0E`/`+$08`/`+$0A`
+and latch whatever the model returns into `$1066 + (ch-1)*6`. A model that treats "absent" as
+"unreachable" and a model that treats it as "not initialised" behave differently, and the firmware
+means the second.
+
+This also sharpens the recorded statement that "AC3 and AC4 task slots are dormant". They are
+dormant in the sense of never initialising a port and never waking on their own — **not** in the
+sense of being disconnected from the interrupt system. `$1062` reads 0 after the forced interrupt,
+so the ISR ran and recorded no bit-15-clear event, which is what an empty channel window produces.
