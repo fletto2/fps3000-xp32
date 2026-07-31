@@ -35340,3 +35340,35 @@ those slots.
 **Both descriptions are correct; they differ in which base they read through.** The recorded one is
 what a static reading of the table yields, and it took following an execution into the table to find
 that the firmware ever uses the other origin.
+
+## The measured footprint of a driven channel: five registers (2026-07-31)
+
+Bus log over `FPS3K_XPIRQ=1`, aggregated:
+
+| register | accesses | role |
+|---|---:|---|
+| `$F70019` | 590,333 | board status (self-test, unrelated to the channel) |
+| `$FF0204` | 32,974 | phase counter (self-test) |
+| **`$FF004E`** | **1,512** | channel 1 command/status |
+| **`$FF004A`** | **1,490** | channel 1 data LOW |
+| **`$FF0048`** | **1,490** | channel 1 data HIGH |
+| **`$FF0202`** | **1,479** | XLTR MODE1 |
+| **`$FF0244`** | **1,474** | channel 1's BIM control register |
+| `$FF0216`/`$0210`/`$0218`/`$021A`/`$0214`/`$020C` | 4-18 each | init and self-test |
+| `$FF0246`/`$024A`/`$024C`/`$024E` | 3 each | other BIM registers, init only |
+
+**One channel transaction touches exactly five registers**, and nothing else in the AP I/F or XLTR
+moves. The counts cluster tightly (1474-1512) because each is touched once per poll iteration of the
+1000-iteration `$F07F12` loop: status read, data pair written, MODE1 tested for busy, BIM CR
+masked/restored.
+
+**`$FF004A` is accessed 1,490 times — and is still never *named* in the image.** Both statements are
+true and they are the same fact from two directions: the port has zero absolute or displacement
+references because it is only ever reached as `$2(a1)`, yet it is one of the busiest registers on the
+board once a channel runs. This is the runtime confirmation of the static finding recorded above,
+and the clearest possible illustration of why an absolute-address census undercounts this firmware.
+
+**For a chassis model** the per-transaction contract is therefore small and fully enumerated: answer
+`+$0E` with the DONE/ERROR bits, accept writes to `+$08`/`+$0A`, tolerate MODE1 read-modify-writes,
+and tolerate the BIM CR being driven to `$4F` and back to `$5F`. Nothing else is exercised by a
+channel cycle.

@@ -8172,6 +8172,9 @@ check('...and the continue half pairs POLL with BLK_XFR on adjacent codes',
             _slot_tgt(0xF08450 + 4*_c) == 0xF08366) for _c in (0x0F, 0x10)]
       == [(True, False), (False, True)])
 
+check('the channel primitive masks the BIM CR to $4F and restores $5F',
+      _w(0xF07F12) == 0x36BC and _w(0xF07F14) == 0x004F)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
