@@ -23514,3 +23514,31 @@ The slot was assigned earlier today from two directions — `T0FNDSEM` (directiv
 routine at `$F01876`, and that routine having been characterised independently as "structure-table
 search on `$0C24`". **This is a third, from a completely different directive.** Three routines
 that do not call each other all treat `$0C24` as the semaphore registry.
+
+### XP4I pokes the semaphore field directly, bypassing P/V
+
+One more consequence of the pointer identification. `T0P` and `T0V` — TRAP #0 `$01` and `$02`,
+the kernel's own wait and signal primitives — take `a0` pointing at exactly this `+$10` field.
+XP4I gets that pointer as a side effect of `$2B` SGSEM and then **writes the field directly**:
+
+```
+$F0609C  trap    #$1              $2B SGSEM -- the kernel does its P/V internally
+$F0609E  beq.b   $F060AA          success
+$F060A0  move.w  #$271,d0 / jsr $F068A8    failure -> the issuer, which ends in `bra .`
+$F060AA  move.w  (a0),d0          read the semaphore's +$10 field
+$F060AC  btst.b  #$b,d0
+$F060B2  move.w  #$1F41,(a0)      ...and write it back
+$F060B8  move.w  #$1F45,(a0)
+```
+
+The failure arm never returns (the panel-command issuer spins), so `$F060AA` is reached only on
+success and `a0` is always valid there — the code is correct in that respect.
+
+But it is **reading and writing a synchronisation object's internal field with ordinary `move.w`,
+outside the primitives that own it**. No other task in this firmware does that; the other three
+XP tasks perform a channel transaction at the equivalent point. Whatever `$1F41`/`$1F45` encode,
+XP4I is setting semaphore state by hand.
+
+That is worth flagging for anyone modelling or modifying this: the `+$10` field has at least two
+writers with different disciplines — `T0P`/`T0V` under the kernel's interrupt masking, and this
+unsynchronised `move.w` in task context.
