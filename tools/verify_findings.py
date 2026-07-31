@@ -5628,6 +5628,24 @@ check('the driver call returns status in CARRY, set and cleared adjacently',
       insn(0xF04478) == 'ori.w #$1, sr' and insn(0xF0447C) == 'rts'
       and insn(0xF04482) == 'andi.w #$fffe, sr' and insn(0xF04486) == 'rts')
 check('...which is what the walker tests with bcs', insn(0xF044CA) == 'bcs.b $f044d6')
+
+# ---- the static vector table read out (2026-07-31) ----
+_vt = []
+_o = 0xF0011E - 0xF00000
+for _n in range(23):
+    _vt.append((_rom[_o], (_rom[_o+1] << 16) | (_rom[_o+2] << 8) | _rom[_o+3])); _o += 4
+_vd = dict(_vt)
+check('vector 24 (spurious) points at the 100-count reporter', _vd[24] == 0xF009EA)
+check('vector 28 (autovector 4) is the SYSTEM TICK', _vd[28] == 0xF00EC8)
+check('vector 34 lands on the third entry of the TRAP fan-in',
+      _vd[34] == 0xF00A78 and 0xF00A74 + 2 * 2 == 0xF00A78)
+check('vector 9 is TRACE, so the kernel has a trace handler', _vd[9] == 0xF00AEE)
+check('vectors 141/142 carry the register snapshot and the kernel-fatal stub',
+      _vd[141] == 0xF00A58 and _vd[142] == 0xF00186)
+check('...which the FPS layer overrides, so the snapshot is dead in this configuration',
+      insn(0xF0A27A) == 'move.w #$2a6, d0')
+check('vector 31 (autovector 7) points at the ODD address $000001',
+      _vd[31] == 0x000001 and (_vd[31] & 1) == 1)
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')

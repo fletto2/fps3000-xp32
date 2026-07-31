@@ -25035,3 +25035,57 @@ So the convention is complete on both sides: **argument in the record pointer on
 point at `+$1E`, next link at `+$8`, status in the carry flag set by `ori.w #$1,sr` or cleared by
 `andi.w #$FFFE,sr` immediately before `rts`.** Both of these exits live in the kernel's last 60
 bytes, immediately above the FPS glue region that contains the walker.
+
+## The static vector table read out in full (2026-07-31)
+
+`$F0011E`, 23 records of `{vector byte, 3-byte handler}`:
+
+| vector | address | handler | |
+|---:|---|---|---|
+| 0 | `$000` | `$F00896` | |
+| 2 | `$008` | `$F00AD8` | bus error |
+| 4 | `$010` | `$F00ADC` | illegal instruction |
+| 5 | `$014` | `$F00ADE` | divide by zero |
+| **9** | `$024` | **`$F00AEE`** | **TRACE** |
+| 10 | `$028` | `$F00AE6` | line A |
+| 12 | `$030` | `$000000` | |
+| **24** | `$060` | **`$F009EA`** | **spurious — the 100-count reporter** |
+| 25 | `$064` | `$000000` | autovector 1 |
+| **28** | `$070` | **`$F00EC8`** | **autovector 4 — THE SYSTEM TICK** |
+| 29 | `$074` | `$000000` | autovector 5 |
+| 31 | `$07C` | `$000001` | autovector 7 — an **odd** address |
+| 32 | `$080` | `$F001AC` | TRAP #0 |
+| 33 | `$084` | `$F00262` | TRAP #1 |
+| 34 | `$088` | `$F00A78` | TRAP #2 — the fan-in table |
+| 48 | `$0C0` | `$000000` | |
+| **141** | `$234` | **`$F00A58`** | **the register snapshot** |
+| **142** | `$238` | **`$F00186`** | **the kernel-fatal path** |
+| 143-146 | | `$000000` | |
+| **147** | `$24C` | **`$F009DC`** | the VMOD bit-5 clear |
+
+### Three confirmations
+
+**Vector 24 -> `$F009EA`** confirms the spurious-interrupt reading: the 100-count-then-report
+routine is literally on the spurious vector. **Vector 28 -> `$F00EC8`** puts the system tick on
+**autovector level 4**, consistent with the project's note that the level-4 autovector handler
+reads `$0C3A`. **Vector 34 -> `$F00A78`** lands exactly on the third entry of the 16-way TRAP
+fan-in, as `$F00A74 + 2x2` predicted.
+
+### And it explains why the register snapshot never runs
+
+Vectors **141, 142 and 147** (`$8D`, `$8E`, `$93`) carry the kernel's snapshot, kernel-fatal and
+VMOD-clear handlers — and this project records that the FPS layer **overrides exactly those three,
+plus spurious, with the panic catch-all `$F0A27A`**. So on the running machine those vectors
+report panel `$2A6` instead, and **`$F00A58`'s full-machine-state dump is dead code in this
+configuration**.
+
+That is worth knowing before relying on the post-mortem area: `$0800`/`$0806`/`$0808` are written
+only if something reaches `$F00A58`, and after boot nothing can — unless a host-loaded program
+reinstalls vector 141. **`$0848`/`$084C`, written by the kernel-fatal stub at `$F00196`, are in the
+same position.** The post-mortem fields documented earlier are real and their writers are exact,
+but on the stock machine they are reachable only through the FPS exception reporters, which do not
+write them.
+
+**The one genuinely odd entry is vector 31**, autovector level 7, pointing at **`$000001`** — an
+odd address, which would raise an address error if ever taken. Level 7 is non-maskable on a 68000,
+so this is the entry a stuck NMI would use, and it is deliberately aimed at a fault.
