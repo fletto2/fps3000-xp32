@@ -33726,3 +33726,43 @@ compatible.
 3. **`$F092C6` spins `dbeq` up to 16 times** waiting for `$1FFF1` bit 5 to read back before testing
    the response. The firmware allows the bit **settling time**; a model that answers instantly is
    fine, but one that answers *late* has a 16-iteration budget and no more.
+
+## How the self-test proves interrupt DELIVERY: handlers drive `$1FFF1` (2026-07-31)
+
+Three fragments around `$F0903C` form one mechanism:
+
+```
+loc_F0903C:  bclr.b #$6,$1(a5)        ; main line DROPS $1FFF1 bit 6
+             move.w #$f,d0
+loc_F09046:  btst.b #$3,$1(a4)        ; $F70019 bit 3
+             dbeq   d0,loc_F09046     ; spin until Z set (bit CLEAR) or 16 iterations
+             rts
+
+loc_F09052:  bset.b #$6,$1(a5)        ; the INTERRUPT HANDLER sets bit 6
+             rte
+```
+
+`dbeq` terminates when the tested condition holds (`Z` set ⇒ the bit read **0**) or the counter
+expires, so `$F09046` is a **bounded wait for `$F70019` bit 3 to go clear**.
+
+Read against the derived equation `bit 3 = NOT(bit 6 OR …)`, that is coherent and it names the
+mechanism: the main line clears `$1FFF1` bit 6 — which drives `$F70019` bit 3 **set** — and then
+waits for bit 3 to fall, which can only happen once bit 6 is **set again**. Nothing in the main line
+sets it. **`$F09052` does, from interrupt context.** So the spin is a wait for the interrupt to have
+been *delivered and serviced*, observed indirectly through the chassis status line rather than
+through a flag in RAM.
+
+**Two things an emulator owes, neither previously recorded:**
+
+1. **Installed interrupt handlers write `$1FFF1`.** This project notes abstractly that four handlers
+   are "installed by tests that set `a5` and then lower the CPU mask"; this is what they *do* with
+   it. A model treating `$1FFF1` as SBC-main-line-only will never satisfy the wait.
+2. **The delivery budget is 16 iterations of a `btst`/`dbeq` pair** — a few microseconds of real
+   time. The interrupt must be delivered essentially immediately after the level is written, not on
+   the next scheduler tick. This is the second bounded-settling budget found in this stage family
+   (the other guards the `$1FFF1` bit-5 readback), and both are `move.w #$f,d0` / `dbeq`.
+
+Unlike most of this suite, **these waits fail by falling through rather than retrying** — the
+counter expires and the routine `rts`es. So a model that never delivers the interrupt does not hang
+here; it proceeds with the chassis in an unexpected state and fails somewhere later, which is a
+harder symptom to trace back than the usual retry-forever.

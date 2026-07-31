@@ -7747,6 +7747,17 @@ check('...allowing a 16-iteration dbeq settling budget for the readback',
       _w(0xF092C2) == 0x303C and _w(0xF092C4) == 0x000F
       and _w(0xF092CC) == 0x57C8)
 
+check('$F09052 is an interrupt handler that SETS $1FFF1 bit 6 and rte''s',
+      _w(0xF09052) == 0x08ED and _w(0xF09054) == 0x0006 and _w(0xF09056) == 0x0001
+      and _w(0xF09058) == 0x4E73)
+check('...while the main line clears bit 6 and waits for $F70019 bit 3 to fall',
+      _w(0xF0903C) == 0x08AD and _w(0xF0903E) == 0x0006 and _w(0xF09040) == 0x0001
+      and _w(0xF09042) == 0x303C and _w(0xF09044) == 0x000F
+      and _w(0xF09046) == 0x082C and _w(0xF09048) == 0x0003
+      and _w(0xF0904C) == 0x57C8)
+check('...and that wait falls through on timeout (rts), it does not retry',
+      _w(0xF09050) == 0x4E75)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
