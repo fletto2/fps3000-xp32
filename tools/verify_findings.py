@@ -8141,6 +8141,15 @@ check('...so $F08614 is the return for BOTH paths, balanced on the no-USER one',
       and _w(0xF08612) == 0x10A1
       and _w(0xF08608) == 0x5340 and _w(0xF0860A) == 0xE348)
 
+check('a second dispatch site $F08266 indexes the table from base $F08450',
+      _w(0xF08260) == 0x49F9 and _l(0xF08262) == 0x00F08450
+      and _w(0xF08266) == 0x4EF4 and _w(0xF08268) == 0x0000
+      and 0xF08450 - 0xF083FC == 84)
+check('...and its two live targets are relative slots $0E and $10',
+      (0xF08488 - 0xF08450) // 4 == 0x0E
+      and (0xF08490 - 0xF08450) // 4 == 0x10
+      and _w(0xF08488) == 0x4EFA and _w(0xF08490) == 0x4EFA)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

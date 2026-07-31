@@ -35189,3 +35189,46 @@ undriven and most driven runs pass through it without incident.
 Incidental: `$F0860E` indexes `$10A1` by `(ch-1)*2` (`subq`/`lsl #1`), confirming the per-channel
 word array at `$10A0` is stride **2** — the same stride the teardown code applies to `$1098`, and a
 different one from the stride-4 `$1080` pointer array three instructions earlier.
+
+## The 42-slot dispatch table is entered at TWO bases — the op code is phase-dependent (2026-07-31)
+
+Tracing which instruction transfers into `BLK_XFR` on a driven channel produced a result the
+recorded model does not predict. This project states that the XP copies are "reached from `$F07F84`
+(`lsl.w #2,d0` / `jmp (a4,d0.w)`)" and that "only slots 14 (`$0E`) and 16 (`$10`) are reachable from
+the normal request path, and both are **D1_SEND**".
+
+`FPS3K_REGLOG=F07F84` confirms the first half exactly: **two dispatches, `d0 = $FFFF0010` and
+`$FFFF000E`**, nothing else. Yet `BLK_XFR` at `$F08366` *is* reached — entered from `$F08488` and
+`$F08490`, which are `jmp loc_F08366(pc)` slots.
+
+The predecessor of both is **`$F08266`**, a **second dispatch site with a different base**:
+
+```
+$F08260  lea   $F08450.l,a4          ; NOT $F083FC
+$F08266  jmp   (a4,d0.w)             ; and d0 is already a byte offset — no lsl here
+```
+
+`$F08450` is `$F083FC + 84`, i.e. **the same table indexed from slot 21**. The two observed targets
+resolve as:
+
+| target | slot from `$F083FC` | slot from `$F08450` |
+|---|---:|---:|
+| `$F08488` | 35 (`$23`) | **14 (`$0E`)** |
+| `$F08490` | 37 (`$25`) | **16 (`$10`)** |
+
+**So both dispatches use operation codes `$0E` and `$10` — the same two the request path uses — and
+they resolve to different handlers.** From base A they are `D1_SEND`; from base B they are
+`BLK_XFR`. `$F08266` sits at the tail of the transaction primitive's **continue** phase, so the
+reading is that the base selects the phase: *request* sends the operand, *continue* moves the data.
+
+Two consequences.
+
+1. **The recorded code→handler map is base-relative, not absolute.** The table listing
+   (`D1_SEND` = `$02`-`$07`/`$0D`-`$10`, `BLK_XFR` = `$08 $09 $18 $1A $1C $1D $1E $23 $25`, …) is
+   correct for base `$F083FC`. Read from `$F08450` the same bytes give a different map, and the
+   apparent "`$23`/`$25`" entries are `$0E`/`$10` seen through the other base.
+2. **"Only D1_SEND is reachable from the normal path" needs the qualifier "at that dispatch site".**
+   The normal path reaches `BLK_XFR` too — through the second site, on the same operation codes.
+
+The 42 slots are still one table of `jmp d16(pc)` instructions; what is new is that the firmware
+indexes it from two different origins, which no static reading of the table alone would reveal.
