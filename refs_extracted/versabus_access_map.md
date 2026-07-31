@@ -27246,3 +27246,53 @@ The regression harness's own sweeps carried the same caps and have been raised.
 base-register analysis, after absolute-address-only scanning, literal-vs-computed operands,
 and branch-path provenance. The pattern is consistent enough to state as a rule: *when a
 sweep reports an absence, the first question is what the sweep cannot see.*
+
+## The XLTR mode registers are modified register-side, and the bit maps re-derive (2026-07-31)
+
+A sweep for `bset`/`bclr` **on memory** at `$FF0200`/`$FF0202` finds **nothing** — which
+briefly looked like it contradicted the documented "21 operational read-modify-write pairs".
+It does not. The firmware's idiom is:
+
+```
+move.w $202(a5),d1
+bclr.b #$e,d1        ; <-- on a DATA REGISTER: mod 32, so this really is bit 14
+move.w d1,$202(a5)
+```
+
+**The bit operations are on the register, not the memory.** That matters twice over: a
+memory-side sweep sees none of them, and — because `btst`/`bset`/`bclr` on a data register
+are **mod 32** rather than mod 8 — the bit numbers are literal word-bit numbers with no
+translation. The usual "byte-sized, bit mod 8" caution is exactly inverted here.
+
+Collecting the register-side operations between each paired read and write independently
+re-derives the mode-register bit maps:
+
+| register | bit | operation | count |
+|---|---:|---|---:|
+| **MODE1** `$FF0202` | 14 | `bclr` | 9 |
+| | 14 | `bset` | 1 |
+| | 12 | `bset` | **8** |
+| | 6 | `bset` | **4** |
+| | 0 | `bset` | **1** |
+| **MODE0** `$FF0200` | 10 | `bclr` | 9 |
+| | 10 | `bset` | 1 |
+| | 11 | `bset` | 4 |
+| | 11 | `bclr` | 1 |
+| **`$FF0216`** | 4 | `bset` / `bclr` | 1 / 1 |
+
+**Three of the documented MODE1 counts reproduce exactly** — bit 12 `bset` ×8, bit 6
+`bset` ×4, bit 0 `bset` ×1 — from a method that did not use the earlier analysis. Bit 14's
+`bclr` count comes out 9 against the documented 13, and **bit 7 does not appear at all**,
+because this pattern requires the read and write to use the same base register within eight
+instructions; the documented total is 21 pairs and this sweep finds 15. So it is a
+**lower bound that confirms rather than replaces** the earlier map.
+
+**`$FF0216` bit 4 reproduces its documented bracketing exactly** — one `bset`, one `bclr`,
+which is the pair around `CPLOAD` (`$F0550A` / `$F05582`). A one-in, one-out result from an
+independent route.
+
+**MODE0's bit map is quantified here for the first time.** Bit 10 is overwhelmingly
+*cleared* (9 clears to 1 set) and bit 11 overwhelmingly *set* (4 sets to 1 clear), which
+matches their documented roles — bit 10 is cleared when issuing a command and again by RDHC
+to acknowledge, bit 11 is set by the idle sweep and cleared when the chassis answers. The
+asymmetry is the signature of a bit the *chassis* sets and the SBC clears, and vice versa.

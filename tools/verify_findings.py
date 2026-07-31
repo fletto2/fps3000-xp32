@@ -5812,6 +5812,16 @@ check('...and $F7001A is never referenced at all',
       not [x for x in range(0xF00000, 0xF10000, 2)
            if 'f7001a' in (insn(x) or '').lower()])
 
+check('MODE1 is modified register-side: no bit op targets $FF0202 in memory',
+      not [x for x in range(0xF00000, 0xF10000, 2)
+           if (insn(x) or '').startswith(('bset', 'bclr', 'bchg'))
+           and _mre.search(r'\$20[0-9a-f]\(a\d\)', (insn(x) or '').lower())])
+check('...the canonical pair reads MODE1, clears bit 14 and sets bit 12, then writes',
+      insn(0xF04510) == 'move.w $202(a0), d1' and insn(0xF04514) == 'bclr.b #$e, d1'
+      and insn(0xF04518) == 'bset.b #$c, d1' and insn(0xF0451C) == 'move.w d1, $202(a0)')
+check('...and on a DATA REGISTER those bit numbers are mod 32, i.e. literal word bits',
+      0x0E == 14 and 0x0C == 12)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
