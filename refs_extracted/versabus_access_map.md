@@ -17570,3 +17570,28 @@ byte-sized with the bit number taken mod 8** — a hazard this file already docu
 elsewhere. So it tests **bit 6 of the byte at `$0C34`**, not bit 14 of a word. The eight
 sites use `#$8` through `#$F`, which are bits 0-7 of that same byte; reading them as bit
 numbers 8-15 of a word would put them in the *other* byte, `$0C35`.
+
+### `!IDV` in full: the interrupt wiring, six 14-byte records
+
+Records are `{vector word, TCB long, ISR entry long, ISR exit long}` = 14 bytes, from
+`$1F808`:
+
+| vector | TCB | task | ISR entry | ISR exit |
+|---|---|---|---|---|
+| `$45` | `$1E900` | `XP1I` | `$F07EE6` | `$F07F08` |
+| `$46` | `$1EB00` | `XP2I` | `$F074E6` | `$F07508` |
+| `$47` | `$1ED00` | `XP3I` | `$F06AE6` | `$F06B08` |
+| `$48` | `$1EF00` | `XP4I` | `$F060CE` | `$F060F0` |
+| `$4A` | `$1F100` | `IO1I` | `$F05DD6` | `$F05E4C` |
+| `$41` | `$1F300` | `RDHC` | `$F04930` | `$F050FC` |
+
+This reproduces the BIM vector table documented in this project from the *other* side —
+that table was built by reading the BIM programming code, this is the RTOS's own record of
+what directive `$4C` installed. Entries and exits both match: `$F050FC` is the RDHC ISR
+exit stub and `$F05E4C` is TCBIO1I's `ISRExit`, both already named here.
+
+A consistency property worth stating: **every ISR entry and exit lies inside its own task's
+`!TST` segment** — `$F07EE6`/`$F07F08` in XP1I's `$F07D00-$F086FF`, `$F060CE`/`$F060F0` in
+XP4I's `$F05F00-$F068FF`, `$F04930`/`$F050FC` in RDHC's `$F04600-$F05CFF`, and
+`$F05DD6`/`$F05E4C` in IO1I's `$F05D00-$F05EFF`. Two structures written by different parts
+of the RTOS agree on where each task's code lives.
