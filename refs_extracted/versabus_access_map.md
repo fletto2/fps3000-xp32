@@ -33109,3 +33109,37 @@ than a table of all six.
 **For an emulator this is the cheapest possible source for the IRQ map**: six fixed ROM addresses,
 20 bytes each, no boot required — and it can be cross-checked against `!IDV` after a boot as this
 session did.
+
+## The task-definition head: one fixed layout, all six tasks (2026-07-31)
+
+Each task's code region opens with a four-part definition block, identical in shape across every
+task:
+
+```
++$00   20 bytes   INTERRUPT RECORD   {name, 0, vector, ISR entry, ISR exit}   -> copied into !IDV
++$14   24 bytes   CRTCB / GTSEG      {name, session, $20000000, "STCK", 0, $190}
++$2C   10 bytes   semaphore descriptor  "AXPn" / "HIO1"
++$36   10 bytes   semaphore descriptor  "HXPn"        (XP tasks only)
+```
+
+The middle block decodes straight onto `SEG.EQ`'s `SGPB` fields that this project matched to the
+28-byte `GTSEG`/`CRTCB` size:
+
+| offset | `SGPB` field | value |
+|---|---|---|
+| `+$00` | `SGPBTASK` | the task name |
+| `+$04` | `SGPBSESS` | **0** — the single-session machine confirmed from a third source |
+| `+$08` | `SGPBOPT`/`ATTR` | **`$20000000`**, identical for all five |
+| `+$0C` | `SGPBNAME` | **`"STCK"`** |
+| `+$10` | `SGPBLA` | 0 |
+| `+$14` | `SGPBSL` | **`$190`** — the stack request this project notes "becomes `$200`" |
+
+So the ROM states, in one place per task: which vector it owns, where its ISR enters and exits,
+what it is called, what stack it wants, and which semaphores it declares. **Everything TDTI needs
+is static**, which is why the boot can be predicted without running it — and it explains the
+observed `2/2/2/2/1/0` semaphore counts directly, since RDHC's block simply has no descriptor after
+its `CRTCB` parameters.
+
+The `$190` request appearing here as ROM data closes another loop: this project derived the
+"rounded up to `$200`" behaviour from the allocator's page granularity, and the request itself is
+right here in the definition block, five times over.

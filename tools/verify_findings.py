@@ -7577,6 +7577,14 @@ check('every task region opens with a 20-byte {name, 0, vector, entry, exit} rec
 check('...with the CRTCB parameter block immediately after, at +$14',
       _l(0xF05F14) == 0x58503449 and _l(0xF04614) == 0x55534552)
 
+check('every task CRTCB block declares session 0, opts $20000000, "STCK", size $190',
+      all(_l(_b + 0x18) == 0 and _l(_b + 0x1C) == 0x20000000
+          and _l(_b + 0x20) == 0x5354434B and _l(_b + 0x28) == 0x00000190
+          for _b in (0xF05D00, 0xF05F00, 0xF06900, 0xF07300, 0xF07D00)))
+check('...and the semaphore descriptors follow at +$2C and +$36',
+      _l(0xF05F2C) == 0x41585034 and _l(0xF05F36) == 0x48585034
+      and _l(0xF07D2C) == 0x41585031 and _l(0xF07D36) == 0x48585031)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
