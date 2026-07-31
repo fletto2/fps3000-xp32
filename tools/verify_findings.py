@@ -4180,6 +4180,21 @@ check('...but only POLL writes XLTR_COUNTER = $4 for a bulk-port source',
       insn(0xF08284) == 'move.w #$4, $20c(a4)'
       and '20c' not in insn(0xF08380))
 
+# --- TCB+$13C is the saved stack pointer ---------------------------------
+# A pointer stored into it, dereferenced from it, and adjusted by exactly a
+# 6-byte exception frame and a 60-byte movem on suspend/resume.
+check('TCB+$13C has a 6-byte exception frame subtracted on suspend',
+      insn(0xF00616) == 'subq.l #$6, $13c(a6)')
+check('...and 60 bytes for movem.l d0-d7/a0-a6',
+      insn(0xF0063A) == 'subi.l #$3c, $13c(a6)')
+check('...and it is both stored from and dereferenced as a pointer',
+      insn(0xF006C2) == 'move.l a1, $13c(a6)'
+      and insn(0xF0058E) == 'movea.l $13c(a6), a0')
+# TCB+$140/$144 are the owner name/session copied from TCBNAME/TCBSESSN.
+check('TCB+$140/$144 are copies of the owner TCBNAME/TCBSESSN',
+      insn(0xF0354A) == 'move.l $10(a5), $140(a2)'
+      and insn(0xF03550) == 'move.l $14(a5), $144(a2)')
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
