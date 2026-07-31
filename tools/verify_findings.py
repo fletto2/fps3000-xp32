@@ -6196,8 +6196,10 @@ check('...and its third offset word is NEGATIVE once sign-extended',
       struct.unpack('>H', _rom[0xF0A4BE - 0xF00000 + 3 * 18:][:2])[0] == 0x8700
       and (0x8700 - 0x10000) < 0)
 
-check('table passes 1 and 2 land inside the documented $1F000-$1F09F nonzero region',
-      0x1F000 <= 0x1F07E and 0x1F08D <= 0x1F09F)
+check('the table writes land inside the !TST of the TCB at $1EF00, which TDTI\n'
+      '       fills afterwards -- so they do NOT survive to a post-boot dump',
+      0x1EF00 + 0x160 <= 0x1F07E and 0x1F08D <= 0x1EF00 + 0x1AF
+      and insn(0xF0A056) == 'bsr.w $f0a44a')
 
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')

@@ -28458,7 +28458,7 @@ Recorded this way deliberately. The mechanics are worth having — a model must 
 writes, and the sign-extension is easy to get wrong — but the pattern of plausible-looking
 values invites a story, and the ROM does not supply one.
 
-### The table explains the "40 nonzero bytes at `$1F000`-`$1F09F`"
+### RETRACTED: the table does NOT explain the "40 nonzero bytes at `$1F000`-`$1F09F`"
 
 This project records that a stock-boot RAM dump "shows 40 nonzero bytes in `$1F000`-`$1F09F`"
 — the observation that forced the monitor's workspace to be relocated from `$1F000` down to
@@ -28477,6 +28477,23 @@ consecutive `$71 $72 $73 $74` and the `$8E` are the same shape as the vector num
 same routine writes elsewhere, which is suggestive — but as noted above, the *purpose*
 remains unestablished and I am not going to infer one from four consecutive integers.
 
-What this does settle is the practical point behind the monitor relocation: **that region is
-written during boot by identified code**, not by chance or by an uninitialised structure, so
-relocating the workspace was necessary rather than merely cautious.
+> **RETRACTED the same day — I skipped an ordering check.** The connection above is wrong.
+>
+> The table routine is called from `$F0A056`, which runs **before** the TDTI loop at
+> `$F0A066` creates the six TCBs. The TCB at `$1EF00` spans `$1EF00`-`$1F0FF`, and its
+> `!TST` sits at `+$160` = `$1F060`-`$1F0AF`. The table's writes to `$1F07E`-`$1F08D` land
+> **inside that `!TST`**, and TDTI then copies 16 longwords into it — so those bytes are
+> overwritten before any post-boot dump could see them.
+>
+> **The 40 nonzero bytes at `$1F000`-`$1F09F` are the `!TST` segment table of the TCB at
+> `$1EF00`**, not this table's work. That is a better explanation than mine and it was
+> already implicit in the documented structure map; I reached for a novel one because I had
+> just decoded the table and an address range matched.
+>
+> The practical point about the monitor relocation stands, but for the ordinary reason: the
+> region is inside a live TCB.
+>
+> **The lesson is the ordering check.** An address overlap between a writer and an
+> observation proves nothing unless the writer runs *last*. I verified the overlap and not
+> the sequence, which is the same shape of error as attributing a count to a tidy
+> decomposition.
