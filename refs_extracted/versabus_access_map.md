@@ -18538,3 +18538,54 @@ reaches the same conclusion.
 
 It also sets the requirement for a chassis model precisely: the slot needs a stub that
 **returns**, and four bytes is enough for one.
+
+## The callback path leaks 96 bytes of stack, and `$F08614`'s `rts` returns to garbage
+
+Driving the callback to completion exposes something the static reading alone would not.
+With a returning stub the trace runs cleanly all the way through —
+
+```
+F085F4 lea $10AE(a2),a2 / F085F8 jsr (a2) / 0010AE <stub> / F085FA movem.l (a7)+
+F085FE result low -> channel / F08604 result high -> channel
+F0860E bset #0,$10A1(a2) / F08614 rts / 000000 / F0A24A  <- illegal instruction
+```
+
+— and then returns to **address 0**, which the FPS layer reports as panel `$2A0`
+(`PCMD_EXCEPTION_ILLEGAL_INSTRUCTION`) before ending in a panel spin at `$F056B8`.
+
+The cause is a stack imbalance in the firmware, not in the stub. Auditing **every**
+`a7`-touching instruction in `$F08550`-`$F08616`:
+
+```
+$F0857A  lea -$60(a7),a7      ; allocate the 96-byte RSTATE output block
+$F0857E  pea (a7) / push $0 / push 'USER'      ; -12
+$F08592  lea $c(a7),a7        ; +12
+$F085AA  movem.l d0-d7/a0-a6,-(a7)   ; -60
+$F085F8  jsr (a2)             ; -4
+$F085FA  movem.l (a7)+,...    ; +60
+$F08614  rts
+```
+
+There is **no `lea $60(a7),a7` anywhere**. On this path the routine leaves `a7` 96 bytes
+low, so the final `rts` pops from inside the RSTATE block instead of the return address.
+
+Three readings, and the mechanics eliminate the easy two:
+
+1. *The callee cleans up.* It cannot, simply: the 96-byte block lies **above** the saved
+   registers, so any adjustment the callee makes breaks the `movem.l (a7)+` that follows the
+   `jsr`. Confirmed by test — a stub doing `lea $60(a7),a7` / `rts` fails the same way.
+2. *The stub is wrong.* No: `$0010AE` appears in the trace, `$F085FA` follows it, and the
+   result reaches the channel. Everything up to `$F08614` is correct.
+3. **The CP program's handler is not expected to return** — it jumps back into the task
+   elsewhere, or switches context, making the leak moot. This is the only reading left
+   standing, and it is consistent with the slot being a `bra.w` into arbitrary program code
+   rather than a subroutine.
+
+Either way this is a **hard, checkable prediction for real hardware**: a CP program whose
+channel handler simply returns will crash its XP task at `$F08614`. Anyone reviving this
+machine needs the handler either not to return, or to repair `a7` in a way that survives
+the `movem` — and the firmware offers no help.
+
+It is also a reminder that a path never executed is a path never debugged. This code is
+hand-written assembly on a branch that requires host software to reach; a 96-byte leak
+there is exactly the kind of defect that survives to the ROM mask.
