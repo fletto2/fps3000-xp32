@@ -32615,3 +32615,42 @@ Stated conservatively: the two sites demonstrably produce different byte layouts
 apparent intent, and only the first yields the instruction the code is plainly trying to write.
 Whether the second path is a transcription slip or serves some other consumer cannot be settled
 from the ROM alone — but its own `lea $4A` says it expects the thunk at `$4A`.
+
+## Directive `$0E` decoded — and `TCB+$28` bit 13 is a snapshot enable (2026-07-31)
+
+```
+$F02F34  bset.b #$1,$29(a6)      ; set flags bit 1
+$F02F3A  move.w a0,$2a(a6)       ; stash a0's low word at TCB+$2A ...
+$F02F3E  bne.b  $F02F46          ;   ... non-zero -> skip
+$F02F40  bset.b #$f,$2a(a6)      ;   ... zero -> set bit 15 as a marker
+$F02F46  btst.b #$f,$28(a6)      ; PRIVILEGE
+$F02F4C  beq.b  $F02F5A          ;   unprivileged -> skip
+$F02F4E  btst.b #$d,$28(a6)      ; flags word bit 13
+$F02F54  beq.b  $F02F5A
+$F02F56  bsr.w  $F00186          ; <- THE FULL REGISTER SNAPSHOT
+$F02F5A  btst.b #$7,$2d(a6)      ; ... then into the deferred-work path
+```
+
+`$F00186` is the routine this project identifies as writing the whole post-mortem snapshot —
+`movem.l d0-d7/a0-a7` to `$0808`, SR to `$0806`, the faulting PC to `$0800`, USP to `$0848` and the
+bus-error vector to `$084C`.
+
+**So `TCB+$28` bit 13 is a per-task "snapshot on this directive" enable.** It had been recorded
+only as "tested at `$F02F4E`" with no meaning. The measured flags word is `$A081` in five tasks and
+`$A001` in RDHC — **bit 13 is set in all six**, so every task is armed for it.
+
+Two consequences worth having:
+
+- **`$F00186` is directive-reachable, not only internal.** This project counts it as "called by 22
+  ordinary `bsr`s from inside the kernel" — consistency checks and the `'BE'` canary release. This
+  one is different in kind: a *task* can cause a full machine snapshot by issuing `$0E`, provided
+  it is privileged and bit 13 is set. Both conditions hold for all six tasks here; only the
+  directive is never issued.
+- **That is a usable debugging hook for host-loaded software.** A CP program wanting a register
+  dump at `$0800` need only issue directive `$0E` — no monitor, no breakpoint, no serial port. It
+  is the third state-capture path in the machine, alongside the panel exception reporters and the
+  monitor's own `r` command, and the only one reachable from an ordinary task.
+
+`TCB+$2A` also gains a reading: it takes the **low word of `a0`** (the parameter-block pointer)
+with **bit 15 set when that word is zero** — a stored handle with a marker for the zero case, which
+is why the field is a word rather than a longword.
