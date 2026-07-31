@@ -30146,3 +30146,51 @@ phases needed separate handlers at all, which looked redundant when only one pha
 **Every handler in this family acknowledges by clearing `$1FFF1` bits 0-2 (`andi.w #$fff8,(a5)`)
 before doing anything else** — vectors `$50`, `$52`, `$53` visibly, and `$51` by setting bit 6.
 So software acknowledgement is the house convention for the interrupter, not a quirk of one test.
+
+## Vector `$54` is the MC6840 interrupt test, and it requires ALL THREE timers (2026-07-31)
+
+The handler installed at vector `$54` (`$F0911E`, via `lea` at `$F09078` / store at `$F0907E`)
+turns out not to be a VMOD interrupter handler at all — it is the **PTM** one, and it specifies
+timer behaviour the operational firmware never exercises.
+
+```
+$F0911E  move.b #$7,d1
+$F09122  and.b  $2(a0),d1      ; a0 = $F70001, so $F70003 = the PTM STATUS register
+$F09126  cmpi.b #$3,d6         ; which sub-phase?
+$F0912C  cmpi.b #$7,d1         ; sub-phase 3: ALL THREE flags must be set at once
+$F09130  bne    $F09146        ;              ... or fault
+$F09134  tst.b  $4(a0)         ; other sub-phases: read T1 counter  ($F70005)
+$F09138  tst.b  $8(a0)         ;                   read T2 counter  ($F70009)
+$F0913C  tst.b  $c(a0)         ;                   read T3 counter  ($F7000D)
+$F09140  tst.b  $2(a0)         ; re-read status ...
+$F09144  beq    $F0914C        ; ... which must now read ZERO
+$F09146  d7 = $F0F0F0F0        ; else fault
+$F0914C  move.w #$ffff,d2      ; signal delivery to the main line (the usual d2 convention)
+$F09150  bsr    PTMInit
+$F09152  rte
+```
+
+**Three requirements for the MC6840 model, and the third is the interesting one:**
+
+1. **`$F70003` bits 0-2 are the three timer interrupt flags** (T1, T2, T3), readable as a status
+   byte.
+2. **Reading a timer's counter clears its flag** — after reading `$F70005`, `$F70009` and
+   `$F7000D`, the status byte must read **exactly zero**.
+3. **All three timers must be able to be pending simultaneously.** Sub-phase 3 requires
+   `status & 7 == 7`, so the test fires T1, T2 *and* T3 and demands all three flags stand
+   together.
+
+Requirement 3 matters because this project records that operationally **T1 is an external-input
+counter (`CR1 = $00`) and "T2 is never programmed operationally at all"**. Both statements are
+about the *running* firmware and remain true — but the **self-test programs and fires all three**,
+so a model that implements only T3 faithfully passes the boot and fails this phase. Per the fault
+policy, that failure is an infinite retry parked on the phase code, not an error message.
+
+The handler also confirms the `d2` signalling convention is firmware-wide rather than a quirk of
+the VMOD tests: an interrupt handler deliberately clobbers `d2` so the bounded spin in the main
+line can see that delivery occurred.
+
+Immediately after it, `$F09154` is the **`movep.w` walking-ones test** — `movep.w d0,$0(a1)` /
+`movep.w $0(a1),d1` / compare / `asl.w #$1,d0` — which is why the PTM model's write path must
+load the raw latch and read it back verbatim, the constraint that forced the split between raw
+latch and effective period when the dual-8-bit mode was fixed.

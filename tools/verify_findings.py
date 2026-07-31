@@ -6683,6 +6683,22 @@ check('every interrupter handler acknowledges with andi.w #$fff8,(a5) first',
       all(_w(x) == 0x0255 and _w(x + 2) == 0xFFF8
           for x in (0xF093BE, 0xF093C8, 0xF094AE)))
 
+check('vector $54 is the PTM interrupt handler $F0911E, masking status with #$7',
+      _l(0xF0907A) == 0x00F0911E and _lw_count(0xF0911E) == 1
+      and _w(0xF0911E) == 0x123C and _w(0xF09120) == 0x0007
+      and _w(0xF09122) == 0xC228 and _w(0xF09124) == 0x0002)
+check('...sub-phase 3 requires ALL THREE timer flags set at once (status & 7 == 7)',
+      _w(0xF09126) == 0x0C06 and _w(0xF09128) == 0x0003
+      and _w(0xF0912C) == 0x0C01 and _w(0xF0912E) == 0x0007)
+check('...and otherwise reading T1/T2/T3 counters must leave the status byte ZERO',
+      _w(0xF09134) == 0x4A28 and _w(0xF09136) == 0x0004
+      and _w(0xF09138) == 0x4A28 and _w(0xF0913A) == 0x0008
+      and _w(0xF0913C) == 0x4A28 and _w(0xF0913E) == 0x000C
+      and _w(0xF09140) == 0x4A28 and _w(0xF09142) == 0x0002
+      and (insn(0xF09144) or '').startswith('beq'))
+check('...and it signals delivery with the same d2 = $ffff convention, then rte',
+      _w(0xF0914C) == 0x343C and _w(0xF0914E) == 0xFFFF and _w(0xF09152) == 0x4E73)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
