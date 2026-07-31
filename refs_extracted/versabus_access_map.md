@@ -31588,3 +31588,60 @@ My error was in the reference list I checked against, not in the analysis.
 `TCB+$00` is **not** a field: all 23 bare-`(a6)` accesses are `lea`/`pea`, passing the TCB pointer
 itself as an argument. A census that counts the bare form as offset zero over-reports by exactly
 that much.
+
+## The scheduler's three dispatch variants, and what selects per-task single-stepping (2026-07-31)
+
+`$F00536`-`$F005DE` is the task-dispatch path, and reading it maps the task state word's low byte
+(`TCB+$2D`, the low half of the documented state word at `+$2C`) onto three alternative exits:
+
+```
+$F00536  move.l $c(a6),$c(a1)     ; dequeue from the ready list
+$F0053C  bclr.b #$4,$2d(a6)       ; bit 4 = "on the ready list"
+$F00542  move.l a6,$c0c.w         ; $0C0C = current task
+$F00562  move.w $c54.w,$c52.w     ; reload the quantum
+$F00568  bclr.b #$6,$2d(a6) / bne $F005C0   ; bit 6 -> FULL CONTEXT RESTORE
+$F00570  btst.b #$7,$2d(a6) / bne $F005CC   ; bit 7 -> DEFERRED WORK
+$F00578  bclr.b #$5,$2d(a6) / bne $F005D8   ; bit 5 -> ASQ PROCESSING
+```
+
+| bit | exit | what it does |
+|---:|---|---|
+| **6** | `$F005C0` | `movem.l $74(a6),d0-d7/a0-a6` then restore the priority byte to `TCB+$26` — the **full** restore from the documented 60-byte save area |
+| **7** | `$F005CC` | `pea $F0050C` / `push SR $2000` / `bra $F02F64` — **synthesises a frame** to run deferred work that returns to the scheduler |
+| **5** | `$F005D8` | `movea.l $40(a6),a5` — enters **ASQ processing** through the second ASQ pointer |
+
+Bit 6's exit confirms two documented fields in one instruction (`+$74` save area, `+$26` priority
+byte), which is a good check on the decode.
+
+### `TCB+$148` bit 7 is the per-task single-step enable
+
+The normal exit ends:
+
+```
+$F00594  movem.l $100(a6),d0-d7/a0-a5   ; a SECOND register save area
+$F005A8  bclr.b #$f,$148(a6)            ; TCB+$148 bit 7 -- one-shot
+$F005AE  bne.b  $F005B6                 ;   was set -> the traced exit
+$F005B0  movea.l $138(a6),a6 / rte      ; normal
+$F005B6  movea.l $138(a6),a6
+$F005BA  ori.w  #$8000,sr / rte         ; ... with the 68000 TRACE BIT set
+```
+
+This project records that `$F005B6` "is a second task-dispatch exit that does `ori.w #$8000,sr` —
+RMS68K supports **per-task single-stepping**, latent here because **nothing selects the traced
+exit**." **Something does: `TCB+$148` bit 7.** It is `bclr`, so the enable is **one-shot** — armed
+per step, consumed on dispatch, which is exactly what single-stepping needs. The mechanism is
+complete and simply never armed by this firmware's tasks.
+
+### Two register save areas, not one
+
+The full-restore path uses `TCB+$74` (`d0-d7/a0-a6`, 60 bytes, documented). The **normal** path
+uses **`TCB+$100`** (`d0-d7/a0-a5`, 56 bytes) and restores `a6` separately. So the TCB carries
+**two distinct save areas** for two dispatch routes, which the documented map — listing only
+`+$74` — does not capture.
+
+**A tension worth recording rather than smoothing.** Both exits end `movea.l $138(a6),a6`, i.e.
+they load the task's **a6** from `TCB+$138`. This project documents `+$138` as the pointer to the
+task's ASQ/semaphore block (Motorola's `TCBECNT`). Both readings cannot be simultaneously true of
+one longword; the likeliest resolution is that `+$138` holds the task's saved `a6`, which for these
+tasks *is* a pointer into their own block — but that is an inference, and a RAM dump comparing
+`TCB+$138` against each task's `a6` at a breakpoint would settle it directly.

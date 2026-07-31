@@ -7140,6 +7140,20 @@ check('...falling back to a walk of the all-tasks list at $0C10',
       _w(0xF01732) == 0x2278 and _w(0xF01734) == 0x0C10
       and _w(0xF0173E) == 0xB0A9 and _w(0xF01740) == 0x0010)
 
+check('the dispatch path selects three exits on state-word bits 6, 7 and 5',
+      _w(0xF00568) == 0x08AE and _w(0xF0056A) == 0x0006 and _w(0xF0056C) == 0x002D
+      and _w(0xF00570) == 0x082E and _w(0xF00572) == 0x0007
+      and _w(0xF00578) == 0x08AE and _w(0xF0057A) == 0x0005)
+check('...bit 6 restoring d0-d7/a0-a6 from TCB+$74 and the priority byte to TCB+$26',
+      _w(0xF005C0) == 0x4CEE and _w(0xF005C2) == 0x7FFF and _w(0xF005C4) == 0x0074
+      and _w(0xF005C6) == 0x1D40 and _w(0xF005C8) == 0x0026)
+check('TCB+$148 bit 7 is the one-shot per-task single-step enable',
+      _w(0xF005A8) == 0x08AE and _w(0xF005AA) == 0x000F and _w(0xF005AC) == 0x0148
+      and (insn(0xF005AE) or '').startswith('bne')
+      and _w(0xF005BA) == 0x007C and _w(0xF005BC) == 0x8000 and _w(0xF005BE) == 0x4E73)
+check('...and the normal path uses a SECOND save area at TCB+$100 (d0-d7/a0-a5)',
+      _w(0xF00594) == 0x4CEE and _w(0xF00596) == 0x3FFF and _w(0xF00598) == 0x0100)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
