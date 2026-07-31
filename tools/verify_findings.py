@@ -4797,3 +4797,19 @@ check('exactly 8 sites guard against touching $1FFF0 (the RAM/register partition
 check('...and none guards $1FFE2/$1FFE4/$1FFE6',
       not any(m.startswith('cmpa') and any(x in o for x in ('#$1ffe2', '#$1ffe4', '#$1ffe6'))
               for _, (m, o, _) in _mins.items()))
+
+# ---- the SBC-to-SCM contract (2026-07-31) ----
+check('both SCM tests set the page register to 0 first',
+      insn(0xF09AE2) == 'clr.w $210(a6)' and insn(0xF09B24) == 'clr.w $210(a6)')
+check('SCM test 1 is an address-line walk: write each address\'s own value',
+      insn(0xF09AF6) == 'move.l d1, (a0, d1.l)' and insn(0xF09AFA) == 'lsl.l #$1, d1')
+check('...bounded at $4000 = 16 KB', insn(0xF09AEC) == 'move.l #$4000, d0')
+check('SCM test 2 spans $400000-$404000, the same 16 KB',
+      insn(0xF09B30) == 'lea.l $400000.l, a2' and insn(0xF09B36) == 'lea.l $404000.l, a1')
+check('...with longword stride 4', insn(0xF09B2C) == 'move.w #$4, d2')
+_scmpat = [_bst.unpack('>I', _rom[0xF09BB6 - 0xF00000 + n * 4:][:4])[0] for n in range(6)]
+check('the SCM pattern table is 0000/FFFF then 5555/AAAA, then terminator',
+      _scmpat == [0x00000000, 0xFFFFFFFF, 0x55555555, 0xAAAAAAAA, 0, 0], [hex(x) for x in _scmpat])
+check('the self-test never walks the SCM page register past 0',
+      not any('$210(a' in o and '#$0' not in o and m.startswith('move')
+              for a, (m, o, _) in _mins.items() if 0xF09A00 <= a <= 0xF09C00))

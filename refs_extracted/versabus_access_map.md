@@ -21174,3 +21174,67 @@ partition. The census finds them explicitly: seven `cmpa.l #$1FFF0,aN` at `$F098
 `$F09946`, `$F09960`, `$F099BE`, `$F09A94`, `$F09ABC`, plus `$F089A4` — **eight**, exactly, and
 none for `$1FFE2`/`$1FFE4`/`$1FFE6`. The partition was derived from the exclusions; here it is
 re-derived from an unrelated sweep with the same count.
+
+## What the SBC demands of MEM CTL and MAIN DATA, in full (2026-07-31)
+
+The System Common Memory is the only board beyond the XLTR that the SBC exercises, and it does
+so with exactly two tests. Both set `XLTR_MODE2 = 0` first, so **both run entirely on page 0**.
+
+### Test 1, `$F09AE6` — an address-line walk
+
+```
+clr.w    $210(a6)              page 0
+movea.l  #$400000,a0
+move.l   #$4000,d0             bound = 16 KB
+moveq    #$4,d1
+$F09AF6  move.l  d1,(a0,d1.l)  write each address's own value at that address
+         lsl.l   #$1,d1        4, 8, 16, 32, ... $4000
+         cmp.l   d1,d0 / bge
+         cmp.l   (a0,d2.l),d2  read back and compare, d2 doubling likewise
+```
+
+Writing an address's own value at that address and reading it back is the standard test for
+**shorted or open address lines**: any two addresses that alias will hold each other's value.
+The doubling stride means it checks address bits 2 through 14.
+
+### Test 2, `$F09B30` — a pattern fill and verify over the same 16 KB
+
+```
+lea      $400000,a2 / lea $404000,a1      16 KB span
+lea      $F09BB6,a3                       the pattern table
+move.l   (a3)+,d0 / move.l (a3)+,d1       a PAIR per round
+         fill (a2)..(a1) with d0, stride 4
+         verify, then advance the phase counter d6
+```
+
+and the pattern table at `$F09BB6` is:
+
+| | pattern |
+|---|---|
+| pair 1 | `$00000000` / `$FFFFFFFF` |
+| pair 2 | `$55555555` / `$AAAAAAAA` |
+| terminator | `$00000000` x8 |
+
+All zeros, all ones, then both alternating-bit patterns — the classic stuck-at and
+adjacent-bit-coupling set, applied 32 bits wide, which is what a "MAIN DATA 1 MEG **32 BIT**"
+card should be tested with.
+
+### So the complete SBC-to-SCM contract is
+
+- **address space touched**: `$400000`-`$404000`, 16 KB, page 0 only
+- **access width**: longword, stride 4 throughout
+- **page register**: `$FF0210` written `$0000` before both tests
+- **values that must survive a write/read**: `$00000000`, `$FFFFFFFF`, `$55555555`, `$AAAAAAAA`,
+  and each address's own value
+- **failure signalling**: `d7 <- $F0F0F0F0` then `bsr $F0891C` / `$F089EE`
+
+**The 16 KB bound is the striking part.** The MAIN DATA card carries one megaword; the firmware
+tests **16 KB of it, on one page**, and never walks `$FF0210` to reach the rest. So a green
+power-on says the memory *controller* answers and the first 16 KB is sound, and **says nothing
+at all about the other 4 MB or about the three uninstalled card slots**. An emulator that models
+only the first 16 KB of the window passes the entire self-test — which is worth knowing before
+treating a clean boot as evidence about SCM.
+
+That completes the device inventory: SBC, PTM, VMOD, board status, bus watchdog, XLTR, AP I/F,
+and SCM through MEM CTL. **XP-32 EXEC, XP-32 ARITH and UNIV FMT are never addressed**, by this
+or any other code path in the ROM.
