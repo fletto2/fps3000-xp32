@@ -17887,3 +17887,42 @@ Command 1 also does two things worth recording:
 And `$F053E8` computes the channel's command port as `((ch+1) << 5) + $FF000E` — for
 channel 1, `$FF004E`. That is the firmware's own window arithmetic, and it is why AP I/F
 **window 1 is skipped**: the formula maps channel *n* to window *n+1*.
+
+## RDHC host commands 3 and 4 (2026-07-30)
+
+**Command 3 (`$F054E8`) is a longword-array loader.** It takes a count from the record and
+copies that many longwords from the record into **`$E8A`** onward:
+
+```
+$F054E8  move.l (a0)+,d2        ; count
+$F054EA  lea    $e8a,a2
+$F054F4  move.l (a0)+,(a2)+     ; repeat d2 times
+```
+
+`$E8A` has **exactly one absolute reference in the whole ROM — this write**. No absolute
+read exists. The standing caution about base-register addressing applies (a displacement
+off a register holding ~`$E8A` would be invisible to a static sweep), and the command never
+executes, so a runtime sweep cannot settle it either. The honest statement is: *this
+firmware fills a buffer that nothing in this firmware is seen to read*, which fits a
+parameter area handed to the host-loaded `USER` program.
+
+**Command 4 (`CPLOAD`) arms the 16→32 width conversion.** Before parsing any record it does:
+
+```
+$F05502  move.l (a0)+,d2
+$F05504  move.l d2,$E64          ; the transfer COUNT global
+$F0550A  move.w $216(a5),d2
+$F0550E  bset   #$4,d2
+$F05512  move.w d2,$216(a5)      ; $FF0216 bit 4
+```
+
+Self-test phase `$1900` established that **`$FF0216` bit 4 muxes the low half of the 32-bit
+chassis word, with `$FF0214` as the low-half latch** — the width-conversion mechanism. That
+was a diagnostic finding; this shows the bit is **armed by the microcode-upload path
+itself**, which is the first functional use of it outside the self-test. So the S-record
+payload really does arrive as 32-bit chassis words assembled from 16-bit halves, and
+`CPLOAD` sets up that assembly before it reads a byte.
+
+It also reuses `$E64`, the same transfer-count global that chassis operation `$2` sets —
+so the count reaches the transfer loop by two routes, the chassis command language and the
+host command record.

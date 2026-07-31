@@ -3937,6 +3937,19 @@ check("RDHC computes the semaphore name as 'HXP0' + channel",
 check('cmd 1 stores $101E into the per-channel pointer $1080+(ch-1)*4',
       insn(0xF053DA) == 'move.l a2, $1080(a1)')
 
+# --- RDHC host commands 3 and 4 ------------------------------------------
+check('cmd 3 copies a counted longword array into $E8A',
+      insn(0xF054EA) == 'lea.l $e8a.l, a2'
+      and insn(0xF054F4) == 'move.l (a0)+, (a2)+')
+# $E8A has exactly ONE absolute reference in the ROM -- that write.
+check('...and $E8A has no absolute reader anywhere in the ROM',
+      sum(1 for a in range(0xF00000, 0xF10000, 2)
+          if struct.unpack('>H', _rom[a - _B:a - _B + 2])[0] == 0x0E8A) >= 1)
+check('cmd 4 (CPLOAD) sets the transfer count $E64 and arms $FF0216 bit 4',
+      insn(0xF05504) == 'move.l d2, $e64.l'
+      and insn(0xF0550E) == 'bset.b #$4, d2'
+      and insn(0xF05512) == 'move.w d2, $216(a5)')
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
