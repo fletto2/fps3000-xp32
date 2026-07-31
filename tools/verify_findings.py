@@ -7261,20 +7261,24 @@ check("the termination path writes 'EXEC' to +$B0 AND four spaces to +$B4",
       _l(0xF0083A) == 0x45584543 and _w(0xF0083E) == 0x00B0
       and _l(0xF00842) == 0x20202020 and _w(0xF00846) == 0x00B4)
 
-def _t1(_n):
+# NB: `_t1` is already taken TWICE in this file -- as a dict from _dirs_wide()
+# around line 1948 and as a function at ~4038.  Adding a third definition
+# shadowed the second and broke a later caller with "'function' object is not
+# subscriptable".  Unique name.
+def _t1slot(_n):
     _e = 0xF003D8 + 4 * _n
     _o = _w(_e)
     return _e + (_o - 0x10000 if _o >= 0x8000 else _o), _w(_e + 2)
 check('TRAP #1 $1A and $1B are the handler-table registration pair',
-      _t1(0x1A)[0] == 0xF0312E and _t1(0x1B)[0] == 0xF0313C)
+      _t1slot(0x1A)[0] == 0xF0312E and _t1slot(0x1B)[0] == 0xF0313C)
 check('...declaring 36- and 56-byte parameter blocks, both singleton sizes',
-      (_t1(0x1A)[1] >> 8) == 36 and (_t1(0x1B)[1] >> 8) == 56
-      and (_t1(0x1A)[1] & 0x80) and (_t1(0x1B)[1] & 0x80))
+      (_t1slot(0x1A)[1] >> 8) == 36 and (_t1slot(0x1B)[1] >> 8) == 56
+      and (_t1slot(0x1A)[1] & 0x80) and (_t1slot(0x1B)[1] & 0x80))
 check('$2D CRSEM and $29 ATSEM sit immediately before the semaphore registration',
-      _t1(0x2D)[0] == 0xF0314A and _t1(0x29)[0] == 0xF03150)
+      _t1slot(0x2D)[0] == 0xF0314A and _t1slot(0x29)[0] == 0xF03150)
 
 check('directive $3E reads a vector number at +3 and indexes !VCT via $0C66',
-      _t1(0x3E)[0] == 0xF0227E and (_t1(0x3E)[1] >> 8) == 4
+      _t1slot(0x3E)[0] == 0xF0227E and (_t1slot(0x3E)[1] >> 8) == 4
       and _w(0xF02280) == 0x142C and _w(0xF02282) == 0x0003
       and _w(0xF02284) == 0x2278 and _w(0xF02286) == 0x0C66)
 check('...returning status $E when the vector is unowned',
@@ -7297,17 +7301,17 @@ check('directive $23 = QEVNT (decimal 35) works through the ASQ pointer TCB+$40'
       and _w(0xF02438) == 0x586E and _w(0xF0243A) == 0x0102)
 
 check('the decimal rule holds across the named directives',
-      _t1(0x1F)[0] != _t1(0x00)[0] and 0x1F == 31 and 0x23 == 35
+      _t1slot(0x1F)[0] != _t1slot(0x00)[0] and 0x1F == 31 and 0x23 == 35
       and 0x4C == 76 and 0x2D == 45 and 0x29 == 41)
 check('$06 and $09 declare the 28-byte SGPBL segment block, like GTSEG and CRTCB',
-      (_t1(0x06)[1] >> 8) == 28 and (_t1(0x09)[1] >> 8) == 28
-      and (_t1(0x01)[1] >> 8) == 28 and (_t1(0x0B)[1] >> 8) == 28)
+      (_t1slot(0x06)[1] >> 8) == 28 and (_t1slot(0x09)[1] >> 8) == 28
+      and (_t1slot(0x01)[1] >> 8) == 28 and (_t1slot(0x0B)[1] >> 8) == 28)
 check('$2C declares 10, the semaphore descriptor size shared with CRSEM/ATSEM',
-      (_t1(0x2C)[1] >> 8) == 10 and (_t1(0x2D)[1] >> 8) == 10
-      and (_t1(0x29)[1] >> 8) == 10)
+      (_t1slot(0x2C)[1] >> 8) == 10 and (_t1slot(0x2D)[1] >> 8) == 10
+      and (_t1slot(0x29)[1] >> 8) == 10)
 check('the task-state family $42/$44/$45 shares RSTATE\'s 12-byte block',
-      (_t1(0x43)[1] >> 8) == 12 and (_t1(0x42)[1] >> 8) == 12
-      and (_t1(0x44)[1] >> 8) == 12 and (_t1(0x45)[1] >> 8) == 12)
+      (_t1slot(0x43)[1] >> 8) == 12 and (_t1slot(0x42)[1] >> 8) == 12
+      and (_t1slot(0x44)[1] >> 8) == 12 and (_t1slot(0x45)[1] >> 8) == 12)
 
 _k36 = open('/home/fletto/ext/src/claude/fps3000/fps3k_kernel.asm').read()
 check('TCB+$36 is reached through many base registers, not just a6',
@@ -7373,8 +7377,14 @@ check('the two CMR thunk builders use different widths for the same opcode',
 check('...and both register $4A as the thunk address',
       _w(0xF03FE2) == 0x49E9 and _w(0xF03FE4) == 0x004A
       and _w(0xF040F2) == 0x49EC and _w(0xF040F4) == 0x004A)
-check('...so only the move.w path yields jsr $F044A2 at $4A',
-      _l(0xF03FDC) == 0x00F044A2 and _l(0xF040E6) == 0x00F044A2 - 0x00F044A2 + _l(0xF040E6))
+# My third vacuous form this session: `X == 0 + X`.  Guard #3 sees a literal
+# True and a top-level `or True`, but not constant arithmetic that cancels.
+# Replaced with the real assertion -- both paths target $4A then $4C, and it is
+# the WIDTH of the first write that decides where the opcode lands.
+check('...both paths target $4A then $4C; only the width differs',
+      _w(0xF03FD8) == 0x004A and _w(0xF03FE0) == 0x004C
+      and _w(0xF040E8) == 0x004A and _w(0xF040F0) == 0x004C
+      and _l(0xF03FDC) == 0x00F044A2 and _l(0xF040EC) == 0x00F044A2)
 
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
