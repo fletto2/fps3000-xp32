@@ -4934,6 +4934,26 @@ check('...and the AP I/F ready flag and bulk port twice each',
       _devacc[('a4', 0x004)] == 2 and _devacc[('a4', 0x008)] == 2)
 check('the only other displacement is the channel data-low at $2(a1)',
       _devacc[('a1', 2)] == 12)
+
+# ---- TCBIO1I: the mailbox is paged, and MODE1 bit 0 is the host link (2026-07-31) ----
+check('the host ISR saves XLTR_MODE2, selects page $F, and restores it',
+      insn(0xF05DE6) == 'move.w $210(a5), d7' and insn(0xF05DEA) == 'move.w #$f, $210(a5)'
+      and insn(0xF05E44) == 'move.w d7, $210(a5)')
+check('...with the mailbox base $700000 inside the paged chassis window',
+      insn(0xF05DE0) == 'movea.l #$700000, a4'
+      and 0x400000 <= 0x700000 < 0x800000)
+check('...reading $70001C and writing $700020 through it',
+      insn(0xF05DF0) == 'move.l $1c(a4), d1' and insn(0xF05E40) == 'move.l d1, $20(a4)')
+check('MODE1 bit 0 is set by TCBIO1I before a host-link panel command',
+      insn(0xF05E04) == 'bset.b #$0, d1' and insn(0xF05E08) == 'move.w d1, $202(a5)')
+check('...shared by both $281 and $282 via the same exit',
+      insn(0xF05DFA) == 'move.l #$281, d0' and insn(0xF05E1A) == 'move.l #$282, d0'
+      and insn(0xF05E20) == 'bra.b $f05e00')
+check("TCBIO1I's descriptor carries the semaphore name HIO1",
+      _rom[0xF05D2C - 0xF00000:0xF05D30 - 0xF00000] == b'HIO1')
+check('...and the region ends in 120 bytes of zero padding',
+      set(_rom[0xF05E88 - 0xF00000:0xF05F00 - 0xF00000]) == {0}
+      and 0xF05F00 - 0xF05E88 == 120)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

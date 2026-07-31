@@ -419,3 +419,25 @@ words straight to the chassis-programmed address in `$E58`, with no bound check.
 `$FF0010` remains **never referenced** in any form — an earlier trace appeared to reach it by
 chaining two `lea $8(...)` instructions that lie on mutually exclusive branches. The register the
 emulator models there has no counterpart in the firmware.
+
+## CORRECTION 2026-07-31: the host mailbox is INSIDE the paged chassis window
+
+This document lists "host mailbox" as its own block, separate from "chassis memory window (paged
+via MODE2)". **They are the same window.** `$700000` lies inside `$400000`-`$7FFFFF`, and
+TCBIO1I's ISR proves the paging applies:
+
+```
+$F05DE6  move.w  $210(a5),d7        save XLTR_MODE2
+$F05DEA  move.w  #$F,$210(a5)       select page $F
+$F05DF0  move.l  $1C(a4),d1         read  $70001C   (a4 = $700000)
+$F05E40  move.l  d1,$20(a4)         write $700020
+$F05E44  move.w  d7,$210(a5)        restore XLTR_MODE2
+```
+
+**`$70001C` and `$700020` are only meaningful while `XLTR_MODE2 = $F`.** The ISR saves the
+incoming page value rather than assuming one, which means other code pages the window
+concurrently — RDHC's chassis-memory operations do exactly that.
+
+**Model requirement**: `$FF0210` must gate the mailbox as it gates the rest of the window. A model
+that answers `$70001C` unconditionally works by accident in a boot where nothing else pages, and
+diverges the moment RDHC issues a chassis-memory operation.

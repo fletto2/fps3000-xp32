@@ -22927,3 +22927,64 @@ MODE1 traffic is also this block.
 in particular `$FF021A` as a genuine per-bit read/write latch and `$FF0008` as a FIFO — is
 sufficient for 28% of the firmware's code and for the whole channel-transaction protocol on every
 one of the five paths that implement it.
+
+## TCBIO1I read out in full — and the mailbox needs `XLTR_MODE2 = $F` (2026-07-31)
+
+TCBIO1I is 512 bytes, replication-free (13 incidental 48-byte matches against the rest of the
+image) and decodes to 132 instructions. Reading all of them turns up four things.
+
+### 1. The host mailbox is PAGED, and the ISR brackets it
+
+```
+$F05DD6  movem.l d1-d2/d7/a4-a5,-(a7)
+$F05DDA  movea.l #$FF0000,a5
+$F05DE0  movea.l #$700000,a4          the mailbox base
+$F05DE6  move.w  $210(a5),d7          SAVE XLTR_MODE2
+$F05DEA  move.w  #$F,$210(a5)         SET PAGE $F
+$F05DF0  move.l  $1C(a4),d1           read $70001C
+         ...
+$F05E40  move.l  d1,$20(a4)           write $700020
+$F05E44  move.w  d7,$210(a5)          RESTORE XLTR_MODE2
+$F05E48  movem.l (a7)+,d1-d2/d7/a4-a5
+```
+
+**`$70001C` and `$700020` are only valid while `XLTR_MODE2 = $F`.** `$700000` lies inside the
+`$400000`-`$7FFFFF` chassis window that `$FF0210` pages, so the mailbox is not a directly-mapped
+register — it is a location in a selected page, and the ISR saves the incoming page, selects `$F`,
+does its work, and restores.
+
+**This is an emulation requirement that has not been recorded.** `device_communications_map.md`
+lists the host mailbox as its own block alongside the chassis window; it is *in* the chassis
+window. A model that answers `$70001C` regardless of `$FF0210` will work by accident here and
+diverge as soon as anything else pages the window — and RDHC's chassis-memory operations page it
+constantly.
+
+### 2. The last unattributed `XLTR_MODE1` bit is closed
+
+```
+$F05E00  move.w  $202(a5),d1
+$F05E04  bset.b  #$0,d1
+$F05E08  move.w  d1,$202(a5)
+```
+
+The MODE1 bit map found "**bit 0**, `bset` x1" with no owner. **It is TCBIO1I setting bit 0
+immediately before issuing panel command `$281` or `$282`** — the two host-link codes, which
+share this exit (`$F05E20 bra.b $F05E00`). So bit 0 marks a host-link command specifically, as
+distinct from the bit 12 "command valid" every issuer sets.
+
+Every bit of `XLTR_MODE1` now has an owner: 14 control, 12 enable, 7 busy, 6 the issuer copies,
+**0 the host link**.
+
+### 3. The task's parameter block is data at `$F05D00`, containing `HIO1`
+
+`$F05D00`-`$F05D35` disassembles as nonsense (`ori.b #$0,d0` padding artefacts) because it is the
+task descriptor, with the semaphore name **`HIO1`** (`48 49 4F 31`) at `$F05D2C`. The entry point
+is `$F05D36`, exactly as the TDTI table states, and `$F05D5A`-`$F05D6C` copies the descriptor onto
+the stack before `$2D` CRSEM — the same "prologue as parameter block" pattern documented for the
+XP tasks.
+
+### 4. The region ends in 120 bytes of zero padding
+
+`$F05E88`-`$F05EFF` is all zero. TCBIO1I uses 392 of its 512-byte segment, and the `!TST`
+segment table still claims the full two pages — consistent with segments being allocated in whole
+pages rather than sized to content.
