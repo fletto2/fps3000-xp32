@@ -19277,3 +19277,39 @@ like a working poll.
 now demonstrated running, not merely described** — commands in through MODE0 and the three
 dispatch layers, status out through `$1064` and operation `$A`, and a complete channel cycle
 including a call into host-loaded code in between.
+
+## The status nibble encoding, validated on every branch
+
+`$F08616` classifies a channel into a 4-bit code. Driving each branch by varying the channel
+status word (`FPS3K_CHCMD`) with the busy bit available confirms all four:
+
+| channel status | b15 | b13 | b11 | encoder rule | predicted | **observed `$1064`** |
+|---|:---:|:---:|:---:|---|---:|---:|
+| `$C800` | 1 | 0 | **1** | `seq + 1` | 1 | **`$0001`** |
+| `$C000` | 1 | 0 | 0 | `seq + 1 + 9` | 10 | **`$000A`** |
+| `$2000` | 0 | **1** | 0 | **`9`** (fixed) | 9 | **`$0009`** |
+| `$4000` | 0 | 0 | 0 | `seq + 1 + 4` | 5 | **`$0005`** |
+| `$0000` | 0 | 0 | 0 | `seq + 1 + 4` | 5 | **`$0005`** |
+
+Every branch predicted correctly, with the sequence counter at 0 (the idle sweep resets it
+each pass). So the base codes a chassis sees are:
+
+| nibble | meaning |
+|---|---|
+| **1** | bit 11 set — the sub-mode path |
+| **5** | plain: raised, no flags |
+| **9** | **error** (bit 13) with bit 15 clear |
+| **10** | transaction complete (bit 15 set, bit 11 clear) |
+
+**The error class is the only one that does not carry the sequence number.** `9` is loaded
+as a literal (`move.b #$9,d4`) while the other three are `$107E + 1` plus an offset. That is
+a real design distinction, not an accident of the arithmetic: a chassis polling `$1064` can
+tell a *repeated* error from a *new* event, because the normal codes advance with the
+counter and the error code does not.
+
+It also means the nibble is not a plain enumeration — it is `{class offset} + {sequence}`
+packed into four bits, so with the counter advancing the same class produces different
+nibbles on successive events, and the classes are distinguishable only modulo the counter's
+wrap. That is worth knowing before writing a chassis model that decodes it: **read the
+sequence counter `$107E` alongside `$1064`**, which is precisely why operation `$A` can walk
+past the array into it.
