@@ -36668,3 +36668,42 @@ withdrawn the companion.
 What the inventory does establish is the *scale* of the interface: **five 16-bit buses plus three
 8-bit groups**, which is why the card needs 200 pins and two ribbon cables, and why no part of this
 link can be reproduced without the counterpart adapter.
+
+## Synthesis: the hardware register file versus the firmware's view (2026-07-31)
+
+The schematics give a register file of `{HMA-high, HMA-low, APMA, WC, CTL}`, each with a decoded
+write strobe (`*CLKE#`) and read enable (`*OUT#`). The firmware sees four registers per AP I/F
+window plus the base window's four. Laying them side by side:
+
+| hardware register | firmware sees | evidence |
+|---|---|---|
+| **WC** (word count) | **`$FF0000`** — the remaining-word count | both are "words left"; both must reach zero to end a transfer; `WC-0` generates `DMADONE` |
+| **CTL** (control) | **`+$0E`** — command on write, status on read | `RDCTL#` reads the same register that is written; `OVFL*`/`UNFL*`/`WC-0` feed it, matching the ERROR/DONE bits the firmware polls |
+| the FIFO | **`$FF0008`** / **`+$08`,`+$0A`** | `RDFIFO#` pops; 16 deep |
+| `READY*` (pin A5) → READY LOGIC | **`$FF0004` bit 0** | a dedicated ready input with its own logic block |
+| **APMA** (AP memory address) | *possibly* the transfer address the SBC programs | a counter, auto-incrementing, matching the documented auto-increment |
+| **HMA-high / HMA-low** | **nothing** | — |
+
+**The last row is the finding.** The AP I/F carries a **host memory address** register pair that the
+firmware never touches, in any window, in any code path. This project records the absence as a
+curiosity ("nothing in the firmware touches a host address"); the schematics explain it. `HMA` is
+loaded **from the host side**, through `REGSEL` on J23, by the counterpart adapter — not by the SBC.
+
+That divides the transfer setup cleanly:
+
+```
+SBC  programs:  its own address ($E58), its own count ($E64), the operation, the channel
+HOST programs:  HMA-high / HMA-low  — where the data goes on ITS side
+hardware:       APMA counts, WC counts down, WC=0 -> DMADONE
+```
+
+**So a chassis model does not need to invent host-address behaviour**, and the recorded observation
+that the firmware never programs one is not an omission to be explained away — it is the architecture.
+It also means any future attempt to drive the AP I/F from a substitute host must program HMA through
+`REGSEL`, because no amount of SBC-side activity will do it.
+
+**One structural puzzle this may bear on.** The recorded window map notes eight 32-byte windows of
+which **window 1 is never accessed** and is "architecturally reserved rather than merely unused; what
+for is unestablished". A register the SBC has no business touching — HMA being the obvious candidate —
+would present exactly that way. Offered as a hypothesis, not a finding: nothing here ties window 1 to
+HMA specifically.
