@@ -34488,3 +34488,42 @@ A static check that would have caught the error immediately: there is **no `move
 anywhere in the image**. Every literal MODE1 write is `$8020`, `$8000`, `$2000` or `$1000`. An
 observed value with no literal behind it is necessarily register-sourced, and that is worth checking
 before attributing any observed register value to a specific instruction.
+
+## CORRECTION AGAIN: `$F089EE` is an infinite retry, not a soft-error retry (2026-07-31)
+
+I described `$F089EE` as retrying "and only if the retry also fails does it raise `d7`", i.e. a
+one-shot soft-error recovery. Reading its tail shows that is wrong:
+
+```
+loc_F08A18:  move.l d0,(a0) / cmp.l (a0),d0 / beq $F08A2E   ; re-write, re-verify
+             move.l #$f0f0f0f0,d7 / move.w d1,$202(a6)      ; publish on failure
+loc_F08A2E:  board-status check -> $F08A46 if bits 4 AND 5
+loc_F08A3C:  tst.l d7
+             bne.b  $F08A18                                 ; <-- LOOP BACK
+             movem / rts
+loc_F08A46:  jmp $F088F4                                    ; the only real exit
+```
+
+**`d7` is never cleared inside the routine, and every caller sets it *before* calling**
+(`$F099D2`, `$F09B5C`, `$F09B76` each do `move.l #$f0f0f0f0,d7` then `bsr`). So `tst.l d7` at
+`$F08A3C` is always non-zero, `bne` always taken, and the `rts` at `$F08A44` is **unreachable**.
+The routine re-writes and re-verifies the failing location forever, republishing `d1` to MODE1 on
+each failing pass, until the chassis raises board-status bits 4 **and** 5 and `$F08A46` jumps to
+`Phase2Init`.
+
+So it is the memory-fault instance of this suite's documented policy — *retry forever; only the
+chassis can end it* — not an exception to it. My "the designers expected transient failures to be
+worth one more attempt" was reading a recovery mechanism into a hang. The re-write/re-verify is real
+and does exercise the hardware repeatedly, but the loop has no success exit.
+
+This is consistent with the measurement rather than newly explaining it: `scm_bitrot` left the final
+PC at **`$F08A18`**, the top of that loop.
+
+**Scope, which does stand:** `$F089EE` has exactly **three** callers — `$F099D8` (the DRAM verify)
+and `$F09B62`/`$F09B7C` (the two SCM verifies). All three are **memory** tests. Register and
+logic tests raise `d7` inline and retry their own stage instead. So the firmware does distinguish
+memory faults from logic faults — but by *which loop it hangs in*, not by attempting recovery.
+
+Incidental confirmation: the DRAM verify's bound is `cmpa.l #$1fff4,a0`, which is exactly the
+documented RAM/register partition boundary — `$1FFF0`-`$1FFF3` excluded, `$1FFF4` onward ordinary
+RAM. Two unrelated derivations agreeing on the same address.

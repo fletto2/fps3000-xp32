@@ -7938,6 +7938,18 @@ check('$F089EE retries the failing location before raising d7',
 check('...and no literal $FFFF is ever written to MODE1',
       len(_re21a.findall(r'move\.w\s+#\$ffff,\s*\$202\(a[0-7]\)', _asm21a)) == 0)
 
+check('$F089EE never clears d7, so its rts is unreachable',
+      _w(0xF08A3C) == 0x4A87
+      and _w(0xF08A3E) >> 8 == 0x66          # bne back to $F08A18
+      and 0xF08A40 + ((_w(0xF08A3E) & 0xFF) - 0x100) == 0xF08A18
+      and _w(0xF08A44) == 0x4E75
+      and _w(0xF08A46) == 0x4EF9 and _l(0xF08A48) == 0x00F088F4)
+check('...and all three callers raise d7 BEFORE calling it',
+      all(_w(_a) == 0x2E3C and _l(_a + 2) == 0xF0F0F0F0
+          for _a in (0xF099D2, 0xF09B5C, 0xF09B76)))
+check('the DRAM verify bound is $1FFF4, the documented partition boundary',
+      _w(0xF099E0) == 0xB1FC and _l(0xF099E2) == 0x0001FFF4)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
