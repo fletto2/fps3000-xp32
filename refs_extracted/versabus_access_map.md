@@ -18646,3 +18646,58 @@ This also fits the established finding that the firmware is **hand-written assem
 image contains **zero `link`/`unlk` pairs**, so `lea -$x(a7),a7` is its only framing idiom,
 and it is used four times in the whole program. A compiler emitting frames would have
 emitted the matching `unlk`, and the defect could not have arisen.
+
+## A working CP-program handler: the first complete XP-32 channel cycles
+
+The leak analysis says a real handler must **not return** — it has to restore the registers
+itself and rejoin the task, because the firmware's own `rts` is 96 bytes out. That is
+directly constructible, and the frame arithmetic says exactly what it must do.
+
+At the `jsr (a2)`, with `P` = the stack pointer after the outer `jsr $F08550` pushed its
+return address:
+
+```
+lea -$60(a7),a7   -> P-$60      push 12 / lea $c(a7),a7  -> P-$60
+movem.l -(a7)     -> P-$9C      jsr (a2)                 -> P-$A0
+```
+
+So a handler entered at `a7 = P-$A0` must restore `d0-d7/a0-a6` from `$4(a7)` (= `P-$9C`,
+where the `movem` put them), set `a7 = P+4` — an adjustment of **`+$A4`** — and jump to
+`$F07EA4`, the address the outer `jsr` would have returned to. Sixteen bytes:
+
+```
+$0F00  4CEF 7FFF 0004   movem.l $4(a7),d0-d7/a0-a6
+$0F06  4FEF 00A4        lea $A4(a7),a7
+$0F0A  4EF9 00F0 7EA4   jmp $F07EA4
+```
+
+with a 4-byte `bra.w` in the trampoline slot pointing at it (`$10AE: 6000 FE50` — note the
+target is `$10B0 + disp`, not `$10AE + disp`; getting that wrong by 2 sends it into unpoked
+RAM).
+
+```
+FPS3K_XPIRQ=1 FPS3K_CHCMD=C000 \
+FPS3K_POKE=10AE=6000,10B0=FE50,F00=4CEF,F02=7FFF,F04=0004,F06=4FEF,F08=00A4,F0A=4EF9,F0C=00F0,F0E=7EA4
+```
+
+| | bare `rts` stub | this handler |
+|---|---|---|
+| trampoline entered | 1 | **1466** |
+| handler reached | — | **1466** |
+| rejoin at `$F07EA4` | 0 | **1466** |
+| return-to-`$000000` | 1 | **0** |
+| illegal-instruction handler | 1 | **0** |
+| final PC | `$F056B8` (panel spin) | **`$F00FD0` — the RTOS idle loop** |
+
+**These are the first complete XP-32 channel cycles this project has executed**: interrupt →
+latch → status decode → `RSTATE` → argument frame → call the CP handler → result back into
+the channel data pair → rejoin the task → wait for the next interrupt, 1466 times, ending in
+the normal idle state rather than a crash or a spin.
+
+It also validates the analysis three ways at once. The `+$A4` was *derived* from the frame
+arithmetic, not tuned — had any step of that reasoning been wrong the rejoin would not
+happen, let alone 1466 times cleanly. The trampoline must be **executed** for a `bra.w` to
+work at all. And the leak must be **real**, or a plain `rts` would have sufficed.
+
+For emulation this is a concrete deliverable: a chassis model that wants to exercise the XP
+channels needs those sixteen bytes plus a four-byte branch, and the machine runs.

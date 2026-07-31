@@ -4103,6 +4103,28 @@ check('lea -$60(a7),a7 occurs 4 times, once per XP task',
 check('...and lea +$60(a7),a7 occurs ZERO times, so it is never released',
       _rom.count(b'\x4f\xef\x00\x60') == 0)
 
+# --- a working CP handler runs complete XP-32 channel cycles --------------
+# The handler must NOT return (the firmware's rts is 96 bytes out); it restores
+# the registers from $4(a7), adjusts a7 by +$A4 -- derived from the frame
+# arithmetic, not tuned -- and jumps to $F07EA4, the outer jsr's return address.
+_HANDLER = ('10AE=6000,10B0=FE50,F00=4CEF,F02=7FFF,F04=0004,'
+            'F06=4FEF,F08=00A4,F0A=4EF9,F0C=00F0,F0E=7EA4')
+with tempfile.TemporaryDirectory() as _tdh:
+    _p = subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000',
+                         '-trace', f'{_tdh}/t'], capture_output=True, timeout=400,
+                        env={**os.environ, 'FPS3K_XPIRQ': '1',
+                             'FPS3K_CHCMD': 'C000', 'FPS3K_POKE': _HANDLER})
+    _hp = collections.Counter(
+        re.findall(r'[0-9A-F]{6}', open(f'{_tdh}/t').read()))
+    _hpc = re.search(r'final PC=([0-9A-F]+)', _p.stderr.decode('latin1', 'replace'))
+check('a non-returning CP handler runs the channel cycle repeatedly',
+      _hp['0010AE'] > 100 and _hp['000F00'] == _hp['0010AE']
+      and _hp['F07EA4'] == _hp['0010AE'])
+check('...with no return-to-zero and no illegal-instruction exception',
+      _hp['000000'] == 0 and _hp['F0A24A'] == 0)
+check('...and the machine ends in the RTOS idle loop, not a spin',
+      bool(_hpc) and 0xF00F00 <= int(_hpc.group(1), 16) <= 0xF01000)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
