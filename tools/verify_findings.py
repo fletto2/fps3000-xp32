@@ -7345,6 +7345,16 @@ check('CNCTIRQ derives the task number as an !IDV record index, (x+6)/14',
       _w(0xF02264) == 0x5C87 and _w(0xF02266) == 0x8EFC and _w(0xF02268) == 0x000E
       and _w(0xF0226A) == 0x1387)
 
+check('!VCT has exactly four writers and no bit-clear',
+      _w(0xF03FF2) == 0x10BC and _w(0xF03FF4) == 0x00FF
+      and _w(0xF0411A) == 0x4231
+      and _w(0xF0226A) == 0x1387
+      and not _re21a.search(r'bclr\.\w+\s+\S+,\s*\(a\d,\s*d\d', _k36))
+check('$F03FEE claims a vector then dispatches through a link at +$8',
+      _w(0xF03FEE) == 0x2078 and _w(0xF03FF0) == 0x0C66
+      and _w(0xF03FFC) == 0xD1E8 and _w(0xF03FFE) == 0x0008
+      and _w(0xF04004) == 0x4E90)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

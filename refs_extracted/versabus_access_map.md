@@ -32494,3 +32494,45 @@ Two candidates ruled out along the way. **The display progress code `$BF` is not
 `$F09C50` loads it, but `$F09C40` branches past that whole path because config `$F0A506` is zero,
 so it never executes on this machine. And **`CNCTIRQ` is not the source** — it writes `d7` computed
 as `(offset + 6) / 14`, an `!IDV` record index, which for six records cannot reach 191.
+
+### Every `!VCT` writer enumerated — and none of them writes `$BF`
+
+Censusing every user of the base pointer `$0C66` gives the complete write set:
+
+| site | operation | meaning |
+|---|---|---|
+| `$F09F16`-`$F09F26` | the builder — `$FF` fill then conditional `$FF` | initial ownership map |
+| `$F0226A` | `move.b d7,(a1,d2.w)` | `CNCTIRQ` stamps a **task number** |
+| `$F03FF2` | `move.b #$ff,(a0,d0.w)` | mark **system-owned** |
+| `$F0411A` | `clr.b (a3,d1.w)` | mark **unclaimed** |
+
+plus four `tst.b` readers (`$F02226`, `$F02288`, `$F03DB4`, `$F03F90`) and the two sites that set
+the pointer itself. **There is no `bclr` on `!VCT` anywhere**, and no site writes `$BF`.
+
+So the `$BF` at `$1FA2D` does not come from the structure's own code. Since this project has
+measured that "the firmware never reads a byte it has not written", the byte *was* written — by
+something addressing `$1FA2D` without going through `$0C66`. An adjacent-structure overrun is the
+obvious candidate (`!IOV`'s page ends at `$1F9FF`, `$2D` bytes short of it), but that is a guess.
+
+**What the census does establish is that the ownership map has exactly four legitimate states and
+four writers**, which is what a model needs:
+
+```
+$FF  system-owned   (builder, or $F03FF2)
+0    unclaimed      (builder, or $F0411A)
+1-6  task-owned     ($F0226A, CNCTIRQ)
+```
+
+One site is worth noting on its own account. `$F03FEE`-`$F04004` marks a vector system-owned and
+then **dispatches through a table hanging off the same pointer**:
+
+```
+$F03FEE  movea.l $c66.w,a0
+$F03FF2  move.b  #$ff,(a0,d0.w)   ; claim the vector for the system
+$F03FFC  adda.l  $8(a0),a0        ; follow a link at +$8
+$F04004  jsr     (a0)             ; ... and call it
+```
+
+That is a second dispatch-through-a-registered-pointer mechanism, distinct from the `$F00B74` one
+found earlier, and it lives in the `CMR` neighbourhood — the channel-request directive this
+firmware never issues.
