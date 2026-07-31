@@ -36070,7 +36070,7 @@ all).
 `movep.w $3313(a7),d7` is data:
 
 ```
-$F08E8C:  $FFFF $00FF $0F1F $0F0F $3313 $3333 $AA9A $AAAA
+$F08E8C:  $0010 $FFFF $009F $00FF $0F1F $0F0F $3313 $3333
 ```
 
 — **eight walking/alternating bit patterns**, and `emulator/versabus.c` already reasons about exactly

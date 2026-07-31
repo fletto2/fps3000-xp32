@@ -8341,9 +8341,9 @@ check('...with tas present at exactly six sites (the control)',
       sum(1 for _i in range(0, len(_rom_bytes) - 1, 2)
           if _rom_bytes[_i] == 0x4A and (_rom_bytes[_i+1] & 0xC0) == 0xC0) == 6)
 
-check('$F08E8C is an eight-word pattern table, not code',
+check('$F08E8C is a pattern table, not code',
       [_w(0xF08E8C + 2*_i) for _i in range(8)]
-      == [0xFFFF, 0x00FF, 0x0F1F, 0x0F0F, 0x3313, 0x3333, 0xAA9A, 0xAAAA])
+      == [0x0010, 0xFFFF, 0x009F, 0x00FF, 0x0F1F, 0x0F0F, 0x3313, 0x3333])
 check('...and the genuine movep sites are the PTM ones only',
       _w(0xF00FA4) == 0x0308 and _w(0xF0A2C6) == 0x0189 and _w(0xF0A2CE) == 0x0189
       and _w(0xF090F4) == 0x0188 and _w(0xF09156) == 0x0189)
