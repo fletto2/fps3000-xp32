@@ -18428,33 +18428,39 @@ For emulation this is a concrete recipe rather than an inference: **to carry an 
 past the notify arm, the model needs executable code at `$10AE + (ch-1)*4`**, and a bare
 `rts` suffices to get through the call.
 
-### `RSTATE` names the `$3C` offset: it is the target task's `a7`
+### `RSTATE`'s block layout — and a RETRACTION about the `$3C` offset
 
 `$43` `RSTATE`'s handler is `$F03620`, and it builds a **`$60` = 96-byte** block — exactly
-the frame the caller reserves with `lea -$60(a7),a7`:
+the frame the callback reserves with `lea -$60(a7),a7`, which is a real and useful match:
 
 ```
 $F03622  d5 = $60                       ; the block size
-$F0362E  move.w #$10,d0                 ; SIXTEEN longwords
+$F0362E  move.w #$10,d0                 ; sixteen longwords
 $F03632  move.l (a1)+,(a4)+             ; copied from $100(a5)
-$F03638  then $FC(a5)  (long)           ; the saved PC
-$F0363C  then $FA(a5)  (word)
-$F03640  then $148(a5) masked $1FFFFFF
-$F0364C  then $2C(a5)                   ; the task STATE word
-$F03650  then $148(a5) masked $F800
-$F0365A  then $150, $154, $14C, $158
+$F03638  then $FC(a5) (long), $FA(a5) (word)
+$F03640  then $148(a5) masked $1FFFFFF, $2C(a5) (the state word),
+         $148(a5) masked $F800, then $150, $154, $14C, $158
 ```
 
-Sixteen longwords is `d0-d7` + `a0-a7`, so the block's offset `$3C` is the **sixteenth**
-longword — **`a7`, the target task's stack pointer**. That is what `movea.l $3C(a7),a3` in
-the callback picks up, which independently confirms the reading that the XP task builds its
-argument frame **on the `USER` task's own stack** before calling the trampoline. The
-inference and the kernel agree without either being used to derive the other.
+`$F035E0` shows `a5` is the **target** task's TCB and `a6` the caller's — it compares
+`$140(a5)`/`$144(a5)` against the caller's `$10(a6)`/`$14(a6)` (`TCBNAME`/`TCBSESSN`), an
+ownership check, and reports through `$102(a6)`, the caller's directive status.
 
-*A tension worth flagging rather than papering over:* if `TCB+$100` begins a 64-byte
-register-save area, it overlaps `TCB+$102`, which this file identifies as the directive
-status/return code on the strength of 119 accesses. Both cannot be right about the same
-TCB. The likely resolution is that `a5` here is the **target** task's control block located
-by the preceding `bsr $F035E0`, and that the two offsets are being read in different
-structures — but that is not established, and until it is, `TCB+$100` should not be added
-to the field map.
+**RETRACTED, before it could propagate:** I first read the sixteen longwords as
+`d0-d7`/`a0-a7` and concluded that the block's offset `$3C` is the target task's `a7`,
+"independently confirming" that the callback frame is built on the `USER` task's stack.
+That is wrong. `TCB.EQ` puts `TCBA6` at `+$0F8` and `TCBUSP` (user's A7) at `+$0FC`, so a
+register save area would **end** at `$100`, not begin there; `+$100` onward is `TCBSR`,
+`TCBPC`, `TCBVOR`, `TCBRTCD`, pads and the exception-monitor fields. The sixteen longwords
+are not registers.
+
+What survives is only this: `a3` in the callback is the longword at **offset `$3C` of the
+RSTATE block**, which is the sixteenth longword copied from `<target TCB>+$100` — i.e.
+`<target TCB>+$13C`. **Its meaning is not established.** `TCB.EQ` calls that a pad, and this
+project separately records that `TCB.EQ` is displaced in this region, so neither source
+settles it.
+
+None of the callback findings depend on this: the `lea`-not-`movea` at `$F085F4`, the `jsr`
+into `$10AE + (ch-1)*4`, the three argument pointers, the count word `$000C` and the result
+read back out of `$10DE` are all read directly off the instructions, and the runtime test
+with a 4-byte `rts` stub confirms them independently.
