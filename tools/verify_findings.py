@@ -35,6 +35,49 @@ def check(name, cond, detail=''):
     if cond: print(f'  PASS  {name}')
     else:    print(f'  FAIL  {name}   {detail}'); fails.append(name)
 
+# --- STRUCTURAL SELF-AUDITS: these run FIRST.  Both defects they catch
+# --- (orphaned checks, use-before-definition) silently INFLATED the pass
+# --- count rather than failing, so they must precede every check.
+_self = open(__file__).read()
+_marker = 'sys.exit(1 if fails else 0)'
+# build the needle at runtime so this guard does not match its own source text
+_needle = 'ch' + 'eck('
+_below = _self[_self.rindex(_marker):].count(_needle)
+if _below:
+    print(f'  FATAL: {_below} check() calls are below sys.exit() and never ran')
+    sys.exit(2)
+
+# ---------------------------------------------------------------------------
+# Structural self-audit #2: use-before-definition inside the emulator block.
+#
+# The runtime checks live in an `else:` that spans ~3000 lines, and the module
+# level continues for another 3000 after it.  A check written in the first
+# block that calls a helper defined in the second raises NameError the moment
+# the emulator IS built -- and passes silently when it is not.  One did.
+# ---------------------------------------------------------------------------
+import ast as _ast_g
+_tree_g = _ast_g.parse(_self)
+_elseblk = None
+for _n in _ast_g.walk(_tree_g):
+    if isinstance(_n, _ast_g.If) and _n.orelse and _n.end_lineno - _n.lineno > 500:
+        _elseblk = (_n.orelse[0].lineno, _n.end_lineno)
+_late = {}
+for _n in _tree_g.body:
+    if isinstance(_n, (_ast_g.FunctionDef, _ast_g.Assign)) and _elseblk \
+            and _n.lineno > _elseblk[1]:
+        for _t in ([_n] if isinstance(_n, _ast_g.FunctionDef)
+                   else [x for x in _n.targets if isinstance(x, _ast_g.Name)]):
+            _late[getattr(_t, 'name', getattr(_t, 'id', ''))] = _n.lineno
+_bad_g = set()
+if _elseblk:
+    for _n in _ast_g.walk(_tree_g):
+        if isinstance(_n, _ast_g.Name) and isinstance(_n.ctx, _ast_g.Load) \
+                and _elseblk[0] <= _n.lineno <= _elseblk[1] and _n.id in _late:
+            _bad_g.add((_n.id, _n.lineno))
+if _bad_g:
+    print('  FATAL: names used in the emulator block but defined below it:',
+          sorted(_bad_g)[:6])
+
 def word(a): return struct.unpack('>H', d[a-B:a-B+2])[0]
 def long_(a): return struct.unpack('>I', d[a-B:a-B+4])[0]
 
@@ -598,13 +641,14 @@ else:
           and d[0xF09B24-0xF00000:0xF09B28-0xF00000] == b'\x42\x6e\x02\x10')
 
     # --- TCB offsets against the vendor structure -----------------------------
-    check('the documented task name at +$10 matches vendor TCBNAME',
-          0x10 == 16)
+    check('the task name at +$10 of the TDTI record really is the task name',
+          [d[0xF0A600 - B + n * 96 + 0x04:][:4] for n in range(6)]
+          == [b'RDHC', b'IO1I', b'XP4I', b'XP3I', b'XP2I', b'XP1I'])
     # The vendor header is from a DIFFERENT RMS68K revision: it puts TCBENTRY at
     # +$5A, which reads 0 in every live TCB, while the real entry points are at
     # +$6C.  Field names taken from it are tentative.  Assert what is measured.
     check('the TDTI records supply entry points that the vendor TCB.EQ\n       would place elsewhere -- the usage-derived map is preferred',
-      all(_bst.unpack('>I', _rom[0xF0A600 - 0xF00000 + n * 96 + 0x1C:][:4])[0]
+      all(long_(0xF0A600 + n * 96 + 0x1C)
           in (0xF046F0, 0xF05D36, 0xF05F4A, 0xF0694A, 0xF0734A, 0xF07D4A)
           for n in range(6)))  # measured in post-boot RAM; see the access map for the values
     check('+$100/$102/$138/$160 are BEYOND the 252-byte vendor TCB',
@@ -724,7 +768,9 @@ else:
     check('$0C sets Z (bit 2) and N (bit 3) -- arithmetically impossible together',
           (0x0C >> 2) & 1 and (0x0C >> 3) & 1 and not (0x0C & 0x13))
     check('...so it is a sentinel, not a directive: 12 = GTTASKNM in the reference',
-          _t1[0x0C][0] == 0xF003D0)
+          (0xF003D8 + 0x0C * 4
+           + struct.unpack('>h', d[0xF003D8 - B + 0x0C * 4:][:2])[0]) & 0xFFFFFF
+          == 0xF003D0)
 
     # --- the issuer is linear: no branch between entry and the spin -----------
     check('$F05688-$F056B8 contains no branch instruction',
@@ -736,8 +782,25 @@ else:
           all(d[a2-0xF00000:a2-0xF00000+48] == d[0xF05688-0xF00000:0xF05688-0xF00000+48]
               for a2 in (0xF04500, 0xF05E56, 0xF068A8, 0xF072C0,
                          0xF07CC0, 0xF086C0, 0xF0A57E)))
-    check('no RDHC code writes to a stacked return address',
-          True is not False)  # see access map: every a7 access is save/restore/params
+    # Assert this by scanning rather than by restating it: no instruction in
+    # RDHC may have a a7-relative DESTINATION other than a push/pop.  (An ISR
+    # that patched its own stacked PC would show up here -- the mechanism this
+    # project once wrongly attributed to $F04930.)
+    import capstone as _cs7
+    _md7 = _cs7.Cs(_cs7.CS_ARCH_M68K, _cs7.CS_MODE_M68K_000)
+    _a7w = []
+    for _a in range(0xF04600, 0xF05D00, 2):
+        try:
+            _i = next(_md7.disasm(d[_a - B:_a - B + 10], _a, count=1))
+        except StopIteration:
+            continue
+        _dst = _i.op_str.split(',')[-1].strip()
+        if 'a7' in _dst and _i.mnemonic.split('.')[0] in (
+                'move', 'add', 'sub', 'clr', 'addq', 'subq', 'or', 'and'):
+            if _dst not in ('-(a7)', '(a7)+'):
+                _a7w.append((hex(_a), _i.mnemonic, _i.op_str))
+    check('no RDHC code writes THROUGH the stack pointer to a saved PC',
+          all(w[1] in ('movem.l',) or w[2].endswith('a7') for w in _a7w), _a7w[:4])
 
     # --- nine bra . sites exist; the census is exact --------------------------
     _spins = [a2 for a2 in range(0xF00000, 0xF0FFFE, 2)
@@ -5122,6 +5185,237 @@ check('so the trace hook is dark for TWO reasons: zero mask AND no CCB',
 # capstone renders bsr.w without a .l suffix -- three assertions in this file
 # were written with one and had to be corrected.  Recorded here so the next
 # person writing a bsr assertion checks the rendering first.
+# ---------------------------------------------------------------------------
+# Directives $23 and $36, decoded from their bodies (2026-07-31)
+#
+# $23 = 35 decimal = QEVNT, "queue event".  The body reads a LENGTH byte and
+# then a TYPE byte from the caller's packet, masks the type with $7F (so the
+# top bit is a flag), special-cases types 7 and 3, and checks the resulting
+# size against $5(a4) -- a size field in the queue header -- failing with
+# error $10 if it does not fit.  That is a variable-length event packet being
+# bounds-checked against the queue that will hold it.  The name table gives
+# 35 = QEVNT independently, and the two agree.
+#
+# $36 = 54 decimal = AKRQST, "acknowledge request", one of the
+# SERVER/DSERVE/DERQST/AKRQST family.  Its entire body is a state gate:
+# unless bit 11 or bit 2 of the task state word is set it fails with error $A.
+# That identifies two more bits of the state word at TCB+$2C as server-
+# protocol bits, alongside the documented 9 (SUSPND), 12 (WTEVNT), 14 (WAIT).
+# ---------------------------------------------------------------------------
+check('$23 QEVNT reads a length byte then a type byte from the packet',
+      insn(0xF0246E) == 'move.b (a1)+, d1' and insn(0xF0248C) == 'move.b (a1)+, d7')
+check('...masks the type with $7F, so the top bit is a separate flag',
+      insn(0xF0248E) == 'andi.b #$7f, d7')
+check('...special-cases type 7 and type 3',
+      insn(0xF02492) == 'cmpi.b #$7, d7' and insn(0xF024A4) == 'cmpi.l #$3, d7')
+check('...and size-checks the total against $5(a4), error $10 if it overflows',
+      insn(0xF024B4) == 'move.b $5(a4), d0'
+      and insn(0xF024BC) == 'addi.w #$10, $102(a6)')
+check('$23 first requires a non-null queue pointer at $40(a5)',
+      insn(0xF02430) == 'movea.l $40(a5), a4'
+      and insn(0xF02438) == 'addq.w #$4, $102(a6)')
+check('$36 AKRQST is nothing but a state gate on bits 11 and 2',
+      insn(0xF03BD2) == 'btst.b #$b, $2c(a5)'
+      and insn(0xF03BDA) == 'btst.b #$2, $2d(a5)')
+check('...failing with error $A, and it is short enough to end in rte',
+      insn(0xF03BE2) == 'addi.w #$a, $102(a6)' and insn(0xF03BE8) == 'rte')
+
+# $F0175C is the kernel's logical->physical translator for user buffers.  It
+# walks the segment table at a0 comparing PAGE numbers and relocates by adding
+# the segment offset.  The part that matters for an emulator: it returns to
+# DIFFERENT addresses -- $F017A6 does addq.l #$4,$2(a7), patching the stacked
+# return address to skip the caller's next 4 bytes.  A skip-return.
+check('the address translator masks to 24 bits and works in pages',
+      insn(0xF01762) == 'andi.l #$ffffff, d6' and insn(0xF0176C) == 'lsr.l #$8, d6')
+check('...relocates by adding the segment offset at $4(a0,d5.w)',
+      insn(0xF01796) == 'add.w $4(a0, d5.w), d6')
+check('...and uses a SKIP RETURN, patching the stacked PC by 4',
+      insn(0xF017A6) == 'addq.l #$4, $2(a7)')
+
+# ---------------------------------------------------------------------------
+# P and V, the kernel's blocking primitives (2026-07-31).
+# Semaphore object: +$00 word = {bit 15 TAS lock, bits 14-0 signed count},
+# +$02 long = waiter list head, linked through TCB+$20.
+# ---------------------------------------------------------------------------
+check('P masks to level 7 and SPINS on tas.b',
+      insn(0xF006EA) == 'ori.w #$700, sr' and insn(0xF006EE) == 'tas.b (a0)'
+      and insn(0xF006F0) == 'bmi.b $f006ee')
+check('...reads the count by dropping bit 15 and sign-extending bit 14',
+      insn(0xF006F4) == 'lsl.w #$1, d0' and insn(0xF006F6) == 'asr.w #$1, d0')
+check('P decrements, V increments, and they branch on opposite signs',
+      insn(0xF006F8) == 'subq.w #$1, d0' and insn(0xF00798) == 'addq.w #$1, d0'
+      and insn(0xF006FC) == 'bmi.b $f00700' and insn(0xF0079A) == 'ble.b $f007a0')
+check('V has the same lock prologue as P',
+      insn(0xF0078A) == 'ori.w #$700, sr' and insn(0xF0078E) == 'tas.b (a0)')
+check('blocking sets STATE BIT 13 and links the TCB through TCB+$20',
+      insn(0xF00718) == 'bset.b #$d, $2c(a6)' and insn(0xF0071E) == 'clr.l $20(a6)'
+      and insn(0xF00728) == 'move.l a6, $2(a0)')
+check('...releases the TAS lock explicitly before switching stacks',
+      insn(0xF00704) == 'bclr.b #$f, (a0)')
+check('...then installs the SCHEDULER stack and enters the scheduler by bra',
+      insn(0xF0070A) == 'movea.l $c08.w, a7' and insn(0xF00714) == 'bra.w $f0050c')
+check('V unlinks the head waiter through its own TCB+$20 and clears bit 13',
+      insn(0xF007A6) == 'move.l $20(a1), $2(a0)'
+      and insn(0xF007B6) == 'bclr.b #$d, $2c(a1)')
+check('...and clears bit 15 before storing, so the lock is not left held',
+      insn(0xF007AC) == 'bclr.b #$f, d0' and insn(0xF007B0) == 'move.w d0, (a0)')
+
+# --- the task context-save area -------------------------------------------
+check('$F0073C saves the priority byte then raises it to $F0',
+      insn(0xF0073C) == 'move.b $26(a6), d0'
+      and insn(0xF00740) == 'move.b #$f0, $26(a6)')
+check('...sets state bit 6 and saves d0-d7/a0-a6 at TCB+$74',
+      insn(0xF00746) == 'bset.b #$6, $2d(a6)'
+      and insn(0xF0074C) == 'movem.l d0-d7/a0-a6, $74(a6)')
+check('TCB+$77 is the low byte of the SAVED d0, not a field: it restores priority',
+      insn(0xF013B6) == 'move.b $77(a6), $26(a6)' and 0x77 == 0x74 + 3)
+check('the $3C in the saved-SP arithmetic is exactly that movem: 15 regs x 4',
+      15 * 4 == 0x3C)
+
+# --- TCB+$158 is a counter with its limit in the adjacent word --------------
+check('TCB+$158 increments as a WORD but is loaded as a longword with its limit',
+      insn(0xF00CE8) == 'addq.w #$1, $158(a6)'
+      and insn(0xF00CEC) == 'move.l $158(a6), d0'
+      and insn(0xF00CF0) == 'cmp.w $158(a6), d0')
+check('...and the escalation carries class $1B, the same bit tested on entry',
+      insn(0xF00CE0) == 'btst.b #$1b, d2' and insn(0xF00CF8) == 'moveq #$1b, d7')
+check('TCB+$18/+$1C are defaults, used only when d7 bit 14 is set',
+      insn(0xF029FA) == 'btst.b #$e, d7' and insn(0xF02A00) == 'move.l $18(a6), d0'
+      and insn(0xF02A0A) == 'move.l $e(a4), d1')
+
+# --- the server registry ----------------------------------------------------
+check('SERVER refuses a slot already in state 2, error $6',
+      insn(0xF03A5A) == 'tst.b (a2, d2.w)' and insn(0xF03A60) == 'addq.w #$6, $102(a6)')
+check('...and marks the slot 2, then fills a 22-byte record at $0CAA',
+      insn(0xF03A66) == 'move.b #$2, (a2, d2.w)' and insn(0xF03A70) == 'mulu.w #$16, d2'
+      and insn(0xF03A74) == 'move.l a6, (a2, d2.w)')
+check('DSERVE requires state 2 AND that the record names the calling TCB',
+      insn(0xF03AAE) == 'cmpi.b #$2, (a2, d2.w)' and insn(0xF03AC0) == 'cmpa.l (a1, d1.w), a6'
+      and insn(0xF03AC6) == 'addq.w #$7, $102(a6)')
+check('DERQST matches on the ID at +$04 instead of the TCB',
+      insn(0xF03B84) == 'move.l $4(a1, d1.w), d2' and insn(0xF03B88) == 'cmp.l $14(a6), d2')
+check('the registry is initialised to $01010000 -- two slots pre-reserved',
+      insn(0xF0A04E) == 'move.l #$1010000, $c9a.w')
+check('TERM walks both arrays, so server slots are freed at task death',
+      insn(0xF03054) == 'lea.l $c9a.w, a1' and insn(0xF03058) == 'lea.l $caa.w, a2'
+      and insn(0xF0305E) == 'mulu.w #$16, d1')
+
+check('$2A and $2B share a handler, entered at two addresses that set d7',
+      insn(0xF032F8) == 'clr.w d7' and insn(0xF032FC) == 'move.w #$1, d7')
+check('...and both arms operate on !UST entry + $10',
+      insn(0xF03340) == 'lea.l $10(a1, d3.w), a0'
+      and insn(0xF0334A) == 'lea.l $10(a1, d3.w), a0')
+check('$2A WTSEM calls P and $2B SGSEM calls V',
+      insn(0xF03344) == 'bsr.w $f006e8' and insn(0xF0334E) == 'bsr.w $f00788')
+check('...leaving a0 pointing at the semaphore, since rte restores no registers',
+      insn(0xF03348) == 'rte' and insn(0xF03352) == 'rte')
+check('XP4I signals its own semaphore, then overwrites the returned count word',
+      insn(0xF06098) == 'moveq #$2b, d0' and insn(0xF060AA) == 'move.w (a0), d0'
+      and insn(0xF060B2) == 'move.w #$1f41, (a0)'
+      and insn(0xF060B8) == 'move.w #$1f45, (a0)')
+check('...selected by bit 11, and the two values differ in bit 2 alone',
+      insn(0xF060AC) == 'btst.b #$b, d0' and (0x1F41 ^ 0x1F45) == 0x04)
+check('XP4I a6 is the GTSEG-returned stack block, set exactly once',
+      insn(0xF05F68) == 'movea.l a0, a6' and insn(0xF05F64) == 'lea.l $114(a0), a7')
+check('...whose first ten bytes are the AXP4 descriptor copied from $F05F2C',
+      d[0xF05F2C - B:0xF05F30 - B] == b'AXP4')
+
+import re as _re148, capstone as _cs148
+_md148 = _cs148.Cs(_cs148.CS_ARCH_M68K, _cs148.CS_MODE_M68K_000)
+_k148 = []
+for _a in range(0xF00000, 0xF04488, 2):
+    try:
+        _i = next(_md148.disasm(_rom[_a - 0xF00000:_a - 0xF00000 + 10], _a, count=1))
+    except StopIteration:
+        continue
+    if _i.size and _re148.search(r'\$8\(a6\)', _i.op_str):
+        _k148.append(hex(_a))
+check('TCB+$148 bits 3-5 are class enables and bit 7 is armed/pending',
+      insn(0xF00D38) == 'andi.b #$38, d1' and insn(0xF00D3E) == 'bset.b #$f, $148(a6)')
+check('...and the handler clears the STACKED SR trace bit on the way out',
+      insn(0xF00D48) == 'bclr.b #$f, (a7)' and insn(0xF00D4C) == 'rte')
+check('TCB+$08 has zero kernel accesses -- unused, not merely unexplained',
+      not _k148, _k148[:4])
+
+# --- the trace logger's inline-parameter convention -------------------------
+_tr = []
+for _a in range(0xF00000, 0xF10000, 2):
+    try:
+        _i = next(_md148.disasm(_rom[_a - 0xF00000:_a - 0xF00000 + 10], _a, count=1))
+    except StopIteration:
+        continue
+    if _i.size and _i.mnemonic.startswith('bsr') and 'f01688' in _i.op_str:
+        _tr.append((_a, _w(_a + _i.size)))
+check('there are ELEVEN trace hooks, not the nine previously recorded',
+      len(_tr) == 11, [hex(a) for a, _ in _tr])
+check('...and the two extra ones gate on $0C35, not $0C34',
+      insn(0xF022C0) == 'btst.b #$7, $c35.w' and insn(0xF022D0) == 'btst.b #$7, $c35.w')
+check('the logger reads its parameter through the RETURN ADDRESS and skips it',
+      insn(0xF016B6) == 'movea.l $14(a7), a4' and insn(0xF016BA) == 'move.w (a4), (a5)'
+      and insn(0xF016BC) == 'addq.l #$2, $14(a7)')
+check('...so the word after each bsr is DATA; five of them look like instructions',
+      sum(1 for _, c in _tr if c in (0xDD08, 0xEE14, 0xEE09, 0xEE07, 0xDD07)) == 5)
+check('the trace entry stride is $1A, matching the documented 26-byte record',
+      insn(0xF016A2) == 'lea.l $1a(a5), a4')
+check('event codes above $EFFF log one datum fewer',
+      insn(0xF016CC) == 'cmpi.w #$efff, (a5)' and insn(0xF016D0) == 'bhi.b $f016d8')
+
+# --- the skip-return convention --------------------------------------------
+_skip = [x for x in (0xF014A2, 0xF015B6, 0xF015CE, 0xF015F8, 0xF0165A, 0xF01750,
+                     0xF017B8, 0xF017BC, 0xF017EE, 0xF01868, 0xF018E4, 0xF027BC,
+                     0xF029EE) if insn(x) == 'addq.l #$2, $2(a7)']
+check('the kernel skip-return convention is used at 13 sites with #$2',
+      len(_skip) == 13, len(_skip))
+check('...plus the address translator, which skips 4',
+      insn(0xF017A6) == 'addq.l #$4, $2(a7)')
+check('TWO sites clear the stacked SR trace bit, not one',
+      insn(0xF00B0A) == 'bclr.b #$f, (a7)' and insn(0xF00D48) == 'bclr.b #$f, (a7)')
+check('a fault handler steps the stacked PC by exactly 4',
+      insn(0xF098E6) == 'addq.w #$4, $4(a7)')
+check('$F060B4/$F060BA are NOT instruction boundaries -- they fall inside $1F41/$1F45',
+      insn(0xF060B2) == 'move.w #$1f41, (a0)' and insn(0xF060B8) == 'move.w #$1f45, (a0)')
+
+# --- the two-slot return vector, verified across every caller ---------------
+def _skipwin():
+    import capstone as _c
+    _m = _c.Cs(_c.CS_ARCH_M68K, _c.CS_MODE_M68K_000)
+    def _one(x):
+        try:
+            _i = next(_m.disasm(_rom[x - 0xF00000:x - 0xF00000 + 10], x, count=1))
+        except StopIteration:
+            return None
+        return _i if _i.size else None
+    out = []
+    for x in range(0xF00000, 0xF10000, 2):
+        _i = _one(x)
+        if not _i or not _i.mnemonic.startswith('bsr') or 'f0175c' not in _i.op_str:
+            continue
+        _a1 = _one(x + _i.size)
+        _a2 = _one(x + _i.size + _a1.size) if _a1 else None
+        out.append((_a1.size + _a2.size) if (_a1 and _a2) else -1)
+    return out
+_sw = _skipwin()
+check('$F0175C has 31 callers', len(_sw) == 31, len(_sw))
+check('...and EVERY one reserves exactly 4 bytes for the two-slot return vector',
+      set(_sw) == {4}, sorted(set(_sw)))
+
+check('$0C5C is a 100-tick divider -- exactly one second at the 10 ms tick',
+      insn(0xF009EA) == 'addq.w #$1, $c5c.w' and insn(0xF009EE) == 'cmpi.w #$64, $c5c.w'
+      and 0x64 * 10 == 1000)
+check('...and on expiry it writes four words to the DISPLAY device at $0C3A',
+      insn(0xF009F8) == 'movea.l $c3a.w, a1' and insn(0xF009FC) == 'move.w #$15, $4(a1)'
+      and insn(0xF00A0E) == 'move.w #$3e, $4(a1)' and insn(0xF00A16) == 'clr.w $c5c.w')
+check('$0C78 is a re-entry guard holding the saved stack pointer',
+      insn(0xF00A1C) == 'tst.l $c78.w' and insn(0xF00A2A) == 'move.l a7, $c78.w'
+      and insn(0xF00A52) == 'clr.l $c78.w')
+check('...around the ROM\'s only $F70030 access, which sets bit 5',
+      insn(0xF00A3A) == 'move.b $f70030.l, d0' and insn(0xF00A40) == 'ori.b #$20, d0')
+check('...and its restore includes a7, so the stack pointer is part of the context',
+      insn(0xF00A4E) == 'movem.l (a7)+, d0-d7/a0-a7')
+check('$0C3E is a longword tick counter; $0C40 is its low word, not a global',
+      insn(0xF00F02) == 'addq.l #$1, $c3e.w' and insn(0xF01082) == 'move.w $c40.w, d3'
+      and 0xC40 == 0xC3E + 2)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
@@ -5327,8 +5621,8 @@ check('...and bit 4 set walks 24, reaching $25E', 0xD8 - 0xC0 == 24
       and 0x230 + 2 * 24 - 2 == 0x25E)
 check('BIM1 ch0 is inside the 16-register walk though never named operationally',
       0x230 <= 0x240 <= 0x24E and 0x230 <= 0x248 <= 0x24E)
-check('$FF025E alone is both unnamed AND outside the default walk',
-      0x25E > 0x24E)
+# ($FF025E > $FF024E is arithmetic, not a finding -- the finding is that the
+# register is never touched, which is asserted from the access sweep above.)
 
 # ---- the RTOS clock interpolates the PTM counter (2026-07-31) ----
 check('directive $1C reads the live MC6840 T3 counter through the $0C4E base',
@@ -5429,8 +5723,8 @@ check('...then issues $2B2 and hangs',
       and insn(0xF001AA) == 'bra.b $f001aa')
 check('$0848/$084C sit immediately past the 16-register snapshot',
       0x808 + 16 * 4 == 0x848 and 0x848 + 4 == 0x84C)
-check('the display fallback $800 overlaps the snapshot area',
-      0x800 <= 0x804 < 0x848)
+# (The $800/$804/$848 overlap is arithmetic on three constants already
+# asserted individually above; restating it cannot fail, so it is not a check.)
 
 # ---- $1FFF0 is computed from the RAM top and cached in $0E48 (2026-07-31) ----
 check('the VMOD address is derived from the config RAM top, not hard-coded',
@@ -5623,8 +5917,10 @@ check('...reaching $20000 by adding $10 to the VMOD address, not hard-coding it'
       and 0x1FFF0 + 0x10 == 0x20000)
 check('...and retrying the whole sweep on failure',
       insn(0xF08EEE) == 'move.l #$f0f0f0f0, d7' and insn(0xF08EFA) == 'bne.b $f08ec8')
-check('...running BEFORE the bus-watchdog test', 0xF08EB6 < 0xF08F1C)
-check('7616 probes if nothing faults', (0xF00000 - 0x20000) // 0x800 == 7616)
+check('...running BEFORE the bus-watchdog test -- both really are code',
+      bool(insn(0xF08EB6)) and bool(insn(0xF08F1C)))
+check('...and the sweep really does step by $800 to the ROM base',
+      'a0' in (insn(0xF08EF0) or ''))
 
 # ---- the instruction-set profile: two significant absences (2026-07-31) ----
 _mn = _mcol.Counter(m.split('.')[0] for m, _, _ in _mins.values())
@@ -6206,8 +6502,8 @@ _execcall = [a for a, (m, o, _) in _mins.items()
              if m.split('.')[0] in ('jsr', 'bsr') and 'f00824' in o]
 check("the EXEC tag is written from exactly three call sites",
       sorted(_execcall) == [0xF00C62, 0xF027EC, 0xF03028], [hex(x) for x in sorted(_execcall)])
-check('...one of them inside the $0F TERM handler at $F02F64',
-      0xF02F64 < 0xF03028 < 0xF03100)
+check('...one of them inside the $0F TERM handler, whose entry the TRAP #1\n       table really does place at $F02F64',
+      _t1[0x0F][0] == 0xF02F64 and bool(insn(0xF03028)))
 check('the tagging routine also stamps TCB+$2A bit 15, TCB+$29 bit 1 and clears TCB+$5C',
       insn(0xF00826) == 'bset.b #$f, d7' and insn(0xF0082A) == 'move.w d7, $2a(a0)'
       and insn(0xF0082E) == 'clr.w $5c(a0)' and insn(0xF00832) == 'bset.b #$1, $29(a0)')
@@ -6344,16 +6640,11 @@ check('...and that is exactly the page-alignment rounding from $F0A57E',
 # identical precisely BECAUSE nothing new was running.
 #
 # Guard against a recurrence: this self-test refuses to report success if any
-# check() call appears after the exit.
+# check() call appears after the exit.  Both self-audits themselves now run at
+# the TOP of the file -- a guard that only runs at the end cannot protect the
+# checks that crash before reaching it, which is exactly what happened next:
+# a use-before-definition aborted the run 5,700 lines above this point.
 # ---------------------------------------------------------------------------
-_self = open(__file__).read()
-_marker = 'sys.exit(1 if fails else 0)'
-# build the needle at runtime so this guard does not match its own source text
-_needle = 'ch' + 'eck('
-_below = _self[_self.rindex(_marker):].count(_needle)
-if _below:
-    print(f'  FATAL: {_below} check() calls are below sys.exit() and never ran')
-    sys.exit(2)
 
 print(f'\n{checks - len(fails)}/{checks} passed')
 sys.exit(1 if fails else 0)

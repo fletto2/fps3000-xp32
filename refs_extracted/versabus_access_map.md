@@ -23587,6 +23587,16 @@ The eight-byte offset also lets a dump be read directly: name at entry+0, the P/
 entry+8, and the `users`/`type`/`session` values documented as 1/2/0 occupying the four bytes
 between.
 
+> **CORRECTED 2026-07-31 — the offset is `+$10`, not `+8`.** The paragraphs above reason
+> from the *layout* to where the P/V field must sit. Decoding the `$2A`/`$2B` handler
+> instead shows the answer directly: both arms do `lea.l $10(a1,d3.w),a0` before calling
+> P or V, so the object is at **entry + `$10`**. It confirms itself against the entry
+> size — a word plus a longword at `$10` ends exactly on `USTMENT = $16` — which the `+8`
+> reading does not. The prediction above stays valid with the offset changed: a hardware
+> dump of `$1FB00`-`$1FBDA` should show `$1F41`/`$1F45` at an entry's `+$10`, not its `+8`.
+> Everything else in this passage — the `$0C24` base, the stride, the `a0`-survives-`rte`
+> step — is unaffected, and the later section on XP4I supersedes this one.
+
 ## The semaphore field decoded: `{bit 15 = TAS lock, bits 14-0 = signed count}` (2026-07-31)
 
 `T0P` (TRAP #0 `$01`) and `T0V` (`$02`) are eleven and ten instructions, and between them they
@@ -25690,3 +25700,468 @@ at different pages, so a model that answers `$70001C` without consulting `$FF021
 answer it while the SCM tests have page 0 selected — which this file already records as a
 divergence, and which this census confirms is the *only* place two different structures share the
 window.
+
+## The semaphore primitive, fully specified — and state bit 13 identified (2026-07-31)
+
+`$F006E8` and `$F00788` are **P and V**, the kernel's blocking primitives. Everything
+`ATSEM`/`WTSEM`/`SGSEM`/`CRSEM` do reduces to these two, and both are short enough to
+state completely.
+
+**The semaphore object** (whatever `a0` points at):
+
+| offset | field |
+|---|---|
+| `+$00` word | **bit 15 = TAS lock**, bits 14-0 = **signed count** |
+| `+$02` long | head of the waiter list, a TCB pointer |
+
+**P — `$F006E8`:**
+
+```
+move.w sr,-(a7) / ori.w #$700,sr    ; mask all interrupts
+tas.b (a0) / bmi .-2                ; SPIN on the lock bit
+move.w (a0),d0 / lsl.w #1 / asr.w #1 ; drop bit 15, sign-extend bit 14
+subq.w #1,d0 / move.w d0,(a0)        ; count -= 1
+bmi block                            ; negative => no resource, block
+rte
+```
+
+**V — `$F00788`:** identical prologue, `addq.w #$1,d0`, and `ble` to the wakeup path;
+on the fast path it stores and `rte`s.
+
+**The blocking path (`$F00700`) is where the scheduler is entered by hand:**
+
+```
+bset.b #$d,$2c(a6)      ; TASK STATE BIT 13 <- blocked on a semaphore
+clr.l $20(a6)           ; TCB+$20 = the waiter-list LINK
+move.l a6,$2(a0)        ; ...appended to the semaphore's list
+bclr.b #$f,(a0)         ; release the TAS lock
+move.w (a7)+,sr
+movea.l $c08.w,a7       ; switch to the SCHEDULER's stack
+bra.w $f0050c           ; ...and enter the scheduler.  P never returns here.
+```
+
+**The wakeup path (`$F007A0`)** unlinks the head waiter through its own `TCB+$20`,
+stores the count with **bit 15 explicitly cleared** (`bclr.b #$f,d0`), clears the
+woken task's link, and clears **state bit 13**.
+
+Three things this settles:
+
+1. **State-word bit 13 is "blocked on a semaphore."** This file previously listed
+   bits 10 and 13 as "kernel-internal", with only 9 (SUSPND), 12 (WTEVNT) and 14
+   (WAIT) named. Bit 13 now has a matched `bset`/`bclr` pair and a mechanism.
+2. **`TCB+$20` is the semaphore waiter-list link** — cleared on enqueue, read to
+   relink on dequeue, cleared again on wake.
+3. **The count is a 15-bit signed field, and the `lsl`/`asr` pair is how it is read.**
+   A model that treats the word as a plain 16-bit counter gets the sign wrong for any
+   semaphore with waiters, because bit 15 is doing double duty as the lock.
+
+**Emulator consequence.** `tas` must be atomic against any other bus master, and it is
+used here in a **spin loop with interrupts masked at level 7**. If a chassis DMA model
+can hold the lock byte, this loop is where the machine hangs. This is the concrete site
+behind the "tas atomicity" requirement in `chassis_model_spec.md`, which until now
+named the instruction without naming a caller.
+
+Note what this does **not** resolve: XP4I writes `$1F41`/`$1F45` through the pointer
+`$2B` SGSEM leaves in `a0`. As a semaphore word those are bit-15-clear with counts of
+7997 and 8001 — not plausible counts, so that pointer is **not** aimed at the count
+word. The mystery is narrowed, not closed.
+
+## The server/request registry — `$0C9A` and `$0CAA` decoded (2026-07-31)
+
+Two of the three long-unresolved kernel globals belong to the
+`SERVER`/`DSERVE`/`DERQST`/`AKRQST` directive family (`$33`-`$36`), which this
+firmware never issues.
+
+| global | structure |
+|---|---|
+| `$0C9A` | **slot-state byte array**, indexed directly by slot number. `2` = declared |
+| `$0CAA` | parallel array of **22-byte (`$16`) records**: `+$00` owning TCB, `+$04` the server ID from `$14(a6)`, `+$14` flags (bit 14 tested at task teardown) |
+
+`SERVER` refuses a slot already in state 2 (error `$6`); `DSERVE` and `DERQST` require
+state 2 **and** an ownership match — the TCB for `DSERVE`, the ID for `DERQST` — failing
+with error `$7`. `AKRQST` (`$36`) is nothing but a state gate: unless **bit 11 or bit 2**
+of the task state word is set it fails with error `$A`, which identifies two more bits of
+that word as server-protocol bits.
+
+`$F0A04E` initialises `$0C9A` with the longword **`$01010000`**, i.e. slots 0 and 1 start
+in state **1** and slots 2-3 in state 0 — two slots reserved before any task runs.
+
+The `$0F` `TERM` handler walks both arrays (`$F03054`/`$F03058`) and, for each slot this
+task owns in state 2 with bit 14 of `+$14` set, calls `$F00DA4` — so server registrations
+are cleaned up at task death. That is why a directive family nothing issues still has
+code on the teardown path.
+
+## The task context-save area, and three more TCB fields (2026-07-31)
+
+`$F0073C` — reached from `P` before it blocks, and from `$F013B2` — is the kernel's
+**context-save routine**, and it names several fields at once:
+
+```
+move.b  $26(a6),d0        ; save the CURRENT PRIORITY into d0
+move.b  #$f0,$26(a6)      ; ...and raise it to $F0 for the critical section
+bset.b  #$6,$2d(a6)       ; state-word bit 6 = context saved
+movem.l d0-d7/a0-a6,$74(a6)  ; THE REGISTER SAVE AREA
+```
+
+| field | role |
+|---|---|
+| `TCB+$26` | **task priority byte**, raised to `$F0` on entry to a kernel critical section |
+| `TCB+$74` | **the 60-byte register save area**, `d0-d7/a0-a6`, spanning `+$74`-`+$AF` |
+| state bit 6 | context-saved flag |
+
+**`TCB+$77` is not a field.** `$F013B6` does `move.b $77(a6),$26(a6)` to restore the
+priority, and `$77 = $74 + 3` — the **low byte of the saved `d0`**, which is exactly
+where `$F0073C` stashed the old priority one instruction before the `movem`. A field map
+built by collecting displacements sees `+$77` as a distinct field; it is a byte inside
+the save area, reached deliberately. Any offset in `+$74`-`+$AF` should be read as a
+saved register, not as a structure member.
+
+That completes the task context. `TCB+$13C` holds the saved stack pointer (documented
+earlier from its `subq #6` / `subi #$3C` arithmetic — 6 for the exception frame, `$3C`
+for exactly this `movem`), and now `+$74` holds what that `$3C` accounts for. **The two
+were derived independently and agree on the same 60 bytes.**
+
+### `TCB+$158` is a repeated-exception counter with its limit beside it
+
+```
+btst    #$1b,d2            ; d2 is a REGISTER, so bit 27
+addq.w  #$1,$158(a6)       ; count++
+move.l  $158(a6),d0        ; d0 = {count, limit} as one longword
+cmp.w   $158(a6),d0        ; low word of d0 (the LIMIT at +$15A) vs the count
+bhi     ok                 ; limit still above the count -- carry on
+moveq   #$1b,d7            ; otherwise escalate, with the class number in d7
+```
+
+The `move.l` / `cmp.w` pair is the trick worth noting: one longword load fetches both
+fields, and the `cmp.w` then compares the **low half of the loaded longword** — the limit
+at `+$15A` — against the **word in memory** at `+$158` — the count. So
+**`+$158` = count, `+$15A` = limit**, and a field map that only sees "a longword at
+`+$158`" misses that it is two words with different roles.
+
+### `TCB+$18`/`+$1C` are a default parameter pair
+
+`$F02A00` reads them as a longword pair only when bit 14 of `d7` is set; otherwise the
+same two values come from `$A(a4)`/`$E(a4)`, the caller's parameter block. So they are
+per-task **defaults substituted when the caller supplies none**.
+
+`TCB+$20`, previously unresolved, is the **semaphore waiter-list link** (see the P/V
+section above). Of the five fields this file listed as open, four now have mechanisms;
+`+$08` has **zero** kernel accesses and is not merely unexplained but genuinely unused by
+this build.
+
+## `$1F41`/`$1F45` located: XP4I writes them into a SEMAPHORE's count word (2026-07-31)
+
+The last structural unknown in the XP-task template is now placed exactly, by decoding
+the directive handler instead of guessing at the pointer.
+
+`$2A` and `$2B` share one handler entered at two addresses (`$F032FC` sets `d7 = 1`,
+`$F032F8` leaves `d7 = 0`). Both arms end the same way:
+
+```
+lea.l $10(a1,d3.w),a0     ; a1 = the !UST base from $0C24, d3 = the entry offset
+bsr.w $f006e8   (d7=1)    ; ...P   -- so $2A WTSEM is a WAIT
+bsr.w $f00788   (d7=0)    ; ...V   -- so $2B SGSEM is a SIGNAL
+rte
+```
+
+`rte` restores SR and PC but **not registers**, so `a0` comes back to the caller still
+pointing at the object P/V operated on. That object is at **`!UST` entry + `$10`**, and
+by the P/V decode its first word is `{bit 15 TAS lock, bits 14-0 signed count}`.
+
+**This corrects an earlier narrowing in this file, which put the field at entry + `$8`.**
+The offset is `$10`, and it is not inferred from the layout — it is the operand of the
+`lea` that P and V are actually called with.
+
+So XP4I's divergent sequence reads as:
+
+```
+$F06098  moveq #$2b,d0 / lea (a6),a0 / trap #$1   ; SIGNAL its own semaphore
+$F060AA  move.w (a0),d0                           ; read the SEMAPHORE COUNT WORD
+$F060AC  btst #$b,d0                              ; test bit 11 of it
+$F060B2  move.w #$1f41,(a0)   /  #$1f45           ; ...and overwrite it
+```
+
+`a6` is the task's stack-block base (set once at `$F05F68` from the `GTSEG` return), and
+the block's first ten bytes are the `AXP4` descriptor the prologue copies down from
+`$F05F2C` — so the signalled semaphore is `AXP4`, the task's own.
+
+**`$1F41` and `$1F45` are not valid counts.** With bit 15 clear they decode as counts of
+7997 and 8005, on a semaphore initialised to 2. The write also destroys the waiter
+semantics: anything blocked on `AXP4` is left mis-counted. The only consistent reading is
+that this word is being used as a **flag or mailbox** rather than as a semaphore — a
+hand-written-assembly shortcut, using a structure at a known address as scratch. The two
+values differ in **bit 2 alone**, and are selected by **bit 11** of the previous contents,
+so the word carries at least two independent bit-fields.
+
+That is as far as the ROM can settle it: the *location* is now certain and the *format*
+is certain, but what a reader of that word makes of `$1F41` versus `$1F45` is not in this
+firmware. It is the same class of gap as the `$10AE` trampoline — the counterparty is
+host-loaded code.
+
+**The `+$10` offset confirms itself against the entry size.** `!UST`'s live header reports
+`USTMENT = 22 = $16`. The semaphore object is a word (count) plus a longword (waiter list)
+= 6 bytes, and `$10 + 6 = $16` — the object **exactly fills the tail of the entry**. So the
+offset derived from the `lea` in the directive handler and the entry size read out of the
+live header agree, from two unrelated directions.
+
+## `TCB+$148` is the per-task trace control — closing the last open TCB field (2026-07-31)
+
+```
+$F00D2C  btst.b #$6,$29(a6)      ; a state byte gate
+$F00D34  move.b $148(a6),d1
+$F00D38  andi.b #$38,d1          ; bits 3-5 = ENABLED CLASSES
+$F00D3C  beq    skip
+$F00D3E  bset.b #$f,$148(a6)     ; bit 7 = ARMED/PENDING
+$F00D44  movea.l (a7)+,a6
+$F00D46  move.l  (a7)+,d1
+$F00D48  bclr.b #$f,(a7)         ; <-- the STACKED SR's high byte: clears the T BIT
+$F00D4C  rte
+```
+
+The last `bclr` is the tell. `(a7)` at that point is the top of the exception frame, whose
+first word is the saved SR, and `btst`/`bclr` on memory are byte-sized with the bit number
+mod 8 — so `#$f` is **bit 7 of the SR's high byte, the trace bit**. The handler is
+disarming single-step on the way out.
+
+So `TCB+$148` is the **per-task trace/debug control**: bits 3-5 enable classes, bit 7 is
+armed/pending, and `$F005A8` clears it with a `bclr` whose result selects the exit path.
+
+**That closes the TCB field map.** Of the five offsets this file listed as unresolved:
+
+| field | resolution |
+|---|---|
+| `+$18`/`+$1C` | default parameter pair, used when the caller supplies none |
+| `+$26` | task priority byte, raised to `$F0` in kernel critical sections |
+| `+$148` | per-task trace control (this section) |
+| `+$158`/`+$15A` | count and limit, loaded as one longword |
+| `+$08` | **zero accesses anywhere in the kernel** — unused by this build, not merely unexplained |
+
+Together with `+$20` (semaphore waiter link) and `+$74` (the 60-byte register save area),
+the task control block is now mapped end to end for the purposes of a model: state,
+priority, saved registers, saved SP, saved PC, directive status, segment table, stack
+block, semaphore linkage, trace control and the two counters.
+
+## The trace logger takes an INLINE parameter — and there are 11 hooks, not 9 (2026-07-31)
+
+`$F01688` is the RMS68K event logger. It works on `$0C30`, the trace table, walks
+`TRCPTR` against `TRCLNG`, wraps to `$8(a3)` at the end, and advances by **`$1A` = 26
+bytes** — independently re-deriving the entry size this project took from `TRACE.EQ`.
+
+What makes it worth a section is its calling convention:
+
+```
+$F016B6  movea.l $14(a7),a4     ; fetch the caller's RETURN ADDRESS off the stack
+$F016BA  move.w  (a4),(a5)      ; the word AFTER the bsr is the event code
+$F016BC  addq.l  #$2,$14(a7)    ; ...and step the return address over it
+```
+
+**The word following every `bsr.w $f01688` is data, not code.** The routine reads it
+through the return address and then skips it, so control resumes two bytes later.
+
+There are **11 such call sites**, and their codes are:
+
+| site | code | | site | code |
+|---|---|---|---|---|
+| `$F002E4` | `$FF15` | | `$F00B5C` | `$AA11` |
+| `$F005A2` | `$FD10` | | `$F00F66` | `$FF13` |
+| `$F006E0` | `$DD08` | | `$F022C8` | `$EE07` |
+| `$F0089E` | `$EE14` | | `$F022D8` | `$DD07` |
+| `$F00904` | `$EE09` | | `$F044AC` | `$EE14` |
+| `$F00ABE` | `$AA12` | | | |
+
+Two corrections come out of this:
+
+1. **The hook census is 11, not the 9 this project recorded.** The nine previously listed
+   addresses are the gating `btst`s, each 8 bytes before its `bsr`. The two extra hooks at
+   `$F022C8`/`$F022D8` were missed because they test a **different byte**: `btst.b #$7,$c35.w`,
+   whereas the other nine test `$0C34`. So the trace mask is a **word** at `$0C34`, both of
+   whose bytes gate hooks — which is consistent with the single config word at `$F0A52A`
+   being `$0000` and switching all eleven off at once.
+
+2. **Five of the eleven inline words decode as plausible instructions** — `$DD08` as
+   `addx.b -(a0),-(a6)`, `$EE14` as `roxr.b #$7,d4`, `$EE09` as `lsr.b #$7,d1`, `$EE07` as
+   `asr.b #$7,d7`, `$DD07` as `addx.b d7,d6`. A linear or recursive-descent disassembler
+   follows the `bsr`, returns, and decodes the code word as an instruction. They are all
+   two bytes, so the listing happens to resync immediately and the damage is one bogus
+   line per site rather than a cascade — but the lines are wrong, and `fps3k.asm` carries
+   them.
+
+The event code is also structured: `cmpi.w #$efff,(a5)` / `bhi` skips capturing a fourth
+datum for codes above `$EFFF`. So the top nibble selects the record shape — `$FF`/`$FD`
+codes log three values, `$AA`/`$DD`/`$EE` codes log four.
+
+**Emulator note.** Nothing here executes in a stock boot (the mask is zero), so this costs
+a model nothing — but a model that *enables* tracing by writing `$F0A52A` must implement
+the return-address fixup, or every one of the eleven call sites returns into the middle of
+its own parameter.
+
+## Every place the firmware rewrites a stacked return address (2026-07-31)
+
+A complete census, because this is the class of trick that defeats static analysis: an
+instruction that changes where a `bsr`/`rte` goes back to. Sweeping the whole 64 KB for
+writes through `a7` at a displacement gives **33 candidates, of which 31 are real** — the
+two rejects, `$F060B4` and `$F060BA`, are misaligned decodes landing inside the
+`move.w #$1f41,(a0)` / `#$1f45` instructions, and they were caught by cross-checking every
+hit against the boundary-verified listings rather than by eye.
+
+| form | sites | meaning |
+|---|---:|---|
+| `addq.l #$2,$2(a7)` | **13** | **skip-return**: the callee skips 2 bytes at the caller |
+| `addq.l #$4,$2(a7)` | 1 | `$F017A6`, the address translator — skips 4 |
+| `addq.l #$2,$12/$14/$1a(a7)` | 3 | the same trick at deeper frames, incl. the trace logger |
+| `addq.l #$2,(a7)` | 1 | `$F0A3B8` |
+| `subq.l #$6,(a7)` | 1 | `$F00282` — not a return at all, but the ISR-exit **search key** |
+| `bclr.b #$f,(a7)` | **2** | clearing the stacked SR's **trace bit** |
+| `addq.w #$4,$4(a7)` | 1 | `$F098E6` — a fault handler stepping the stacked PC over 4 bytes |
+| `move.l`/`move.w` into a stacked slot | 9 | substituting a return value or a frame field |
+
+Three things worth carrying into a model or a listing:
+
+1. **The kernel has a skip-return calling convention, used at 14 sites.** A routine that
+   returns "successfully" skips the two bytes immediately after the `bsr` — which in
+   practice is a short branch to an error path. Read `bsr X` / `bra.b err` as
+   *call-and-check*, not as a call followed by an unconditional jump. A reader who takes
+   the `bra` at face value concludes the code after it is unreachable.
+
+2. **Two sites clear the stacked trace bit**, `$F00B0A` and `$F00D48`, not one. Both are
+   part of the per-task single-step machinery around `TCB+$148`.
+
+3. **`$F098E6` shows a fault handler advancing the stacked PC by exactly 4.** This project
+   noted elsewhere that the self-test's probes are 2-byte instructions with four-`nop`
+   landing zones, so byte-exact bus-error PC semantics are not required; that remains true
+   of the *probe* sites, but this handler does arithmetic on the stacked PC, so a model
+   must at least stack a PC in the right place and of the right width.
+
+**Methodological note.** The stride-2 sweep had a 6% false-positive rate (2 of 33), and
+both false positives were syntactically perfect instructions. Cross-checking candidate
+addresses against a listing whose boundaries are validated by executed PCs is what
+separated them; eyeballing would not have.
+
+### The skip-return is a two-slot return vector, and it is uniform across 31 call sites
+
+`$F0175C`, the logical-to-physical translator, returns **either to the instruction after
+the `bsr` or to 4 bytes past it** (`$F017A6: addq.l #$4,$2(a7)`). Checking every caller
+shows the convention is not ad-hoc padding but a fixed shape:
+
+| shape of the 4 bytes after `bsr` | sites |
+|---|---:|
+| `bra.b <continue>` + `nop` | 24 |
+| `bra.b <continue>` + `bra.b <error>` | 6 |
+| `rts` + `nop` | 1 |
+| **total, all exactly 4 bytes** | **31** |
+
+So the four bytes are a **two-slot return vector**: slot 1 is taken on success, slot 2 on
+failure. Sites that need a distinct error target put a second `bra.b` there; the 24 that
+simply fall through into their error code pad the slot with `nop`.
+
+**31 of 31 windows are exactly 4 bytes.** That is what makes this a convention rather than
+an observation — there is no counter-example in the image.
+
+Two consequences:
+
+- **Those 24 `nop`s are not dead code.** A pass that strips or ignores `nop`s, or that
+  reports them as padding, is deleting the failure arm of a calling convention. This also
+  supersedes any reading of these particular `nop`s as alignment filler.
+- **`bsr $F0175C` / `bra.b X` does not mean "call, then always jump to X".** The code
+  after the `bra` is reachable — it is the error path. A reader (or a recursive-descent
+  disassembler that stops at an unconditional branch) concludes the opposite, which is
+  exactly the gap-recovery case this project already had to add a sweep for.
+
+The same `addq.l #$2,$2(a7)` form appears at 13 further sites in the kernel, so the
+one-slot version of the same idea is used more widely still.
+
+### Every `nop` in the image is accounted for
+
+`nop` is the instruction most easily dismissed as filler, and in this ROM almost none of
+it is. Counting `nop`s at boundaries the listings validate gives **128**, and they
+partition:
+
+| group | count |
+|---:|---|
+| **65** | the five 42-entry dispatch tables — **13 no-op slots each**, `rts`+`nop` pairs |
+| **24** | self-test probe landing zones — **six sites of four** |
+| **28** | slot 2 of a `bsr` two-slot return vector (the failure arm) |
+| 3 | slot of a one-slot `addq.l #$2` skip-return |
+| 4 | the XP task template — one per task, at `$F06810`/`$F07228`/`$F07C28`/`$F08628` |
+| 1 | alignment after a `bra.b` |
+| 3 | context not established (the byte before does not decode on a boundary) |
+
+The 65 independently re-derive "13 of the 42 codes are accepted and ignored by design",
+counted from the table bytes rather than from the handler census; and the 24 independently
+re-derive the six four-`nop` landing zones. The four XP-task `nop`s sit at `$A00` stride
+for XP1I-XP3I and `$A18` for XP4I — **the same irregular shift** that shows up in that
+task's abort routine and its dispatch table, from a third direction.
+
+So of 128 `nop`s, **121 are structural** — table entries, return-vector slots, fault
+landing zones, template artefacts — and at most 7 are filler. A tool that treats `nop` as
+padding is discarding a dispatch table's no-op entries and a calling convention's failure
+arm.
+
+## The kernel global map completed, and a 1 Hz display heartbeat (2026-07-31)
+
+Sweeping every `$0Cxx`/`$0Dxx` short-absolute operand gives **44 candidate globals**, of
+which 28 were already named. The remainder resolve as follows — and two of them are not
+separate globals at all:
+
+| global | role |
+|---|---|
+| `$0C3E` | **tick counter**, `addq.l #$1` in the tick path; `$F037E4` subtracts it to get elapsed time |
+| `$0C40` | **not a global** — it is the low word of the longword at `$0C3E`, read as `move.w` |
+| `$0C41` | **not a global** — a misaligned decode at `$F054CC`, which is not an instruction boundary in any validated listing (an `addq.w` to an odd address would address-error) |
+| `$0C42`/`$0C46`/`$0C4A` | elapsed-time accumulators alongside the tick counter |
+| `$0C4E` | a buffer pointer, initialised to `$800` — the same scratch page the display fallback uses |
+| `$0C56`/`$0C58` | word constants written once at init and added to the time values |
+| `$0C5A` | a byte flag in the tick path, bit 7 |
+| `$0C5C` | **the seconds divider** (see below) |
+| `$0C62` | per-directive scratch, cleared at the head of many handlers |
+| `$0C73` | a byte copied from config `$F0A53D` |
+| `$0C78` | **saved `a7` + re-entry guard** (see below) |
+| `$0C7C` | a table base taken by `lea` at init |
+| `$0CC0` | written once from `(a6)` at `$F004EC` |
+
+### `$0C5C` is a 100-tick divider that drives the display once a second
+
+```
+addq.w  #$1,$c5c.w
+cmpi.w  #$64,$c5c.w        ; 100
+bmi     out
+movea.l $c3a.w,a1          ; THE DISPLAY DEVICE POINTER
+move.w  #$15,$4(a1) / #$35,$4(a1) / #$2e,$4(a1) / #$3e,$4(a1)
+clr.w   $c5c.w
+```
+
+Four words to `$4(a1)` — the same value-then-strobe, twice, that the boot-progress driver
+uses. So the display is not only a boot-progress indicator: **there is a once-per-second
+heartbeat written to it for as long as the machine runs.** `$0C3A` was noted elsewhere as
+"also read by the level-4 autovector handler, so the device is used beyond boot"; this is
+that use, with a mechanism and a rate.
+
+**The divider is exactly 100, and the tick is 10.0000 ms — so the period is exactly one
+second.** That is an independent confirmation of the tick rate derived from the MC6840's
+dual-8-bit programming: two unrelated parts of the system agree that a tick is 10 ms.
+
+On a board with no display fitted (`$F0A506 = 0` here) `$0C3A` points at scratch RAM
+`$800`, so the heartbeat harmlessly writes there — which is why **`$0804` can be watched
+as a 1 Hz liveness signal in a RAM dump** even on this machine.
+
+### `$0C78` guards the handler that makes the ROM's only `$F70030` access
+
+```
+tst.l   $c78.w / bne reuse      ; RE-ENTRY GUARD
+ori.w   #$7000,sr
+movem.l d0-d7/a0-a6,-(a7)
+move.l  a7,$c78.w               ; ...save the stack pointer
+...
+movea.l $c78.w,a7
+move.b  $f70030.l,d0 / ori.b #$20,d0 / move.b d0,$f70030.l
+movea.l $c78.w,a7
+movem.l (a7)+,d0-d7/a0-a7       ; note: restores a7 TOO
+clr.l   $c78.w
+```
+
+This is the interrupt-masked routine that reads `$F70030`, ORs bit 5 and writes it back —
+documented as the kernel's single device access outside the FPS layer, and as executing
+**zero** times in a full boot. It now has a shape: a **re-entrancy-guarded handler with
+its own saved stack**, which is what one writes for a handler that can interrupt itself.
+The `movem.l (a7)+,d0-d7/a0-a7` restoring `a7` from the frame is the giveaway that the
+stack pointer itself is part of the saved context.
