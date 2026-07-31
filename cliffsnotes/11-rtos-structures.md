@@ -96,3 +96,31 @@ millisecond arithmetic and the 1 Hz heartbeat.
 `lsl.w #1`/`asr.w #1`, and update it. `P`'s slow path links the TCB through `+$20`, sets
 state bit 13, releases the lock, installs the scheduler stack from `$0C08` and `bra`s to
 `$F0050C` — it does not return. **`tas` must be atomic against the chassis bus master.**
+
+## The TDTI boot table at `$F0A600`
+
+Six 96-byte records; the loop at `$F0A066` consumes each and calls `T0CRTCB`.
+
+| offset | role |
+|---|---|
+| `+$00` | `!TCB` marker — also the terminator test |
+| `+$04` | task name |
+| `+$14` | word → `d6` (zero here) |
+| `+$16` | byte `$96`, **duplicated into both halves** of `d4`'s high word → `$9696` |
+| `+$18` | **initial task state word** → `TCB+$2C`; **bit 4 = put on the ready list** |
+| `+$1A` | word `$A000` → `d4` low |
+| `+$1C` | **task entry point** → `d5` |
+| `+$20`-`+$5F` | segment descriptor block, 16 longwords copied verbatim into `!TST` |
+
+The segment *count* is not stored — TDTI walks four 8-byte slots from `+$20` and counts
+those with a non-zero word at `+$06`. Exactly one qualifies (`PROG`), which is why `!TST`
+reads `TSTNSEGS=4, TSTCSEGS=2`: the second is `STCK`, added later by the task's own `GTSEG`.
+
+## Device pointers
+
+Only three globals hold device addresses: `$0C4E` (PTM), `$0C3A` (display, or scratch `$800`
+when unfitted), `$0E48` (VERSAmodule control register, address *computed* from RAM top).
+
+The PTM is reached **three ways** — the `$F70001` literal with even displacements
+(self-test only), config `$F0A52C` = `$F70000` with odd displacements (RTOS init), and the
+cached pointer (tick ISR). All five PTM registers are used; **T2 only by the self-test**.

@@ -207,3 +207,19 @@ Worth stating plainly: the AP I/F window failures only appeared **because** the 
 checks were rescued. That assertion had been written from a wrong summary and had never
 once executed. Rescued checks that immediately fail are the expected outcome, not a
 regression.
+
+### Continued, same day — the boot table and the device closure
+
+- **The TDTI record is decoded field by field**, resolving the two constants that had been
+  listed as unexplained. `+$18` bit 4 is what places each task on the ready list; the
+  segment count is computed from four slots rather than stored, which independently
+  reproduces `!TST`'s `TSTNSEGS=4, TSTCSEGS=2`.
+- **The MC6840 is fully specified** — reset held across programming, CR2 toggled three
+  times because CR1 and CR3 share address 0, T1 loaded with `$0100`, T2 touched only by the
+  self-test, T3's counter read live by the sub-tick clock.
+- **The device map is closed against cached-pointer indirection.** Exactly three globals
+  hold device addresses. The PTM is reached three different ways, and a sweep keyed on its
+  literal address sees only the self-test — the third confidently-wrong negative of this
+  kind in the project, after `$FF0204` and the `$FF0048` read.
+- **The post-mortem snapshot is reachable after all** (22 `bsr` callers of `$F00186`), and
+  `$0848` holds the USP rather than `a1`. Both had been recorded the other way.
