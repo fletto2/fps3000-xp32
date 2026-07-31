@@ -18920,3 +18920,36 @@ neighbouring run — which is easy to do by eye and impossible mechanically, sin
 The practical consequence is small but real: **13 of the 42 operation codes are explicitly
 accepted and ignored**, rather than 8 being undefined. A chassis issuing one of those gets
 silence by design, not by omission.
+
+## The complete SBC→channel operation-code map
+
+Because the XP tasks index the 42-slot table by the **operation code** they issue, the
+table *is* the operation-code map. Enumerated from `$F083FC` (identical in all five copies):
+
+| handler | codes |
+|---|---|
+| **`D1_SEND`** — push `d1` as two words, `$8004` REQUEST-TRANSFER | `$02 $03 $04 $05 $06 $07` · `$0D $0E $0F $10` |
+| **`POLL`** — memory → channel | `$01 $0A $16 $17 $19 $1B $1F $22 $24` |
+| **`BLK_XFR`** — channel → memory | `$08 $09 $18 $1A $1C $1D $1E $23 $25` |
+| **`D2_FIN`** — push `d2`, `$8005` CONTINUE-TRANSFER, then panel `$26C` | `$14` |
+| **`rts`/`nop`** — accepted and ignored | `$00 $0B $0C $11 $12 $13 $15 $20 $21 $26 $27 $28 $29` |
+
+Three things this shows that the handler counts alone did not.
+
+**`D1_SEND` occupies two contiguous runs**, `$02`-`$07` and `$0D`-`$10`, and the normal
+request path uses `$10` and `$0E` — both inside the second run. So the request codes are not
+scattered; they are a block, and the firmware uses two of it.
+
+**`POLL` and `BLK_XFR` interleave in the `$16`-`$25` range** — `$22`/`$23` and `$24`/`$25`
+are clean adjacent pairs, one each way, and `$19`/`$1A`, `$1B`/`$1C` are the same idea with
+the parity reversed. Given this file's finding that the two are mirrors (`BLK_XFR` moves
+channel → memory, `POLL` memory → channel), the interleaving reads as **direction pairs**:
+each transfer kind gets an in code and an out code.
+
+**`$14` is `D2_FIN` here** — and `$14` is also the code RDHC's *main loop* reads as "a
+command record is waiting". The same number meaning different things in different
+dispatchers is exactly the three-layer structure documented above, and this is a concrete
+instance of it.
+
+The map bounds what a chassis can ask for: **29 codes do something, 13 are accepted and
+ignored, and everything above `$29` is out of the table entirely.**
