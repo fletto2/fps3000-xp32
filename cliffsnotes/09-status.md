@@ -225,3 +225,34 @@ regression.
   kind in the project, after `$FF0204` and the `$FF0048` read.
 - **The post-mortem snapshot is reachable after all** (22 `bsr` callers of `$F00186`), and
   `$0848` holds the USP rather than `a1`. Both had been recorded the other way.
+
+### Continued — device maps completed, and a tooling defect that mattered
+
+**A lookahead cap in every base-register sweep.** All the provenance sweeps — mine and the
+harness's — walked forward from a `lea`/`movea` with a 300–500 instruction cap. A base
+register can stay live far longer: `a6` holds the AP I/F base from `$F08752` to `$F09B24`,
+~5,000 bytes. Uncapped, the `$FF0000` sweep finds **431 access sites instead of 328** and
+one extra register (`$FF0214`). **No structural conclusion changed** — the AP I/F window map
+and the three never-referenced BIM registers survive — but the caps are now raised
+everywhere, so a truncated sweep fails loudly instead of passing quietly. This is the fourth
+distinct false-negative mechanism in base-register analysis here.
+
+**Device maps now complete:**
+
+- **SBC↔SCM** is one self-test routine: page 0, `$400000`-`$403FFF`, complementary pattern
+  pairs, each element read back and complemented, then the whole set repeated **backwards**.
+  ~65,000 window accesses, matching the bus-log figure from the opposite direction.
+- **MODE2** is only ever *set* to `$0` or `$F`; any other value on the bus is a restore.
+  Two pages need backing.
+- **The board status register is never written** — 16 read sites, 16 `btst` sites, zero
+  writes by any path — and **`$F7001A` is never referenced at all**, though the block is
+  documented as 28 bits.
+- **A new constraint**: the SCM test aborts if `$F70019` bits 4 **and** 5 are both set. The
+  emulator satisfies it, but for an unrelated reason.
+
+**Two counting corrections.** The VMOD control pair carries **52** bit operations, not 28 —
+ten of them use a *computed* bit number that no literal census can see. And the XLTR mode
+registers are modified **register-side** (`move.w` → `bclr.b #$e,d1` → `move.w`), where bit
+numbers are **mod 32**, not mod 8. A memory-side sweep finds none of them. Across the image
+the split is 742 register-target versus 666 memory-target bit instructions, with 198 memory
+sites carrying a literal bit number above 7 — so neither convention is the default.
