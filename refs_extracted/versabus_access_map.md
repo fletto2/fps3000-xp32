@@ -18393,3 +18393,37 @@ block, not two handles.
 It also explains why no chassis model can carry a channel through a full cycle: the missing
 piece is not a register value, it is **code at `$10AE`**. The firmware will happily `jsr`
 into it, and there is nothing there.
+
+### Driving the callback: a 4-byte stub makes it execute for the first time
+
+The interpretation above predicts that the *only* thing missing is executable code in the
+trampoline slot. That is directly testable, because `FPS3K_POKE` intercepts reads and an
+instruction fetch is a read:
+
+```
+FPS3K_XPIRQ=1 FPS3K_CHCMD=C000 FPS3K_POKE=10AE=4E75
+```
+
+`$C000` presents channel status with bits 15 and 14 set and bit 11 clear — the arm that
+notifies `USER` — and `$4E75` is `rts`, a minimal trampoline. Measured:
+
+| site | without the stub | with it |
+|---|---|---|
+| `$F08550` notify entry | 1467 | 1 |
+| `$F08572` `tst.l $10AE` | 1467 | 1 |
+| `$F0858C` **`$43` RSTATE on `'USER'`** | **0** | **1** |
+| `$F085F8` **`jsr` the trampoline** | **0** | **1** |
+
+So the SBC issues `RSTATE`, builds the FORTRAN-style argument frame, and **transfers control
+into `$10AE`** — a path that had never executed in any configuration. Four bytes of stub is
+the whole difference, which is the strongest confirmation available that the slot is called
+rather than dereferenced.
+
+**It does not complete a channel cycle.** The run ends at `final PC = $F056B8`, which is
+inside a panel-command issuer's `bra .` — the same self-programmed spin documented for
+TCBIO1I, for RDHC, and for the CPRUN path. So the callback is now reachable and the block
+beyond it is the one already known, not a new one.
+
+For emulation this is a concrete recipe rather than an inference: **to carry an XP channel
+past the notify arm, the model needs executable code at `$10AE + (ch-1)*4`**, and a bare
+`rts` suffices to get through the call.
