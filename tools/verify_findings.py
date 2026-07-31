@@ -4959,3 +4959,13 @@ check('...so arm B replaces the WHOLE USP with a sign-extended 16-bit value',
       insn(0xF04A44) == 'move a1, usp')
 check('the self-test also exercises the USP as a register',
       insn(0xF08AD2) == 'move a5, usp' and insn(0xF08AD6) == 'move usp, a3')
+
+# ---- phases $101/$102 test 68000 core behaviour (2026-07-31) ----
+check('phase $101 verifies that moveq SIGN-EXTENDS to 32 bits',
+      insn(0xF08A9E) == 'moveq #$ff, d6' and insn(0xF08AA0) == 'cmpi.l #$ffffffff, d6')
+check('...with the standard $F0F0F0F0 failure marker', insn(0xF08AA8) == 'move.l #$f0f0f0f0, d7')
+check('phase $102 round-trips a 32-bit value through the USP',
+      insn(0xF08AC8) == 'move.l d0, d1' and insn(0xF08ACA) == 'not.l d1'
+      and insn(0xF08AD2) == 'move a5, usp' and insn(0xF08AD6) == 'move usp, a3')
+check('a6 is reused as the VMOD base and then the AP I/F base in one routine',
+      insn(0xF08A88) == 'lea.l $1fff0.l, a6' and insn(0xF08AAE) == 'lea.l $ff0000.l, a6')

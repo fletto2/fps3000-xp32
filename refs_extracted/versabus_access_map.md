@@ -21629,3 +21629,41 @@ will diverge from the hardware on exactly the values a test is most likely to us
 **And a core requirement**: `move usp,aN` / `move aN,usp` are privileged and are exercised in
 three separate places here, including a self-test write/read-back at `$F08AD2`. A 68000 core
 that does not implement them fails the self-test, not merely this interface.
+
+## Phases `$101`/`$102` test CPU core behaviour an emulator must get right (2026-07-31)
+
+The very first self-test stages are not about the board at all — they check the 68000 itself:
+
+```
+$F08A96  move.w  #$101,$204(a6)      phase $101
+$F08A9E  moveq   #$ff,d6             <- moveq SIGN-EXTENDS
+$F08AA0  cmpi.l  #$ffffffff,d6       ...so d6 must read $FFFFFFFF, not $000000FF
+$F08AA6  beq.b   $F08AAE
+$F08AA8  move.l  #$f0f0f0f0,d7       failure marker
+
+$F08ABE  move.w  #$102,d6            phase $102
+$F08AC8  move.l  d0,d1 / not.l d1    $FFFFFFFF and its complement
+$F08ACC  movea.l d0,a6 / movea.l d1,a5
+$F08AD0  movea.l a6,a4
+$F08AD2  move    a5,usp              <- the USP as a data path
+$F08AD4  movea.l a4,a2
+$F08AD6  move    usp,a3
+```
+
+Two concrete core requirements fall out:
+
+- **`moveq` must sign-extend its 8-bit immediate to 32 bits.** A core that zero-extends fails at
+  the second stage of the boot and retries forever, leaving `$0101` in `CHANNEL_SELECT`.
+- **`move aN,usp` / `move usp,aN` must be implemented**, and must round-trip a full 32-bit value.
+  This is the third independent place the USP is required — the kernel's task switch, this test,
+  and the chassis register interface.
+
+Both are things a partial 68000 implementation might omit, and both fail *early*, before any
+board-level modelling matters — so a machine that stalls at `$0101` or `$0102` has a CPU-core
+bug, not a chassis-model bug. That is a useful discrimination to have written down, because every
+other self-test failure points at the board.
+
+Note also `$F08AAE lea $FF0000,a6`: **`a6` serves as the VMOD base earlier in the same routine
+and the AP I/F base here.** Base registers are reused across purposes within single routines,
+which is exactly why provenance-tracked sweeps must break on reload and why an offset alone never
+identifies a device in this firmware.
