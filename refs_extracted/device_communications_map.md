@@ -1024,3 +1024,45 @@ registers. `$206`, `$208`, `$20A`, `$20E`, `$212`, `$240`, `$248`, `$25E` never 
 
 Paged by `MODE2`, which is **independent** of the CPU address's high bits. 32-bit accesses,
 longword-addressed. The host mailbox is page `$F`, aperture offset `$30001C`.
+
+## Update 2026-07-31: operational vs self-test-only addresses
+
+The tables above measure *what* is touched. For emulation the more useful cut is *when* — a
+model that only needs to reach the RTOS idle loop has a much smaller contract than one that
+must pass the diagnostics. Every address this firmware touches falls into one of three classes.
+
+### Class 1 — operational only (never touched by the self-test)
+
+The four AP I/F **channel windows** (`$FF0040`-`$FF00AF`): `+$04`, `+$08`, `+$0A`, `+$0E` for
+channels 1-4. A sweep of the whole diagnostic region for `$FF0000`-based accesses with a
+window-sized displacement finds **exactly three, all on `$FF000E`**. So no channel register has
+any self-test contract; they are constrained solely by the operational paths documented above.
+
+### Class 2 — both
+
+`$FF0204` (CHANNEL_SELECT, also the phase beacon), `$FF0210`/`$FF0214`/`$FF0216` (paging and the
+width mux), `$FF0218`/`$FF021A`, `$FF020C`, the BIM block `$FF0230`-`$FF025E`, the `$400000`
+window, `$1FFF0`/`$1FFF1`, `$F70018`/`$F70019`, and the MC6840.
+
+### Class 3 — self-test only
+
+| address / range | role | site |
+|---|---|---|
+| `$F80001`-`$F82001` | **bus-timeout watchdog probe range** — byte reads at **odd** addresses walking down by two; at least one must BERR | `$F08F1C` |
+| `$1FFF2` | the interrupter **vector register**; the phase-`$1300` loop writes it once and then post-increments into plain RAM | `$F09386` |
+| `$1FFE4` | written once with vector number `$52` and never read back — ordinary RAM, scratch | `$F09354` |
+| `$FF000E` = `$AAAA` | the AP I/F command port's only functional check | `$F0987C` |
+| `$FF0212` | walking-bit write and read-back — the site that proves it is a register | `$F09560` |
+
+**`$FF0212` is worth calling out.** It appears nowhere in operational code, which is what made
+the old "it is not a register, only the low half of a 32-bit access to `$FF0210`" reading
+survive so long. It exists to be *tested*, and the test addresses it individually with
+`(a6,a0.w)` — an address-register-indexed form that absolute-address scans cannot see.
+
+### The consequence for staged emulator bring-up
+
+A model can reach the RTOS by satisfying Class 2 alone, because the firmware skips the entire
+diagnostic suite when `$F70019` bit 5 is set at `$F08732`. That is the cheap path, and it is how
+this emulator ran for a long time. Satisfying Class 3 as well is what makes a green boot mean
+something: **a boot that skipped the suite proves the CPU, RAM, ROM, vectors and PTM, and
+essentially nothing about the chassis.**
