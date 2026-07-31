@@ -25615,3 +25615,39 @@ state map — set when a task is being terminated.
 
 **Four of the eight originally-unidentified TCB fields are now placed** (`+$10`, `+$14`, `+$2A`,
 `+$2E`), leaving `+$8`, `+$18`, `+$26`, `+$148` and `+$158` — none of which FPS code touches.
+
+## The AP I/F window map settled rigorously (2026-07-31)
+
+A provenance-tracked sweep from every `$FF0000` base load, counting which 32-byte window each
+displacement falls in:
+
+| window | address range | role | offsets touched |
+|---:|---|---|---|
+| **0** | `$FF0000`-`$FF001F` | host / bulk link | **4** — `$00`, `$04`, `$08`, `$0E` |
+| **1** | `$FF0020`-`$FF003F` | **reserved** | **0** |
+| **2** | `$FF0040`-`$FF005F` | XP channel 1 | **4** — `$44`, `$48`, `$4A`, `$4E` |
+| **3** | `$FF0060`-`$FF007F` | XP channel 2 | **4** — `$64`, `$68`, `$6A`, `$6E` |
+| **4** | `$FF0080`-`$FF009F` | XP channel 3 | **4** — `$84`, `$88`, `$8A`, `$8E` |
+| **5** | `$FF00A0`-`$FF00BF` | XP channel 4 | **4** — `$A4`, `$A8`, `$AA`, `$AE` |
+| **6** | `$FF00C0`-`$FF00DF` | — | **0** |
+| **7** | `$FF00E0`-`$FF00FF` | — | **0** |
+
+**Five populated windows, each touching exactly four offsets at identical relative positions.**
+The symmetry is exact — `+$00`/`+$04`/`+$08`/`+$0E` in every one — which is the strongest form
+this project's four-register window claim has had, since it now rests on a sweep that follows
+base registers rather than on absolute-address matching.
+
+**Windows 1, 6 and 7 have zero references of any kind**, by base register or absolutely. Window 1
+is additionally skipped by the firmware's own `((ch+1)<<5)` arithmetic at `$F053E8`, so it is
+architecturally reserved rather than merely unused; 6 and 7 are simply the empty upper half.
+
+### One false positive, checked rather than reported
+
+The absolute-address pass initially flagged **one** reference into window 7. It is
+`$F0998E move.l #$FF00FF,d0` — a **RAM test pattern**, not an address, followed by `not.l d0` to
+produce its complement `$00FF00` for the paired write. A substring match on `ff00ff` cannot
+distinguish an immediate from an address.
+
+That is the same class of error this file records several times over, and the working rule holds:
+**a single anomalous hit in an otherwise clean sweep is more likely a matcher artefact than a
+finding**, and costs one minute to check.

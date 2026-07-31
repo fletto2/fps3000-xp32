@@ -5854,6 +5854,31 @@ check('...and the save is tested and cleared by its consumers',
       insn(0xF02ADE) == 'btst.b #$f, $2e(a5)' and insn(0xF02B44) == 'clr.w $2e(a5)')
 check('the TERM path sets state bit 7 after saving',
       insn(0xF02F76) == 'bset.b #$7, $2d(a6)')
+
+# ---- the AP I/F window map, provenance-tracked (2026-07-31) ----
+_apw = set()
+for _st, _rg in [(a, o.split(', ')[1]) for a, (m, o, _) in sorted(_mins.items())
+                 if m.startswith(('movea.l', 'lea'))
+                 and _mre.match(r'(#\$ff0000|\$ff0000\.l), a\d$', o)]:
+    _p = _st + _mins[_st][2]
+    for _ in range(500):
+        if _p not in _mins: break
+        _m, _o, _sz = _mins[_p]
+        if _m.startswith(('lea', 'movea')) and _o.endswith(', ' + _rg): break
+        for _mm in _mre.finditer(r'\$([0-9a-f]{1,3})\(' + _rg + r'\)', _o):
+            _apw.add(int(_mm.group(1), 16))
+        if _mre.search(r'\(' + _rg + r'\)', _o) and not _mre.search(r'\$[0-9a-f]+\(' + _rg + r'\)', _o):
+            _apw.add(0)
+        _p += _sz
+for _n, _base in ((0, 0x00), (2, 0x40), (3, 0x60), (4, 0x80), (5, 0xA0)):
+    check('AP I/F window %d touches exactly four offsets' % _n,
+          sorted(o for o in _apw if _base <= o <= _base + 0x1F)
+          == [_base + 0x00, _base + 0x04, _base + 0x08, _base + 0x0E],
+          sorted(hex(o) for o in _apw if _base <= o <= _base + 0x1F))
+check('windows 1, 6 and 7 are touched at NO offset',
+      not [o for o in _apw if 0x20 <= o <= 0x3F or 0xC0 <= o <= 0xFF])
+check('the one apparent window-7 reference is a RAM pattern, not an address',
+      insn(0xF0998E) == 'move.l #$ff00ff, d0' and insn(0xF09996) == 'not.l d0')
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')
