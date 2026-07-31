@@ -5611,6 +5611,23 @@ check('...nor uses link/unlk, chk, illegal, trapv or rtr',
       all(_mn[k] == 0 for k in ('link', 'unlk', 'chk', 'illegal', 'trapv', 'rtr')))
 check('tas appears exactly 5 times -- the kernel locks', _mn['tas'] == 5)
 check('movep appears 10 times -- the PTM interface', _mn['movep'] == 10)
+
+# ---- the SR census: trace dispatch and the carry convention (2026-07-31) ----
+_sr = _mcol.Counter()
+for _a, (_m, _o, _) in _mins.items():
+    if _mre.search(r'(^|, )sr$', _o) or _o.startswith('sr,'):
+        _sr[_mre.sub(r'#\$[0-9a-f]+', '#$imm', _m + ' ' + _o)] += 1
+check('the dual-entry prologue move.w sr,-(a7) appears 43 times',
+      _sr['move.w sr, -(a7)'] == 43, _sr['move.w sr, -(a7)'])
+check('there is a TRACE-ENABLED task dispatch beside the plain one',
+      insn(0xF005B4) == 'rte' and insn(0xF005B6) == 'movea.l $138(a6), a6'
+      and insn(0xF005BA) == 'ori.w #$8000, sr' and insn(0xF005BE) == 'rte')
+check('...so the trace exception is a stock-ROM requirement, not just the monitor',
+      (0x8000 >> 15) == 1)
+check('the driver call returns status in CARRY, set and cleared adjacently',
+      insn(0xF04478) == 'ori.w #$1, sr' and insn(0xF0447C) == 'rts'
+      and insn(0xF04482) == 'andi.w #$fffe, sr' and insn(0xF04486) == 'rts')
+check('...which is what the walker tests with bcs', insn(0xF044CA) == 'bcs.b $f044d6')
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')
