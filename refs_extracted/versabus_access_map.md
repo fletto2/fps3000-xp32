@@ -24262,10 +24262,24 @@ bytes before the address the TRAP #0 table holds. That is the dual-entry convent
 documents for 29 of 33 handlers, caught in the act: one directive calling another's
 implementation internally rather than trapping.
 
-### TCB+$28 joins the field map
+### TCB+$28 joins the field map — and the first draft of this paragraph was wrong
 
-`btst.b #$F,$28(a6)` under the mod-8 rule addresses **bit 7 of the byte at `TCB+$29`**, i.e. bit
-15 of the word at `TCB+$28`. That word also appears in directive `$25`'s context restore
-(`btst.b #$F,$28(a6)` at `$F02A18`) gating whether the restored SR keeps its high bit — so
-**`TCB+$28` bit 15 is a privilege flag governing both clock-setting and SR restoration**, which
-is a coherent pair: both are supervisor-adjacent capabilities.
+`TCB+$28` is tested at **23 sites**, and the bit is the same one almost everywhere:
+
+| form | sites | bit addressed |
+|---|---:|---|
+| `btst.b #$F,$28(a6)` | 18 | **bit 7 of the byte at `$28`** (mod 8) |
+| `btst.b #$7,$28(a6)` | 3 | **the same bit**, written the other way |
+| `btst.b #$D,$28(a6)` | 1 | bit 5 of that byte |
+| `move.w $28(a6),dN` | 2 | the whole word |
+
+So **one privilege flag — bit 7 of the byte at `TCB+$28` — gates 21 sites across the kernel**,
+including `$49`'s clock-set. It is a general capability bit, not a clock-specific one, and the
+`#$F` / `#$7` pair is the mod-8 rule producing two spellings of one test.
+
+**A first draft of this paragraph claimed the flag also appeared "in directive `$25`'s context
+restore at `$F02A18`". Both halves were wrong** — `$F02A18` is a misdecode address (the real
+neighbouring site is `$F02A14`), and it lies in the `$0D` START region, not `$25`. The citation
+was written from memory rather than from a sweep. Running the sweep gave a **better** result than
+the invented one: 21 sites rather than two, which makes "general privilege flag" the supported
+reading and "clock-and-SR pair" an unnecessary story.

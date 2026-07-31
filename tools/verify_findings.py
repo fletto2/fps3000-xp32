@@ -5362,6 +5362,15 @@ check('$49 is PRIVILEGED on TCB+$28 bit 15 and fails with status +9',
       insn(0xF037B4) == 'btst.b #$f, $28(a6)' and insn(0xF037BC) == 'addi.w #$9, $102(a6)')
 check('...while $4A needs no permission check',
       not insn(0xF03862).startswith('btst'))
+_t28 = [a for a, (m, o, _) in _mins.items()
+        if _mre.search(r'\$28\(a6\)', o) and m.split('.')[0] == 'btst']
+check('TCB+$28 is bit-tested at 22 sites', len(_t28) == 22, len(_t28))
+check('...and #$F and #$7 address the SAME bit under the mod-8 rule', 0xF % 8 == 7 % 8)
+check('...so one privilege flag gates 21 of them',
+      sum(1 for a in _t28 if insn(a) in ('btst.b #$f, $28(a6)', 'btst.b #$7, $28(a6)')) == 21,
+      sum(1 for a in _t28 if insn(a) in ('btst.b #$f, $28(a6)', 'btst.b #$7, $28(a6)')))
+check('$F02A18 is NOT a real instruction boundary -- $F02A14 is',
+      0xF02A14 in _mins and insn(0xF02A14) == 'btst.b #$f, $28(a6)')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
