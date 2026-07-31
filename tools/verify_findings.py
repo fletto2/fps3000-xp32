@@ -5351,6 +5351,17 @@ check('...and accumulates the adjustment so elapsed time survives a clock set',
       and insn(0xF037F4) == 'add.l d4, $c4a.w')
 check("...with an 8-byte block = {day longword, millisecond longword}",
       (_t1[0x49][1] >> 8) == 8)
+check('directive $4A reads the time by calling the clock at its PRE-TRAP entry',
+      _t1[0x4A][0] == 0xF03862 and insn(0xF03862) == 'bsr.w $f00f96.l')
+check('...normalises the interpolated millisecond value past a day boundary',
+      insn(0xF0386A) == 'cmpi.l #$5265c00, d1' and insn(0xF03872) == 'subi.l #$5265c00, d1'
+      and insn(0xF03878) == 'addq.l #$1, d0')
+check('...and returns {day, ms} as a longword pair', insn(0xF0387A) == 'movem.l d0-d1, (a4)')
+check('...with an 8-byte block, matching $49', (_t1[0x4A][1] >> 8) == 8)
+check('$49 is PRIVILEGED on TCB+$28 bit 15 and fails with status +9',
+      insn(0xF037B4) == 'btst.b #$f, $28(a6)' and insn(0xF037BC) == 'addi.w #$9, $102(a6)')
+check('...while $4A needs no permission check',
+      not insn(0xF03862).startswith('btst'))
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

@@ -24217,3 +24217,55 @@ corroborated by the declared size, so `$49` comes off the unnamed list.
 model must let the day rollover happen: a run long enough to cross 86,400,000 ms — 24 hours of
 simulated time — takes the `$F00F02` branch, which is the only place `$0C3E` is incremented. That
 is unreachable in any run this project has made, so the rollover path has never executed.
+
+## `$49` and `$4A` are SET and READ TIME OF DAY — and `$4A` normalises the interpolation
+
+**`$4A` (handler `$F03862`) is the read:**
+
+```
+$F03862  bsr.w   $F00F96          call the clock read at its PRE-TRAP entry
+$F03866  move.l  $C3E.w,d0        the day counter
+$F0386A  cmpi.l  #$5265C00,d1     if the interpolated ms has reached a day...
+$F03872  subi.l  #$5265C00,d1     ...normalise it
+$F03878  addq.l  #$1,d0           ...and carry into the day
+$F0387A  movem.l d0-d1,(a4)       return {day, milliseconds}
+$F0387E  rte
+```
+
+**The normalisation is not redundant.** The tick ISR wraps `$0C42` the instant it crosses
+86,400,000, so the stored value is always in range — but `$F00F96` returns the stored value **plus
+the sub-tick remainder read live from the PTM counter**, and that sum can exceed a day when the
+stored value is within 10 ms of midnight. `$4A` is the only place that carry is handled. A caller
+using `$1C` directly would see a millisecond value greater than 86,400,000 for up to 10 ms per
+day.
+
+**`$49` (handler `$F037B4`) is the privileged set:**
+
+```
+$F037B4  btst.b  #$F,$28(a6)      a permission bit in the TCB
+$F037BA  bne.b   $F037C4          allowed -> do the work
+$F037BC  addi.w  #$9,$102(a6)     else status += 9
+$F037C2  rte
+```
+
+So **setting the clock requires a TCB permission bit (bit 15 of `TCB+$28`) and fails with status
+`+9` without it**, while reading it needs no permission. That is a privilege distinction the
+firmware's own tasks never exercise — none issues `$49` or `$4A` — so it exists for host-loaded
+software.
+
+Both declare **8-byte parameter blocks**, which is `{day longword, millisecond longword}` in each
+direction. Two more directives come off the unnamed list, named from behaviour and corroborated
+by their declared sizes.
+
+**And `$4A` reaches the clock read by `bsr.w $F00F96`** — the routine's *pre-trap* entry, two
+bytes before the address the TRAP #0 table holds. That is the dual-entry convention this project
+documents for 29 of 33 handlers, caught in the act: one directive calling another's
+implementation internally rather than trapping.
+
+### TCB+$28 joins the field map
+
+`btst.b #$F,$28(a6)` under the mod-8 rule addresses **bit 7 of the byte at `TCB+$29`**, i.e. bit
+15 of the word at `TCB+$28`. That word also appears in directive `$25`'s context restore
+(`btst.b #$F,$28(a6)` at `$F02A18`) gating whether the restored SR keeps its high bit — so
+**`TCB+$28` bit 15 is a privilege flag governing both clock-setting and SR restoration**, which
+is a coherent pair: both are supervisor-adjacent capabilities.
