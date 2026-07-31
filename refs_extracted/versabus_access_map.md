@@ -30788,3 +30788,42 @@ register, fails the verify half even if the write half looks fine.
 
 That makes the proposed fix a genuine test of the third BIM's register file rather than a cosmetic
 change: **boot to the idle loop, plus 24 successful read-backs, is the pass condition.**
+
+## `$FF0216` bit 6: function unknown, required behaviour fully determined (2026-07-31)
+
+A complete census of the register closes what a model owes for the one bit whose purpose is still
+open.
+
+| form | count |
+|---|---:|
+| literal writes `$10`, `$20`, `$40`, `$80` | 2 each — the four self-test probes |
+| literal write `$C0` | 1 — the init tail's resting value |
+| `clr.w` | 7 — all in the self-test |
+| register-sourced writes | op `$6`'s save/restore |
+| reads | 3 |
+| **direct `bset`/`bclr`/`btst` on the register** | **none** |
+
+Two things fall out:
+
+- **Every bit change goes through a data register**, exactly as with MODE0 and MODE1. A census
+  grepping for `bset`/`bclr` on `$216(aN)` finds nothing and would conclude the register is
+  write-only with no read-modify-write — the same false negative that hid MODE1's structure.
+- **Bit 6 is set once, at `$F0A22A`'s `$C0`, and never individually changed again.** It appears in
+  the self-test's four-arm probe (`$40` ×2) and in the resting value; nothing clears it alone. Op
+  `$6` saves and restores the *whole word*, so even that leaves it intact.
+
+So operationally bit 6 is a **static configuration bit**: asserted at the end of init and held for
+the life of the machine. Combined with the four-arm test proving it has **no effect on `$400000`
+accessibility in either state, for both reads and writes**, the model's obligation is completely
+determined even though the function is not:
+
+> **`$FF0216` bit 6 must be a readable latch with no side effects.**
+
+That is what the emulator already does, so there is no gap here — which is worth recording
+explicitly, because "function unknown" reads like an open modelling risk and this one is not. The
+open question is about the *hardware*, not the model: something on the XLTR is enabled by that bit
+at power-up and never reconfigured, and only a schematic or a probe will say what.
+
+For contrast, the other three bits of the nibble are all dynamic: bit 4 is bracketed around
+`CPLOAD`, bit 5 gates the window and is toggled by the self-test, bit 7 is cleared for the
+duration of every op `$6`.
