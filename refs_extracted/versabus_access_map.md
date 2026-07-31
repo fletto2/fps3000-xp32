@@ -30503,3 +30503,51 @@ firmware: written for host-loaded software that never arrives.
 **Emulator consequence**: a chassis model that returns a non-zero mailbox at page `$F` during init
 sets `$10A8` and changes nothing else — but it is a cheap, observable hook for confirming that a
 model's paging is correct at the earliest possible moment.
+
+## The TCB `+$102` figures were a6-only counts (2026-07-31)
+
+An audit of the harness for **base-register-keyed matchers** — the failure mode that had already
+produced three wrong results today — found one enumerating check filtering on the literal
+`'$102(a6)'`. TCB `+$102` is the directive status/return field, and it is reached through **more
+than one base**:
+
+| base | count |
+|---|---:|
+| `a6` | 119 |
+| `a5` | 3 |
+| `a4` | 1 |
+| `a0` | 1 |
+| **total** | **124** |
+
+So every figure this project records for that field is the a6-only count. Base-agnostic:
+
+| form | count | |
+|---|---:|---|
+| `addq.w` | 54 | |
+| `addi.w` | 49 | |
+| `move.w` | **17** | recorded as 16 |
+| `clr.w` | 1 | the dispatcher clearing the field at entry |
+| `tst.w` | 2 | reads |
+| `move.l` | 1 | a read, at `$F00E0C` |
+| **total** | **124** | recorded as 119 |
+
+**The substantive claim survives intact**: the status code space is 1..16 and **every value is
+present** — verified base-agnostically, with `$6`, `$7` and `$9` the most common (15, 16 and 15
+occurrences). The missed sites add `#$7` once and `#$A` twice through `a5`, values already in the
+set, plus one `move` and one read.
+
+So the correction is quantitative, not qualitative: **124 accesses, 17 moves, and one read at
+`$F00E0C`** — which also means the field is not purely write-only from the kernel's side, as the
+"119 writes" framing implied.
+
+### The audit itself is the more useful result
+
+Sweeping all 49 enumerating checks in the harness for operand filters containing `(aN)` turned up
+exactly this one. The 427 other base-specific operand literals are **point assertions** —
+`insn(addr) == 'move.w #$400, $218(a5)'` — where naming the base register is correct, because the
+claim is about one instruction at one address. The hazard is specific to checks that *count* or
+*enumerate*.
+
+Worth keeping as a rule: **a point assertion may name a base register; a census may not.** Three
+of today's four wrong results came from violating it — the MODE1 bit-15 count, the board-status
+"writable bit 7", and this one.

@@ -7185,10 +7185,14 @@ check('no code anywhere issues the six unnamed privileged directives',
       _issued == [], [hex(a) for a in _issued])
 
 # ---- the RTOS status-code vocabulary (2026-07-31) ----
+# CORRECTED 2026-07-31: this filtered on '$102(a6)' -- base-register
+# specific.  TCB+$102 is reached via a6 x119 but ALSO a5 x3, a4 x1, a0 x1,
+# so the a6 filter saw 119 of 124 accesses and the documented counts were
+# the a6-only ones.  Match the offset and let the base vary.
 _st = _mcol.Counter(); _stmove = 0
 for _a, (_m, _o, _) in _mins.items():
-    if '$102(a6)' not in _o: continue
-    _mm = _mre.match(r'#\$([0-9a-f]+), \$102\(a6\)$', _o)
+    if not _mre.search(r'\$102\(a\d\)', _o): continue
+    _mm = _mre.match(r'#\$([0-9a-f]+), \$102\(a\d\)$', _o)
     if _mm:
         _st[int(_mm.group(1), 16)] += 1
         if _m.split('.')[0] == 'move': _stmove += 1
@@ -7196,7 +7200,7 @@ check('the status code space is 1..16 and fully populated',
       sorted(_st) == list(range(1, 17)), sorted(hex(v) for v in _st))
 check('...with $9 (privilege refusal) among the most common', _st[9] >= 14, _st[9])
 check('most writes ADD rather than SET, because the dispatcher clears the field first',
-      _stmove <= 16 and sum(_st.values()) - _stmove >= 90, (_stmove, sum(_st.values())))
+      _stmove <= 17 and sum(_st.values()) - _stmove >= 90, (_stmove, sum(_st.values())))
 check('...and the generic failure $1 is written with move at the dispatcher error stub',
       insn(0xF003D0) == 'move.w #$1, $102(a6)')
 check('$3E writes $E for a vector with no owner', insn(0xF0228E) == 'move.w #$e, $102(a6)')
