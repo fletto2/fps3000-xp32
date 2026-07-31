@@ -3712,6 +3712,10 @@ def _vtab():
     return out
 
 
+def _lw2(a):
+    return struct.unpack('>I', _rq2[a:a + 4])[0] & 0xFFFFFF
+
+
 _vt = _vtab()
 check('it holds 23 {vector, handler} records',
       len(_vt) == 23)
@@ -3980,6 +3984,19 @@ check('a word written to $FF0214 lands in the LOW half of the chassis longword',
 check('...whereas a word written to the window itself affects the high half',
       insn(0xF09808) == 'move.w d1, (a0)'
       and insn(0xF0980A) == 'cmp.l (a0), d2')
+
+# --- every task has an unreachable branch to its own ISR entry -----------
+# beq.b +4 followed by beq.w: both paths land on the same address, so the
+# beq.w can never execute.  Six sites, one per task.
+_dead = []
+for _a in range(0xF04488, 0xF0A600, 2):
+    if (struct.unpack('>H', _rom[_a - _B:_a - _B + 2])[0] == 0x6704
+            and struct.unpack('>H', _rom[_a + 2 - _B:_a + 4 - _B])[0] == 0x6700):
+        _dead.append(_a + 4 + struct.unpack('>H', _rom[_a + 4 - _B:_a + 6 - _B])[0])
+check('there are exactly six unreachable beq.b/beq.w pairs, one per task',
+      len(_dead) == 6)
+check('...and their targets are exactly the six !IDV ISR entries',
+      sorted(_dead) == sorted(_lw2(0x1F808 + 14 * k + 6) for k in range(6)))
 
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,

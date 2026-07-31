@@ -18104,3 +18104,42 @@ the block bases and the `CRSEM`/`ATSEM` declared parameter size of 10.
 intervening test. The first skips the second, and if it is not taken the second cannot be
 either, so **`beq.w $F05DD6` — a branch straight into the ISR entry — is unreachable**. It
 reads like a vestige of an earlier loop that re-entered the handler directly.
+
+## Every task carries an unreachable branch to its own ISR entry (2026-07-30)
+
+Immediately before its blocking wait, each of the six tasks has this two-instruction
+sequence:
+
+```
+6704        beq.b  +4       ; skips the next instruction
+6700 xxxx   beq.w  <ISR>    ; UNREACHABLE
+```
+
+If Z is set the first branch jumps past the second; if Z is clear the second is not taken
+either. **Both paths land on the same address, so the `beq.w` can never execute.** It
+appears exactly six times in the image, once per task:
+
+| site | task | unreachable target |
+|---|---|---|
+| `$F04736` | `RDHC` | `$F04930` |
+| `$F05DAC` | `IO1I` | `$F05DD6` |
+| `$F0600C` | `XP4I` | `$F060CE` |
+| `$F06A06` | `XP3I` | `$F06AE6` |
+| `$F07406` | `XP2I` | `$F074E6` |
+| `$F07E06` | `XP1I` | `$F07EE6` |
+
+**Those six targets are exactly the six ISR entry addresses in `!IDV`** — set equality,
+checked against a live dump, not by eye.
+
+The reading is a development artefact preserved in the shared task template: the tasks once
+had a path that entered their interrupt handler **inline** — a polled form — and when the
+design moved to interrupt-driven wakeups the call site was neutralised by putting a `beq.b`
+in front of it rather than deleting it. One edit to the template, propagated to all six
+copies, which is consistent with everything else known about how these tasks were built
+(byte-identical bodies with hand-patched constants, and the `$1E`/`$18` shifts in XP4I).
+
+It is worth recording for two practical reasons. A disassembler's reachability analysis
+will happily decode that branch and mark the ISR as reachable from the task body, which it
+is not — the only real entry is the vector. And anyone reading the listing will see what
+looks like a conditional dispatch into the handler and infer a polling mode the firmware
+does not have.
