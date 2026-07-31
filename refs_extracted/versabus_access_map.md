@@ -30955,3 +30955,48 @@ count**, and the checksum being consumed and discarded.
 4. **Nothing validates the payload.** No checksum, no character range check, no length
    cross-check. The only guard is the `$10000`-`$1FFFF` address bound, and that truncates silently
    rather than erroring.
+
+## BOTH S-record loaders discard the checksum — which makes it a design decision (2026-07-31)
+
+This project records the checksum omission for the SLC path. The **`CPLOAD` path does exactly the
+same thing**, and the two are independently written:
+
+```
+SLC   ($F051A2, ASCII, via the handshaked stream port)
+  $F05238  cmpi.w #$1,d4 / bne <loop>     ; stop with ONE unit left
+  $F0523A  arm/poll/clear                 ; a full handshake for it
+  $F05250  move.w (a0),d2                 ; read the checksum ...
+  $F05254  rts                            ; ... and return without examining it
+
+CPLOAD ($F055A2, binary, straight from chassis memory)
+  $F055F0  cmpi.w #$1,d4 / bne <loop>     ; same terminator
+  $F055F6  move.w (a0)+,d2                ; read the checksum ...
+  $F055FA  rts                            ; ... and return without examining it
+```
+
+The two loaders differ in almost everything else — ASCII vs binary, handshaked vs free-running,
+byte stores vs word stores — yet **agree on every design decision**:
+
+| | SLC | CPLOAD |
+|---|---|---|
+| address seed | `a1 = $10` | `a1 = $10` |
+| offset applied | `+$10000` | `+$10000` |
+| bound | `$10000`-`$1FFFF`, both sides | identical |
+| violation report | panel `$25A` | panel `$25A` |
+| loop terminator | `d4 == 1` | `d4 == 1` |
+| checksum | read, discarded | read, discarded |
+
+**Two independent implementations making the same omission is evidence of intent, not oversight.**
+A slip would appear in one loader; agreement across both, down to the `d4 == 1` terminator that
+exists *precisely* to leave the checksum unconsumed by the data loop, says the field is understood
+and deliberately skipped. The most economical reading is that FPS trusted the transport — the AP
+I/F link is **RS-422 differential** with its own integrity, and the chassis-memory path never
+leaves the backplane at all.
+
+It also means the hazard is uniform: **neither of the firmware's two upload paths will detect a
+corrupted microcode bank.** The monitor's `L` command, which does validate, remains the only
+checking loader in the machine.
+
+`$F055FC` is the matching width selector for the terminator records — `d4 == 2` → shift 0 (S9),
+`d4 == 3` → shift `$10` (S8), anything else → panel `$260` — the same shift-count mechanism the
+S1/S2/S3 selector uses, confirming that `$260` is a width error rather than a type error.

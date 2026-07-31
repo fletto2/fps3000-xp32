@@ -6959,6 +6959,21 @@ check('the checksum word is read through a full handshake and then discarded',
       _w(0xF0523A) == 0x3B7C and _w(0xF0523C) == 0x0400
       and _w(0xF05250) == 0x3410 and _w(0xF05254) == 0x4E75)
 
+check('the CPLOAD loader also stops at d4 == 1, reads one word, and returns unexamined',
+      _w(0xF055F0) == 0x0C44 and _w(0xF055F2) == 0x0001
+      and _w(0xF055F6) == 0x3418 and _w(0xF055F8) == 0x5280 and _w(0xF055FA) == 0x4E75)
+check('...and shares the $10 seed, the +$10000 offset and the same bound as the SLC loader',
+      _w(0xF055A2) == 0x227C and _l(0xF055A4) == 0x00000010
+      and _l(0xF055C6) == 0x00010000
+      and _l(0xF055CE) == 0x00010000 and _l(0xF055D6) == 0x0001FFFF)
+check('...reporting the same panel code $25A on a bound violation',
+      _w(0xF055E0) == 0x303C and _w(0xF055E2) == 0x025A
+      and _w(0xF05224) == 0x303C and _w(0xF05226) == 0x025A)
+check('the S8/S9 width selector maps d4=2 -> shift 0, d4=3 -> shift $10, else panel $260',
+      _w(0xF055FC) == 0x0C44 and _w(0xF055FE) == 0x0002 and _w(0xF05604) == 0x0000
+      and _w(0xF05608) == 0x0C44 and _w(0xF0560A) == 0x0003 and _w(0xF05610) == 0x0010
+      and _w(0xF05616) == 0x0260)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
