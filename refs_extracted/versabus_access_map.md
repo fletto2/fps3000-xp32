@@ -35975,3 +35975,39 @@ so a `$4E4x` pair straddling the alignment is not an instruction.
 cannot collide with firmware use, and thirteen further vectors are available to host-loaded software.
 This project already states that as "confirmed by measurement, not assumption"; it is now confirmed
 by both.
+
+## A completeness result for the disassembly (2026-07-31)
+
+Scanning the raw image for control-flow terminators and checking each against the decoded address
+set of both listings:
+
+| opcode | in image | **not** at a decoded address |
+|---|---:|---:|
+| `rts` `$4E75` | 231 | **0** |
+| `rte` `$4E73` | 203 | **0** |
+| `nop` `$4E71` | 129 | 1 |
+
+**Every `rts` and every `rte` in the 64 KB image lies at an address the listings decode.** For a
+disassembly assembled by recursive descent plus gap recovery, that is a meaningful completeness
+statement: there is no routine ending anywhere in a region treated as data, so no whole subroutine
+has been missed.
+
+The single `nop` exception is the disassembler being **right**: `$F047B4` is the immediate operand of
+
+```
+$F047A8  movea.l #$10000,a0
+$F047AE  moveq   #$1,d0
+$F047B2  move.w  #$4e71,(a0)+     ; <- $F047B4 is the $4E71 operand
+$F047B6  addq.l  #$1,d0
+$F047B8  cmpi.l  #$8,d0 / ble.b $F047B2
+```
+
+— data inside an instruction, correctly not decoded as one. And the loop confirms the recorded
+behaviour precisely: **RDHC writes eight `$4E71` NOP words at `$10000`** before `START`, the count
+`$8` visible in the `cmpi.l`.
+
+**Method note.** This is the same raw-image technique that verified TRAP #2-#15, applied to a
+different question. It works because these opcodes are single words with no operands, so a raw hit at
+an even offset is either an instruction or a coincidence inside data — and here the only coincidence
+turned out to be a deliberate one. The technique does not generalise to opcodes with operands, where
+raw hits would be dominated by false positives.

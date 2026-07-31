@@ -8323,6 +8323,16 @@ check('...and none at all for TRAP #2 through #15',
           for _i in range(0, len(_rom_bytes) - 1, 2)
           if _rom_bytes[_i] == 0x4E and _rom_bytes[_i+1] == (0x40 | _n)) == 0)
 
+check('RDHC NOP-fills exactly eight words at $10000 before START',
+      _w(0xF047A8) == 0x207C and _l(0xF047AA) == 0x00010000
+      and _w(0xF047B2) == 0x30FC and _w(0xF047B4) == 0x4E71
+      and _w(0xF047B8) == 0x0C80 and _l(0xF047BA) == 0x00000008)
+check('...and the image holds 231 rts and 203 rte opcodes',
+      sum(1 for _i in range(0, len(_rom_bytes) - 1, 2)
+          if _rom_bytes[_i] == 0x4E and _rom_bytes[_i+1] == 0x75) == 231
+      and sum(1 for _i in range(0, len(_rom_bytes) - 1, 2)
+              if _rom_bytes[_i] == 0x4E and _rom_bytes[_i+1] == 0x73) == 203)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
