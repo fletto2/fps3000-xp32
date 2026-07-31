@@ -55,10 +55,11 @@ tick walks, `+$10` size, slots from `+$14`.
 | `$0C46`/`$0C4A` | accumulated clock *adjustment*, so intervals survive a `$49` set-time |
 | `$0C56` | tick period in ms = **10**, from config `$F0A530` |
 | `$0C58` | 39, the MC6840 MSB reload derived from the same constant |
-| `$0C5C` | 100-tick divider → a **1 Hz write to the display** at `$0C3A` |
+| `$0C5C` | a divider of 100 in the **spurious-interrupt** handler — which the FPS layer overrides, so it never fires. Not a heartbeat |
 
-One ROM constant (`$F0A530 = 10`) generates the PTM latch `$27C7`, the 10.0000 ms tick, the
-millisecond arithmetic and the 1 Hz heartbeat.
+One ROM constant (`$F0A530 = 10`) generates the PTM latch `$27C7`, the 10.0000 ms tick and
+the millisecond arithmetic. (It does **not** drive a display heartbeat — that reading was
+retracted: the divider lives in the spurious-interrupt handler, which is overridden.)
 
 ## The scheduler and task state
 

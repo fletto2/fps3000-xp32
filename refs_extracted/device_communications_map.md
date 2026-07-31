@@ -591,9 +591,11 @@ being used to derive the other.
 data 0; the second pair is position 1 (or 9 — entry B sets bit 7, which is a further flag
 the ROM does not otherwise explain) carrying the data nibble.
 
-**A collision to know about.** The 1 Hz heartbeat writes `$15 $35 $2E $3E` **inline**, not
-through the driver — and `$15 $35` is byte-identical to the data pair an `$A2` init failure
-produces. On a running machine those two words alone cannot distinguish "initialisation
-failed" from "the clock is ticking"; the surrounding writes can (`$20 $30` before it, versus
-`$2E $3E` after it). Anyone reading `$0800`-`$0807` on a display-less board should read all
-four words, not the pair.
+**A collision that does NOT occur on this machine.** `$F009EA` writes `$15 $35 $2E $3E`
+inline, and `$15 $35` is byte-identical to the data pair an `$A2` init failure produces —
+so I originally recorded this as an ambiguity to watch for. It is not: `$F009EA` is the
+**spurious-interrupt handler** (vector 24), which the FPS layer overrides with the panic
+catch-all at `$F0A142`. It never executes, so the display gets no periodic traffic and
+nothing overwrites the init reporter's snapshot.
+
+**The display is a boot-only channel**: `$BF`, then `$C0`, or `$A2` looping on failure.

@@ -5407,12 +5407,14 @@ check('$F0175C has 31 callers', len(_sw) == 31, len(_sw))
 check('...and EVERY one reserves exactly 4 bytes for the two-slot return vector',
       set(_sw) == {4}, sorted(set(_sw)))
 
-check('$0C5C is a 100-tick divider -- exactly one second at the 10 ms tick',
-      insn(0xF009EA) == 'addq.w #$1, $c5c.w' and insn(0xF009EE) == 'cmpi.w #$64, $c5c.w'
-      and 0x64 * 10 == 1000)
-check('...and on expiry it writes four words to the DISPLAY device at $0C3A',
-      insn(0xF009F8) == 'movea.l $c3a.w, a1' and insn(0xF009FC) == 'move.w #$15, $4(a1)'
-      and insn(0xF00A0E) == 'move.w #$3e, $4(a1)' and insn(0xF00A16) == 'clr.w $c5c.w')
+# The $0C5C divider is NOT a tick heartbeat: $F009EA has no code reference and is
+# the SPURIOUS-INTERRUPT handler (vector 24), which $F0A142 overrides with the
+# panic catch-all.  Assert the structure and the fact that it is dead.
+check('$0C5C is a divider of 100 in a handler with no code reference',
+      insn(0xF009EA) == 'addq.w #$1, $c5c.w' and insn(0xF009EE) == 'cmpi.w #$64, $c5c.w')
+check('...whose vector (24, spurious) is overridden by the FPS panic catch-all',
+      insn(0xF0A13E) == 'lea.l $f0a27a(pc), a1' and insn(0xF0A142) == 'move.l a1, $60.w'
+      and 0x60 // 4 == 24)
 check('$0C78 is a re-entry guard holding the saved stack pointer',
       insn(0xF00A1C) == 'tst.l $c78.w' and insn(0xF00A2A) == 'move.l a7, $c78.w'
       and insn(0xF00A52) == 'clr.l $c78.w')
@@ -5668,7 +5670,7 @@ check('...emitting value-then-strobe pairs, $30 being the strobe',
       insn(0xF0A364) == 'ori.w #$30, d1' and insn(0xF0A36C) == 'ori.w #$30, d0')
 check('the model reproduces the MEASURED $0020,$0030,$0013,$0033 for code $C0',
       _disp(0xC0, 0x10) == [0x20, 0x30, 0x13, 0x33])
-check('an init failure ($A2) produces the same data pair as the 1 Hz heartbeat',
+check('an init failure ($A2) produces the same data pair as the DEAD spurious handler',
       _disp(0xA2, 0x10)[2:] == [0x15, 0x35] and insn(0xF009FC) == 'move.w #$15, $4(a1)')
 
 # --- the bus-error recovery protocol ---------------------------------------

@@ -173,9 +173,11 @@ before any chassis behaviour is observable.
   86,400,000; `$49` sets it (accumulating the adjustment so intervals survive a change),
   `$4A` reads it. **The day rollover rebases every deadline** in the two timer lists at
   `$0C2C`.
-- **A 1 Hz display heartbeat** — `$0C5C` divides the tick by 100 and writes four words to
-  the display device. So the front-panel display is used for the life of the machine, not
-  only at boot; with no display fitted it lands at `$0804`, watchable in a RAM dump.
+- ~~A 1 Hz display heartbeat~~ — **RETRACTED later the same day.** The `$0C5C` divider and
+  its display writes live in the **spurious-interrupt** handler, which the FPS layer
+  overrides, so they never execute. The display is a **boot-only** channel. I had inferred
+  "tick" from the divider value of 100 against the 10 ms tick without checking what invoked
+  the handler.
 - **The server registry** (`$0C9A`/`$0CAA`) and the `SERVER`/`DSERVE`/`DERQST`/`AKRQST`
   family; **`$23` = QEVNT** and **`$36` = AKRQST** decoded from their bodies.
 - **Two calling conventions that defeat static analysis**: the trace logger takes an
