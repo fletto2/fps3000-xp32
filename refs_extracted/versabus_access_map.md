@@ -28906,3 +28906,36 @@ a skip and is not one, which is the sort of thing a regex-level census would fol
 **All eight lie in sequence C's memory tests.** No test in sequences A or B walks memory, so
 none needs the skip — consistent with the partition being about *pattern testing* rather
 than about address decoding.
+
+### Phase `$2100` has two passes: address, then NOT(address)
+
+`$F09938` has **no callers** — it is the fallthrough continuation of phase `$2100`, reached
+after the first pass and after `addq.w #$1,d6` steps the sub-phase. The second pass is the
+complement:
+
+```
+pass 1 ($F098FC):  move.l a0,(a0)+                  ; write each ADDRESS at that address
+                   ... verify ...
+addq.w #$1,d6                                       ; step the sub-phase
+pass 2 ($F0993E):  move.l a0,d0 / not.l d0
+                   move.l d0,(a0)+                  ; write NOT(address) at that address
+                   ... verify the same way ...
+```
+
+Both passes skip the same four bytes at `$1FFF0`, which is where two of the eight skip sites
+live.
+
+**The complement pass catches what the plain one cannot.** Writing each address at itself
+leaves a data line stuck at the value that address happens to carry undetected — bit *n* of
+the address matches bit *n* of the data at every location where they agree. Inverting the
+pattern makes them disagree everywhere, so a stuck or shorted data line shows up in one pass
+or the other.
+
+That is the same design instinct visible in the fill-up/verify-down structure of phase
+`$2400` and the negative cases in the `$FF0216` gate tests: **each test is paired with the
+case that would defeat it.**
+
+So phase `$2100` is a two-pass exhaustive memory test, and the count of distinct DRAM tests
+in sequence C is: address lines (`$0400`, in sequence A), exhaustive uniqueness in two
+polarities (`$2100`), six data patterns filled up and verified down (`$2400`), a boundary
+signature (`$2500`), and refresh (`$2600`).

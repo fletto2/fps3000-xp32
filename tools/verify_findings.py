@@ -6293,6 +6293,13 @@ check('...eight of which are skips; $F089A4 is phase $2500\'s bound test',
       0xF089A4 in _skips and insn(0xF089A4) == 'cmpa.l #$1fff0, a1'
       and insn(0xF089AA) == 'blt.b $f089cc')
 
+check('$F09938 has no callers -- it is phase $2100\'s second pass',
+      not [x for x, (m, o, _) in _mins.items()
+           if 'f09938' in o.lower() and m[0] in 'bj'])
+check('...and that pass writes NOT(address) at each address, then verifies',
+      insn(0xF09942) == 'not.l d0' and insn(0xF09944) == 'move.l d0, (a0)+'
+      and insn(0xF0995A) == 'not.l d0' and insn(0xF0995C) == 'cmp.l (a0)+, d0')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
