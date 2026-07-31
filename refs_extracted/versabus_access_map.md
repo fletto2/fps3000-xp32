@@ -36048,3 +36048,37 @@ sites the semaphore primitives need.
 can take is a genuine fault, never an intentional trap — so a model raising vector 4 is always
 reporting a real problem, and the `PCMD_EXCEPTION_ILLEGAL_INSTRUCTION` reporter at `$2A0` never fires
 by design.
+
+## The complete `movep` map — every 8-bit device access in the firmware (2026-07-31)
+
+`movep` is how the MC6840 is reached (odd bytes, 8-bit device on a 16-bit bus), so a `movep` census
+is a complete census of PTM traffic. Nine appear in the listings; **eight are genuine**:
+
+| site | access | |
+|---|---|---|
+| `$F00FA4` | `movep.w $d(a0),d1` | `T0RDTIM` reads the live T3 counter — **dormant** |
+| `$F090F4`/`$F090F8`/`$F090FC` | `movep.w d0,$4/$8/$c(a0)` | self-test writes |
+| `$F09156` / `$F0915A` | `movep.w d0,$0(a1)` / `movep.w $0(a1),d1` | self-test write-then-read |
+| `$F0A2C6` | `movep.w d0,$d(a1)` | **the T3 latch** — the 10 ms tick |
+| `$F0A2CE` | `movep.w d0,$5(a1)` | the T1 latch |
+
+That is the whole of it. No other code in the image uses the 8-bit access form, which matches the
+device map: the PTM is the only 8-bit peripheral the firmware touches (the SIO is never accessed at
+all).
+
+**The ninth is a misdecode, of a table this project already documents.** `$F08E96`'s
+`movep.w $3313(a7),d7` is data:
+
+```
+$F08E8C:  $FFFF $00FF $0F1F $0F0F $3313 $3333 $AA9A $AAAA
+```
+
+— **eight walking/alternating bit patterns**, and `emulator/versabus.c` already reasons about exactly
+this table ("the pattern table at F08E8C settles it: every one of the eight patterns has bit 6 of
+`$1FFF1` clear, but bit 7 varies (`$9F`, `$9A` set it)"). It is unreached in every run, confirming
+it is data. Sixteen of the recorded "276 other bytes" are accounted for here.
+
+**Method caveat.** A raw-image scan for `movep` is *not* usable as a control: its encoding
+(`0000 rrr1 mm00 1aaa`) overlaps the static `btst`/`bchg`/`bclr`/`bset` and immediate forms, so a
+loose raw pattern returns 69 hits against 8 real ones. The `rts`/`rte` technique worked because those
+opcodes are unique single words; this one is not, and the listing is the better source.
