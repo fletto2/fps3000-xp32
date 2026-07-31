@@ -83,6 +83,20 @@ def is_data(a):
     return any(lo <= a < hi for lo, hi in DATA_REGIONS)
 
 
+def is_padding(rom, a):
+    """Opcode word $0000-$0007 is `ori.b #imm,dN` -- and in this image it is
+    always alignment padding, never an instruction.
+
+    Measured: 338 such "instructions" across the kernel and the application
+    region, and NOT ONE was ever executed.  Meanwhile every one of the six
+    executed PCs the decoder failed to place on an instruction boundary was
+    swallowed by exactly this pattern -- a $0000 pad decoding as a 4-byte
+    `ori.b` and eating the real `moveq #$1,d0` behind it.  $F09BFE is the
+    sharpest case: it ate $F09C00, the reset entry point.
+    """
+    return struct.unpack(">H", rom[a - BASE:a - BASE + 2])[0] <= 0x0007
+
+
 def valid(a):
     return START <= a < END and (a & 1) == 0 and not is_data(a)
 
@@ -169,6 +183,7 @@ def seed_set(rom):
                        _re.findall(r"[0-9A-F]{6}", open(_tr).read())}:
                 if valid(_p):
                     seeds.add(_p)
+                    TRACE_SEEDS.add(_p)
         except OSError:
             pass
 
@@ -254,7 +269,14 @@ def decode(rom, seeds):
     md = Cs(CS_ARCH_M68K, CS_MODE_M68K_000)
     md.detail = True
     code, visited = {}, bytearray(END - START)
-    queue = list(seeds)
+
+    # Trace-derived seeds go first.  An executed PC is an instruction boundary
+    # by construction, so it must be allowed to claim its own bytes before any
+    # inferred seed can swallow them.  $F046F0 (`moveq #$1,d0`, the TCBRDHC
+    # main loop) was being eaten by `andi.w #$7001,(a2)` decoded at $F046EE --
+    # which is really the tail of a four-longword table of BIM CR offsets
+    # ($244/$246/$250/$252), not an instruction at all.
+    queue = sorted(seeds - TRACE_SEEDS) + sorted(seeds & TRACE_SEEDS)
 
     while queue:
         a = queue.pop()
@@ -264,6 +286,16 @@ def decode(rom, seeds):
             except StopIteration:
                 break
             if ins.size == 0 or a + ins.size > END:
+                break
+            if is_padding(rom, a):
+                break
+            # Refuse an instruction that would overlap bytes already claimed.
+            # Only the START byte was checked before, so a 4-byte decode could
+            # straddle and hide an instruction boundary established earlier --
+            # `andi.w #$7001,(a2)` at $F046EE swallowing `moveq #$1,d0` at
+            # $F046F0 (the TCBRDHC main loop) is the case.  $F046EE is really
+            # the tail of a four-longword table of BIM CR offsets.
+            if any(visited[a - START + i] for i in range(ins.size)):
                 break
             for i in range(ins.size):
                 visited[a - START + i] = 1
@@ -286,6 +318,9 @@ def decode(rom, seeds):
 
 
 MAX_RUN = 512
+
+# Seeds that came from a PC trace.  These are decoded FIRST -- see decode().
+TRACE_SEEDS = set()
 
 
 def recover_gaps(rom, code, visited, rounds=4):
@@ -335,6 +370,13 @@ def recover_gaps(rom, code, visited, rounds=4):
                 if ins.size == 0 or a + ins.size > END:
                     break
                 if any(is_data(x) for x in range(a, a + ins.size)):
+                    break
+                if is_padding(rom, a):
+                    break
+                # Same overlap rule as the descent: the while-condition only
+                # tests the START byte, so a 4-byte decode can straddle into
+                # bytes already claimed and hide a known boundary.
+                if any(visited[a - START + i] for i in range(ins.size)):
                     break
                 run.append(ins)
                 a += ins.size

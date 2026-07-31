@@ -17139,3 +17139,63 @@ The caveat that remains is the one this file already documents: a base register 
 from RAM would evade a static sweep. That is covered from the other side by
 `FPS3K_ACCESSLOG`, which measures accesses at the CPU rather than in the listing, and
 which closes the device map at 68 addresses with no static-only residue.
+
+### `$0000` padding decoding as `ori.b` was eating real instructions
+
+Seeding the disassembler from executed PCs makes a new class of error visible, because a
+PC the CPU executed is an instruction boundary by construction — so if the listing has
+that address *inside* some other instruction, the listing is wrong. Over the application
+region, 2,130 of 2,136 executed PCs landed on boundaries and **6 did not**. All six had
+the same cause:
+
+```
+f05d34: 00 02 70 01     ori.b #$1, d2      <- but $F05D36 is executed
+f09bfe: 00 00 4e f9     ori.b #$f9, d0     <- but $F09C00 is executed
+```
+
+A `$0000` alignment pad decodes as a legal 4-byte `ori.b #imm,dN` and swallows the real
+instruction behind it — `moveq #$1,d0` in four of the six, and at `$F09BFE` it ate
+**`$F09C00`, the reset entry point itself**.
+
+The rule that fixes it is supported by measurement rather than by taste: across the
+kernel and the application region there are **338 "instructions" whose opcode word is
+`$0000`-`$0007`, and not one of them was ever executed**, while 6 of 6 boundary failures
+are caused by them. `is_padding()` now stops both the descent and the sweep there.
+
+Kernel coverage moves 96.7% -> 95.0% as 66 fake instructions become data, which is the
+**correct** direction: those bytes were being mis-attributed, and the real instructions
+they hid are now reachable. Coverage is a proxy; boundary agreement with execution is
+the actual measure, and it stays at 620/620.
+
+### Overlapping decodes, and a correctness property for the whole listing
+
+Two more rules were needed before every executed PC landed on a boundary.
+
+**Trace seeds must be decoded first.** An executed PC is a boundary by construction, so
+it has to claim its bytes before any inferred seed can. **And overlap must be refused
+outright** — the decoder tested only the *start* byte against `visited`, so a 4-byte
+decode could straddle into bytes already claimed and hide a boundary established
+earlier. Both the recursive descent and the recovery sweep had this hole, and fixing
+only one left the case alive.
+
+The case that exposed it: `andi.w #$7001,(a2)` decoded at `$F046EE`, swallowing
+`moveq #$1,d0` at **`$F046F0` — `TCBRDHC_Entry`, the master task's entry point**.
+`$F046EE` is not an instruction at all; it is the tail of a four-longword table
+`$244 $246 $250 $252`, the per-channel BIM control-register offsets. The tracked
+`fps3k.asm` already carries a `;###` note saying exactly that and already labels
+`$F046F0` correctly, so this is **convergent confirmation of earlier work, not a new
+finding** — but it does mean `disasm.py` renders those table longwords as
+`ori.b #$44,d0`, the same padding artifact, and the MC annotation at `fps3k.asm:2086`
+calling `$F046E0` a "TCB dispatch table" is superseded by the `;###` note beside it.
+
+With all four rules in place — data regions, padding words, trace priority, no overlap —
+the result is a property rather than a percentage:
+
+| region | executed PCs on an instruction boundary |
+|---|---|
+| kernel `$F00000-$F04487` | **620 / 620** |
+| application `$F04488-$F0FFFF` | **2136 / 2136** |
+
+Every byte the CPU was observed to execute is decoded, in both regions, at the right
+boundary. Coverage percentages move around as mis-attributed bytes are correctly
+demoted to data; this property does not, and it is the one worth regression-testing.
