@@ -715,3 +715,34 @@ independent code regions do it the same way, and the self-test — which has the
 itself — skips the save and simply clears. A model that latches MODE2 without honouring the
 restore will diverge only when two users interleave, which is exactly the case the
 save/restore exists to handle.
+
+## The board register block is READ-ONLY, and one byte of it does not exist (2026-07-31)
+
+An uncapped sweep of every base register holding `$F70000`/`$F70018`, plus every absolute
+reference, gives the complete map of `$F70000`-`$F7003F`:
+
+| address | register | sites | operations |
+|---|---|---:|---|
+| `$F70001` | PTM CR1 / CR3 | 5 | `move` |
+| `$F70003` | PTM CR2 | 5 | `move`, `clr`, `and`, `tst` |
+| `$F70005` | PTM T1 | 3 | `movep`, `tst` |
+| `$F70009` | PTM T2 | 3 | `movep`, `tst` |
+| `$F7000D` | PTM T3 | 3 | `movep`, `tst` |
+| `$F70018` | board status, word | 16 | **`move` — reads only** |
+| `$F70019` | board status, byte | 16 | **`btst` — tests only** |
+| `$F70030` | the kernel's single device access | 2 | `move` read + write |
+
+Two results worth stating plainly:
+
+- **The board status register is never written.** Zero writes through any base register and
+  zero absolute writes, across the whole image. `$F70018` is only ever read as a word and
+  `$F70019` only ever bit-tested. So an emulator needs no write path for it at all — a
+  simplification, and a check on any model that thinks it is handling writes there.
+- **`$F7001A` is never referenced.** This project describes the block as "board
+  status/control register (PAL-decoded, **28 bits**)", which implies three meaningful bytes.
+  The firmware touches two. Whatever the PAL decodes into the third byte, this ROM neither
+  reads nor writes it.
+
+Combined with the PTM's three addressing paths and the earlier cached-pointer census, the
+`$F7xxxx` device space is now completely mapped: **eight live addresses, one of them
+dormant** (`$F70030`, zero executions in a full boot), and nothing else decoded.

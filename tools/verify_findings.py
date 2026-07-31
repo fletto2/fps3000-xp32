@@ -5804,6 +5804,14 @@ check('the self-test always selects page 0 for the chassis window',
       all(insn(x) in ('clr.w $210(a6)', 'move.w #$0, $210(a6)')
           for x in (0xF095F8, 0xF0961A, 0xF096DC, 0xF09782, 0xF09AE2, 0xF09B24)))
 
+check('nothing anywhere writes the board status register',
+      not [x for x in range(0xF00000, 0xF10000, 2)
+           if _mre.search(r'\$f7001[89]\.l$', (insn(x) or '').lower())
+           and (insn(x) or '').split('.')[0] in ('move', 'clr', 'or', 'and')])
+check('...and $F7001A is never referenced at all',
+      not [x for x in range(0xF00000, 0xF10000, 2)
+           if 'f7001a' in (insn(x) or '').lower()])
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
