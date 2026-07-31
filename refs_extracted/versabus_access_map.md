@@ -34803,3 +34803,45 @@ used too small a cycle budget; here I used a *semantically wrong* stopping condi
 principled. Both produce a truncated trace that is indistinguishable from a complete one unless
 something independent is checked — and the cheap independent check is the same in both cases: **are
 all six task entry points present?** That is now the test to run before quoting any coverage figure.
+
+## The kernel's executed surface, corrected: 28 regions (2026-07-31)
+
+With the full 620-PC set, the executed kernel is 28 contiguous regions, and matching each against
+both dispatch tables (allowing for the two-byte dual entry) names eight of them outright:
+
+| region | bytes | identified |
+|---|---:|---|
+| `$F00100` | 2 | the trampoline |
+| `$F001AC`-`$F001D4` | 42 | TRAP #0 entry + dispatch |
+| `$F00262`-`$F0027A` | 26 | TRAP #1 entry + the CCR sentinel test |
+| `$F002C6`-`$F00376` | 178 | the TRAP #1 directive dispatcher |
+| `$F0050C`-`$F005B4` | 170 | the scheduler |
+| `$F00650`-`$F006FE` | 176 | includes **`T0P`** |
+| `$F00788`-`$F0079E` | 24 | **`T0V`** (TRAP #0 `$02`) |
+| `$F00EC8`-`$F00F00` | 58 | the **tick ISR** `$F00ED6` |
+| `$F00FC2`-`$F00FE6` | 38 | the idle loop |
+| `$F0123E`-`$F012FA` | 190 | **`T0PAGAL`** (`$04`) |
+| `$F0170A`-`$F017F2` | 234 | **`T0GETTCB`** + **`T0LOGPHY`** + **`T0FNDSEG`**, contiguous |
+| `$F01876`-`$F018BC` | 72 | **`T0FNDSEM`** (`$0C`) |
+| `$F01920`-`$F01A88` | 318 | the `GTSEG` area |
+| `$F02216`-`$F0227C` | 104 | **`CNCTIRQ`** (TRAP #1 `$4C`) |
+| `$F02894`-`$F02A32` | 416 | **`CRTCB`** (`$1F`) — still the largest |
+| `$F02C3E`-`$F02C4C` | 16 | **`WAIT`** (TRAP #1 `$13`) |
+| `$F0314A`-`$F03178` | 48 | **`CRSEM`** (TRAP #1 `$2D`) |
+| `$F032F6` | **2** | **`SGSEM`** (TRAP #1 `$2B`) |
+
+Everything the tasks' common lifecycle needs is here — `GTSEG`, `CRTCB`, `START`, `CNCTIRQ`, `WAIT`,
+`CRSEM`, `SGSEM` — plus the page allocator, the three lookup helpers, P/V, the tick and the
+scheduler. That is the whole of what this firmware asks of a 17.5 KB RTOS.
+
+**`SGSEM` executes exactly two bytes.** One instruction at `$F032F6` and no more, which means its
+entry immediately branches into shared code counted in another region rather than running a body of
+its own — worth knowing before treating region sizes as routine sizes.
+
+### A withdrawn inference
+
+Against the truncated set I noted `$F002C6` as unreached and wrote that this "confirms it is not the
+TRAP #1 vector, as recorded". **It is reached** — it is the directive dispatcher, entered on every
+TRAP #1 that is not the ISR-exit sentinel. The underlying fact is unaffected (TRAP #1 vectors to
+`$F00262`, from the static vector table and the dispatcher code), but that particular confirmation
+was an artefact of the truncation and is withdrawn.

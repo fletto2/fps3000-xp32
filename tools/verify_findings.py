@@ -8036,6 +8036,13 @@ check('the six task entry points from the TDTI table are all distinct',
 check('...and the recorded full-boot PC set splits 620 kernel / 2136 application',
       620 + 2136 == 2756)
 
+check('SGSEM ($2B) and WAIT ($13) resolve to distinct TRAP #1 handlers',
+      _t1h(0x2B) != _t1h(0x13)
+      and 0xF032F0 <= _t1h(0x2B) <= 0xF03300
+      and 0xF02C38 <= _t1h(0x13) <= 0xF02C50)
+check('CNCTIRQ ($4C) resolves into the $F02216 region that contains $F0226A',
+      0xF02210 <= _t1h(0x4C) <= 0xF0226A)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
