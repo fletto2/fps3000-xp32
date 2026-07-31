@@ -7702,6 +7702,20 @@ check('the bit-3 correspondence test holds its bit numbers in d0=6 and d1=3',
 check('...and there are five such register-held tests on $1(a4), invisible to a literal sweep',
       len(_re21a.findall(r'btst\.\w\s+d[0-7],\s*\$1\(a4\)', _asm21a)) == 5)
 
+check('the second correspondence test declares d0=4 (drive) and d1=1 (respond)',
+      _w(0xF0919C) == 0x7004 and _w(0xF0919E) == 0x7201
+      and _w(0xF09196) == 0x49F9 and _l(0xF09198) == 0x00F70018)
+check('...and clears $1FFF1 bit 7 first, so the equation reduces to the leading term',
+      _w(0xF091A0) == 0x08AD and _w(0xF091A2) == 0x0007 and _w(0xF091A4) == 0x0001)
+check('both correspondence tests are inversions (polarity read off the branches)',
+      # bne skips the fault => bit must be SET ; beq => CLEAR
+      _w(0xF08C8C) >> 8 == 0x66 and _w(0xF08CC8) >> 8 == 0x67
+      and _w(0xF08D04) >> 8 == 0x66
+      and _w(0xF091EC) >> 8 == 0x67 and _w(0xF09224) >> 8 == 0x66)
+check('...driven by alternating bclr/bset on $1FFF1 through d0',
+      [_w(_a) for _a in (0xF08C84, 0xF08CC0, 0xF08CFC, 0xF091E4, 0xF0921C)]
+      == [0x01AD, 0x01ED, 0x01AD, 0x01ED, 0x01AD])
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

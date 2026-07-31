@@ -33605,3 +33605,43 @@ this failure mode for `$1FFF0` ("10 sites use a computed bit number... invisible
 census"); it applies to the board register too, and there the *interesting* accesses are the hidden
 ones. Note also these are **constants in registers**, not walking bits — the sites are fixed tests,
 so "computed" overstates them; what matters is only that the operand is not an immediate.
+
+## Two chassis bit equations derived at instruction level, with polarity (2026-07-31)
+
+There are **exactly two** register-form correspondence tests in the image, and each declares its
+own bit pair in registers: `d0` = the `$1FFF1` bit the SBC **drives**, `d1` = the `$F70019` bit that
+must **respond**.
+
+| test | `d0` (drive, `$1FFF1`) | `d1` (respond, `$F70019`) | check points |
+|---|---:|---:|---:|
+| `$F08C54` | **6** | **3** | 3 |
+| `$F0919C` | **4** | **1** | 2 |
+
+Reading each `btst`'s branch (`bne` skips the fault ⇒ the bit must be SET; `beq` ⇒ CLEAR):
+
+| site | drive | required response |
+|---|---|---|
+| `$F08C88` | `bclr` bit 6 → 0 | bit 3 = **1** |
+| `$F08CC4` | `bset` bit 6 → 1 | bit 3 = **0** |
+| `$F08D00` | `bclr` bit 6 → 0 | bit 3 = **1** |
+| `$F091E8` | `bset` bit 4 → 1 | bit 1 = **0** |
+| `$F09220` | `bclr` bit 4 → 0 | bit 1 = **1** |
+
+**Both are clean inversions**, and both confirm the equations the emulator arrived at empirically:
+
+- `bit 1 of $F70019 = NOT(bit 4 of $1FFF1) OR …` — the leading term, exactly.
+- `bit 3 of $F70019 = NOT(bit 6 OR (bit 7 AND bit 1))` — with bit 7 cleared, which `$F091A0` and
+  the group-1 preamble both do explicitly, this reduces to `NOT(bit 6)`, exactly.
+
+So two of the five modelled chassis equations are now *derived from the firmware* rather than
+fitted to observed behaviour. The `OR` terms are simply not exercised by these stages.
+
+**The third check point is not redundant.** Group 1 goes clear → set → **clear**, re-testing the
+same condition it started from. A latch that captured the first transition would pass steps 1 and 2
+and fail step 3, so the extra step is there to prove the chassis bit **follows** its input rather
+than latching it. An emulator implementing these bits as sticky flags passes two thirds of the test
+and then retries forever.
+
+Every step is gated by `PollBoardStatus` and, on mismatch, sets `d7 = $F0F0F0F0` and branches back
+to the same step — the suite's usual retry-forever policy, so a wrong equation is a hang, not a
+diagnostic.
