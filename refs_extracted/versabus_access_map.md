@@ -24460,13 +24460,24 @@ the self-test from one after the RTOS took over, which nothing else in the machi
 | `$0400` | the self-test fault count, low-stack variant | `$F08912` |
 | `$1F800` | the self-test fault count, high-stack variant | `$F0890A` |
 
-Together with `$0E6E` (the last panel command), `$FF000E` (the exception class), `$FF0204` (the
-self-test phase, major and minor), and the per-task `TCB+$2C`/`+$FC`/`+$B0`, **a single RAM dump
-of a stopped board now yields the PC, the SR, every register, which bus-error handler was live,
-the last panel command, the exception class, the self-test phase and every task's state.**
+**REACHABILITY CAVEAT, added 2026-07-31 after reading the static vector table.** The writers
+above are exact, but **on the stock machine most of them cannot be reached after boot**:
 
-That is a complete post-mortem story for a machine whose RS-232 drivers were unpowered as
-shipped, and every field in it has been traced to the instruction that writes it.
+- `$F00A58` (the register snapshot) is **vector 141**, and `$F00196` (the kernel-fatal stub) is
+  **vector 142** — and the FPS layer **overrides vectors 141, 142, 147 and spurious with the panic
+  catch-all `$F0A27A`**. So `$0800`, `$0806`, `$0808`-`$0847`, `$0848` and `$084C` are written only
+  if something reinstalls those vectors, which nothing in this firmware does.
+- The self-test fault counts at `$0400`/`$1F800` **are** written, but only during the self-test.
+
+So the **reachable** post-mortem set on a running stock machine is: `$FF000E` (the exception
+class, via the FPS reporters), `$0E6E` (the last panel command), `$FF0204` (the self-test phase if
+it died there), and the per-task `TCB+$2C` / `+$FC` / `+$B0` / `+$102`. The register dump becomes
+available only to host-loaded code that reinstalls vector 141 — which is a real option, since the
+handler is present and correct, but it is not what a stock board offers.
+
+An earlier version of this section claimed "a single RAM dump of a stopped board now yields the
+PC, the SR, every register…" without that qualification. The mechanism is real; the availability
+was overstated.
 
 **One overlap to watch**, noted earlier and worth repeating here: the display-device pointer
 `$0C3A` falls back to scratch RAM `$800` when no display is fitted — which is *inside* this area.
