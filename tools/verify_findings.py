@@ -6131,6 +6131,20 @@ check('...and poll board-status bits 4 and 5 as a two-bit rendezvous',
 check('...with BOTH set meaning stop -- the same signal that aborts the SCM test',
       insn(0xF088F4) == 'jmp $f09c06.l' and insn(0xF0894E) == 'bra.w $f088f4')
 
+check('the $FF0216 bit-7 test installs a temporary bus-error handler',
+      insn(0xF09836) == 'movea.l $8.w, a0' and insn(0xF0983A) == 'move.l #$f098e0, $8.w')
+check('...probes $FF000E with COUNTER=$FF and STATUS armed',
+      insn(0xF098C4) == 'move.w #$ff, $20c(a6)' and insn(0xF098CA) == 'move.w #$400, $218(a6)'
+      and insn(0xF098D0) == 'tst.w $e(a6)')
+check('...requiring a FAULT with bit 7 set and NO fault with $FF0216 clear',
+      insn(0xF0984C) == 'move.w #$80, $216(a6)' and insn(0xF09854) == 'bne.b $f0985c'
+      and insn(0xF098A0) == 'clr.w $216(a6)' and insn(0xF098A6) == 'beq.b $f098ae')
+check('...while the port still round-trips $AAAA with the status cleared',
+      insn(0xF09878) == 'clr.w $218(a6)' and insn(0xF0987C) == 'move.w #$aaaa, $e(a6)'
+      and insn(0xF09882) == 'cmpi.w #$aaaa, $e(a6)')
+check('the probe handler steps the PC over exactly the 4-byte probe instruction',
+      insn(0xF098E6) == 'addq.w #$4, $4(a7)' and insn(0xF098D4) == 'nop')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

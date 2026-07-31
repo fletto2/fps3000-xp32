@@ -28162,3 +28162,51 @@ never runs most of its diagnostics.
 
 The `$D0` marker and the `MODE1 <- $8000` write are the SBC's half of the rendezvous; the
 chassis is expected to answer by moving those two status bits.
+
+## `$FF0216` bit 7 gates the AP I/F command port with a BUS ERROR (2026-07-31)
+
+Sequence B's last test, `$F09832`, is a fault-gating test on `$FF000E`. It installs a
+temporary bus-error handler and probes the port with the gate open and closed:
+
+```
+$F09836  movea.l $8.w,a0                 ; save the bus-error vector
+$F0983A  move.l  #$f098e0,$8.w           ; ...install the probe handler
+
+$F098C4 (the probe):
+  move.w #$ff,$20c(a6)     ; XLTR_COUNTER <- $FF
+  move.w #$400,$218(a6)    ; STATUS_IRQ  <- $400 (armed)
+  tst.w  $e(a6)            ; ACCESS $FF000E  -- 4 bytes
+  nop / nop / nop / nop    ; landing zone
+  tst.w  d1                ; d1 is non-zero iff the handler ran
+  rts
+
+$F098E0 (the handler):
+  moveq #$1,d1             ; flag the fault
+  lea   $8(a7),a7          ; discard the group-0 frame remainder
+  addq.w #$4,$4(a7)        ; ...and step the stacked PC over the 4-byte probe
+```
+
+The two arms:
+
+| `$FF0216` | probe result required |
+|---|---|
+| `$0080` (bit 7 set) | **`bne`** — a bus error **must** occur |
+| `$0000` (all clear) | **`beq`** — the access **must** succeed |
+
+So **bit 7, in combination with an armed `$FF0218`, makes `$FF000E` fault.** With the status
+register cleared, the same port round-trips `$AAAA` normally (`$F0987C`/`$F09882`), so bit 7
+alone does not disable it — the gate is bit 7 *plus* the armed status.
+
+This is a hardware-level identification. This project records bit 7 as "gates chassis op
+`$6`: cleared for the duration and the original word restored" — a firmware-level
+observation. The mechanism underneath is that **bit 7 set makes the command port
+inaccessible**, which is exactly why op `$6` must clear it before touching the port and
+restore it afterwards.
+
+**Emulator requirement**: with `$FF0216` bit 7 set and `$FF0218` armed with `$400`, a word
+access to `$FF000E` must raise a bus error; with `$FF0216` clear it must not. A model that
+never faults there fails sequence B, and one that always faults fails the `$AAAA` round-trip.
+
+This also attributes the `addq.w #$4,$4(a7)` noted earlier as "a fault handler steps the
+stacked PC by exactly 4": it is this handler, and the 4 bytes are precisely the `tst.w $e(a6)`
+probe instruction, landing execution on the four `nop`s that follow.
