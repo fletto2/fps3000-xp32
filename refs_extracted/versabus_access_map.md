@@ -35619,3 +35619,36 @@ comparison, and the day counter at `$0C3E`.
 
 That makes the rollover a real emulation hazard rather than a curiosity: any host software queuing
 absolute-time work depends on a path that no test here has ever taken.
+
+## The rollover list is `!PAT` — and that BOUNDS the hazard I claimed (2026-07-31)
+
+`$0C2C` reads `$0001F700` after boot, which is **`!PAT`**, the Periodic Activation Table — already
+recorded in the slot→structure map. Its header confirms it:
+
+```
+$1F700  +$00  $21504154   '!PAT'
+        +$04  $0001F714   free list
+        +$08  $00000000
+        +$0C  $00000000   <- THE ACTIVE LIST, and it is NULL
+        +$10  $00000100
+        +$14  $0001F732
+```
+
+The day-rollover walk starts at `$c(a1)` — that null active-list head — and its first instruction
+pair is `move.l a0,d1` / `beq`, so **with no active entries the loop exits immediately**.
+
+**So my previous characterisation was overstated.** I wrote that the rollover "reclassifies from
+curiosity to hazard" because it is an unbounded pointer walk under a full interrupt mask that no test
+has taken. The walk is real, but this firmware declares **no periodic activations** — `RQSTPA`
+(`$1D`) is never issued, which this project already records — so the list is structurally empty and
+the traversal is a no-op even if the rollover fires. It becomes a hazard only for host software that
+issues `$1D`.
+
+**What the finding does add** is the *consumer*. This project records `!PAT` as "8 free slots, active
+list null, so `$1D` is never issued" — an observation about the structure. The day-rollover path is
+what the active list is *for*: on crossing midnight, every pending activation's absolute time at
+`+$8` is reduced by 86,400,000 ms so it stays consistent with the wrapped `$0C42`. That connects a
+dormant structure to the one piece of live code that would use it.
+
+Live state is consistent throughout: `$0C42` = 73,000 ms (73 s simulated), `$0C3E` = 0 days, and the
+rollover branch has never executed.

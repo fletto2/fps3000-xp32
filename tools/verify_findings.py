@@ -8241,6 +8241,10 @@ check('...and the day rollover walks a list subtracting 86,400,000 under mask le
       and _w(0xF00F16) == 0x007C and _w(0xF00F18) == 0x0700
       and _w(0xF00F22) == 0x91A8 and _w(0xF00F24) == 0x0008)
 
+check('the day-rollover walk exits immediately on a null list head',
+      _w(0xF00F1A) == 0x2069 and _w(0xF00F1C) == 0x000C
+      and _w(0xF00F1E) == 0x2208 and _w(0xF00F20) >> 8 == 0x67)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
