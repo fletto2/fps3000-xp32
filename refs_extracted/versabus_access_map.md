@@ -22755,3 +22755,44 @@ not.
 That also explains why `PanelSendAndWait`'s name has always sat awkwardly: it is not a panel
 routine. It is the **generic chassis transaction primitive**, and "panel" is this project's own
 label, applied before the protocol was understood.
+
+## The replicated subsystem is 1,431 bytes and accounts for 28% of the application code (2026-07-31)
+
+With `PanelSendAndWait` identified as the fifth replicated component, the block can be measured
+rather than described. Comparing RDHC's copy against XP1I's at the `+$2858` offset:
+
+| | |
+|---|---|
+| block | **`$F056BA` - `$F05C50`**, mapping onto `$F07F12` - `$F084A8` |
+| size | **1,431 bytes** |
+| byte-identical | **1,375 (96%)** |
+| differing | **56 bytes (3.9%)** — the per-task patched constants |
+| copies | **5** (RDHC, XP1I-XP4I) |
+| total | **7,155 bytes = 28% of the 25,501-byte application content region** |
+
+**Over a quarter of the FPS application code is five copies of one subsystem**, and the copies
+differ in 56 bytes each — the channel literal, the four window offsets, the BIM control register,
+the per-channel record address, the scan mask, and the panel codes.
+
+Three consequences worth stating:
+
+**1. Understanding 1,431 bytes explains 7,155.** The block contains the transaction primitive, the
+42-entry dispatch table, its four handlers, and the channel map — all decoded. So the "94.2% of
+the application content region decoded" figure is less impressive than it sounds *and* more
+solid: a large slice of it is the same 1.4 KB understood once.
+
+**2. It calibrates the coverage numbers.** Driving one XP task to completion executes its copy of
+the block — roughly 1,431 of the ~2,560 bytes in that task's region. Four tasks reaching 34-40%
+each is therefore close to the ceiling that exercising the shared block alone can reach; the
+remaining per-task code is the task-specific arms around it.
+
+**3. It is the strongest single piece of evidence that this firmware is hand-assembled.** A
+compiler or a macro assembler producing five instances of a 1,431-byte routine would parameterise
+it — a base register, a channel index, a table. This one is stamped out verbatim and hand-patched
+in 56 places, with XP4I's copy landing `$18` off the grid because an earlier edit changed its
+length. That is a human with a text editor, not a toolchain.
+
+**And it means a fix must be applied five times.** Any patch to the transaction logic — a longer
+timeout, a different trigger word, an extra status bit — has to be made in all five copies or the
+channels will behave differently from each other. That is a real hazard for anyone modifying this
+ROM, and it is invisible from any single disassembly listing.

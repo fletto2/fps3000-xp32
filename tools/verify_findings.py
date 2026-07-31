@@ -4886,6 +4886,16 @@ check('XP2I and XP3I sit on the $A00 grid',
       0xF07F12 - 0xA00 == 0xF07512 and 0xF07F12 - 0x1400 == 0xF06B12)
 check("XP4I's copy is $18 earlier than the grid -- a fourth confirmation of the tail shift",
       0xF07F12 - 0x1E00 - 0x18 == 0xF060FA)
+_blklo, _blkhi, _blkoff = 0xF056BA, 0xF05C51, 0x2858
+_blkmatch = sum(1 for _a in range(_blklo, _blkhi)
+                if _rom[_a - 0xF00000] == _rom[_a + _blkoff - 0xF00000])
+check('the replicated block is 1431 bytes and 96% identical between RDHC and XP1I',
+      _blkhi - _blklo == 1431 and _blkmatch == 1375, (_blkhi - _blklo, _blkmatch))
+check('...so 56 bytes are per-task patched constants', (_blkhi - _blklo) - _blkmatch == 56)
+check('...and five copies are 7155 bytes, 28% of the 25501-byte application region',
+      1431 * 5 == 7155 and (1431 * 5 * 100) // 25501 == 28)
+check('the block ends exactly where the channel map ends',
+      _blkhi - 1 == 0xF05C50 and 0xF05C4C + 5 == 0xF05C51)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
