@@ -202,3 +202,31 @@ directly, e.g.
     curl 'https://ntrs.nasa.gov/api/citations/search?q=%22AP-120B%22&size=25'
     curl -o 19830018988.pdf \
       'https://ntrs.nasa.gov/api/citations/19830018988/downloads/19830018988.pdf'
+
+### Table I timings are exact integer cycle counts (checked 2026-07-31)
+
+The document was re-supplied and confirmed **byte-identical** to the copy already held at
+`refs/AP-120B/NASA-TM-84566_…pdf`, so nothing new was added — but the extracted Table I turns out to
+carry a check that had not been drawn from it.
+
+Dividing each figure by the **167 ns** instruction cycle the same document states in §3.4:
+
+| operation | startup | per element |
+|---|---|---|
+| Sum of vector elements | 0.833 µs = **5 cycles** | 0.333 µs = **2 cycles** |
+| Sum of squares | 1.333 µs = **8 cycles** | 0.333 µs = **2 cycles** |
+| Vector add `{A}+{B}` | 2.667 µs = **16 cycles** | 0.500 µs = **3 cycles** |
+| Vector multiply `{A}*{B}` | 2.667 µs = **16 cycles** | 0.500 µs = **3 cycles** |
+
+**Every one is an integer multiple of the cycle time**, the largest deviation being 0.03 cycles —
+i.e. the published µs figures are rounded cycle counts, not measurements.
+
+Two things follow:
+
+1. **The 167 ns cycle is confirmed internally.** The timing table and the stated cycle time are
+   consistent to within rounding across eight independent figures, which is a stronger check on the
+   cycle figure than the single §3.4 statement.
+2. **The table is directly usable as cycle counts** for validating an APSIM-equivalent — `5 + 2n`,
+   `8 + 2n`, `16 + 3n` — rather than needing conversion from microseconds each time. That the add and
+   multiply share both figures also says their pipelines have equal latency and throughput at this
+   level, consistent with the "6 MFLOPS adder + 6 MFLOPS multiplier" split the same section gives.
