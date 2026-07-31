@@ -18626,3 +18626,23 @@ that balances. The one path that allocates is the one that requires a CP program
 Which is also why this could not have been found by reading alone: the imbalance is only
 three instructions apart from correct, and it takes *executing* the accepted path to see
 the `rts` land on `$000000`.
+
+### A whole-ROM stack-balance audit puts the leak beyond doubt
+
+Every `lea <disp>(a7),a7` in the image, kernel included:
+
+| site(s) | adjustment | what it is |
+|---|---|---|
+| `$F06762`, `$F0717A`, `$F07B7A`, `$F0857A` | **−$60** | the four XP callback frames |
+| `$F0677A`, `$F07192`, `$F07B92`, `$F08592` | +$C | popping the 12-byte RSTATE parameter block, in those same four routines |
+| `$F002BA`, `$F01108`, `$F01A84`, `$F05670`, `$F08916`, `$F08F16`, `$F098E2`, `$F0A4B8` | +$2/$4/$6/$8/$A | ordinary argument cleanup after `pea`/`move.l -(a7)` |
+
+**The only negative adjustments in the whole 64 KB are those four**, and there is no
+positive `$60` anywhere. Every other adjustment is argument cleanup, not framing. So the
+leak is not a release I failed to find — the ROM allocates a stack frame exactly four times
+and releases none of them.
+
+This also fits the established finding that the firmware is **hand-written assembly**: the
+image contains **zero `link`/`unlk` pairs**, so `lea -$x(a7),a7` is its only framing idiom,
+and it is used four times in the whole program. A compiler emitting frames would have
+emitted the matching `unlk`, and the defect could not have arisen.
