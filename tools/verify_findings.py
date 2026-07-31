@@ -5557,6 +5557,14 @@ check('...stride $1E, and (size - $14) is never a multiple of it -- the last slo
       insn(0xF09FD6) == 'lea.l $1e(a1), a1'
       and all((p * 256 - 0x14) % 0x1E != 0 for p in (1, 2, 3, 4)))
 
+check('!PAT is allocated ONE page, from config $F0A522',
+      insn(0xF09F98) == 'move.l $f0a522(pc), d2'
+      and struct.unpack('>I', _rom[0xF0A522 - 0xF00000:][:4])[0] == 1)
+check('...so 8 slots are linked and the eighth ends 4 bytes past the block',
+      0x14 + 8 * 0x1E == 260 and 260 - 256 == 4)
+check('...and a zero page count would leave $0C2C aimed at scratch RAM $800',
+      insn(0xF09F90) == 'move.l #$800, $c2c.w' and insn(0xF09F9C) == 'beq.b $f09fe2')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

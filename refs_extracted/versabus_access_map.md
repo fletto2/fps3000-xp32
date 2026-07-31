@@ -26629,7 +26629,19 @@ The overrun would only occur if a slot were *used*, and using one requires direc
 `RQSTPA`, which this firmware never issues; the active lists stay empty. So a stock machine
 never writes past the block.
 
-It matters for two readers: a model that pre-fills `!PAT` slots would corrupt the adjacent
-structure, and host-loaded software that does issue `RQSTPA` enough times to reach the last
-free slot would too. The slot count is decidable from a single RAM dump — read the size
-field at `$1F710` — which this project's "8 free slots" note implies is one page.
+**Settled from the ROM: `!PAT` is allocated ONE page.** The allocation at `$F09F98` takes
+its page count from config `$F0A522`, which is **`1`**. So the block is 256 bytes, the free
+list links **8 slots**, and the eighth spans offsets 230-259 — **four bytes past the end of
+the block**, into `$1F800`, which is `!IDV`. No RAM dump is needed after all, and the
+project's existing "8 free slots of `$1E` bytes" note is confirmed rather than merely
+consistent.
+
+It matters for two readers: a model that pre-fills `!PAT` slots would corrupt `!IDV`'s
+first four bytes — its `!IDV` tag — and host-loaded software that issues `RQSTPA` often
+enough to reach the eighth free slot would do the same on real hardware.
+
+The same allocation carries a **graceful default**: `$F09F90` writes `#$800` into `$0C2C`
+first, and a zero page count branches straight past the allocator, leaving the table
+pointer aimed at scratch RAM `$800`. That is the same defensive pattern as the display
+pointer and the kernel relocator — a configurable feature that degrades to a harmless
+address rather than to zero.
