@@ -35878,3 +35878,33 @@ Running total: of the fifteen recorded modelling requirements audited, **eleven 
 witness**, and the four without are the PTM running counter, runtime `jsr` construction, the register
 snapshot, and `$F70030` — plus the group-0 guard, single-stepping, and the SLC loader's two sites,
 which need stimuli not yet run.
+
+## The S-record checksum negative, verified with a control (2026-07-31)
+
+I flagged "the checksum is consumed and never verified" as a negative resting on reading alone, of
+exactly the shape that has produced matcher artefacts repeatedly today. Verified properly:
+
+**Control first.** The ROM-checksum routine (phase `$300`) must show accumulation, and does —
+`$F08D3E: eor.w d1,d0`. The detector works.
+
+**Then the handler.** Every arithmetic instruction of any form in `$F051A2`-`$F05300`:
+
+| site | instruction | role |
+|---|---|---|
+| `$F051C0`, `$F05230`, `$F05252`, `$F052B6`, `$F052F4` | `addq.l #$1,d0` | **loop counters** |
+| `$F051D0`, `$F052C4` | `adda.l d2,a1` | **address** arithmetic |
+| `$F051DC`, `$F052D0` | `adda.l #$10000,a1` | the staging-buffer offset |
+
+**Nine arithmetic instructions, not one of which accumulates a data value.** Every add is a counter
+or a pointer; there is no `eor`, no `addx`, no register-to-register data add anywhere in the handler.
+So the recorded finding is right, and now rests on a widened search validated against a known
+positive rather than on a reading.
+
+Two recorded facts fall out incidentally: **`adda.l #$10000,a1` appears twice** — at `$F051DC` and
+`$F052D0` — confirming the documented staging offset in both arms of the handler, and the
+`adda.l d2,a1` pair is the record-address arithmetic that offset accompanies.
+
+**This is the method the rest of this session's negatives should be held to.** "X never happens" is
+worth stating only when the detector that failed to find X has been shown to find it somewhere else,
+and when the search covers every form X could take. Both were cheap here; neither was done when the
+claim was first recorded.

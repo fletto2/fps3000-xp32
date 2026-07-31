@@ -8298,6 +8298,14 @@ check('the two S-record loaders are independent implementations',
       _l(0xF051A2) != _l(0xF055A2)
       and 0xF055A2 - 0xF051A2 == 0x400)
 
+check('the ROM checksum routine accumulates with eor.w (the control)',
+      _w(0xF08D3E) == 0xB340)
+check('...while the S-record handler has no accumulating arithmetic at all',
+      not _re21a.search(r'^F05[12][0-9A-F]{2}.*\s(eor|addx)', _asm21a, _re21a.M))
+check('...and adds $10000 to the record address in both arms',
+      _w(0xF051DC) == 0xD3FC and _l(0xF051DE) == 0x00010000
+      and _w(0xF052D0) == 0xD3FC and _l(0xF052D2) == 0x00010000)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
