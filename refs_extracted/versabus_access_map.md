@@ -22330,3 +22330,54 @@ The three families checked today by guard or adjacency — `$258`-`$260`, `$26D`
 `$276`-`$27D` — came out 8 wrong, 1 wrong, 0 wrong respectively. **Context-based naming was
 reliable where the surrounding code was distinctive and unreliable where several sites looked
 alike**, which is precisely the abort family's situation: 45 identical tails.
+
+## XP4I's divergent arm decoded in full — one constant still unidentified (2026-07-31)
+
+This is the piece of the XP template that XP4I does differently, and it is now readable end to
+end:
+
+```
+$F06088  btst.b  #$e,$1078       bit 14 (DONE) of XP4I's latched status word
+$F06090  beq.b   $F060C0         not done -> panel $262 ("interrupt, no valid transaction")
+$F06092  jsr     $F06738         validate the channel (1 <= ch <= $105E, else $264+ch)
+$F06098  moveq   #$2B,d0
+$F0609A  lea     (a6),a0
+$F0609C  trap    #$1             directive $2B SGSEM -- signal a semaphore
+$F0609E  beq.b   $F060AA
+$F060A0  move.w  #$271,d0        SGSEM failed -> $271   (which is why $271 maps to $2B)
+$F060AA  move.w  (a0),d0         read a word through the pointer the trap left in a0
+$F060AC  btst.b  #$b,d0          bit 11
+$F060B0  bne.b   $F060B8
+$F060B2  move.w  #$1F41,(a0)     bit 11 clear -> write $1F41
+$F060B8  move.w  #$1F45,(a0)     bit 11 set   -> write $1F45
+$F060CA  bra.w   $F0600C         back to the task loop
+```
+
+The `btst.b #$e,$1078` is the documented mod-8 convention: `$1078` is the **high byte** of
+channel 4's latched status word, so `#$e` addresses **word bit 14**, and `#$b` in the second test
+addresses word bit 11 of the value read back — the same two bits the other three tasks use.
+
+**Where XP1I/XP2I/XP3I perform the `$0000001B` channel transaction, XP4I signals a semaphore and
+then read-modify-writes a word through the pointer that directive returns.** That is a
+structurally different operation on a different object, which is what the 265 differing bytes and
+the missing `move.w #$1b` amount to.
+
+### The one thing still unidentified: `$1F41` / `$1F45`
+
+Everything about the arm is now accounted for except these two constants. What can be said:
+
+- they differ by **exactly bit 2** (`$1F41` vs `$1F45`), and the branch that selects between them
+  tests **bit 11** of the current value — so the write is a *state transition*, not a fresh value;
+- the target is **not a device register**: `a0` comes from `$2B` SGSEM, so it points into the
+  semaphore structure the RTOS returned, i.e. RAM;
+- their low bytes are `$41` and `$45` = `'A'` and `'E'`, which is suggestive given this firmware's
+  `A`+name / `H`+name semaphore convention — but `'H'` is `$48` and does not appear, so the
+  resemblance is probably coincidence and should not be leaned on;
+- nothing else in the ROM writes either constant, and nothing reads the location afterwards
+  within XP4I.
+
+**This is the last unidentified constant in the XP task family.** Resolving it needs either the
+`$2B` handler's return-block layout read out in detail, or a run in which XP4I's arm executes and
+the target address can be observed — and XP4I gates itself off on Lovett's 2-AC machine
+(`$105E` = 2), so the second route requires `FPS3K_CHANNELS=4`, which is a reading aid rather than
+a model of that chassis.

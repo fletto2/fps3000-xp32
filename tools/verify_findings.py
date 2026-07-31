@@ -5185,6 +5185,22 @@ check('$26A likewise follows btst #$d -- it is an ERROR code, not a timeout',
 check('$26B likewise', insn(0xF05776) == 'btst.b #$d, d4'
       and insn(0xF0577C) == 'move.w #$26b, d0')
 
+# ---- XP4I's divergent arm, and the $262/$263/$264 guards (2026-07-31) ----
+check("XP4I tests bit 14 of its latched status via the mod-8 high-byte convention",
+      insn(0xF06088) == 'btst.b #$e, $1078.l' and insn(0xF06090) == 'beq.b $f060c0')
+check('...falling to panel $262 when no valid transaction is present',
+      insn(0xF060C0) == 'move.w #$262, d0')
+check('...then signalling a semaphore with $2B and read-modify-writing its word',
+      insn(0xF06098) == 'moveq #$2b, d0' and insn(0xF060AA) == 'move.w (a0), d0'
+      and insn(0xF060AC) == 'btst.b #$b, d0')
+check('...writing $1F41 or $1F45, which differ by exactly bit 2',
+      insn(0xF060B2) == 'move.w #$1f41, (a0)' and insn(0xF060B8) == 'move.w #$1f45, (a0)'
+      and (0x1F41 ^ 0x1F45) == 0x4)
+check('$263 is the channel-number reject, guarded on $105E',
+      insn(0xF06698) == 'cmp.w $105e.l, d0' and insn(0xF066A0) == 'move.w #$263, d0')
+check('$264 is a BASE: addi.w #$264,d1 with d1 = the channel gives $265-$268',
+      insn(0xF066C2) == 'addi.w #$264, d1' and insn(0xF066B6) == 'moveq #$10, d0')
+
 
 # ---------------------------------------------------------------------------
 # STOP.  ADD NEW check() CALLS *ABOVE* THIS LINE.
