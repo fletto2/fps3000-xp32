@@ -31065,3 +31065,49 @@ data pair (`$1B`, `$10`, `$0E`), not in the command word.
 That is a tight bound on the CP→AC interface: a chassis model needs to recognise three command
 values, and any richer AC behaviour must be driven by the operation codes or by host-loaded CP
 code, not by this register.
+
+## What XP4I actually overwrites: its own semaphore parameter block, not a `!UST` word (2026-07-31)
+
+Tracing `a6` back to its source settles what the `$1F41`/`$1F45` writes destroy. At entry each XP
+task copies a **ROM template** into the base of its GTSEG-allocated segment, and the template is
+the 10-byte semaphore descriptor:
+
+| task | template at | bytes |
+|---|---|---|
+| XP1I | `$F07D2C` | `"AXP1"` `$00000000` `$0002` |
+| XP2I | `$F0732C` | `"AXP2"` `$00000000` `$0002` |
+| XP3I | `$F0692C` | `"AXP3"` `$00000000` `$0002` |
+| XP4I | `$F05F2C` | `"AXP4"` `$00000000` `$0002` |
+
+`{4-byte name, longword, word}` with **type = 2** — exactly the descriptor shape this project
+derived from the task block bases, and exactly the `type=2` the live `!UST` entries report. All
+four tasks are byte-identical bar the channel digit, and all four put the stack at
+**base + `$114`**.
+
+**So `(a6)` is the first two bytes of the name `"AX"`,** and the latch runs:
+
+| pass | `(a6)` before | bit 11 | writes |
+|---|---|:-:|---|
+| 1 | `$4158` = `"AX"` | 0 | `$1F41` |
+| 2 | `$1F41` | 1 | `$1F45` |
+| 3+ | `$1F45` | 1 | `$1F45` |
+
+**This corrects the recorded reading.** `CLAUDE.md` says "XP4I is repurposing a **`!UST` word** as
+private storage". It is not a `!UST` word — `!UST` lives at `$1FB00` and holds the registry the
+kernel built from `CRSEM`. What XP4I overwrites is **its own local parameter block**, the copy of
+the descriptor in its private segment. The registry is untouched.
+
+The consequence is narrower but sharper: **after the first pass, that block no longer names
+`AXP4`.** Any later `SGSEM` issued through it looks up a semaphore called `$1F`,`'A'`,`'P'`,`'4'`,
+which does not exist. Whether that matters depends on how often the path runs — it is gated on
+`btst.b #$e,$1078`, i.e. **bit 6 of the byte at `$1078`** (byte-sized, mod 8), a word inside the
+op-`$A` status array.
+
+**Hardware/emulator prediction, checkable in one RAM dump:** on a machine where XP4I has taken
+this path, the first word of its task segment reads `$1F41` or `$1F45` rather than `$4158`, while
+the `!UST` entry for `AXP4` at `$1FB00`+ still reads the intact name. If both are intact, the path
+has never run; if `!UST` is also corrupted, the reading here is wrong.
+
+That is also the cleanest statement of why XP4I is the structural outlier: the other three tasks
+spend this slot on the `$0000001B` channel transaction, and XP4I spends it on a two-state flag
+kept in a field that was never meant to hold one.

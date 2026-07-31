@@ -6988,6 +6988,15 @@ check('$1F41 and $1F45 are 8001 and 8005, and BOTH have bit 11 set',
       0x1F41 == 8001 and 0x1F45 == 8005
       and (0x1F41 & 0x800) and (0x1F45 & 0x800))
 
+check('each XP task copies a 10-byte semaphore descriptor template into its segment',
+      all(_l(t) == 0x41585030 + _n and _l(t + 4) == 0 and _w(t + 8) == 0x0002
+          for t, _n in ((0xF07D2C, 1), (0xF0732C, 2), (0xF0692C, 3), (0xF05F2C, 4))))
+check('...all four with the stack at segment base + $114',
+      all(_w(e) == 0x4FE8 and _w(e + 2) == 0x0114
+          for e in (0xF05F64, 0xF06964, 0xF07364, 0xF07D64)))
+check('...so (a6) is the name word "AX", whose bit 11 is CLEAR, starting the latch',
+      _l(0xF05F2C) == 0x41585034 and not (0x4158 & 0x800))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
