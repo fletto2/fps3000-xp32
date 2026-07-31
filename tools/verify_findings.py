@@ -4827,6 +4827,8 @@ check('...and all eight sites are inside the self-test region',
       all(0xF08F80 <= a <= 0xF09320
           for a in (0xF08FA8, 0xF08FCC, 0xF08FE8, 0xF09010, 0xF0902C,
                     0xF092B2, 0xF092F8, 0xF09320)))
-check('so the "never bit-manipulated" premise is false, but no OPERATIONAL path touches it',
-      not any(0xF04488 <= a <= 0xF08700 and '(a5)' in o and m.split('.')[0] in ('bset', 'bclr')
-              and False for a, (m, o, _) in _mins.items()))
+# the surviving ground for "the SBC never requests the bus": every site that can
+# reach $1FFF0 at all lives in the self-test, none in the RTOS or task regions.
+_v0sites = [a for a, (m, o, _) in _mins.items() if m.startswith('lea') and '$1fff0' in o]
+check('every $1FFF0 base-load is in the self-test or its immediate init; none in a task',
+      all(a >= 0xF08700 for a in _v0sites), [hex(a) for a in sorted(_v0sites) if a < 0xF08700])
