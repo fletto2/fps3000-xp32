@@ -29993,3 +29993,33 @@ consumes.
 **Emulator consequence.** The VMOD interrupter's vector should come from
 `$1FFF2 + 2*(level-1)` after all — my retraction of that was wrong — and there are two further
 interrupter blocks at `$1FFE0` and `$1FFD0` that the current model does not represent at all.
+
+### What the 21 vector numbers say, and what they do not
+
+Laid out per block (ascending address within each):
+
+| block | base | contents |
+|---|---|---|
+| 0 | `$1FFF2` | `$8E $8E $8E $8E $8E $8E $8E` |
+| 1 | `$1FFE2` | `$8D $8E $8E $93 $1C $8C $8E` |
+| 2 | `$1FFD2` | `$8E $71 $72 $73 $74 $8E $1F` |
+
+Three things are solid:
+
+- **`$8E` is filler, and it is the panic vector.** It fills 12 of the 21 slots, and `$8D`, `$8E`
+  and `$93` are exactly the vectors the FPS layer points at the panic catch-all `$F0A27A`. So an
+  interrupt arriving on an unassigned level lands on the panic handler by design — a testable
+  model behaviour, and a sensible one.
+- **`$71`-`$74` is a run of four consecutive vectors at four consecutive slots** in block 2. Four
+  of anything in this machine means the four XP channels.
+- **`$1C` and `$1F` are 68000 autovector numbers** — 28 and 31, the autovectors for levels 4 and
+  7. A vector *register* programmed with an autovector number is unusual and worth noting: these
+  registers can evidently be made to deliver the same vector an unvectored interrupt would.
+
+What is **not** established is the index-to-level mapping. The obvious pairing — slot *k* serves
+request level *k+1* — is not confirmed by the two registers whose vectors we know independently:
+phase `$1400` selects vector `$50` from **`$1FFF2`** (block 0, slot 0) and `$52` from
+**`$1FFE4`** (block 1, slot **1**) via `$1FFF1` bit 3. Different slots in different blocks, so
+bit 3 is not simply "pick the other block at the same slot". Recorded as open rather than
+guessed; a bus trace that raises each level in turn and reads the delivered vector settles it in
+one pass.
