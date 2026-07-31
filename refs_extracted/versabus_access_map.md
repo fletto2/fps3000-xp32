@@ -31337,3 +31337,43 @@ whole-ROM XOR come out zero, verified here as `$0000`.
 Combined with the earlier byte accounting (kernel 95.0% decoded, application content 94.2%, blank
 tail 22,489 bytes verified all-zero), the ROM is now fully accounted for: **43,047 bytes of
 content, every one either decoded or attributed to a named structure.**
+
+## 34 bytes of undecoded CODE in the kernel, at `$F00A1C` (2026-07-31)
+
+Applying the same accounting to the kernel listing: **283 non-zero data words (566 bytes)** in 49
+runs. Almost all are the expected tables — the TRAP #0 dispatch table `$F001D6`-`$F00261` (70
+words = 140 bytes = 35 slots × 4, an exact fit), the TRAP #1 table's runs inside
+`$F003D8`-`$F0050B`, and the static vector table at `$F00114`.
+
+**One run is not a table.** `$F00A1C`-`$F00A3D`, 17 words, decodes cleanly as instructions:
+
+```
+$F00A1C  4A B8 0C 78    tst.l   $0C78.w              ; re-entry guard
+$F00A20  66 10          bne.b   $F00A32              ; already active -> skip the save
+$F00A22  00 7C 70 00    ori.w   #$7000,sr            ; mask to LEVEL 7
+$F00A26  48 E7 FF FE    movem.l d0-d7/a0-a6,-(a7)    ; 15 registers
+$F00A2A  21 CF 0C 78    move.l  a7,$0C78.w           ; the stack pointer saved separately
+$F00A2E  46 EF 00 3C    move.w  $3C(a7),sr           ; SR from the exception frame
+$F00A32  2E 78 0C 78    movea.l $0C78.w,a7           ; switch to the dedicated stack
+$F00A36  00 7C 07 00    ori.w   #$0700,sr
+$F00A3A  10 39 00 F7 00 30   move.b $F70030.l,d0     ; <- the listing resumes decoding here
+```
+
+It **reconnects**: `$F00A3A` and `$F00A44` are already decoded in the listing as the documented
+`$F70030` read-modify-write, so the block ends exactly on a known instruction boundary — the
+soundness test this project uses for gap recovery.
+
+**A correction it forces.** `CLAUDE.md` describes this routine as saving "**all sixteen**
+registers". The mask is `$FFFE`, and in `movem.l <list>,-(An)` bit 0 is **a7** — clear here — so it
+saves **fifteen** (d0-d7, a0-a6). That is not a quibble, it is the mechanism: **a7 is excluded
+because it is saved separately**, by `move.l a7,$0C78.w` two instructions later. The routine
+preserves the stack pointer *into the global it then switches from*, which is precisely why the
+shape reads as a fatal-error or watchdog path — you save the SP elsewhere when the stack you are
+on may be unusable.
+
+`$3C` = 60 = fifteen registers × 4, so `$3C(a7)` is the stacked SR sitting just past them — which
+independently confirms the register count from the addressing.
+
+So the kernel's undecoded residue is **566 bytes, of which 532 are genuine tables and 34 are code
+the disassembler could not reach** (nothing branches to `$F00A1C`; it is entered only as a vector
+target, and this project records it as executing zero times in a full boot).

@@ -7072,6 +7072,18 @@ check('XP4I contains ZERO #$1b immediates while XP1I/2/3 have exactly one each',
 check('...at exactly the $A00 stride, so XP4I cannot issue the $1B transaction',
       0xF07ECA - 0xF074CA == 0xA00 and 0xF074CA - 0xF06ACA == 0xA00)
 
+check('$F00A1C is undecoded CODE: guard, level-7 mask, movem, SP save, stack switch',
+      _w(0xF00A1C) == 0x4AB8 and _w(0xF00A1E) == 0x0C78
+      and _w(0xF00A22) == 0x007C and _w(0xF00A24) == 0x7000
+      and _w(0xF00A26) == 0x48E7 and _w(0xF00A28) == 0xFFFE
+      and _w(0xF00A2A) == 0x21CF and _w(0xF00A2C) == 0x0C78
+      and _w(0xF00A32) == 0x2E78 and _w(0xF00A34) == 0x0C78)
+check('...and it saves FIFTEEN registers, not sixteen: mask $FFFE excludes a7',
+      _w(0xF00A28) == 0xFFFE and not (0xFFFE & 1)
+      and bin(0xFFFE).count('1') == 15)
+check('...so $3C(a7) is the stacked SR, 15 registers x 4 bytes past the save',
+      _w(0xF00A2E) == 0x46EF and _w(0xF00A30) == 0x003C and 15 * 4 == 0x3C)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
