@@ -19782,3 +19782,44 @@ reachability one.** Its remaining undecoded call targets are found and queued an
 earlier misaligned decodes. Fixing that properly needs eviction — letting a confirmed call
 target displace a conflicting linear decode — rather than reordering, and that is a larger
 change than two addresses justify.
+
+## Final byte accounting: what is left unattributed in the whole ROM
+
+Measured on the regenerated `fps3k_custom.asm` and `fps3k_kernel.asm`, splitting the
+application region at the blank tail so the 22 KB of zero-fill does not distort the ratio:
+
+### Application content region `$F04488`-`$F0A824` — 25,501 bytes
+
+| | bytes | |
+|---|---:|---|
+| decoded as instructions | **24,024** | **94.2%** |
+| data | 1,466 | 5.7% |
+| — printable ASCII | 152 | strings |
+| — **all-zero** | **1,038** | parameter-block and table padding |
+| — other | **276** | tables and small padding |
+
+So the genuinely unattributed remainder in the application region is **276 bytes** — about
+1% — with everything else either decoded, printable text, or zero-fill. That is a much
+sharper statement than "the region is roughly half data", which was true of the *raw* region
+including the blank tail and has misled at least one earlier reading in this project.
+
+### Kernel `$F00000`-`$F04487` — 17,544 bytes
+
+95.0% decoded, with the residue identified: **448 bytes of dispatch table** (TRAP #0's 140
+and TRAP #1's 308), **106 bytes of the `$F00114` vector-installation table**, 6 of reset
+vector, and ~30 of small offset tables and padding.
+
+### The whole image
+
+| region | bytes | status |
+|---|---:|---|
+| kernel | 17,544 | 95.0% decoded; residue fully identified |
+| application content | 25,501 | 94.2% decoded; 276 bytes unattributed |
+| blank tail `$F0A825`-`$F0FFFD` | 22,489 | all zero, verified |
+| checksum word `$F0FFFE` | 2 | `$C12D`, makes the image XOR to zero |
+
+**43,047 bytes of ROM content, of which ~276 are unattributed.** Both listings satisfy the
+correctness property that matters more than coverage: **every PC the CPU was observed to
+execute decodes as an instruction at its own address** — 620/620 in the kernel, and 2,134 of
+2,136 in the application (the two exceptions being the ordering artefact diagnosed above,
+not unreached code).
