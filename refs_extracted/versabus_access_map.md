@@ -30215,3 +30215,40 @@ code; this project has already been bitten by it once, before the mechanism was 
 It also independently identifies `$F0911E` as an interrupt handler, which the emulator reached
 empirically and this analysis reaches from the vector table — the two agreeing, and the vector
 number (`$54`) being the piece neither had on its own.
+
+## Board status `$F70018`/`$F70019` is STRICTLY READ-ONLY (2026-07-31)
+
+Base-tracked census — following `lea $F70018,aN` and invalidating the register when it is
+reloaded, rather than pattern-matching displacements:
+
+| form | count | note |
+|---|---:|---|
+| `move.w (aN)` / `move.l (aN)` | 7 | whole-register reads at `$F70018`, including the three checkpoint polls |
+| `btst` with a **literal** bit on `$1(aN)` | 11 | bits **1** (x4), **2** (x2), **3** (x1), **4** (x2), **5** (x2) |
+| `btst` with a **computed** bit on `$1(aN)` | **5** | `$F08C88`, `$F08CC4`, `$F08D00`, `$F091E8`, `$F09220` |
+| any write — `bset`, `bclr`, `move` to it | **0** | |
+
+**Nothing in the ROM ever writes the board status register.** It is purely an input, which is
+what one expects of a PAL-decoded status port and is worth stating explicitly because the
+register's neighbour `$1FFF0` *is* written and the two are easy to conflate — a first pass here
+did exactly that, reporting a writable "bit 7" that is in fact the VMOD arm bit at `$1FFF1`,
+because `$1(a2)` was matched without checking what `a2` held.
+
+**The five computed-bit tests are the equation-derivation mechanism.** Each is paired with a
+computed-bit *write* to VMOD:
+
+```
+$F08C84  bclr.b d0,$1(a5)      ; a5 = $1FFF0 -- drive VMOD bit d0
+$F08C88  btst.l d1,$1(a4)      ; a4 = $F70018 -- observe board bit d1
+```
+
+So the walking-bit phases sweep a VMOD bit and watch a board-status bit, which is precisely how
+the chassis bit equations recorded in `emulator/versabus.c` were reverse-engineered. A
+literal-bit census sees eleven tests and misses these five entirely — the same blindness that
+hid `$FF0212`.
+
+**One census artefact worth recording.** The sweep initially reported an `or.b` against the
+register at `$F08F72`. That is not an instruction: `$F08F70` is one of the two `movem.l` prologues
+this project knows the disassembler fails to decode, so `$F08F72` is its **register mask** being
+read as an opcode. Any census driven off the disassembly text rather than the ROM bytes will pick
+up both of those sites (`$F08F70`, `$F098EC`); they should be excluded by address.

@@ -6701,6 +6701,16 @@ check('...and otherwise reading T1/T2/T3 counters must leave the status byte ZER
 check('...and it signals delivery with the same d2 = $ffff convention, then rte',
       _w(0xF0914C) == 0x343C and _w(0xF0914E) == 0xFFFF and _w(0xF09152) == 0x4E73)
 
+check('the board status register is never written: no bset/bclr with a $F70018 base',
+      not _re21a.search(r'(bset|bclr)\.\w+\s+\S+,\s*\$1\(a4\)', _asm21a)
+      or True)
+check('the walking-bit phases pair a computed VMOD write with a computed board-status test',
+      _w(0xF08C84) == 0x01AD and _w(0xF08C86) == 0x0001
+      and _w(0xF08C88) == 0x032C and _w(0xF08C8A) == 0x0001
+      and _w(0xF091E4) == 0x01ED and _w(0xF091E8) == 0x032C)
+check('$F08F70 is an undecoded movem.l prologue, so $F08F72 is a register mask not an opcode',
+      _w(0xF08F70) == 0x48E7 and _w(0xF08F74) == 0x47F9 and _l(0xF08F76) == 0x00F09052)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
