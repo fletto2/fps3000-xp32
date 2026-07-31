@@ -36184,3 +36184,33 @@ which is buffers, registers and the differential receiver — consistent with th
 up the board near the data path rather than at the connector. Their presence or absence is what would
 decide whether the two variants differ in interface width or only in PROM content, and it is worth a
 targeted look before anyone treats the two boards as interchangeable.
+
+## Both AP I/F variants are eight-deep and 32 bits wide (2026-07-31)
+
+Rows D and E of `4448_APIF_F.JPG` carry **eight `AM27LS03PC`** (date code 8315DM) — four in each row,
+in matching positions — alongside four `74S138N` 3-to-8 decoders.
+
+**The `Am27LS03` is a 16-word x 4-bit bipolar RAM.** So:
+
+| | documented card (`04_APIF.JPG`) | this variant |
+|---|---|---|
+| storage array | eight **`Am29705`** 16x4 | eight **`Am27LS03`** 16x4 |
+| total | 16 words x **32 bits** | 16 words x **32 bits** |
+
+**The two boards differ in part choice, not in organisation.** Same depth, same width, same count —
+so the interface width is identical and the variants are not architecturally different in the way
+that mattered.
+
+**This materially strengthens a recorded inference.** The card list argues that "the card carries
+eight Am29705 16-word x 4-bit dual-port SRAMs = 32 bits wide, which is the basis for believing the
+original host was a 32-bit machine such as a VAX". That rested on one board. It now rests on **two
+independently-built boards, using different RAM parts, both organised eight-deep by 16x4** — a much
+harder arrangement to explain as coincidence. The 32-bit host reading is correspondingly firmer.
+
+**One difference worth flagging rather than glossing.** The `Am29705` is a **two-port** register file
+(separate read and write ports); the `Am27LS03` is a plain single-port 16x4 RAM. If both boards are
+functionally interchangeable, the second must obtain its port separation some other way — the four
+`74S138N` decoders and the `AM25S08PC` registers in row H are the candidates. If they are *not*
+interchangeable, then the earlier board can overlap host and SBC access in a way the later one
+cannot, which would matter to any model of AP I/F contention. Not resolvable from photographs; noted
+so the difference is not silently assumed away.
