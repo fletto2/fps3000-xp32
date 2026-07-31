@@ -241,3 +241,30 @@ behavior.
 - Charlesworth FPS-164 paper: `refs/FPS-164/Charlesworth_..._1986.pdf`
 - AP-120B reference: `refs/AP-120B/FPS-7319_Programmers_Reference_*`
 - Surviving units inventory: `Nakazoto/FloatingPointSystems/KnownSurviving.txt`
+
+## FPS T Series (added 2026-07-31)
+
+**Reference**: Fazzari & Lynch, *The Second Generation FPS T Series: An Enhanced Parallel Vector
+Supercomputer*, Floating Point Systems, Portland OR — ACM, 10 pages. Saved at
+`refs/FPS-T-Series/Fazzari_Lynch_Second_Generation_FPS_T_Series_ACM.pdf`.
+
+A **completely different FPS product line** from the AP-120B / FPS-100 / XP-32 / FPS-164 lineage this
+project works on:
+
+| | T Series | our lineage |
+|---|---|---|
+| topology | **binary n-cube hypercube**, up to **16,384 nodes** | single chassis, 1-4 ACs |
+| node control processor | **INMOS transputer** (T800/T414), 10 MIPS | Am29116 bit-slice (XP-32) or custom TTL |
+| node memory | 4 MB DRAM, five-ported, plus four 4 KB vector registers | SCM + LMD/TCM |
+| node vector unit | FP ALU + FP multiplier/divider, **19 MFLOPS** at 32/64-bit | FP pipes, 32-bit IEEE (XP-32) |
+| interconnect | four transputer links, 9.2 MB/s bidirectional | VersaBus / XP32 bus |
+
+**Relevance to this project: essentially none, directly.** A full-text search finds **zero**
+occurrences of `XP32`, `XP-32`, `FPS-5000`, `FPS-3000`, `FPS-164`, `AP-120`, `AP I/F`, `VersaBus`,
+`68000`, `Weitek` or `29116`. The T Series shares a manufacturer and a market, not an architecture —
+it is transputer-based and distributed where ours is bit-slice and centralised.
+
+**Where it is useful**: it dates and places the company's direction after the XP-32 era, and it is a
+primary FPS-authored source with a named control-processor/vector-processor split — the same
+*organising idea* as CP-plus-AC, implemented with completely different parts. Worth having in the
+family tree; not worth mining for emulation detail.
