@@ -716,3 +716,48 @@ being updated.
 What this session adds beyond the fix: **BIM2 is programmed unconditionally** by init and by three
 tasks, so three BIMs were never optional — which the code comment does not say, and which is the
 reason the bit cannot be a presence strap in the first place.
+
+---
+
+# The chassis INPUT surface — everything the chassis can use to influence the SBC
+
+The conformance suite above says what a model must *do*. This is the dual: the complete set of
+values the chassis supplies that the firmware actually branches on. Anything not in this list
+cannot change the SBC's behaviour, however the chassis sets it.
+
+Derived by pairing every device-register read with the test applied to its destination register
+within five instructions, then completing it from findings established elsewhere in this session.
+
+| input | how the firmware uses it | tests |
+|---|---|---:|
+| **`$FF0202` MODE1 bit 7** | "chassis busy" — the XP tasks' contention check | **15** |
+| `$FF0202` bit 14 | cleared by the SBC when issuing; chassis sets it | 1 |
+| **`$FF0200` MODE0 low byte** | `andi #$ff` — **the 16-operation command dispatch**, latched at `$E86`/`$E87`; bit 7 selects the alternate register-access dispatcher | 1 read, 2 dispatchers |
+| **`$FF0204` CHANNEL_SELECT** | the general argument register; compared against **`$0`**, **`$10`**, **`$28`** | 4 |
+| **`$FF0218` bit 15** | ready/done — every bulk and stream handshake | **20** |
+| `$FF0218` bit 4 | sizes the phase-`$1600` BIM walk (16 or 24) | 1 |
+| **`$F70019` bits 1-5** | board status: 11 literal-bit tests plus **5 with computed bit numbers** | 16 |
+| **channel `+$0E` bits 15, 14, 13, 11** | latched into `$1066` by the ISR, then decoded by the task body | 4 arms |
+| **`$FF0000`** | remaining-word count — the S-record drain loop spins while `> 0` | 1 |
+| **`$70001C` mailbox** | host-presence probe at init (`$10A8`), and TCBIO1I's class field / bit 29 | 3 |
+| `$400000` window contents | chassis memory, read back by op `$3` and by RDHC's record fetch | — |
+
+**That is the whole surface.** Eleven inputs, of which four carry almost all the traffic: MODE1
+bit 7, MODE0's command byte, `$FF0218` bit 15, and board status.
+
+Two consequences worth drawing out:
+
+- **A chassis model that gets these eleven right is behaviourally complete for the SBC**, whatever
+  else it does. Registers outside this list are latches the firmware writes and reads back but
+  never branches on — they must *store* correctly (phase `$1600` verifies many by read-back) but
+  their values cannot steer execution.
+- **The command byte is the only wide input.** Everything else is a single bit or a comparison
+  against one of three constants. So the chassis→SBC channel is, in information terms, one 8-bit
+  opcode plus about a dozen flags — which is why the 16-entry dispatch table at `$F05102` and the
+  42-entry table at `$F05BA4` between them account for essentially all chassis-driven behaviour.
+
+**Caveat on the derivation**: the read-then-test pairing sees only reads into a data register
+followed by a test within five instructions. It misses tests through a base-register displacement
+(board status, which is why that row is completed from the separate census) and anything where the
+value is stored and tested later (the channel status, latched into `$1066` first). Those are
+filled in from findings established independently, and are marked as such.
