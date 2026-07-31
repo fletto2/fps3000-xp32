@@ -29836,3 +29836,43 @@ Note this also means the readback is a **verification of the whole XLTR setup in
 `$F09582`-`$F095B6` re-reads `$FF0204`, `$FF0202`, `$FF0200`, `$FF020C`, `$FF0218` and `$FF021A`
 and requires each to hold what phase `$1600` wrote (`d6`, `$2000`, low byte 0, `$1`, `$400` under
 mask, `$FFF`). A model that makes any of those six write-only fails here.
+
+## `XLTR_MODE0` (`$FF0200`) decoded completely: the SBC writes exactly two bits (2026-07-31)
+
+Both MODE registers are manipulated the same way, and it is **not** in-place bit operations on
+memory — every change is *read into a data register, modified there, written back*:
+
+```
+$F04520  move.w $200(a0),d1
+$F04524  bclr   #$a,d1          ; a DATA-register bit op: bit number mod 32, so bit 10
+$F04528  move.w d1,$200(a0)
+```
+
+That matters twice over. A census that greps for `bset`/`bclr` on `$200(a6)` finds **none** and
+concludes the register is write-only — the same false negative that hid MODE1's structure. And
+because the bit number on a data register is mod **32**, not mod 8, `bclr #$a` really is bit 10;
+the mod-8 rule that applies to memory operands would give bit 2.
+
+Pairing all 19 reads to the bit operations on their destination register, up to the write-back:
+
+| bit | `bclr` | `bset` | who |
+|---:|---:|---:|---|
+| **10** | **13** | 1 | cleared by the eight panel-command issuers and the channel-abort path; **set** by the panel-status ISR `$F04948` |
+| **11** | 1 | **4** | cleared by the panel-status ISR `$F0493E`; **set** by the four XP tasks' all-idle sweep (`$F0689E`, `$F072B6`, `$F07CB6`, `$F086B6` — one per task) |
+
+**No other bit of MODE0 is ever written.** 18 write-backs, all preserving everything except bits
+10 and 11 — which is why the read-modify-write shape is load-bearing rather than incidental: the
+low byte carries the chassis's command/operation byte (latched to `$E86`/`$E87` at `$F04942`),
+and the SBC must not disturb it while replying.
+
+**The two bits form a symmetric handshake pair**, each with a setter on one side and a clearer on
+the other:
+
+- **bit 10** — the SBC **clears** it when issuing a command; the chassis-response ISR **sets** it
+  when acknowledging. So bit 10 low means "a command is outstanding".
+- **bit 11** — the XP tasks **set** it when a scan finds no channel needing service; the ISR
+  **clears** it when the chassis answers. So bit 11 high means "the SBC has nothing pending".
+
+That closes MODE0 the way MODE1 was closed: **every bit the firmware touches has an owner, and
+the count of untouched bits is 14.** For a model, the contract is small — preserve bits 0-9 and
+12-15 across SBC writes, and treat 10/11 as the two-way handshake above.

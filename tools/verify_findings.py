@@ -6600,6 +6600,19 @@ check('...and verifies the whole XLTR setup: $204, $202, $200, $20C, $218, $21A'
       and _w(0xF0959A) == 0x0C6E and _w(0xF0959C) == 0x0001 and _w(0xF0959E) == 0x020C
       and _w(0xF095B0) == 0x0C6E and _w(0xF095B2) == 0x0FFF and _w(0xF095B4) == 0x021A)
 
+check('MODE0 is read-modify-written through a data register, never bit-op\'d in memory',
+      _w(0xF04520) == 0x3228 and _w(0xF04522) == 0x0200
+      and _w(0xF04524) == 0x0881 and _w(0xF04526) == 0x000A
+      and _w(0xF04528) == 0x3141 and _w(0xF0452A) == 0x0200)
+check('the panel-status ISR clears MODE0 bit 11, latches the word, then sets bit 10',
+      _w(0xF0493A) == 0x3028 and _w(0xF0493C) == 0x0200
+      and _w(0xF0493E) == 0x0880 and _w(0xF09340 - 0x9340 + 0x4940) == 0x000B
+      and _w(0xF04942) == 0x33C0 and _l(0xF04944) == 0x00000E86
+      and _w(0xF04948) == 0x08C0 and _w(0xF0494A) == 0x000A)
+check('...and exactly the four XP tasks set MODE0 bit 11 in their idle sweep',
+      all(_w(x) == 0x08C0 and _w(x + 2) == 0x000B
+          for x in (0xF0689E, 0xF072B6, 0xF07CB6, 0xF086B6)))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
