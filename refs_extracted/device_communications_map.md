@@ -799,3 +799,37 @@ Points that matter for a model:
 - **The 32-bit value crosses the boundary as two 16-bit halves** in `$0E70`/`$0E72`, selected
   by `$E87` bit 6, with `$0E74` returning the selected half to the chassis. So a full
   longword transfer takes **two** chassis operations, one per half.
+
+## Verified negatives: what a model does NOT need (2026-07-31)
+
+Negative claims are the ones an emulator leans on hardest — "this register does not exist,
+do not model it" — and they are the easiest to get wrong, because any sweep that *misses* an
+access produces one for free. Tested with the **permissive** provenance variant, which
+over-detects by crossing control transfers: an absence *it* reports is well supported.
+
+| claim | result |
+|---|---|
+| `$FF0010` "CMD_ARG_HI" is never accessed | **clean** — no access at any offset `+$10` |
+| AP I/F **window 1** (`$FF0020`-`$FF003F`) untouched | **clean** |
+| AP I/F **window 6** (`$FF00C0`-`$FF00DF`) untouched | **clean** |
+| AP I/F **window 7** (`$FF00E0`-`$FF00FF`) untouched | **clean** |
+| the gap `$FF0100`-`$FF01FF` untouched | **clean** |
+| `$F7001A` never referenced | **clean** |
+| `$F70018`/`$F70019` never written | **clean** — 14 accesses, all reads or bit-tests |
+| `$FF0240`, `$FF0248`, `$FF025E` never referenced | **clean** — and confirmed three ways |
+| no 32-bit operation on any XLTR register | **clean** — every access is `.w` or `.b` |
+| XLTR `$206`, `$208`, `$20A`, `$20E`, `$212` never referenced | **clean** |
+
+So a model may omit: window 1, windows 6-7, the upper half of the AP I/F grid, `$FF0010`,
+`$F7001A`, three BIM registers, five XLTR offsets, and any write path for the board status
+register. Nothing in this firmware can observe their absence.
+
+Two caveats, stated because negatives invite over-reading:
+
+- **This is about the firmware, not the hardware.** Window 1 being architecturally reserved
+  and window 1 being absent from the backplane are different facts, and the ROM cannot
+  distinguish them.
+- **Host-loaded code is out of scope.** The chassis's register-access interface can reach
+  any address, and a CP program can do what the ROM does not. These negatives bound *this
+  firmware's* behaviour, which is what a model must reproduce to boot — not the machine's
+  full capability.

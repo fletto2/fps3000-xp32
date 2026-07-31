@@ -5957,6 +5957,11 @@ check('...and auto-increments by ONE, so the address counts longwords',
 check('btst/tst/cmp put their memory operand last but do NOT write',
       insn(0xF08926) == 'btst.b #$4, $1(a2)' and insn(0xF0892E) == 'btst.b #$5, $1(a2)')
 
+check('no 32-bit operation touches ANY XLTR register',
+      not [x for x in range(0xF00000, 0xF10000, 2)
+           if (insn(x) or '').split()[0].endswith('.l')
+           and _mre.search(r'(?<!-)\$2[0-5][0-9a-f]\(a\d\)', (insn(x) or '').lower())])
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
