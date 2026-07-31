@@ -29294,3 +29294,67 @@ fault counters this project records at `$0400` and `$1F800`. **Which counter is 
 current stack pointer**: at or above `$10000` it counts at `$1F800`, below it at `$400`. The
 self-test runs on different stacks at different stages, so the pair distinguishes faults taken
 early from faults taken late — one counter per stack regime, not one per fault class.
+
+## `$1FFF2`-`$1FFFF` is a SEVEN-ENTRY VECTOR REGISTER FILE, one per request level (2026-07-31)
+
+The RAM/register partition recorded in `CLAUDE.md` says `$01FFF0-$01FFF3` is register and
+`$01FFF4-$01FFFF` is ordinary RAM. Phase `$1300` (`$F09338`, the panel-bus interrupt
+diagnostic) writes interrupt vector numbers across that whole range, so the boundary is wrong.
+
+```
+$F0934E  d0 = $148 >> 2 = $52       ; a VECTOR NUMBER, not an address
+$F09354  move.w d0,-$c(a5)          ; -> $1FFE4, purpose not established
+$F09358  d0 = $140 >> 2 = $50
+$F0935E  move.l a3,$148             ; vector $52 handler <- $F093C8
+$F09364  move.l a4,$140             ; vector $50 handler <- $F093BE
+$F0936A  andi.w #$fff8,(a5)         ; clear the request-level field
+$F09374  andi.w #$f8ff,sr           ; drop the IPL mask to 0 -- all levels enabled
+$F09378  d1 = 1
+$F0937A  a2 = $2(a5)                ; = $1FFF2
+loop:
+$F09386  move.w d0,(a2)+            ; write vector $50 into THIS LEVEL's register
+$F0938A  or.w   d1,(a5)             ; request at level d1
+$F09390  tst.w d2 / dbne d3         ; bounded spin, 256 iterations
+$F0939A  d7 = $F0F0F0F0             ; not delivered -> fault
+$F093AA  addq.w #$1,d1
+$F093AC  cmpi.w #$8,d1 / blt loop   ; d1 = 1 .. 7
+```
+
+`a2` starts at `$1FFF2` and post-increments once per iteration while `d1` walks 1 to 7. So
+iteration *k* writes `$1FFF2 + 2k` and then requests level *k+1*:
+
+| request level | vector register |
+|---:|---|
+| 1 | `$1FFF2` |
+| 2 | `$1FFF4` |
+| 3 | `$1FFF6` |
+| 4 | `$1FFF8` |
+| 5 | `$1FFFA` |
+| 6 | `$1FFFC` |
+| 7 | `$1FFFE` |
+
+**The VERSAmodule control block is therefore `$1FFF0`-`$1FFFF`, sixteen bytes**: a control word
+at `$1FFF0`/`$1FFF1` (with the request level in `$1FFF1` bits 0-2) followed by **seven vector
+registers**. That is exactly the shape of an MC68153-style interrupter — one vector per
+request level — and it explains why the machine needs a vector *file* rather than a single
+vector, which the `$50`/`$52` pair had only hinted at.
+
+**What the phase proves, and it is a full contract:** with vector number `$50` written into
+level *N*'s register and a request raised at level *N*, the chassis must deliver an interrupt
+whose vector is `$50`. The proof is the handler pair — `$F093BE` (vector `$50`) sets
+`d2 = $F0F0`, `$F093C8` (vector `$52`) sets nothing — so a wrong vector is indistinguishable
+from no delivery, and both fail the arm. **Both handlers open with `andi.w #$fff8,(a5)`**,
+clearing the request-level field: that is the interrupt *acknowledge*, done in software by the
+handler, not by an IACK cycle.
+
+**Emulator consequence — this is a real modelling gap.** The current model hardcodes the
+vector as `$50` or `$52` selected by `$1FFF1` bit 3, and uses a fixed `chassis_irq_level`,
+ignoring `$1FFF2`-`$1FFFF` entirely (they fall in plain RAM). That happens to satisfy phases
+`$1300` and `$1400` because the firmware only ever writes `$50` into the file and bit 3 is
+clear throughout `$1300` — but it is passing for the wrong reason, and any host-loaded software
+that programs a different vector would be mismodelled silently. A faithful interrupter takes
+**the level from `$1FFF1` bits 0-2** and **the vector from `$1FFF2 + 2*(level-1)`**.
+
+Note `$F09354`'s write of vector number `$52` to **`$1FFE4`** — twelve bytes *below* the
+control word, outside the file. It is written once, before the file is touched, and nothing in
+phases `$1300` or `$1400` reads it back. Purpose unestablished; recorded rather than guessed.

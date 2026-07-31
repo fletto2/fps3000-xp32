@@ -6391,6 +6391,20 @@ check('the two phase-$1400 ISRs set different d2 bits and both end in rte',
 check('...so VMOD bit 3 selects the vector ($50 vs $52), it is not an enable',
       _w(0xF09404) == 0x23CA and _l(0xF09406) == 0x00000140)
 
+check('phase $1300 converts $148 and $140 to vector NUMBERS $52 and $50 by lsr #2',
+      _w(0xF0934E) == 0x303C and _w(0xF09350) == 0x0148 and _w(0xF09352) == 0xE448
+      and _w(0xF09358) == 0x303C and _w(0xF0935A) == 0x0140 and _w(0xF0935C) == 0xE448)
+check('...installs those two handlers at vectors $50 and $52',
+      _l(0xF09360) == 0x00000148 and _l(0xF09366) == 0x00000140)
+check('...walks the request level 1..7 in $1FFF1 bits 0-2',
+      _w(0xF09378) == 0x7201 and _w(0xF0938A) == 0x8355
+      and _w(0xF093AA) == 0x5241 and _w(0xF093AC) == 0x0C41 and _w(0xF093AE) == 0x0008)
+check('...writing a vector into $1FFF2+2n via post-increment, one register per level',
+      _w(0xF0937A) == 0x45ED and _w(0xF0937C) == 0x0002 and _w(0xF09386) == 0x34C0)
+check('...and both ISRs acknowledge by clearing the request field, differing only in d2',
+      _w(0xF093BE) == 0x0255 and _w(0xF093C0) == 0xFFF8 and _w(0xF093C2) == 0x343C
+      and _w(0xF093C4) == 0xF0F0 and _w(0xF093C8) == 0x0255 and _w(0xF093CC) == 0x4E73)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
