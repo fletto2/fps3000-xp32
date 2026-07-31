@@ -33143,3 +33143,39 @@ its `CRTCB` parameters.
 The `$190` request appearing here as ROM data closes another loop: this project derived the
 "rounded up to `$200`" behaviour from the allocator's page granularity, and the request itself is
 right here in the definition block, five times over.
+
+## Two static task tables, and they are complementary (2026-07-31)
+
+The TDTI table at `$F0A600` reads out exactly as this project documents — six 96-byte `!TCB`
+records, name at `+$04`, entry at `+$1C`, code-segment first/last page at `+$20`/`+$22`:
+
+| record | name | entry | code pages |
+|---|---|---|---|
+| 0 | RDHC | `$F046F0` | `$F046`-`$F05C` |
+| 1 | IO1I | `$F05D36` | `$F05D`-`$F05E` |
+| 2 | XP4I | `$F05F4A` | `$F05F`-`$F068` |
+| 3 | XP3I | `$F0694A` | `$F069`-`$F072` |
+| 4 | XP2I | `$F0734A` | `$F073`-`$F07C` |
+| 5 | XP1I | `$F07D4A` | `$F07D`-`$F086` |
+
+reproducing the `!TST` code extents exactly. **So the machine has two static task tables, and they
+do not duplicate each other:**
+
+| table | holds | consumed by |
+|---|---|---|
+| **TDTI `$F0A600`** | name, **entry point**, **code segment extent** | TDTI, to *create* each task |
+| **region head** (`$F04600`, `$F05D00`, …) | **interrupt record**, CRTCB/stack block, **semaphore descriptors** | the task itself, to *configure* itself once running |
+
+They overlap only on the name. The region head sits at the **base of the very code segment** the
+TDTI record describes — RDHC's segment starts at `$F046`00 and its definition block is the first
+20 bytes of it, with the entry point `$F046F0` a little further in.
+
+**That makes the whole boot-time configuration statically predictable in two stages**: TDTI walks
+`$F0A600` and creates six tasks at known entries with known extents; each task then reads its own
+region head to register its vector, request its stack and declare its semaphores. No value in
+either stage is computed — every number is ROM data.
+
+For an emulator this is the strongest possible form of cross-check: `!IDV`, `!UST`, the `!TST`
+extents and the six TCBs can all be predicted before the first instruction executes, then compared
+against a dump afterwards. This session did exactly that for `!IDV` (six for six) and `!UST`
+(nine entries, `2/2/2/2/1/0`).

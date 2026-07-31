@@ -7585,6 +7585,14 @@ check('...and the semaphore descriptors follow at +$2C and +$36',
       _l(0xF05F2C) == 0x41585034 and _l(0xF05F36) == 0x48585034
       and _l(0xF07D2C) == 0x41585031 and _l(0xF07D36) == 0x48585031)
 
+check('the TDTI table holds name, entry and code-segment pages for six tasks',
+      all(_l(0xF0A600 + 96 * _i) == 0x21544342 for _i in range(6))
+      and _l(0xF0A600 + 0x1C) == 0x00F046F0
+      and _l(0xF0A600 + 96 * 5 + 0x1C) == 0x00F07D4A
+      and _w(0xF0A600 + 0x20) == 0xF046 and _w(0xF0A600 + 0x22) == 0xF05C)
+check('...and each region head sits at the base of the segment that record describes',
+      _w(0xF0A600 + 96 * 5 + 0x20) == 0xF07D and _l(0xF07D00) == 0x58503149)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
