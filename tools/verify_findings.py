@@ -5756,6 +5756,16 @@ check('...and repeating the whole set BACKWARDS via neg.w d2',
 check('a mismatch reports with the marker $F0F0F0F0 in d7',
       insn(0xF09B5C) == 'move.l #$f0f0f0f0, d7' and insn(0xF09B62) == 'bsr.w $f089ee')
 
+check('the SCM inner loop polls board status $F70019 bits 4 and 5',
+      insn(0xF08920) == 'lea.l $f70018.l, a2' and insn(0xF08926) == 'btst.b #$4, $1(a2)'
+      and insn(0xF0892E) == 'btst.b #$5, $1(a2)')
+check('...and BOTH set aborts the memory test',
+      insn(0xF08934) == 'bne.b $f0894e' and insn(0xF0894E) == 'bra.w $f088f4')
+check('...while its failure path clears VMOD bit 6 and writes MODE1 = $1000',
+      insn(0xF08940) == 'bclr.b #$6, $1(a1)' and insn(0xF08946) == 'move.w #$1000, $202(a6)')
+check('the mismatch reporter retries the write and compare before failing',
+      insn(0xF08A18) == 'move.l d0, (a0)' and insn(0xF08A1A) == 'cmp.l (a0), d0')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

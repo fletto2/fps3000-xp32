@@ -651,3 +651,41 @@ same behaviour.
 **This is the boundary of the SBC's reach into the array processor.** It talks to SCM
 through the XLTR's paged window; it never addresses the XP-32 EXEC, ARITH or UNIV FMT cards
 at all. The machine's own diagnostics draw exactly the same line.
+
+### The SCM test polls the board-status register ~32,000 times
+
+`$F0891C`, called twice per element from the walk loop, is not a checkpoint — it is a
+**board-status poll with an abort path**:
+
+```
+lea.l  $f70018.l,a2
+btst.b #$4,$1(a2)        ; $F70019 bit 4
+beq    continue
+btst.b #$5,$1(a2)        ; ...and bit 5
+bne    $f088f4           ; BOTH set -> abort the test
+continue:
+tst.l  d7                ; the fault marker
+beq    out
+lea.l  $1fff0.l,a1
+bclr.b #$6,$1(a1)        ; VMOD control $1FFF1 bit 6
+move.w #$1000,$202(a6)   ; XLTR MODE1 <- $1000  (bit 12)
+out: rts
+```
+
+**Emulator consequences, all load-bearing:**
+
+- **`$F70019` is read roughly 32,000 times during the SCM test alone** — twice per element
+  across both directions. A model that computes board status expensively will dominate the
+  boot's runtime here.
+- **Bits 4 and 5 must not both read as set**, or the memory test aborts to `$F088F4` before
+  completing. This is a *new* constraint on the board-status model: the documented bit
+  equations cover bits 1, 2, 3, 4 and 5 individually, but nothing recorded that their
+  *combination* is an abort condition.
+- **The failure path manipulates two registers already documented as puzzling**: it clears
+  **bit 6 of `$1FFF1`** — one of the 28 bit operations on the VMOD pair this project counted
+  — and writes the literal **`$1000` to MODE1**, confirming the note that whole-word MODE1
+  literals are self-test-only. Both now have a caller and a reason.
+
+`$F089EE`, the mismatch reporter, does the same two writes and then **retries the failing
+write and compare**, so a single transient does not immediately fail the test — the marker
+`$F0F0F0F0` in `d7` is what makes the failure sticky.
