@@ -34556,3 +34556,34 @@ routine's opening and inferring intent before checking how it exits. A `bsr` to 
 instructions from the end shows it cannot succeed. In a codebase where 64 of 65 fault gates are
 retry loops, **the prior should have been "this loops" and the burden of proof on any reading that
 says otherwise.** The sweep above is cheap and would have settled it in one step.
+
+## The hang map: nine unconditional spins, all dormant in a clean boot (2026-07-31)
+
+A byte-level sweep for `60FE` (`bra .`) finds **exactly nine** sites, confirming the recorded count
+and its structure — one kernel stub plus eight panel-command issuers, each spin sitting exactly
+`$30` bytes past its issuer:
+
+```
+$F001AA   (kernel, the PCMD_KERNEL_FATAL stub)
+$F04530  $F056B8  $F05E86  $F068D8  $F072F0  $F07CF0  $F086F0  $F0A5AE
+```
+
+There are **no two-instruction self-loops** (`60FC`) anywhere, so `bra .` is the firmware's only
+unconditional-hang idiom.
+
+**Measured over a boot verified complete by `-breakpc 0xF00FC2`: none of the nine executes.**
+
+Taken with the self-test result above — 64 retry gates, none of which triggers — this gives a precise
+sense of what "the machine boots cleanly" means here: **not that the firmware survives its hazards,
+but that it encounters none of them.** A clean boot passes through zero hang sites of either kind.
+
+**That makes the nine addresses an ideal tripwire.** Any run in which one of them is reached has left
+the normal path, and *which* one names the subsystem immediately: `$F001AA` is a kernel fatal;
+`$F04530` is RDHC's issuer; `$F056B8`, `$F05E86`, `$F068D8`, `$F072F0`, `$F07CF0`, `$F086F0` are the
+per-task issuers; `$F0A5AE` is the init-time copy. Cheaper than a full trace and unambiguous —
+worth a permanent hook rather than an ad-hoc `-breakpc` per investigation.
+
+It also bounds the documented chassis-driving experiments: every result recorded here that ends
+"…and the SBC stops at `bra .`" is describing a state a clean boot never enters, reached only by
+driving the chassis to issue a panel command. The spins are a property of the *conversation*, not of
+the firmware's own startup.

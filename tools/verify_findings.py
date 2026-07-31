@@ -7959,6 +7959,17 @@ check('...and PollBoardStatus is the only gate that returns with d7 raised',
       and _w(0xF0894C) >> 8 == 0x60      # bra to the common return
       and _w(0xF08952) == 0x4CDF and _w(0xF08956) == 0x4E75)
 
+check('exactly nine bra-dot sites, and no two-instruction self-loops',
+      [_i for _i in range(0, len(_rom_bytes) - 1, 2)
+       if _rom_bytes[_i] == 0x60 and _rom_bytes[_i+1] == 0xFE]
+      == [0x01AA, 0x4530, 0x56B8, 0x5E86, 0x68D8, 0x72F0, 0x7CF0, 0x86F0, 0xA5AE]
+      and not [_i for _i in range(0, len(_rom_bytes) - 1, 2)
+               if _rom_bytes[_i] == 0x60 and _rom_bytes[_i+1] == 0xFC])
+check('...and each task spin sits $30 past its panel-command issuer',
+      all(_s - _i == 0x30 for _i, _s in
+          ((0x4500, 0x4530), (0x5688, 0x56B8), (0x5E56, 0x5E86), (0x68A8, 0x68D8),
+           (0x72C0, 0x72F0), (0x7CC0, 0x7CF0), (0x86C0, 0x86F0), (0xA57E, 0xA5AE))))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
