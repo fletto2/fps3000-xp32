@@ -7322,6 +7322,13 @@ check('the allocator page counts in the config block are 1,2,1,1,1,1,1',
       _l(0xF0A516) == 1 and _l(0xF0A51A) == 2 and _l(0xF0A51E) == 1
       and _l(0xF0A522) == 1 and _l(0xF0A526) == 1)
 
+check('every !IDV ISR exit stub begins move.w #$c,ccr',
+      all(_w(x) == 0x44FC and _w(x + 2) == 0x000C
+          for x in (0xF07F08, 0xF07508, 0xF06B08, 0xF060F0, 0xF05E4C, 0xF050FC)))
+check('...and the four XP tasks share a uniform +$22 entry-to-exit offset',
+      0xF07F08 - 0xF07EE6 == 0x22 and 0xF07508 - 0xF074E6 == 0x22
+      and 0xF06B08 - 0xF06AE6 == 0x22 and 0xF060F0 - 0xF060CE == 0x22)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

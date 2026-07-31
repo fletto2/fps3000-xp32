@@ -32390,3 +32390,35 @@ earlier base-register mistakes were all cases where the *same* structure was add
 different registers within one routine; this is the opposite case, where different structures share
 an offset. Both are real, and the discriminator is always whether the base's contents can be
 established.
+
+## The complete IRQ wiring, verified live from `!IDV` (2026-07-31)
+
+`!IDV` at `$1F800` holds the machine's entire interrupt wiring: a tag, a bound pointer, then six
+**14-byte records at `$1F808`** of `{vector word, TCB long, ISR entry long, ISR exit long}`. All six
+read out of a boot dump and match the documented IRQ table exactly:
+
+| vector | task | TCB | ISR entry | ISR exit | entry→exit |
+|---|---|---|---|---|---:|
+| `$45` | XP1I | `$1E900` | `$F07EE6` | `$F07F08` | +`$22` |
+| `$46` | XP2I | `$1EB00` | `$F074E6` | `$F07508` | +`$22` |
+| `$47` | XP3I | `$1ED00` | `$F06AE6` | `$F06B08` | +`$22` |
+| `$48` | XP4I | `$1EF00` | `$F060CE` | `$F060F0` | +`$22` |
+| `$4A` | IO1I | `$1F100` | `$F05DD6` | `$F05E4C` | +`$76` |
+| `$41` | RDHC | `$1F300` | `$F04930` | `$F050FC` | +`$7CC` |
+
+**Every exit stub begins `44 FC 00 0C` — `move.w #$c,ccr`.** That confirms the CCR-sentinel
+convention at all six sites: the stub sets `CCR = N|Z` and traps, and TRAP #1's handler uses that
+value to distinguish an ISR exit from a directive call. One opcode, two interfaces, chosen by a
+condition-code value — verified here at every user of it rather than at the one site that revealed
+it.
+
+Two details the table adds:
+
+- **The four XP tasks share a uniform +`$22` entry-to-exit offset**, while TCBIO1I (+`$76`) and
+  RDHC (+`$7CC`) differ — exactly the template/bespoke split seen everywhere else in the task layer.
+- **RDHC's exit is `$F050FC`**, which this project independently identifies as "the waker … its own
+  ISR exit stub". The `!IDV` record is where the kernel learns that association, and it is what the
+  `subq.l #$6` search key at `$F00282` resolves against.
+
+The four XP exit stubs `$F07508`, `$F06B08`, `$F060F0` and `$F05E4C` had not been enumerated before;
+they complete the set.
