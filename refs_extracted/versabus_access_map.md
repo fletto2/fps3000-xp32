@@ -37126,3 +37126,35 @@ include one stimulus the sixteen did not.
 the character-pair conversion, the record dispatcher, `SRecordDataHandler`, the bound check and the
 checksum consumption. Those 219 instructions are the microcode-staging front end, and until today none
 of them had executed in any configuration this project has run.
+
+## The SLC path's RDHC footprint — 13 regions (2026-07-31)
+
+The 219 newly-executing RDHC instructions cluster into thirteen regions, and together they trace the
+whole microcode-staging front end:
+
+| region | bytes | what |
+|---|---:|---|
+| `$F04740`-`$F0475A` | 28 | **RDHC's post-`WAIT` code** — the task leaves its blocking directive |
+| `$F04824`-`$F04828` | 6 | |
+| `$F0489E`-`$F048D6` | 58 | up to the bit-7 command arm at `$F048D8` |
+| `$F04924`-`$F04958` | 54 | the panel-status ISR `$F04930` |
+| `$F04A6E`-`$F04AD2` | 102 | the 16-operation dispatcher and op `$0`'s handler `$F04A84` |
+| **`$F04B08`-`$F04C4C`** | **326** | the SLC handshake and record dispatcher |
+| `$F050F8`-`$F05102` | 12 | the ISR exit stub |
+| `$F05150`-`$F0517C` | 46 | the ASCII-pair converter and the `S0` handler |
+| **`$F051A2`-`$F05260`** | **192** | **`SRecordDataHandler`** |
+| `$F05298`-`$F052F6` | 96 | the rest of the record path |
+| `$F05688`-`$F056B8` | 50 | a panel-command issuer, ending in its `bra .` |
+
+So the run is: **leave `WAIT` → ISR → dispatcher → op `$0` → SLC loader → record handler → panel
+issuer spin.** That is the complete staging front end in one stimulus.
+
+**One clarification against the record.** `$F04740` executing is *not* new — this project already
+records "**`$F04740` executes — RDHC leaves its wait for the first time**" under
+`FPS3K_RESP=0x94 FPS3K_XPIRQ=6`. What is new is reaching it *by this route*, and everything downstream
+of the dispatcher: the SLC loader and record handler regions (`$F04B08`-`$F04C4C`,
+`$F05150`-`$F052F6`, 660 bytes between them) are the part no previous configuration entered.
+
+The run ending in a panel-issuer `bra .` is also expected rather than a failure — this project
+documents all eight issuers as terminating that way, and the earlier hang map measured none of them
+reached in a clean boot. Reaching one here is the normal end of a chassis conversation.
