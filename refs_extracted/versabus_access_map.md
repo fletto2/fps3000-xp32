@@ -32316,3 +32316,48 @@ used by the firmware's own tasks, and separately that "84 directives are now nam
 Those are different counts of different things — issued-by-this-firmware versus named-in-the-source
 — and neither is the count of *live table slots*. The number that matters for a dispatcher is
 **60 live**, of which 29 can be named from the available equate files and 31 cannot.
+
+## `TCB+$36` corrected: 43 sites, one writer, two consumers (2026-07-31)
+
+I reported `TCB+$36` as having "24 accesses". **That figure was `a6`-only.** Matching the offset
+with any base register finds **43 sites** — the field is reached through `a0`, `a2`, `a3`, `a4`,
+`a5` and `a6`, because the kernel operates on *other* tasks' translation bases as well as its own.
+
+That is the fifth time this session a base-register-keyed matcher has under-counted, and the fix
+is always the same: **match `$xx(a` and let the base vary.** I have now made this mistake often
+enough that it is worth stating as a rule rather than a caution — any census of a structure field
+must be base-agnostic, because a kernel that manipulates several instances of a structure will
+address them through several registers.
+
+The fuller picture is a much stronger confirmation than the narrow one:
+
+| | count |
+|---|---:|
+| **writers** | **1** — `$F02986`, `move.l a2,$36(a5)` |
+| callers into `$F0175C` = **`T0LOGPHY`** | ~28 |
+| callers into `$F017C4` = **`T0FNDSEG`** (TRAP #0 `$07`, table entry `$F017C6`) | 4 |
+| callers into `$F006D2` | 1 |
+| loads with no immediate call | the remainder |
+
+**Both named consumers are segment-table routines** — "logical to physical" and "find segment in
+TST" — and both take the pointer in `a0`. So the call graph independently says what the RAM dump
+said: `TCB+$36` is the task's `!TST` pointer. Three routes now agree (the `T0LOGPHY` call sites,
+the measured `+$36` == `+$160`, and the `!TST` tag at that address).
+
+**One writer means the base is established once per task and never re-pointed**, which is what a
+model needs to know: no directive relocates a task's segment table.
+
+### The segment directives share this substrate
+
+`$06`, `$09` and `$1C` — three of the unnamed live directives — all load a translation base and
+call the `$F0175x` family:
+
+- **`$06`** loads **another task's** base (`$36(a5)`) with a 28-byte `SGPBL` block — a cross-task
+  segment operation.
+- **`$09`** loads its **own** (`$36(a6)`), tests bit 13 of a parameter word as an option flag, and
+  reports status `$C` on failure.
+- **`$1C`** loads its own, privileged, with the `$200` two-page constant.
+
+So the unnamed segment family is not opaque even without names: all three take segment descriptors
+and route through the same translation machinery, differing in whose table they touch and whether
+privilege is required.

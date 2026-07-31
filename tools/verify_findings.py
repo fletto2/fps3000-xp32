@@ -7309,6 +7309,15 @@ check('the task-state family $42/$44/$45 shares RSTATE\'s 12-byte block',
       (_t1(0x43)[1] >> 8) == 12 and (_t1(0x42)[1] >> 8) == 12
       and (_t1(0x44)[1] >> 8) == 12 and (_t1(0x45)[1] >> 8) == 12)
 
+_k36 = open('/home/fletto/ext/src/claude/fps3000/fps3k_kernel.asm').read()
+check('TCB+$36 is reached through many base registers, not just a6',
+      len(_re21a.findall(r'\$36\(a\d\)', _k36)) > 35
+      and len(_re21a.findall(r'\$36\(a6\)', _k36)) < 30)
+check('...with exactly one writer, so a translation base is set once per task',
+      len(_re21a.findall(r'move\.l\s+a\d,\s*\$36\(a\d\)', _k36)) == 1)
+check('...and its consumers are T0LOGPHY ($F0175C) and T0FNDSEG ($F017C4)',
+      _l(0xF001D6 + 4 * 0x08) == 0xF0175E and _l(0xF001D6 + 4 * 0x07) == 0xF017C6)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
