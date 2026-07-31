@@ -25569,3 +25569,49 @@ whether two tasks belong to the same session before permitting an operation.
 
 That reduces the unidentified TCB fields to six — `+$8`, `+$18`, `+$26`, `+$2E`, `+$148`, `+$158`
 — none of which is touched by FPS code.
+
+### `TCB+$2E` is the SAVED PREVIOUS STATE, and `+$2A` the reason for the change
+
+Four real sites (two more are misdecodes) show one idiom:
+
+```
+$F02E88  bset.b  #$1,$29(a5)
+$F02E8E  move.w  d0,$2A(a5)          <- the reason/object
+$F02E92  move.w  $2C(a5),$2E(a5)     <- SAVE THE CURRENT STATE
+$F02E98  move.l  $10(a5),$120(a6)    ...then pass the task NAME as an argument
+
+$F02F64  btst.b  #$1,$29(a6)         (in the $0F TERM handler)
+$F02F6C  move.w  a0,$2A(a6)
+$F02F70  move.w  $2C(a6),$2E(a6)     <- SAVE THE CURRENT STATE
+$F02F76  bset.b  #$7,$2D(a6)         ...then set state bit 7
+```
+
+and the consumers:
+
+```
+$F02ADE  btst.b  #$F,$2E(a5)         test bit 7 of the saved state's high byte
+$F02B44  clr.w   $2E(a5)             discard the save
+```
+
+**So a task's state word is copied to `+$2E` immediately before it is changed, and `+$2E` is
+cleared when the change is completed or undone.** That is the mechanism for restoring a task to
+what it was doing before a temporary transition — resuming a suspended task to its prior state
+rather than to a default.
+
+**`+$2A` receives `d0` or `a0` at the same moment**, so it carries the *reason* or *object* of the
+transition alongside the saved state.
+
+Both fields join the map:
+
+| offset | field |
+|---|---|
+| `+$2A` | the object/reason of the pending state change |
+| **`+$2C`/`+$2D`** | the **current** state word |
+| **`+$2E`** | the **saved previous** state word |
+
+Note also `bset.b #$7,$2D(a6)` in the TERM path: under the mod-8 rule that is **state bit 7**,
+which joins bit 4 (ready-at-creation), 9 (SUSPND), 12 (WTEVNT) and 14 (WAIT) in the documented
+state map — set when a task is being terminated.
+
+**Four of the eight originally-unidentified TCB fields are now placed** (`+$10`, `+$14`, `+$2A`,
+`+$2E`), leaving `+$8`, `+$18`, `+$26`, `+$148` and `+$158` — none of which FPS code touches.

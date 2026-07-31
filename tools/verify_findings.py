@@ -5843,7 +5843,17 @@ check('...and +$10/+$14 are an adjacent longword pair, both accessed as longword
 check('TCB+$14 is overwhelmingly READ and COMPARED, as a session id would be',
       sum(1 for _a, (_m, _o, _) in _mins.items()
           if _a < 0xF04488 and _mre.search(r'\$14\((a5|a6)\), d\d$', _o)) >= 11)
-check('...and $140/$144 are documented copies of the name/session pair', 0x144 - 0x140 == 4)
+check('...and $140/$144 are documented copies of the name/session pair', _tcbf.get(0x140, 0) + _tcbf.get(0x144, 0) >= 2)
+check('TCB+$2E receives a copy of the state word before a transition',
+      insn(0xF02E92) == 'move.w $2c(a5), $2e(a5)'
+      and insn(0xF02C08) == 'move.w $2c(a5), $2e(a5)'
+      and insn(0xF02F70) == 'move.w $2c(a6), $2e(a6)')
+check('...with the reason stored in +$2A at the same moment',
+      insn(0xF02E8E) == 'move.w d0, $2a(a5)' and insn(0xF02F6C) == 'move.w a0, $2a(a6)')
+check('...and the save is tested and cleared by its consumers',
+      insn(0xF02ADE) == 'btst.b #$f, $2e(a5)' and insn(0xF02B44) == 'clr.w $2e(a5)')
+check('the TERM path sets state bit 7 after saving',
+      insn(0xF02F76) == 'bset.b #$7, $2d(a6)')
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')
