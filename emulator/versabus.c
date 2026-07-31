@@ -598,6 +598,25 @@ static uint16_t apif_read(uint32_t addr) {
      * chassis says "nothing more" by clearing it.  Without this the drain
      * never terminates -- which is exactly what the first S-record runs
      * did.  Documented in versabus_access_map.md. */
+    /* FPS3K_WC=<n>: model $FF0000 as the real WC down-counter the schematics
+     * show (sheet 16: four 25LS2569 up/down counters, whose zero condition
+     * sheet 10 turns into DMADONE).  The default path below satisfies the
+     * firmware's drain loop by returning 0 once the source is exhausted, which
+     * terminates the loop but never lets the count take an INTERMEDIATE value.
+     * Opt-in so golden-master behaviour is unchanged. */
+    if (addr == APIF_CMD_STATUS) {
+        static int wc_init = -1;
+        static long wc;
+        if (wc_init < 0) {
+            const char *e = getenv("FPS3K_WC");
+            wc_init = e ? 1 : 0;
+            wc = e ? strtol(e, NULL, 0) : 0;
+        }
+        if (wc_init) {
+            if (wc > 0) wc--;          /* each read of the count advances the drain */
+            return (uint16_t)(wc < 0 ? 0 : wc);
+        }
+    }
     if (addr == APIF_CMD_STATUS && srec_exhausted) return 0x0000;
 
     if (addr == 0xFF0008) {

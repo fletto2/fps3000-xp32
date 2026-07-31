@@ -36851,3 +36851,35 @@ only use of `$FF0000` *is* the zero test — but the schematic removes the excus
 confirmation is now supported from the hardware side too: the register file on these sheets is
 `{HMAH, HMAL, APMA, WC, CTL, TEMP}`, and nothing in it corresponds to a "command argument high" at
 that offset.
+
+## `$FF0000` has NO runtime witness in any configuration driven here (2026-07-31)
+
+Measured across three configurations — default boot, channel-driven (`FPS3K_XPIRQ=1`) and
+RDHC-driven (`FPS3K_RESP=0x94 FPS3K_XPIRQ=6 FPS3K_CHASSIS_CMD=…`):
+
+| configuration | reads of `$FF0000` |
+|---|---:|
+| default | **0** |
+| channel-driven | **0** |
+| RDHC / CPLOAD-driven | **0** |
+
+**The register is never read.** Three consequences, all worth stating plainly:
+
+1. **The recorded role rests entirely on static reading.** "`$FF0000` remaining-word count — role
+   established 2026-07-31 — both S-record error paths spin `while ($FF0000 > 0) read (a0)` to drain a
+   rejected record" is a decode of code that has never executed here. It joins the unwitnessed list
+   alongside the PTM running counter and the runtime `jsr` construction.
+2. **The emulator's `srec_exhausted` shortcut has never been exercised either.** It exists to
+   terminate a loop nothing has reached.
+3. **My `FPS3K_WC` counter is speculative code for a dead path.** It is implemented, opt-in, and
+   verified not to disturb the default boot (identical final PC and phase counter with and without
+   it) — but it has no test, and I should not present it as validated.
+
+**The interesting inversion:** for this register the *schematic* is now stronger evidence than the
+firmware. Sheet 16 shows four `25LS2569` counters that physically exist and whose zero condition
+sheet 10 wires to `DMADONE`; the firmware's drain loop is a decode of unreached code. Normally
+runtime behaviour grounds a model and documents corroborate it. Here it is the other way round.
+
+**To get a witness** the SLC ASCII S-record path must be driven to a *rejected* record — the drain
+loops are error paths, so a well-formed record never reaches them. That is a specific, achievable
+experiment: feed an over-long or wrongly-typed record through `FPS3K_SREC` and check `$F05218`.
