@@ -4063,6 +4063,23 @@ check('...and writing either half from CHANNEL_SELECT',
 check('$101E + 16*4 == $105E, the channel-present count',
       0x101E + 16 * 4 == 0x105E)
 
+# --- the CP-program callback: the SBC CALLS into host-loaded code ---------
+# $45EA is lea, not movea ($2x6A), so jsr (a2) transfers control to
+# $10AE + (ch-1)*4 ITSELF -- a 4-byte per-channel trampoline slot.
+check('$F085F4 is an lea (45EA), so the $10AE slot is CALLED, not dereferenced',
+      _rom[0xF085F4 - _B:0xF085F8 - _B] == bytes.fromhex('45ea10ae')
+      and _rom[0xF085F8 - _B:0xF085FA - _B] == bytes.fromhex('4e92'))
+check('...and the four per-channel arrays are 16 bytes apart',
+      [0x10AE + 16 * k for k in range(4)] == [0x10AE, 0x10BE, 0x10CE, 0x10DE])
+check('the callback builds three argument pointers and a count word $000C',
+      insn(0xF085D2) == 'lea.l $10de(a2), a4'
+      and insn(0xF085D8) == 'lea.l $10ce(a2), a4'
+      and insn(0xF085DE) == 'lea.l $10be(a2), a4'
+      and insn(0xF085E4) == 'move.w #$c, -(a3)')
+check('...and the result at $10DE goes straight into the channel data pair',
+      insn(0xF085FE) == 'move.w $10e0(a2), $2(a1)'
+      and insn(0xF08604) == 'move.w $10de(a2), (a1)')
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.

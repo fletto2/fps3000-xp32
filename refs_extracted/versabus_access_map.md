@@ -18339,3 +18339,57 @@ firmware probes at `$F0A202` and every task gates on. The register file ends exa
 that counter begins, the same way the op-`$A` status array ends exactly where its sequence
 counter begins. The low-RAM globals are laid out as adjacent, exactly-sized structures
 rather than scattered.
+
+## The CP-program callback interface: the SBC *calls into* host-loaded code (2026-07-30)
+
+`$F0857A`-`$F08608` in each XP task is the "notify `USER`" arm, and it is far more than a
+notification. Decoded:
+
+```
+$F0857A  lea -$60(a7),a7                  ; a 96-byte frame
+$F08580  push $00000000 ; push 'USER'     ; an RSTATE parameter block, built on the stack
+$F0858C  moveq #$43,d0 / lea (a7),a0 / trap #1     ; $43 RSTATE "RECEIVE TASK STATE"
+$F08596  a3 = $3C(a7)                     ; a pointer out of the returned state
+$F0859A  $10BE(a2) <- d0                  ; argument 1
+$F0859E  $10CE(a2) <- d1                  ; argument 2
+$F085A2  $10DE(a2) <- 0                   ; the RESULT slot, cleared
+$F085AA  movem.l d0-d7/a0-a6,-(a7)
+         push six longwords of 0 onto a3
+$F085D2  push &$10DE(a2), &$10CE(a2), &$10BE(a2)   ; THREE ARGUMENT POINTERS
+$F085E4  push word $000C
+         push two more longwords of 0
+$F085F4  lea $10AE(a2),a2                 ; NOT movea -- bytes are 45EA, an lea
+$F085F8  jsr (a2)                         ; CALL $10AE + (ch-1)*4
+$F085FA  movem.l (a7)+,d0-d7/a0-a6
+$F085FE  $2(a1) <- $10E0(a2)              ; the result's LOW word  -> channel data-low
+$F08604  (a1)   <- $10DE(a2)              ; the result's HIGH word -> channel data-high
+```
+
+**`$10AE + (ch-1)*4` is not a handle — it is a callable address.** The `lea`/`movea`
+distinction decides this and the bytes settle it: `45EA 10AE` is `lea`, so `jsr (a2)`
+transfers control to `$10AE + (ch-1)*4` itself. Four bytes is exactly the size of a
+`bra.w`, so the slot is a **per-channel trampoline** the CP program installs.
+
+That makes the whole `$10AE`-`$10ED` run a single interface, four 16-byte-strided arrays:
+
+| array | per channel | role |
+|---|---|---|
+| `$10AE`-`$10BD` | 4 bytes | **the trampoline the SBC calls** (`tst.l` non-zero = installed) |
+| `$10BE`-`$10CD` | 4 bytes | argument 1 — `d0` from `RSTATE` |
+| `$10CE`-`$10DD` | 4 bytes | argument 2 — `d1` from `RSTATE` |
+| `$10DE`-`$10ED` | 4 bytes | **the result**, read straight back into the channel data pair |
+
+The call frame is built on **`a3`, a pointer taken out of the `USER` task's own state**, and
+carries three pointers plus a count word `$000C` — the shape of a FORTRAN-style argument
+list, which is exactly what a MAXL FORTRAN program would expect. So the XP task suspends its
+own context, assembles a call on the CP program's stack, jumps into the program's channel
+handler, and ships whatever it writes into `$10DE` straight to the AC.
+
+**This revises what this file said about `$10AE`/`$10BE`** ("`$10BE` holds a task handle and
+`$10AE` is nonzero"). The prediction it stated is still the right test — both nonzero on a
+machine running a CP program — but the semantics are a callable trampoline and an argument
+block, not two handles.
+
+It also explains why no chassis model can carry a channel through a full cycle: the missing
+piece is not a register value, it is **code at `$10AE`**. The firmware will happily `jsr`
+into it, and there is nothing there.
