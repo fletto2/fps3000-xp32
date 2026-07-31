@@ -4687,3 +4687,18 @@ check('$E62 is read back and range-checked as the channel',
       insn(0xF0537E) == 'move.w $e62.l, d4' and insn(0xF05384) == 'cmpi.w #$1, d4')
 check('op $3 stages the chassis word through $E72 into the result $E74',
       insn(0xF04DB2) == 'move.w $e72.l, $e74.l')
+
+# ---- $FF0216 is a 4-bit control register, bits 4-7 (2026-07-31) ----
+check('op $6 clears bit 7 and RESTORES the original word afterwards',
+      insn(0xF04EA4) == 'move.w d0, d1' and insn(0xF04EA6) == 'bclr.b #$7, d0'
+      and insn(0xF04EDC) == 'move.w d1, $216(a0)')
+check('CPLOAD SETS the 16->32 width mux, bit 4', insn(0xF0550E) == 'bset.b #$4, d2')
+check('...and CLEARS it again on completion -- it is bracketed, not latched',
+      insn(0xF05586) == 'bclr.b #$4, d2' and insn(0xF0558A) == 'move.w d2, $216(a5)')
+check('the self-test probes exactly bits 4-7 of $FF0216',
+      sorted({int(insn(a).split('#$')[1].split(',')[0], 16)
+              for a in (0xF09626, 0xF096E8, 0xF097B8, 0xF0984C)}) == [0x10, 0x20, 0x40, 0x80])
+check('$C0 at $F0A22A is the exception path, not a resting value',
+      insn(0xF0A22A) == 'move.w #$c0, $216(a0)'
+      and insn(0xF0A230) == 'move.w #$8000, $202(a0)')
+check('...and $C0 leaves the window gate and width mux OFF', not (0xC0 & 0x30))

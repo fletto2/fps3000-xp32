@@ -20934,3 +20934,65 @@ operation. Four instructions, four sampling points, and everything in between is
 That completes the block. With the 16-operation table, the four RDHC commands, the channel
 transaction and the CP callback already mapped, **there is no remaining unidentified state in
 the chassis conversation.**
+
+## `$FF0216` is a four-bit control register, bits 4-7 — the SBC's handle on the XP32 data path (2026-07-31)
+
+Twenty-three accesses, and they partition perfectly into three users. This is the closest the
+SBC gets to the UNIV FMT / XP32 side of the machine, so it is worth stating completely.
+
+### Bit 7 — gated around chassis operation `$6`, and RESTORED
+
+```
+$F04EA0  move.w  $216(a0),d0        read
+$F04EA4  move.w  d0,d1              keep the original
+$F04EA6  bclr.b  #$7,d0
+$F04EAA  move.w  d0,$216(a0)        clear bit 7 for the duration
+         ...                        the unbounded 16-bit peek/poke
+$F04EDC  move.w  d1,$216(a0)        RESTORE the original word
+```
+
+Not a set-and-leave: the original word is saved and written back verbatim, so whatever else was
+in the register survives the operation.
+
+### Bit 4 — the 16->32 width mux, BRACKETED around `CPLOAD`
+
+```
+$F0550A  move.w  $216(a5),d2 / bset.b #$4,d2 / move.w d2,$216(a5)     enable
+         ...                                                          parse the S-records
+$F05582  move.w  $216(a5),d2 / bclr.b #$4,d2 / move.w d2,$216(a5)     DISABLE
+```
+
+**The clearing half at `$F05582` was not previously recorded.** This file and `CLAUDE.md` both
+say bit 4 is *set* before parsing; it is also cleared afterwards, on the normal completion path
+(`$F0558E jmp $F05678`). So the width-conversion mux is live **only for the duration of a
+microcode upload**, not latched for the life of the machine. An emulator that leaves it set
+after `CPLOAD` diverges from the hardware from the second upload onward.
+
+### The self-test probes exactly these four bits and no others
+
+`$F09626`-`$F098A0` walks `$10`, `$20`, `$40`, `$80` — bits 4, 5, 6, 7 — each as a
+set-then-clear pair with a test routine between (`$F096AC`, `$F096B8`, `$F09806`, `$F0981A`,
+`$F098C4`). Nothing ever writes bits 0-3.
+
+So `$FF0216` is a **4-bit register occupying the high nibble**, and every one of its bits has an
+identified or bounded role:
+
+| bit | role | evidence |
+|---:|---|---|
+| **7** | gates chassis op `$6` (SBC-RAM access) | cleared for the duration, original restored |
+| **6** | unidentified | set as part of the `$C0` resting value; probed by the self-test |
+| **5** | gates the `$400000` chassis window (set => BERR) | self-test phases `$1700`/`$1800` |
+| **4** | 16->32 width mux, with `$FF0214` as the low-half latch | phase `$1900`; bracketed around `CPLOAD` |
+
+### `$C0` is written on the exception path, not as a resting value
+
+`$F0A22A move.w #$C0,$216(a0)` is immediately followed by `move.w #$8000,$202(a0)` and
+`bra $F0A282` — it is the FPS exception reporter putting the XLTR into a known state before
+announcing the fault, not an idle-state assignment. Bits 7 and 6 set, 5 and 4 clear: the window
+closed and the width mux off, which is the safe configuration to report from.
+
+**What this does and does not say about the EU and AU.** Bits 5 and 4 are the SBC's only
+controls over what happens *beyond* the XLTR — the chassis memory window and the width
+conversion the UNIV FMT performs. Neither addresses the EU or the AU. The register confirms the
+boundary rather than crossing it: the SBC can open a path and set its width, and cannot see what
+consumes it.
