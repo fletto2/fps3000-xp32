@@ -27794,3 +27794,36 @@ there is harmless until the moment the interrupter needs it.
 
 That is a useful sharpening: an exclusion list is evidence about consequences, not about
 address decoding.
+
+## The VERSAmodule interrupter has a five-entry VECTOR REGISTER FILE (2026-07-31)
+
+Following the `$1FFE4` discovery, every other negative displacement off the `$1FFF0` base
+turns out to be the same thing. Each site computes `vector_address >> 2` and writes it to a
+register, then installs a handler at that vector address:
+
+| register | programmed with | vector no. | site |
+|---|---|---|---|
+| `$1FFF2` | `$140 >> 2` | **`$50`** | `$F093FA` |
+| `$1FFE2` | `$144 >> 2` | **`$51`** | `$F08F8C` |
+| `$1FFE4` | `$148 >> 2` | **`$52`** | `$F09354`, `$F093F0` |
+| `$1FFE6` | `$14C >> 2` | **`$53`** | `$F0925C` |
+| `$1FFEA` | `$150 >> 2` | **`$54`** | `$F09074` |
+
+The pattern is unmistakable at every site — `move.w #$1xx,d0` / `lsr.w #$2,d0` /
+`move.w d0,<reg>` / `move.l aN,$1xx.l` — five times with five different vectors.
+
+**So the VERSAmodule board's interrupter drives five vectored interrupt sources**, vectors
+`$50`-`$54`, each with its own programmable vector register. This project's model of the
+board had only the control pair `$1FFF0`/`$1FFF1`; the vector file was invisible because
+every access is a negative displacement off a base register, and because a sweep that finds
+`$1FFE2`/`$1FFE4`/`$1FFE6` without decoding their context reads them as ordinary RAM.
+
+The register addresses are irregular — `$1FFE2`, `$1FFE4`, `$1FFE6`, then `$1FFEA` (skipping
+`$1FFE8`), with `$1FFF2` carrying the *first* vector rather than the lowest address. So the
+file is not a simple array and its layout should be taken from the table above rather than
+extrapolated.
+
+**Emulator requirements**: implement `$1FFE2`, `$1FFE4`, `$1FFE6`, `$1FFEA` and `$1FFF2` as
+readable/writable word registers; supply the programmed vector during the IACK cycle for the
+corresponding source; and note that a RAM pattern test walks over four of them harmlessly
+because they read back what was written.

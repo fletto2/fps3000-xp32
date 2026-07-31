@@ -6024,6 +6024,16 @@ check('$1FFF1 bit 3 gates the second request line -- tested both ways',
       insn(0xF0943C) == 'bclr.b #$3, $1(a5)' and insn(0xF09444) == 'btst.b #$1, d2'
       and insn(0xF09448) == 'beq.b $f09450' and insn(0xF0945E) == 'bset.b #$3, $1(a5)')
 
+_vecf = [(0xF08F8C, '-$e(a5)', 0x144), (0xF09354, '-$c(a5)', 0x148),
+         (0xF0925C, '-$a(a5)', 0x14C), (0xF09074, '-$6(a2)', 0x150)]
+check('four more VMOD vector registers, each programmed with address >> 2',
+      all(insn(_s) == 'move.w d0, ' + _r for _s, _r, _v in _vecf))
+check('...and each is followed by installing a handler at that vector address',
+      insn(0xF08F90) == 'move.l a3, $144.l' and insn(0xF09260) == 'move.l a3, $14c.l')
+check('...covering vectors $50-$54, five interrupt sources',
+      [_v // 4 for _, _, _v in _vecf] == [0x51, 0x52, 0x53, 0x54]
+      and 0x140 // 4 == 0x50)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
