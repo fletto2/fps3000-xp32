@@ -29130,3 +29130,33 @@ that lets the checkpoint handshake mean something (both set = stop) and the SCM 
 | board bit 5 | phase `$0200`, parameterised mapping test |
 | `$FF0216` gates | phases `$1700`/`$1800`/`$1A00`, nine fault assertions |
 | **board bit 4** | **not specified — inferred from the checkpoint** |
+
+## The `$D0` checkpoint marker is what ends the self-test (2026-07-31)
+
+The emulator derives board bit 5 as **`$1FFF1` bit 7 AND bit 6**, and its source comment
+justifies that against three sites. Checking the values involved:
+
+| `$1FFF1` value | where from | bit 7 | bit 6 | board bit 5 |
+|---|---|:-:|:-:|:-:|
+| `$50` | the pre-test write at `$F08720` | 0 | 1 | **0** — run the diagnostics |
+| `$9F`, `$9A` | two of the eight phase-`$0600` patterns | 1 | 0 | **0** — no spurious abort |
+| **`$D0`** | **the checkpoint marker** | 1 | 1 | **1** — advance |
+
+**That closes the loop on the checkpoint handshake.** I decoded the handshake as a two-bit
+rendezvous where *both* bits 4 and 5 set means stop — and here is what sets bit 5: the `$D0`
+marker the checkpoint itself writes. With board bit 4 set in the resting state (`$3F11`), the
+SBC writes `$D0`, its own write drives bit 5, and the poll then sees both bits and ends the
+suite. The handshake is self-completing rather than waiting on the chassis.
+
+It also explains the pattern table's role in the derivation: **two of the eight phase-`$0600`
+patterns (`$9F`, `$9A`) set bit 7 with bit 6 clear**, so a naive "bit 5 mirrors bit 7" model
+would abort the suite in the middle of a pattern test. That constraint comes from the table I
+decoded independently this session, which is a satisfying cross-check — the emulator's
+derivation and my decode of that table are consistent without either having been used to
+build the other.
+
+**What this does *not* resolve** is the phase-`$1400` discrepancy recorded in the model spec.
+Mid-test, `$1FFF1` bit 6 is clear (phase `$0200` clears it, and only vector `$51`'s handler
+sets it), so board bit 5 stays clear and the bits-4-and-5 abort cannot fire during phase
+`$1400`. That leaves the unbounded retry there still unexplained without real interrupt
+delivery.
