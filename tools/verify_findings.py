@@ -7048,8 +7048,15 @@ for _a2 in _reps:
     if _runs64 and _a2 - _runs64[-1][1] <= 32: _runs64[-1][1] = _a2
     else: _runs64.append([_a2, _a2])
 _big64 = [_r for _r in _runs64 if _r[1] + 32 - _r[0] >= 64]
-check('every replicated run of >= 64 bytes lies inside the task layer',
-      _big64 and all(0xF05600 <= _r[0] and _r[1] <= 0xF086FF for _r in _big64))
+# CORRECTED again: the two panel-command-issuer spans are 73 bytes each, so
+# they ARE >= 64-byte runs outside the task layer.  The true statement is that
+# they are the ONLY ones -- third time a "everything is in region X" claim of
+# mine has been too strong, each time because a structure sat just over a
+# threshold I picked.
+_out64 = [_r for _r in _big64 if not (0xF05600 <= _r[0] and _r[1] <= 0xF086FF)]
+check('the only >= 64-byte replicated runs outside the task layer are the two panel issuers',
+      _big64 and len(_out64) == 2
+      and all(_r[0] < 0xF04600 or _r[0] > 0xF0A500 for _r in _out64))
 check('...but the panel-command issuers replicate outside it, at $F04500 and $F0A57E',
       any(_r[0] <= 0xF04500 <= _r[1] + 32 for _r in _runs64)
       and any(_r[0] <= 0xF0A57E <= _r[1] + 32 for _r in _runs64))
