@@ -73,6 +73,15 @@ def main():
          'fired'),
         # ... while the three collisions that predate the guard stay quiet.
         ('known benign redefinitions are tolerated', src, 'quiet'),
+        # Guard #7: raw unsigned branch-displacement arithmetic.  68000
+        # bsr.w/bra.w displacements are SIGNED, so "<const> + _w(<const>)"
+        # computes the wrong target for every backward branch.  Two legitimate
+        # self-relative TABLE sites are allowlisted; a third must fire.
+        ('guard #7 fires on unsigned displacement arithmetic',
+         src.replace("check('the ASQ-post wrapper IS called, from $F043E8',",
+                     "check('INJECTED', 0xF09B64 + _w(0xF09B64) == 0xF089EE)\n"
+                     "check('the ASQ-post wrapper IS called, from $F043E8',", 1),
+         'fired'),
     ]
     bad = 0
     for i, (name, text, want) in enumerate(cases):

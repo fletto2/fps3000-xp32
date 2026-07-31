@@ -137,6 +137,33 @@ if _vac:
     sys.exit(2)
 
 
+# --- STRUCTURAL SELF-AUDIT #7: unsigned branch-displacement arithmetic -----
+# 68000 bsr.w/bra.w/bcc.w displacements are SIGNED.  Writing
+#     <const> + _w(<const>)
+# to compute a branch target silently gives the wrong answer for every
+# BACKWARD branch, and is right only by luck for forward ones.  This mistake
+# has now been made three times in this project (once producing $F10186 for
+# $F00186, twice more in one session AFTER the _bsrw helper existed to prevent
+# it), so it is enforced rather than remembered.  Use _bsrw(<opcode addr>).
+#
+# Two legitimate sites remain: self-relative TABLE entries, where the offset
+# word lives AT the entry address rather than after an opcode, so _bsrw does
+# not apply.  Allowlisted by count, like guard #6.
+_ALLOWED_RAW_DISP = 2
+_raw = []
+for _n in _ast_g.walk(_tree_g):
+    if isinstance(_n, _ast_g.BinOp) and isinstance(_n.op, _ast_g.Add) \
+            and isinstance(_n.left, _ast_g.Constant) \
+            and isinstance(_n.left.value, int) \
+            and isinstance(_n.right, _ast_g.Call) \
+            and getattr(_n.right.func, 'id', None) == '_w':
+        _raw.append(_n.lineno)
+if len(_raw) > _ALLOWED_RAW_DISP:
+    print('  FATAL: unsigned branch-displacement arithmetic at lines',
+          _raw, '- use _bsrw() for branch targets')
+    sys.exit(2)
+
+
 # --- STRUCTURAL SELF-AUDIT #4: shadowed ROM accessors ----------------------
 # _b/_w/_l are the byte/word/long ROM readers.  Later code rebinds some of
 # these names to loop variables (_b as a regex match at two sites), so a
