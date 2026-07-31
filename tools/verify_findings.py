@@ -6710,7 +6710,7 @@ check('the panel-status ISR clears MODE0 bit 11, latches the word, then sets bit
       and _w(0xF04942) == 0x33C0 and _l(0xF04944) == 0x00000E86
       and _w(0xF04948) == 0x08C0 and _w(0xF0494A) == 0x000A)
 check('...and exactly the four XP tasks set MODE0 bit 11 in their idle sweep',
-      all(_w(x) == 0x08C0 and _w(x + 2) == 0x000B
+      all(_w(x) == 0x08C4 and _w(x + 2) == 0x000B      # bset #$b,d4 -- d4, not d0
           for x in (0xF0689E, 0xF072B6, 0xF07CB6, 0xF086B6)))
 
 _set21a = _re21a.findall(r'bset\.\w+\s+[^,]+,\s*\$21a\(a\d\)', _asm21a)
@@ -6725,14 +6725,16 @@ check('the $F0A4BE init table is THREE blocks of SEVEN words (48 bytes), not fou
       _w(0xF0A472) == 0x7803 and _w(0xF0A478) == 0x7607
       and _w(0xF0A474) == 0x3459 and _w(0xF0A47A) == 0x3519)
 check('...with offsets $1000/$0FF0/$0FE0 from the 4KB-rounded RAM top $1F000',
-      _w(0xF0A4BE) == 0x1000 and _w(0xF0A4D0) == 0x0FF0 and _w(0xF0A4E2) == 0x0FE0
+      # stride is 16 bytes: 1 offset word + 7 data words
+      _w(0xF0A4BE) == 0x1000 and _w(0xF0A4CE) == 0x0FF0 and _w(0xF0A4DE) == 0x0FE0
       and _l(0xF0A462) == 0x0280FFFF and _w(0xF0A466) == 0xF000)
 check('...so the three runs are $1FFF2-$1FFFE, $1FFE2-$1FFEE, $1FFD2-$1FFDE',
       all(_w(0xF0A4C0 + 2 * i) == 0x008E for i in range(7)))
 check('...block 1 carries the panic vectors $8D/$8E/$93 and specific $1C/$8C',
-      [_w(0xF0A4D2 + 2 * i) for i in range(7)] == [0x8E, 0x8C, 0x1C, 0x93, 0x8E, 0x8E, 0x8D])
+      # ROM/table order = descending write order; ascending-address order is its reverse
+      [_w(0xF0A4D0 + 2 * i) for i in range(7)] == [0x8E, 0x8C, 0x1C, 0x93, 0x8E, 0x8E, 0x8D])
 check('...block 2 carries a RUN of four consecutive vectors $71-$74',
-      [_w(0xF0A4E4 + 2 * i) for i in range(7)] == [0x1F, 0x8E, 0x74, 0x73, 0x72, 0x71, 0x8E])
+      [_w(0xF0A4E0 + 2 * i) for i in range(7)] == [0x1F, 0x8E, 0x74, 0x73, 0x72, 0x71, 0x8E])
 check('...and the control word $0CD0 then goes to $1F000+$FF0 = $1FFF0',
       _w(0xF0A486) == 0xD5FC and _l(0xF0A488) == 0x00000FF0
       and _w(0xF0A48C) == 0x34BC and _w(0xF0A48E) == 0x0CD0)
