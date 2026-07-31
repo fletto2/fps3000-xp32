@@ -35155,3 +35155,37 @@ Together with the absent-channel run, both arms of the bit-15-clear dispatch are
 channel performs the two-transaction cycle and tears down; an invalid one rejects with panel `$263`
 and spins. That is the whole of the SBC→AC conversation this firmware can conduct unaided, observed
 rather than inferred.
+
+## The 96-byte leak is on the notify path ONLY — `$F08614` alone does not identify it
+
+The junction, measured and read:
+
+```
+$F08572  tst.l $10ae(a2)          ; the USER trampoline slot for this channel
+$F08576  beq.w $F08608            ; ZERO -> skip the entire notify arm
+$F0857A  lea -$60(a7),a7          ; the 96-byte allocation -- NOTIFY PATH ONLY
+   ...
+loc_F08608:
+$F08608  subq.w #$1,d0 / lsl.w #$1,d0 / movea.w d0,a2     ; index x2
+$F0860E  bset.b #$0,$10a1(a2)     ; completion with no USER
+$F08614  rts
+```
+
+In the driven run (`FPS3K_XPIRQ=1`, no CP program loaded) **`$F0857A` is not reached and `$F08608`
+and `$F08614` are** — control takes the `beq.w` straight over the allocation.
+
+**So `$F08614` is the return for both paths, and it is balanced on one of them.** This project
+records the leak as "`$F08568` (channel rejected, returns before the allocation) is balanced;
+`$F08614` (channel accepted, `USER` called) is 96 bytes low". That is right for the notify path, but
+it implies `$F08614` is *the* leaking return — and it is not: with `$10AE` zero the same `rts` is
+perfectly balanced, because the `lea` it would have to undo never executed. **The discriminator is
+whether `$F0857A` ran, not which `rts` is reached.**
+
+That matters for the recorded hardware prediction ("a CP handler that simply returns will crash its
+XP task at `$F08614`"). The prediction stands — but only once a trampoline is installed. On a
+machine with `$10AE` zero, `$F08614` is reached routinely and harmlessly, which is why every
+undriven and most driven runs pass through it without incident.
+
+Incidental: `$F0860E` indexes `$10A1` by `(ch-1)*2` (`subq`/`lsl #1`), confirming the per-channel
+word array at `$10A0` is stride **2** — the same stride the teardown code applies to `$1098`, and a
+different one from the stride-4 `$1080` pointer array three instructions earlier.

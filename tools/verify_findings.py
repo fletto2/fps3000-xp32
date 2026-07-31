@@ -8131,6 +8131,16 @@ check('teardown releases $1080 at stride 4 and $1098 at stride 2 (index halved)'
       and _w(0xF08546) == 0x3444
       and _w(0xF08548) == 0x357C and _w(0xF0854C) == 0x1098)
 
+check('a zero $10AE skips the 96-byte allocation entirely',
+      _w(0xF08572) == 0x4AAA and _w(0xF08574) == 0x10AE
+      and _w(0xF08576) == 0x6700 and _bsrw(0xF08576) == 0xF08608
+      and _w(0xF0857A) == 0x4FEF and _w(0xF0857C) == 0xFFA0)
+check('...so $F08614 is the return for BOTH paths, balanced on the no-USER one',
+      _w(0xF08614) == 0x4E75
+      and _w(0xF0860E) == 0x08EA and _w(0xF08610) == 0x0000
+      and _w(0xF08612) == 0x10A1
+      and _w(0xF08608) == 0x5340 and _w(0xF0860A) == 0xE348)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
