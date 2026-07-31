@@ -27179,6 +27179,12 @@ only one of them is the usual suspect: **10 sites use a computed bit number** (`
 and friends — the walking-bit tests), which no literal-bit census can see; the remaining
 14 were missed by a narrower base-register sweep.
 
+**The 52 is cross-validated by two different instruction maps.** The analysis used
+decode-at-every-even-address; the regression harness builds its map by a *linear* walk from
+`$F00000` following instruction sizes. Those disagree wherever data desynchronises a linear
+walk, so agreement is meaningful — both give `8 + 44 = 52` with the same 10 computed-bit
+sites.
+
 Bit-by-bit on `$1FFF1`, from the literal sites:
 
 | bit | `bset` | `bclr` |
