@@ -27323,7 +27323,19 @@ applying the mod-8 rule there would be equally wrong.
 The reliable discriminator is the destination operand, not the `.b` suffix: capstone prints
 `.b` in both cases.
 
-## `$FF020C` is written at SIX sites, not seven — and the six are structural (2026-07-31)
+## `$FF020C`: the documented SEVEN sites are right — my "correction" to six was wrong
+
+> **This section originally claimed six sites. That was my error**, and the regression
+> harness caught it. A provenance sweep missed `$F04B2C` because its base register's load
+> was not captured — the same unsoundness documented above. Operand-form matching finds
+> **seven** `move.w #$4,$20c(aN)` sites: `$F04AC2`, `$F04B2C`, `$F05A2C`, `$F0646C`,
+> `$F06E84`, `$F07884`, `$F08284`. The structural reading survives with one more member:
+> **two in RDHC** (the SLC preamble and the bulk loop) plus **one per `POLL` copy**.
+>
+> Worth recording as a case where an unsound method produced a confident *correction* of a
+> correct figure. The original text follows.
+
+### (superseded) the six-site claim
 
 Counting every write to `XLTR_COUNTER`, through base registers **and** absolute references:
 

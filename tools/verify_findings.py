@@ -5893,11 +5893,11 @@ check('bit instructions split roughly evenly between register and memory targets
 check('...and ~30% of memory-target sites carry a literal bit number > 7',
       0.25 < _bitbig / _bitmem < 0.35, (_bitbig, _bitmem))
 
-check('XLTR_COUNTER takes $04 at exactly SIX sites, not seven',
+check('XLTR_COUNTER takes $04 at SEVEN sites -- the originally documented figure',
       sorted(x for x in range(0xF00000, 0xF10000, 2)
              if (insn(x) or '').startswith('move.w #$4,')
              and '20c(' in (insn(x) or '').lower())
-      == [0xF04AC2, 0xF05A2C, 0xF0646C, 0xF06E84, 0xF07884, 0xF08284])
+      == [0xF04AC2, 0xF04B2C, 0xF05A2C, 0xF0646C, 0xF06E84, 0xF07884, 0xF08284])
 check('...five of which are the POLL copies at the documented $2858 / $A00 offsets',
       0xF08284 - 0xF05A2C == 0x2858 and 0xF08284 - 0xF07884 == 0xA00
       and 0xF06E84 - 0xF0646C == 0xA18)
