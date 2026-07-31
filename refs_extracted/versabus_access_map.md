@@ -36373,3 +36373,42 @@ rather than on a register file, and anyone repeating the argument should say so.
 **Still open:** what drives `WCCLK` on sheet 16. `RDFIFO#` here is the obvious candidate — a FIFO read
 advancing both the read pointer and the word count — but the two sheets do not show that connection
 directly, and sheets 12-13 (`FIFO CONTROL`, `DMA HANDSHAKE`) are where it would be.
+
+## Sheet 12 `FIFO CONTROL, WRTCLK, DMASTB, SAPX` — the host link at wire level (2026-07-31)
+
+The most directly useful sheet so far for "map all communications".
+
+**The RS-422 differential link appears on the drawing.** `H18` is a **`3487`** (quad differential
+line **driver**) and `H17` a **`3486`** (quad differential **receiver**), with a termination network
+around them — `H17R1 1K`, `H17R2 300`, `H5R1 1K`, `J17R1 120`, `A15R1 620`, `A13R1 600`. That is the
+third independent confirmation of the recorded RS-422 finding: the documented card photo, the second
+board photo, and now a schematic.
+
+**The host handshake signals are named and pinned:**
+
+| signal | direction | connector pin |
+|---|---|---|
+| `DMASTBR` / **`DMASTB`** | received (differential) | **B-23 / B-22** |
+| `SAPXR` / **`SAPX`** | received (differential) | **B-27 / B-25** |
+| **`DMA2HOST`** | driven out through `H18 3487` | — |
+
+**And the FIFO write side is host-driven.** The received `DMASTB`/`SAPX` are synchronised
+(`SYNCSAPX`, `SYNCSAPX#`) through `74279` latches and `74S74` flops, and that logic generates
+**`WRTCLK`**, **`WRTCLK#`**, **`FIFOWRT`**, **`FIFOWRT#`**, **`RDCLK`**, `GENWRTCLK`, `NOTSTB` and
+`CLKSM`.
+
+So the bulk path resolves end to end:
+
+```
+host asserts DMASTB (RS-422)  ->  H17 3486 receiver  ->  synchroniser
+   ->  WRTCLK / FIFOWRT  ->  word written into the 16-deep DMA FIFO (sheet 14)
+SBC reads $FF0008  ->  RDFIFO#  ->  word out, read pointer advances
+```
+
+**The host clocks data in; the SBC clocks it out.** That is why the firmware polls `$FF0004` bit 0
+for ready rather than initiating anything — the arrival rate is not its to control — and it is the
+mechanism behind the recorded observation that the SBC's bulk loop is "one 16-bit word per cycle, no
+interrupts anywhere in the path".
+
+**`WCCLK` still not located.** It is not on this sheet; `RDCLK` is generated here and remains the
+best candidate, but sheet 13 is the remaining place to look.
