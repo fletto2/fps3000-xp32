@@ -5839,8 +5839,11 @@ for _a in sorted(_mins):
                     _vm[_nm][0 if _o2.startswith('#') else 1] += 1
                     break
         _p += _s2
-check('the VMOD pair carries 52 bit operations, not the 28 recorded',
-      sum(sum(v) for v in _vm.values()) == 52, _vm)
+# 52 is the PERMISSIVE provenance figure; the strict variant gives 42.  Assert the
+# bound rather than a point value -- the 10 disputed sites are handlers that
+# inherit a5, and no static method here settles them.
+check('the VMOD pair carries between 42 and 52 bit operations, not the 28 recorded',
+      42 <= sum(sum(v) for v in _vm.values()) <= 52, _vm)
 check('...of which TEN use a computed bit number and evade a literal census',
       _vm['$1FFF1'][1] == 10 and _vm['$1FFF0'][1] == 0, _vm)
 check('VMOD bit 6 is set exactly once, at $F09052',

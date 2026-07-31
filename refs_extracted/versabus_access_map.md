@@ -27179,11 +27179,21 @@ only one of them is the usual suspect: **10 sites use a computed bit number** (`
 and friends — the walking-bit tests), which no literal-bit census can see; the remaining
 14 were missed by a narrower base-register sweep.
 
-**The 52 is cross-validated by two different instruction maps.** The analysis used
-decode-at-every-even-address; the regression harness builds its map by a *linear* walk from
-`$F00000` following instruction sizes. Those disagree wherever data desynchronises a linear
-walk, so agreement is meaningful — both give `8 + 44 = 52` with the same 10 computed-bit
-sites.
+> **QUALIFIED 2026-07-31, later the same day.** The figure 52 comes from the *permissive*
+> provenance variant, which crosses control transfers. The strict variant gives **42**. The
+> 10 disputed sites are all small routines or handlers in the self-test that use `a5`
+> **without setting it** — `$F09052` is `bset.b #$6,$1(a5)` followed immediately by `rte`,
+> an exception handler inheriting `a5` from whatever it interrupted. `a5` is loaded with
+> `$1FFF0` at nine points in the self-test but *also* with `$EFF8`, `$10008` and from `d1`,
+> so it does not always hold the VMOD base there.
+>
+> **So the count is 42 certain and at most 52**, and the specific claim "bit 6 is set
+> exactly once, at `$F09052`" is **conditional on `a5` holding `$1FFF0` at exception time** —
+> which no static method available here can establish. The downstream remark that bit 6 is
+> therefore clear during the SCM test should be read with the same qualification.
+>
+> Two instruction maps agreeing (decode-at-every-address and linear walk) validated the
+> *decoding*, not the *provenance* — a distinction I elided when I first wrote this.
 
 Bit-by-bit on `$1FFF1`, from the literal sites:
 
