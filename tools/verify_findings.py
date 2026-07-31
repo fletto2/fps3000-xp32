@@ -4281,6 +4281,18 @@ check('...and op $C reaches the index with no comparison at all',
       and insn(0xF05032) == 'lsl.w #$2, d1'
       and insn(0xF05034) == 'movea.w d1, a1')
 
+# Op $6 is an unbounded peek/poke; op $8 is the one place an ADDRESS is bounded.
+check('op $6 takes the chassis-supplied address straight into a1, unvalidated',
+      insn(0xF04F30) == 'movea.l $e58.l, a1')
+check('...and the shared routine clears $FF0216 bit 7 for the access, restoring after',
+      insn(0xF04EA6) == 'bclr.b #$7, d0'
+      and insn(0xF04EDC) == 'move.w d1, $216(a0)')
+check('...with bit 5 selecting read vs write and bit 4 auto-incrementing by 2',
+      insn(0xF04EAE) == 'btst.b #$5, $e87.l'
+      and insn(0xF04ED6) == 'addq.l #$2, $e58.l')
+check('op $8 bounds $E7E to the staging range $10000-$1FFFF',
+      insn(0xF04F70) == 'cmpi.l #$10000, $e7e.l')
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
