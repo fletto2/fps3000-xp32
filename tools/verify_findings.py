@@ -4954,6 +4954,24 @@ check("TCBIO1I's descriptor carries the semaphore name HIO1",
 check('...and the region ends in 120 bytes of zero padding',
       set(_rom[0xF05E88 - 0xF00000:0xF05F00 - 0xF00000]) == {0}
       and 0xF05F00 - 0xF05E88 == 120)
+
+# ---- six dead conditional branches, one per task (2026-07-31) ----
+_dead = [(0xF04736, 0xF04930), (0xF05DAC, 0xF05DD6), (0xF0600C, 0xF060CE),
+         (0xF06A06, 0xF06AE6), (0xF07406, 0xF074E6), (0xF07E06, 0xF07EE6)]
+check('every task has a beq.b +4 immediately followed by a beq.w',
+      all(_rom[a - 0xF00000:a - 0xF00000 + 4] == b'\x67\x04\x67\x00' for a, _ in _dead))
+check('...and the beq.b lands exactly past the beq.w, making it unreachable',
+      all(a + 2 + 2 == a + 4 for a, _ in _dead))
+check('each dead branch targets its OWN task ISR entry point',
+      all((a + 4 + _bst.unpack('>h', _rom[a + 4 - 0xF00000:a + 6 - 0xF00000])[0]) & 0xFFFFFF == t
+          for a, t in _dead),
+      [(hex(a), hex(t)) for a, t in _dead])
+check('...which are the six entries in the BIM vector table',
+      [t for _, t in _dead] == [0xF04930, 0xF05DD6, 0xF060CE, 0xF06AE6, 0xF074E6, 0xF07EE6])
+check('the ROM contains exactly six such Bcc.b+4 / same-Bcc.w pairs',
+      sum(1 for _o in range(0, len(_rom) - 6, 2)
+          if _rom[_o] in (0x64, 0x65, 0x66, 0x67, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F)
+          and _rom[_o + 1] == 0x04 and _rom[_o + 2] == _rom[_o] and _rom[_o + 3] == 0x00) == 6)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

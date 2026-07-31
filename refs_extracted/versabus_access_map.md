@@ -23012,3 +23012,55 @@ Recording it in the known-divergences list rather than fixing it, because the fi
 address decode that three golden-master digests depend on, and the change would be invisible in
 every configuration currently tested — exactly the sort of edit that should be made with a
 measurement in hand.
+
+## Six dead conditional branches — one per task, each pointing at its own ISR (2026-07-31)
+
+Every one of the six tasks contains this byte sequence, and it is provably dead:
+
+```
+67 04        beq.b  +4        -> the instruction after the beq.w
+67 00 xx xx  beq.w  <target>
+```
+
+**Local proof of unreachability, needing no flag analysis**: if Z = 1 the short branch is taken
+and skips the long one; if Z = 0 neither branch is taken. `beq` does not modify flags, so no path
+exists on which the `beq.w` transfers control. It is dead **unconditionally**, whatever the
+program state.
+
+The six sites, and their targets:
+
+| task | site | unreachable branch targets |
+|---|---|---|
+| RDHC | `$F04736` | **`$F04930`** — the panel-status ISR |
+| IO1I | `$F05DAC` | **`$F05DD6`** — the host-link ISR |
+| XP4I | `$F0600C` | **`$F060CE`** — its channel ISR |
+| XP3I | `$F06A06` | **`$F06AE6`** — its channel ISR |
+| XP2I | `$F07406` | **`$F074E6`** — its channel ISR |
+| XP1I | `$F07E06` | **`$F07EE6`** — its channel ISR |
+
+**Each task's dead branch points at that task's own interrupt handler** — exactly the six entry
+points recorded in the `!IDV` table and the BIM vector table.
+
+### What it most likely was
+
+The standard 68000 long-conditional-branch idiom is `bcc.b +4 / bra.w target` — or, to branch on
+equal beyond `bcc.b` range, **`bne.b +4 / beq.w target`**. Writing `beq.b` instead of `bne.b` is a
+**one-bit difference** (`$67` vs `$66`) and produces exactly what is in the ROM. So the most
+economical reading is a single mistyped opcode, replicated into all six tasks with the template.
+
+That reading is not certain — the sequence could equally be a deliberate 4-byte skip over embedded
+data — but the target being each task's own ISR, in all six cases, fits a branch far better than
+it fits a datum.
+
+### Two consequences that do not depend on which reading is right
+
+**1. The ISRs are reached only through the vector table.** Whatever was intended, no task ever
+transfers control into its own handler directly. The `!IDV`/vector path is the sole entry, which
+is what this project has assumed and never verified negatively.
+
+**2. These dead branches are why recursive descent finds the ISR entry points at all.** A handler
+reached only via a runtime vector table has no static reference — that is precisely the problem
+that hid three task entry points as `DC.W 0x7001` until the TDTI table was used as a seed. The
+six ISR entries escaped that fate because each has a `beq.w` pointing at it, dead or not. **A
+disassembler bug and a firmware bug cancelling out** is worth knowing about before anyone
+"cleans up" either.
