@@ -23586,3 +23586,56 @@ This is checkable two ways without new information:
 The eight-byte offset also lets a dump be read directly: name at entry+0, the P/V field at
 entry+8, and the `users`/`type`/`session` values documented as 1/2/0 occupying the four bytes
 between.
+
+## The semaphore field decoded: `{bit 15 = TAS lock, bits 14-0 = signed count}` (2026-07-31)
+
+`T0P` (TRAP #0 `$01`) and `T0V` (`$02`) are eleven and ten instructions, and between them they
+define the field's format exactly:
+
+```
+T0P ($F006E8)                         T0V ($F00788)
+  move.w  sr,-(a7)                      move.w  sr,-(a7)
+  ori.w   #$700,sr    mask IRQs         ori.w   #$700,sr
+  tas.b   (a0)        TEST-AND-SET      tas.b   (a0)
+  bmi.b   -2          spin on bit 7     bmi.b   -2
+  move.w  (a0),d0                       move.w  (a0),d0
+  lsl.w   #$1,d0      discard bit 15    lsl.w   #$1,d0
+  asr.w   #$1,d0      sign-extend b14   asr.w   #$1,d0
+  subq.w  #$1,d0      DECREMENT         addq.w  #$1,d0      INCREMENT
+  move.w  d0,(a0)     store, lock clear ble.b   / move.w d0,(a0)
+  bmi.b   / rte                         rte
+```
+
+**The field is a 16-bit word: bit 15 is a `TAS` lock and bits 14-0 are a signed count.** The
+`lsl #1` / `asr #1` pair is how the code strips the lock bit and sign-extends the 15-bit count in
+two instructions; writing the result back both stores the new count and **releases the lock**,
+since bit 15 comes out zero.
+
+### `$1F41` and `$1F45` are not valid semaphore states
+
+Under that format, XP4I's two constants decode as **lock clear, count 8001** and **lock clear,
+count 8005**. A semaphore whose count is eight thousand is not a semaphore in use — and XP4I
+writes them with a plain `move.w`, not through `T0P`/`T0V`, so no lock is taken.
+
+Worse for the semaphore reading: XP4I selects between them on **bit 11 of the current value**, and
+**both constants have bit 11 set** (`$1F41 & $800` = `$800`). So the first write flips the location
+into a state where every subsequent pass writes `$1F45` — a one-way latch, not a counter.
+
+**So XP4I is repurposing the location, not operating a semaphore.** It obtains a pointer into the
+`!UST` as a side effect of `$2B` SGSEM and uses that word as private two-state storage. That is a
+better-supported conclusion than "unidentified constants", and it explains why the values fit no
+documented field: they are not meant to.
+
+### An emulation requirement this surfaces
+
+`T0P` and `T0V` use **`tas.b`**, whose 68000 implementation is an **indivisible
+read-modify-write bus cycle** — the CPU asserts the bus for both halves and no other master may
+intervene. On this board that matters: the chassis **is** a bus master (`MC26S10P` arbitration
+transceivers on the XLTR), so the spinlock's correctness depends on arbitration honouring the RMW
+cycle.
+
+`emulator/` models no arbitration at all — the CPU always owns the bus — so `tas` is trivially
+atomic there and the spinlock can never be observed to fail. That is fine for running this
+firmware and wrong as a model: **a chassis that DMAs into a semaphore word between the two halves
+of a `tas` would corrupt it on hardware and cannot on the emulator.** Adding it to the
+known-divergences list rather than the bug list, since nothing in this ROM can exercise it.

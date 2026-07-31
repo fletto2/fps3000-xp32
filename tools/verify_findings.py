@@ -5132,6 +5132,24 @@ check('...so AXP4 and HXP4 P/V fields are $1FBA0 and $1FBB6',
       0x1FB14 + 6 * 22 + 8 == 0x1FBA0 and 0x1FB14 + 7 * 22 + 8 == 0x1FBB6)
 check('...and the nine entries fit inside the two allocated pages',
       0x1FB14 + 9 * 22 <= 0x1FD00)
+
+# ---- the semaphore field is {bit 15 TAS lock, bits 14-0 signed count} ----
+check('T0P masks interrupts and spins on a TAS of the field',
+      insn(0xF006EA) == 'ori.w #$700, sr' and insn(0xF006EE) == 'tas.b (a0)'
+      and insn(0xF006F0) == 'bmi.b $f006ee')
+check('...then strips bit 15 and sign-extends the 15-bit count',
+      insn(0xF006F4) == 'lsl.w #$1, d0' and insn(0xF006F6) == 'asr.w #$1, d0')
+check('T0P decrements, T0V increments',
+      insn(0xF006F8) == 'subq.w #$1, d0' and insn(0xF00798) == 'addq.w #$1, d0')
+check('T0V takes the same lock the same way',
+      insn(0xF0078E) == 'tas.b (a0)' and insn(0xF00790) == 'bmi.b $f0078e')
+check('writing the stripped value back releases the lock (bit 15 comes out zero)',
+      insn(0xF006FA) == 'move.w d0, (a0)')
+check("XP4I's constants have bit 15 clear and bit 11 SET in both -- a one-way latch",
+      not (0x1F41 & 0x8000) and not (0x1F45 & 0x8000)
+      and (0x1F41 & 0x800) and (0x1F45 & 0x800))
+check('...so they are not semaphore states: counts of 8001 and 8005',
+      (0x1F41 & 0x7FFF) == 8001 and (0x1F45 & 0x7FFF) == 8005)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
