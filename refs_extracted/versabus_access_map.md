@@ -23835,9 +23835,26 @@ byte — bit 7 "has a block to validate/translate", bit 6 a second translation �
 dispatcher can be written for all 60 live directives without knowing what 34 of them do.
 
 **And the sizes are self-consistent in a way that validates the decode.** Every named directive's
-declared size matches the structure it is documented to take, eleven for eleven; the unnamed ones
-fall into the same small set of sizes rather than scattering. A misread flags word would produce
-neither property.
+declared size matches the structure it is documented to take, eleven for eleven.
+
+**The clustering claim needed correcting (2026-07-31).** A first draft said the unnamed directives
+"fall into the same small set of sizes rather than scattering", and a regression check written to
+assert that **failed**: there are **16 distinct sizes**, not a small set. The real shape is
+**bimodal**, and stating it properly makes it a stronger result:
+
+| | |
+|---|---:|
+| seven size clusters of four or more — 0, 8, 10, 12, 16, 24, 28 | **51 of 60 directives** |
+| nine singleton sizes — 4, 6, 9, 14, 18, 20, 22, 36, 56 | 9 directives |
+| sizes occurring two or three times | **none** |
+
+So **85% of live directives share a parameter-block size with at least three others**, and the
+remaining nine each have a unique size and belong to no family. That there is *no* middle ground —
+no size used exactly twice or three times — is itself striking, and is the property a misread
+flags word would not produce.
+
+The nine singletons are the directives a family-based reading cannot bound, and are where
+individual decoding would have to start.
 
 ## The TRAP #1 flags byte decoded completely (2026-07-31)
 

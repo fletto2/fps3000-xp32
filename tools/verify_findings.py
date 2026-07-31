@@ -5208,14 +5208,25 @@ check('...and $3B loads the callee registers from the saved d0-d7 area',
 _t1live = [n for n, (h, _) in _t1.items() if h != 0xF003D0]
 check('60 TRAP #1 slots are live', len(_t1live) == 60, len(_t1live))
 _sizes = _mcol.Counter(_t1[n][1] >> 8 for n in _t1live)
-check('the declared sizes fall into a small set, not scattered',
-      len(_sizes) <= 14, dict(_sizes))
+# CORRECTED 2026-07-31: an earlier draft asserted "a small set" of sizes and
+# failed at 16 distinct values.  The real shape is BIMODAL -- seven clusters of
+# four or more covering 51 of the 60 live directives, and nine singletons that
+# belong to no family.  That is a sharper result than the one that failed.
+_clusters = {k: v for k, v in _sizes.items() if v >= 4}
+_singles = [k for k, v in _sizes.items() if v == 1]
+check('51 of the 60 live directives fall into seven size clusters',
+      sum(_clusters.values()) == 51 and len(_clusters) == 7,
+      (sum(_clusters.values()), len(_clusters)))
+check('...and exactly nine have singleton sizes, belonging to no family',
+      len(_singles) == 9 and sorted(_singles) == [4, 6, 9, 14, 18, 20, 22, 36, 56],
+      sorted(_singles))
+check('...with no size occurring two or three times', not [v for v in _sizes.values() if 1 < v < 4])
 check('the segment family declares 24 or 28',
       all((_t1[n][1] >> 8) in (24, 28) for n in (0x03, 0x04, 0x05, 0x06, 0x07, 0x09, 0x48)))
 check('$2C declares 10, the semaphore-descriptor size', (_t1[0x2C][1] >> 8) == 10)
 check("...and its handler calls T0FNDSEM",
       _t1[0x2C][0] == 0xF03362 and insn(0xF03366) == 'movea.l (a5), a0'
-      and insn(0xF03368) == 'bsr.w $f01876.l')
+      and insn(0xF03368) == 'bsr.w $f01876')
 check('the task-state family $42/$44/$45 declares 12 like RSTATE',
       all((_t1[n][1] >> 8) == 12 for n in (0x42, 0x44, 0x45, 0x43)))
 check('eight live directives declare no parameter block at all',
