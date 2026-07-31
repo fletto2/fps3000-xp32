@@ -5160,6 +5160,24 @@ check('...and it sits inside T0QEVNTI, the post-from-interrupt directive',
       _t0rev.get(0xF01600) == 0x18 and 0xF01600 < 0xF01614)
 check('the FPS application layer takes NO lock anywhere',
       not any(a >= 0xF04488 for a in _tas))
+
+# ---- directive $3B is a keyed supervisor arbitrary-code-call (2026-07-31) ----
+check('directive $3B defaults its status to error before checking the key',
+      insn(0xF039C2) == 'move.w #$1, $102(a6)')
+check('...compares parameter-block +$120 against $4BAA7BFB',
+      insn(0xF039C8) == 'move.l $120(a6), d0'
+      and insn(0xF039CC) == 'cmpi.l #$4baa7bfb, d0')
+check('...takes its target from $0C04 via -(a0) on the $0C08 base',
+      insn(0xF039E6) == 'movea.l $c08.w, a0' and insn(0xF039EA) == 'move.l -(a0), d6')
+check('...translates it with T0LOGPHY', _t0rev.get(0xF0175C) == 0x08)
+check('...loads a full register set from TCB+$100 and CALLS it',
+      insn(0xF03A02) == 'movem.l $100(a6), d0-d7/a0-a4' and insn(0xF03A08) == 'jsr (a5)')
+check('the magic key occurs EXACTLY ONCE in the image, as that comparison operand',
+      _rom.count(bytes.fromhex('4baa7bfb')) == 1)
+check('...so it can only arrive from outside the ROM',
+      _rom.find(bytes.fromhex('4baa7bfb')) == 0xF039CE - 0xF00000)
+check('$0C04, the target global, has NO writer anywhere in the ROM',
+      not any('$c04.w' in o for _, (_, o, _) in _mins.items()))
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

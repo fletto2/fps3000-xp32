@@ -23675,3 +23675,63 @@ board the chassis is a master, so an implementation that models arbitration must
 land between the two halves. `emulator/` models no arbitration, so `tas` is trivially atomic and
 these five sites can never be observed to fail — correct for running this ROM, wrong as a model
 of the hardware.
+
+## Directive `$3B` decoded: a supervisor arbitrary-code-call gated by a 32-bit key (2026-07-31)
+
+`$3B` is recorded here as "an undocumented directive gated by the magic constant `$4BAA7BFB` at
+`+$120` of its parameter block". Decoding its handler at `$F039C2` shows what the key unlocks:
+
+```
+$F039C2  move.w   #$1,$102(a6)          default the status to ERROR
+$F039C8  move.l   $120(a6),d0
+$F039CC  cmpi.l   #$4BAA7BFB,d0         THE KEY
+$F039D2  bne.b    $F03A12               wrong -> rte, status 1
+$F039D4  tst.w    $70(a6) / beq
+$F039DA  movea.l  $C3A.w,a0             the display-device pointer
+$F039DE  btst.b   #$1,$1(a0) / bne      a device bit can also veto
+$F039E6  movea.l  $C08.w,a0
+$F039EA  move.l   -(a0),d6              <- the TARGET, read from $0C04
+$F039EC  moveq    #$6,d5
+$F039EE  movea.l  $36(a6),a0
+$F039F2  bsr.w    $F0175C               T0LOGPHY -- logical -> physical translate
+$F039FC  movea.l  d6,a5
+$F039FE  clr.l    $100(a6)
+$F03A02  movem.l  $100(a6),d0-d7/a0-a4  load a FULL REGISTER SET from the TCB
+$F03A08  jsr      (a5)                  <- CALL IT
+$F03A0A  clr.l    $C62.w
+$F03A0E  movea.l  $C0C.w,a6
+$F03A12  rte
+```
+
+**A caller that supplies the key can execute an arbitrary address in supervisor mode with a
+chosen register set**, the registers coming from the TCB at `+$100` and the target from the
+kernel global `$0C04` after logical-to-physical translation.
+
+### Both gates are closed in this firmware
+
+- **The key exists only as a comparison operand.** `$4BAA7BFB` occurs **exactly once** in the
+  whole 64 KB — at `$F039CE`, the immediate of that `cmpi.l`. It is never stored, never
+  computed, never in a table. So it can only arrive from outside the ROM.
+- **`$0C04` is never written.** A sweep for every reference finds **none** — the target global has
+  no writer anywhere in the image. After boot it reads zero.
+
+So on this ROM alone the directive is doubly unusable: no site issues `$3B`, no site supplies the
+key, and the target it would jump to is null.
+
+### What it means for the machine
+
+`$0C04` is ordinary low RAM, writable by any task. **Host-loaded software that knows the key can
+write `$0C04` and issue `$3B` to gain supervisor execution** — which is presumably the point: this
+is Motorola's kernel, and a keyed supervisor-call hook is a plausible vendor debug or extension
+facility.
+
+It does not widen the *machine's* attack surface, because the chassis already has strictly more
+power — arbitrary memory read/write through op `$6`, full register access including the USP
+through the bit-7 dispatcher, and resume. The chassis needs no key. But it is a second,
+independent route to the same capability, reachable from **task** context rather than from the
+chassis, and it belongs in the emulation picture: a model that implements TRAP #1 `$3B` faithfully
+must implement the key check, the `$0C04` indirection, the `T0LOGPHY` translation and the
+register load from `TCB+$100`, or host software exercising it will behave differently.
+
+`$0C62`, cleared on completion here and at four other sites and read once at `$F00912`, is the
+flag that marks the call in progress.
