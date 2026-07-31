@@ -17548,3 +17548,25 @@ failure code appears exactly as many times as its directive is invoked in that t
 `$26D` once ↔ `$01` `GTSEG` once, **`$26E` twice ↔ `$2D` `CRSEM` twice**, `$270` once ↔
 `$4C` once, **`$271` twice ↔ `$29` `ATSEM` twice**. `$26F` does not occur at all. That is a
 count-level match across four independent copies, not just a plausible story.
+
+### The trace facility, end to end — and why its table is empty
+
+With `$1F500` identified as the trace table, the rest of the mechanism falls out:
+
+1. **The mask** is the word at `$0C34`, written once at init by `$F0A048`
+   (`move.w $f0a52a(pc),$c34.w`) from the ROM constant at **`$F0A52A`, which is `$0000`**.
+2. **Eight hook sites** test it: `$F002DC`, `$F0059A`, `$F006D8`, `$F00896`, `$F008FC`,
+   `$F00AB4`, `$F00B52`, `$F00F5E`, plus `$F044A2` in the FPS layer.
+3. **The readout** is directive `$08` `SNPTRC`, "MOVE TRACE TABLE TO USER BUFFER".
+
+Since the mask is zero, every hook is off, which is exactly why the table reads
+`TRCPTR = $1F508` with **0 of 9 entries written**. The facility is compiled in, allocated,
+and disabled by a single ROM constant — one word at `$F0A52A` would switch on kernel event
+tracing with `{code, SR, PC, A0, A6, D0, time}` per event.
+
+**Correction to a phrasing this project used:** "the FPS kernel hook tests bit 14 of the
+trace flags at `$0C34`". The instruction is `btst.b #$e,$c34.w`, and **`btst` on memory is
+byte-sized with the bit number taken mod 8** — a hazard this file already documents
+elsewhere. So it tests **bit 6 of the byte at `$0C34`**, not bit 14 of a word. The eight
+sites use `#$8` through `#$F`, which are bits 0-7 of that same byte; reading them as bit
+numbers 8-15 of a word would put them in the *other* byte, `$0C35`.
