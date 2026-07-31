@@ -25390,3 +25390,59 @@ known-good set before believing it.
 Here the known-good set existed — the documented 14 — and disagreement with it is what prompted
 the check rather than a new finding being written down. **A census that contradicts an
 established figure should be suspected before the figure is.**
+
+## The TDTI record's shared constants decoded from the scanner (2026-07-31)
+
+The task-creation loop at `$F0A066` finds `!TCB` by content scan, then sets **`a3` = record + 4**
+(the name field) and reads the record through that base — so its displacements are 4 less than
+the record offsets:
+
+```
+$F0A066  lea     $F0A57E(pc),a3 / lea $200(a3),a1
+$F0A06E  move.l  #$21544342,d0        '!TCB'
+$F0A074  cmp.l   (a3),d0 / beq        content scan, stride 2
+$F0A082  lea     $4(a3),a3            a3 = record + 4
+$F0A086  move.b  $12(a3),d4           record+$16  = $96
+$F0A08A  lsl.w   #$8,d4
+$F0A08C  move.b  $12(a3),d4           the same byte again
+$F0A090  swap    d4
+$F0A092  move.w  $16(a3),d4           record+$1A  = $A000
+$F0A096  move.l  $18(a3),d5           record+$1C  = THE ENTRY POINT
+$F0A09C  move.w  $10(a3),d6           record+$14  = $0000
+$F0A0A0  move.w  #$8000,d7
+$F0A0A4  moveq   #$1F,d0
+$F0A0A6  trap    #$0                  T0CRTCB -- create the TCB
+$F0A0AE  move.w  $14(a3),d2           record+$18  = $0010
+$F0A0B2  move.w  d2,$2C(a5)           -> THE TCB's INITIAL STATE WORD
+$F0A0B6  btst.b  #$4,d2
+$F0A0BA  beq.b   $F0A0C6
+$F0A0BC  move.l  $C14.w,$C(a5)        -> PUSH ONTO THE READY LIST
+$F0A0C2  move.l  a5,$C14.w
+```
+
+### Two of the four shared constants now have roles
+
+| record offset | value | role |
+|---|---|---|
+| **`+$18`** (high word) | **`$0010`** | **the TCB's initial state word**, written straight to `TCB+$2C` — and **bit 4 means "enqueue on the ready list"** |
+| `+$1A` (low word) | `$A000` | `T0CRTCB` parameter, `d4` low half |
+| `+$16` (byte) | `$96` | `T0CRTCB` parameter, duplicated into `d4`'s high half |
+| `+$14` (word) | `$0000` | `T0CRTCB` parameter, `d6` |
+| `+$24` | `$00000001` | not read by this loop |
+| `+$44` | `$80000000` | not read by this loop; `d7` is the constant `$8000` instead |
+
+**So `$0010A000` is not one value but two fields**, and the first of them explains a measurement
+this project already has: **all six tasks are created with bit 4 set, so all six are pushed onto
+the ready list** — exactly the "6 pushes onto `$0C14`" counted from execution, and the reason all
+six later appear as `TSKSBLCK` after each blocks.
+
+`TCB+$2C` is documented here as the task state word with bits 9, 12 and 14 meaning
+SUSPND/WTEVNT/WAIT. **Bit 4 is now added: "ready at creation"**, set in the definition rather than
+at runtime.
+
+### And the scan is by content, with stride 2
+
+`$F0A066`-`$F0A07C` searches for `!TCB` from `$F0A57E` over `$200` bytes, comparing longwords and
+advancing by **two** — the same net-stride-2 content scan the `!VCT` search uses. So **both of the
+firmware's table lookups locate their target by tag rather than by address**, which is the
+load-time-addressing discipline the relocatable-kernel machinery requires.

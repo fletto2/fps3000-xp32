@@ -5781,6 +5781,22 @@ check('SGSEM and CRSEM are the most-issued, nine sites each',
       _iss[0x2B] == 9 and _iss[0x2D] == 9)
 check('...and $02/$03 are NOT issued -- they are channel numbers, not directives',
       0x02 not in _iss and 0x03 not in _iss)
+
+# ---- the TDTI scanner decodes the record's shared constants (2026-07-31) ----
+check('the task-creation loop finds !TCB by content scan with stride 2',
+      insn(0xF0A06E) == 'move.l #$21544342, d0' and insn(0xF0A074) == 'cmp.l (a3), d0'
+      and insn(0xF0A078) == 'addq.l #$2, a3')
+check('...then bases a3 at record+4', insn(0xF0A082) == 'lea.l $4(a3), a3')
+check('...passes the entry point in d5 and calls T0CRTCB',
+      insn(0xF0A096) == 'move.l $18(a3), d5' and insn(0xF0A0A4) == 'moveq #$1f, d0'
+      and insn(0xF0A0A6) == 'trap #$0')
+check('record+$18 becomes the TCB initial STATE WORD at TCB+$2C',
+      insn(0xF0A0AE) == 'move.w $14(a3), d2' and insn(0xF0A0B2) == 'move.w d2, $2c(a5)')
+check('...and its bit 4 means ENQUEUE ON THE READY LIST',
+      insn(0xF0A0B6) == 'btst.b #$4, d2' and insn(0xF0A0BC) == 'move.l $c14.w, $c(a5)')
+check('...which is set in all six records, explaining the six ready-list pushes',
+      all(_bst.unpack('>H', _rom[0xF0A600 - 0xF00000 + n * 96 + 0x18:][:2])[0] & 0x0010
+          for n in range(6)))
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')
