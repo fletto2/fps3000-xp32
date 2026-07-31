@@ -17820,3 +17820,39 @@ one-to-one:
 That is the first time the API table in this project has been grounded in specific opcodes
 rather than in name similarity, and it says what a chassis model must issue to exercise
 each one.
+
+## The SBC→chassis transmit protocol, in full (2026-07-30)
+
+All eight byte-identical panel-command issuers do exactly this, in this order:
+
+```
+$F05688  move.w d0,$E6E          ; stash the command at the shared global
+$F05694  move.w d0,$0E(a0)       ; -> $FF000E   the command port
+$F05698  MODE1 ($FF0202): bclr #14, bset #12
+$F056A8  MODE0 ($FF0200): bclr #10
+$F056B4  move.w d0,$204(a0)      ; -> $FF0204   the command AGAIN
+$F056B8  bra .                   ; spin until the chassis interrupts
+```
+
+Six steps, and every one of them is a register this file has listed without a mechanism.
+Now they have one:
+
+| register/bit | role, from this sequence |
+|---|---|
+| `$FF000E` | the command word |
+| `$FF0204` | **the same command word again** — which is why CHANNEL_SELECT is the hottest register on the board (~33k writes): every panel command writes it, on top of the self-test phase broadcasts |
+| MODE1 bit 12 | **set by the SBC to mean "a command is valid"** — the emulator already gates panel responses on this bit, arrived at empirically; here is the reason |
+| MODE1 bit 14 | **cleared** when issuing. It is also cleared on a channel abort, so it is a bit the *chassis* sets and the SBC clears |
+| MODE0 bit 10 | **cleared** when issuing, and cleared again by RDHC to acknowledge an operation — a handshake bit the SBC clears and the chassis sets |
+
+**This is a complete, checkable specification for the chassis side of a transaction**, taken
+entirely from the ROM rather than inferred: on seeing MODE1 bit 12 set with a command word
+in `$FF000E` and `$FF0204`, the chassis must process it and answer by raising BIM0 ch0 with
+a response code in MODE0 — because the issuer's only exit is `bra .`, broken solely by that
+interrupt.
+
+Together with the receive side (three dispatch layers, the 16-op table, RDHC's main-loop
+set, and the per-channel status word), **both directions of the SBC↔chassis conversation
+are now described at register level.** What remains unspecified is not the SBC's half — it
+is what the chassis *chooses* to send, which is the counterpart card's behaviour and is not
+in this ROM.

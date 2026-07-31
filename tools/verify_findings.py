@@ -3908,6 +3908,21 @@ check('op $F resumes the selected channel\'s task with $12 RESUME',
       insn(0xF04854) == 'moveq #$12, d0'
       and insn(0xF04884) == 'moveq #$12, d0')
 
+# --- the SBC->chassis transmit protocol, from the panel-command issuer ----
+# Six steps, every one a register this project had listed without a mechanism.
+check('the issuer writes the command to $FF000E and AGAIN to $FF0204',
+      insn(0xF05694) == 'move.w d0, $e(a0)'
+      and insn(0xF056B4) == 'move.w d0, $204(a0)')
+check('...sets MODE1 bit 12 ("command valid") and clears bit 14',
+      insn(0xF0569C) == 'bclr.b #$e, d1' and insn(0xF056A0) == 'bset.b #$c, d1')
+check('...clears MODE0 bit 10, then spins -- the only exit is an interrupt',
+      insn(0xF056AC) == 'bclr.b #$a, d1' and insn(0xF056B8) == 'bra.b $f056b8')
+# All eight copies are byte-identical over the 48-byte issuer.
+check('all eight panel-command issuers are byte-identical',
+      len({_rom[a - _B:a - _B + 48]
+           for a in (0xF04500, 0xF05688, 0xF05E56, 0xF068A8,
+                     0xF072C0, 0xF07CC0, 0xF086C0, 0xF0A57E)}) == 1)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
