@@ -122,6 +122,11 @@ composes `(4*10-1)<<8 | (800/4-1)` = `$27C7` into the MC6840 T3 latch in dual-8-
 
 ## 8. Things that must fault
 
+- **The ENTIRE gap `$20000`-`$EFFFFF` must fault** (`$F08EB6`, decoded 2026-07-31). A longword
+  sweep walks up from `$20000` in **2 KB steps** to `$F00000` — 7,616 probes if none faults — and
+  **retries forever** on failure. It **runs before the watchdog test**, so a model returning zero
+  for unmapped reads hangs here first. It reaches `$20000` as `$1FFF0 + $10`, adapting to a
+  differently-sized machine rather than hard-coding the boundary.
 - **`$600`**, the bus-timeout watchdog test, requires a BERR in `$F80001`-`$F82001`, and the
   requirement is more specific than that (decoded 2026-07-31 at `$F08F1C`):
   - the probes are **byte reads at ODD addresses** — `$F82001` stepping **down** by two, so

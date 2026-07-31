@@ -24875,3 +24875,63 @@ offset *within* that frame.
 tolerate the bus-error vector changing 16 times during boot and must never assume the value it
 read earlier is still current — which is precisely what makes the kernel-fatal snapshot of `$8.w`
 at `$084C` informative rather than redundant.
+
+## A nop-run census finds every deliberate-fault site — including one that was missed (2026-07-31)
+
+Multi-nop runs turn out to be a **structural signature** for deliberate faults, because the
+landing zone that makes an imprecise bus-error PC safe has to be padding. Censusing all 109 nop
+runs in the image:
+
+- **103 are single nops**, every one following a `bra`, `bsr`, `rts` or `beq` — alignment padding
+  after a control transfer, including the 65 `rts`/`nop` pairs that are the 13 no-op slots of the
+  42-entry dispatch table times its five copies.
+- **6 are multi-nop runs, and every one follows a memory access.**
+
+| run | length | preceded by | what |
+|---|---:|---|---|
+| `$F08ED4` | **5** | `move.l (a0),d0` | **the unmapped-space sweep — see below** |
+| `$F08F42` | 5 | `move.b (a0),d0` | the bus-watchdog sweep |
+| `$F096AE` | 4 | `move.w (a1),d0` | `$400000` window read probe |
+| `$F096BA` | 4 | `clr.w (a1)` | `$400000` window write probe |
+| `$F0986A` | 2 | `move.w d6,$204(a6)` | a device settling delay, not a landing zone |
+| `$F098D4` | 4 | `tst.w $e(a6)` | the `$FF000E` probe |
+
+**Six multi-nop runs, six probe sites, no false positives and no misses.** The technique is worth
+keeping: a landing zone cannot be optimised away, so it marks its site permanently.
+
+## The sixth site: an unmapped-space sweep from `$20000` to `$F00000`
+
+```
+$F08EBA  movea.l $8.w,a2            save the bus-error vector
+$F08EC4  move.l  a1,$8.w            install $F08F06, the FLAG handler
+$F08EC8  lea     $1FFF0.l,a0
+$F08ECE  lea     $10(a0),a0         -> $20000, just past the RAM top
+$F08ED2  move.l  (a0),d0            LONGWORD probe
+$F08ED4  nop x5
+$F08EDE  lea     $800(a0),a0        step UP by 2 KB
+$F08EE2  tst.l   d1 / bne           faulted? -> done
+$F08EE6  cmpa.l  #$F00000,a0        reached the ROM?
+$F08EEC  bmi.b   $F08ED2            no -> next
+$F08EEE  move.l  #$F0F0F0F0,d7      FAILURE
+$F08EFA  bne.b   $F08EC8            ...and RETRY the whole sweep
+```
+
+**The entire gap between the RAM top and the ROM must fault.** The test walks `$20000` upward in
+**2 KB steps** to `$F00000` — **7,616 longword probes** if none faults — and retries forever on
+failure.
+
+This is a **second, much larger unmapped-space requirement** than the bus-watchdog test already
+documented, and it runs **first** (`$F08EB6` precedes `$F08F1C`). A model that returns zero for
+unmapped reads hangs here, before ever reaching the watchdog phase — so the watchdog's
+documentation as "the place a non-faulting model hangs" is only true of a model that already
+satisfies this one.
+
+**Note the address stride.** Probing every 2 KB rather than every byte means a model need only
+fault somewhere in each 2 KB window to be found quickly — but since the loop exits on the *first*
+fault, in practice a model that faults anywhere at or above `$20000` satisfies it on the first
+probe.
+
+**And note where it starts.** `lea $1FFF0,a0 / lea $10(a0),a0` reaches `$20000` by adding `$10` to
+the VMOD control register's address — the same computed address the init code derives from the
+config RAM top. So this test, too, adapts to a differently-sized machine rather than hard-coding
+the boundary.

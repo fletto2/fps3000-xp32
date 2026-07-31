@@ -5574,6 +5574,33 @@ check('bit 5 set expects a FAULT and bit 6 expects none',
       and insn(0xF096E8) == 'move.w #$40, $216(a6)' and insn(0xF096F4) == 'beq.b $f096fc')
 check('the bit-7 probe touches the AP I/F, not the window',
       insn(0xF098C4) == 'move.w #$ff, $20c(a6)' and insn(0xF098D0) == 'tst.w $e(a6)')
+
+# ---- the nop-run census finds every deliberate-fault site (2026-07-31) ----
+_nruns = []; _na = sorted(_mins); _k = 0
+while _k < len(_na):
+    if _mins[_na[_k]][0] == 'nop':
+        _j = _k
+        while _j < len(_na) and _mins[_na[_j]][0] == 'nop': _j += 1
+        _nruns.append((_na[_k], _j - _k, _na[_k - 1] if _k else 0)); _k = _j
+    else: _k += 1
+_multi = [(a, n, p) for a, n, p in _nruns if n >= 2]
+check('exactly six multi-nop runs exist in the ROM', len(_multi) == 6, len(_multi))
+check('...and every one follows a MEMORY ACCESS, not a branch',
+      all(_mre.search(r'\(a\d\)', _mins[p][1]) for _, _, p in _multi),
+      [(hex(a), _mins[p][1]) for a, _, p in _multi])
+check('...while all the single nops follow a control transfer',
+      all(_mins[p][0].split('.')[0] in ('bra', 'bsr', 'rts', 'beq', 'bne', 'rte')
+          for a, n, p in _nruns if n == 1 and p))
+check('the sixth site sweeps $20000 upward in 2 KB steps to the ROM',
+      insn(0xF08ED2) == 'move.l (a0), d0' and insn(0xF08EDE) == 'lea.l $800(a0), a0'
+      and insn(0xF08EE6) == 'cmpa.l #$f00000, a0')
+check('...reaching $20000 by adding $10 to the VMOD address, not hard-coding it',
+      insn(0xF08EC8) == 'lea.l $1fff0.l, a0' and insn(0xF08ECE) == 'lea.l $10(a0), a0'
+      and 0x1FFF0 + 0x10 == 0x20000)
+check('...and retrying the whole sweep on failure',
+      insn(0xF08EEE) == 'move.l #$f0f0f0f0, d7' and insn(0xF08EFA) == 'bne.b $f08ec8')
+check('...running BEFORE the bus-watchdog test', 0xF08EB6 < 0xF08F1C)
+check('7616 probes if nothing faults', (0xF00000 - 0x20000) // 0x800 == 7616)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
