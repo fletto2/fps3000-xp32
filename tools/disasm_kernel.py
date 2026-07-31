@@ -89,7 +89,7 @@ DATA_REGIONS = [
     (0xF08E8C, 0xF08E8C + 32),    # the VMOD longword pattern table: the reader
                                   #   loop is `moveq #$7,d3` + `move.l (a4)+,d0`
     (0xF09BB6, 0xF09BB6 + 24),    # the SCM pattern table: 3 complementary pairs
-    (0xF0A4BE, 0xF0A4BE + 72),    # the VMOD offset table: `moveq #$3,d4` outer,
+    (0xF0A4BE, 0xF0A4BE + 48),    # the VMOD offset table: `moveq #$3,d4` outer,
                                   #   each pass 1 offset word + 8 data words
     (0xF0A600, 0xF0A600 + 576),   # the TDTI table: 6 records of 96 bytes
 ]

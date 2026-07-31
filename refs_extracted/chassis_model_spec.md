@@ -554,13 +554,18 @@ the abort unreachable exactly when it is needed. Bit 5 should be an independent 
 
 ## B. The VMOD interrupter (`$1FFF0`-`$1FFF3`)
 
-**B1.** The register block is **four bytes**, `$1FFF0`-`$1FFF3`. `$1FFF4`-`$1FFFF` is ordinary
-RAM — the DRAM fill and verify loops (`$F09A92`, `$F099CE`) pattern-test it and skip only the
-longword at `$1FFF0`.
+**B1. SUPERSEDED 2026-07-31.** This said `$1FFF4`-`$1FFFF` is ordinary RAM because the DRAM
+loops pattern-test it. The inference does not hold: a vector register that reads back what was
+written is indistinguishable from RAM in a pattern test, and the DRAM walk runs *before*
+`$F0A452` programs the file. The top 48 bytes are **three 16-byte interrupter blocks** —
+control words at `$1FFD0`/`$1FFE0`/`$1FFF0`, each followed by **seven vector registers** for
+levels 1-7. The DRAM loops skip only `$1FFF0` because that is the word that drives the chassis.
 **B2.** `$1FFF1` bits 0-2 are the interrupt **request level**, walked 1..7 by phase `$1300`;
 delivery is mandatory at every level.
-**B3.** `$1FFF2` is the **vector register** — the vector number is written there before the
-request is raised.
+**B3.** The vector for a request at level *N* comes from **`$1FFF2 + 2*(N-1)`** — a seven-entry
+file per block. Phase `$1300` writes the vector before raising each request, and `$F0A452`
+pre-loads all 21 registers across the three blocks at init, with `$8E` (the panic vector) as
+filler for unassigned levels.
 **B4.** `$1FFF1` **bit 3 selects the vector**: clear routes to `$50`, set routes to `$52`
 (phase `$1400`, whose two handlers set different bits of `d2` so a wrong vector is
 indistinguishable from no delivery).
