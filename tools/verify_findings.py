@@ -4346,6 +4346,16 @@ check('...as do its PROG segment bounds, tiling $F04600-$F086FF',
       == [(0xF04600, 0xF05CFF), (0xF05D00, 0xF05EFF), (0xF05F00, 0xF068FF),
           (0xF06900, 0xF072FF), (0xF07300, 0xF07CFF), (0xF07D00, 0xF086FF)])
 
+# $F044A2 is real code the disassembler renders as data -- the FPS trace hook.
+# It escapes the executed-PC property because the trace mask is zero.
+check('$F044A2 is the FPS trace hook: btst on the $0C34 mask byte',
+      insn(0xF044A2) == 'btst.b #$e, $c34.w')
+check('...and the mask that disables it is the ROM word $F0A52A = $0000',
+      struct.unpack('>H', _rom[0xF0A52A - _B:0xF0A52C - _B])[0] == 0)
+# RDHC's four-command jump table: 6-byte jmp entries, matching mulu #$6.
+check('RDHC\'s command table at $F05358 is 6-byte jmp entries',
+      insn(0xF0535E) == 'jmp $f054a2.l' and insn(0xF05364) == 'jmp $f054e8.l')
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
