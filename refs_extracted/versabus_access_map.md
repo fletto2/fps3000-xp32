@@ -27955,3 +27955,51 @@ stripe widths (8, 1 and 2 bits).
 fills `ram[]` with a fixed pattern rather than zeros could collide with one of these six and
 mask a genuine failure. The current model zero-fills, which collides with `$00000000` only
 in the trivially-correct direction.
+
+## The boot transition: self-test exit, breadcrumb, and the low-RAM clear (2026-07-31)
+
+```
+$F09C00  jmp $f08700.l          ; RESET ENTRY -> the self-test
+...
+$F09C06  movea.l #$400,a7       ; where the self-test comes back to
+$F09C0C  move.l  d0,$3fc.w      ; ...saving d0 as a BREADCRUMB
+$F09C10  lea.l   $800.l,a0
+$F09C16  move.l  #$10ee,d6 / sub.l a0,d6 / addi.l #$ff,d6 / clr.b d6
+$F09C26  bsr.w   $f0a336        ; clear $000800-$0010FF
+$F09C2A  movea.l $f0a4fe(pc),a7 ; ...then load the RTOS configuration
+```
+
+Three things worth having:
+
+- **`$F088F4: jmp $f09c06` is not an abort-to-failure.** Four self-test sites reach it, and
+  it is simply where the suite hands back. A failed test and a completed one both continue
+  into RTOS initialisation — the failure is recorded in the counters and the phase code, not
+  by halting.
+- **`d0` is preserved at `$03FC`** across the transition, immediately below the new stack.
+  Nothing later reads it, so it is a diagnostic breadcrumb: on a stalled or crashed board,
+  `$03FC` holds whatever `d0` contained when the self-test finished.
+- **`$000800`-`$0010FF` is explicitly cleared** — the whole FPS global area, from the
+  exception snapshot at `$0800` through the CP-callback arrays ending at `$10ED`. That is why
+  those globals read as clean zeros rather than self-test residue.
+
+`$F0A336` is the **second entry point of the allocation zeroer**: `$F0A332` takes a page
+count and converts (`lsl.l #$8`), `$F0A336` takes a byte count already. Same dual-entry
+convention the kernel uses for its directive handlers.
+
+### The self-test's fault handlers
+
+`$F08902` is the bus-error handler the diagnostics install:
+
+```
+cmpa.l #$10000,a7 / blt low
+addq.l #$1,$1f800.l      ; stack above $10000 -> count here
+bra done
+low: addq.l #$1,$400.w   ; ...otherwise here
+done: lea $8(a7),a7 / rte
+```
+
+`lea $8(a7),a7` before `rte` discards the rest of the **14-byte group-0 frame** (8 + the 6
+that `rte` pops), so a fault is counted and execution resumes at the *next* instruction.
+That is the mechanism behind the two documented fault counters, and it confirms again that
+the frame must be 68000-format: with a 68010 frame the adjustment is wrong and `rte` returns
+into the middle of the frame.

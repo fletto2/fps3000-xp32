@@ -6085,6 +6085,18 @@ check('the DRAM pattern set is three complementary pairs',
       insn(0xF09996) == 'not.l d0' and insn(0xF0999A) == 'move.l #$55aa55aa, d0'
       and insn(0xF099A6) == 'move.l #$33cc33cc, d0')
 
+check('the reset entry jumps to the self-test, which returns to $F09C06',
+      insn(0xF09C00) == 'jmp $f08700.l' and insn(0xF088F4) == 'jmp $f09c06.l')
+check('...saving d0 at $03FC as a breadcrumb, then clearing $800-$10FF',
+      insn(0xF09C0C) == 'move.l d0, $3fc.w' and insn(0xF09C10) == 'lea.l $800.l, a0'
+      and insn(0xF09C16) == 'move.l #$10ee, d6')
+check('$F0A336 is the byte-count entry of the zeroer, past its pages conversion',
+      insn(0xF0A332) == 'move.l d2, d6' and insn(0xF0A334) == 'lsl.l #$8, d6'
+      and insn(0xF0A336) == 'movea.l d6, a6')
+check('the self-test fault handler counts and discards the 14-byte group-0 frame',
+      insn(0xF0890A) == 'addq.l #$1, $1f800.l' and insn(0xF08912) == 'addq.l #$1, $400.w'
+      and insn(0xF08916) == 'lea.l $8(a7), a7' and 8 + 6 == 14)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
