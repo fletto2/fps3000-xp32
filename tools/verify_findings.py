@@ -7121,6 +7121,18 @@ check('...so internal callers bsr to (table entry - 2), the dual-entry conventio
       0xF00346 + _w(0xF00346) == 0xF0175C
       and 0xF005F6 + _w(0xF005F6) == 0xF0175C)
 
+check('T0GETTCB (TRAP #0 $06) starts at $F0170E and looks up by name+session',
+      _l(0xF001D6 + 4 * 0x06) == 0xF01710
+      and _w(0xF01726) == 0xB0AE and _w(0xF01728) == 0x0010
+      and _w(0xF0172C) == 0xB2AE and _w(0xF0172E) == 0x0014)
+check('...with the privilege bit acting as a SESSION WILDCARD',
+      _w(0xF0171A) == 0x082E and _w(0xF0171C) == 0x000F and _w(0xF0171E) == 0x0028
+      and (insn(0xF01720) or '').startswith('bne')
+      and _w(0xF01722) == 0x222E and _w(0xF01724) == 0x0014)
+check('...falling back to a walk of the all-tasks list at $0C10',
+      _w(0xF01732) == 0x2278 and _w(0xF01734) == 0x0C10
+      and _w(0xF0173E) == 0xB0A9 and _w(0xF01740) == 0x0010)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

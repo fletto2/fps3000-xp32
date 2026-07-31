@@ -31533,3 +31533,58 @@ Of 52 offsets touched, the documented map names about 18. The heavily-used unnam
 above), `+$36` (24, now identified), and `+$2D` (14, a byte). Naming them is tractable by the same
 method — find the busiest, look at what it is passed to — and each one that resolves tends to
 identify a subsystem rather than just a field.
+
+## `T0GETTCB` is lookup by {name, session}, and `TCB+$14` is the session (2026-07-31)
+
+TRAP #0 directive **`$06` `T0GETTCB`** starts at `$F0170E`, and its body identifies two more TCB
+fields:
+
+```
+$F0171A  btst.b #$f,$28(a6)     ; the PRIVILEGE flag (bit 7 of the byte at $28)
+$F01720  bne.b  $F01726         ; privileged -> skip loading the session
+$F01722  move.l $14(a6),d1      ; unprivileged -> restricted to OWN session
+$F01726  cmp.l  $10(a6),d0      ; match the NAME ...
+$F0172A  bne    $F01732
+$F0172C  cmp.l  $14(a6),d1      ; ... and the SESSION
+$F01730  beq    $F0170A         ; found
+$F01732  movea.l $c10.w,a1      ; else walk the ALL-TASKS list at $0C10
+$F0173E  cmp.l  $10(a1),d0      ; comparing each TCB's +$10 ...
+```
+
+So **`TCB+$10` is the task name** (already recorded) and **`TCB+$14` is the session** — the pair
+Motorola calls `TCBNAME`/`TCBSESSN`, and the same pair this project found copied into `TCB+$140`/
+`+$144` as `RSTATE`'s permission check. Finding them as the *lookup key* explains why that copy
+exists: `RSTATE` compares a target's stored copy against the caller's own name and session, which
+is the same comparison `T0GETTCB` performs against the live fields.
+
+**The privilege bit is a session wildcard.** An unprivileged caller loads its own session into `d1`
+and must match both fields; a privileged one skips that load, so the session comparison uses
+whatever `d1` already held. That is the concrete meaning of the privilege model this project
+documents at the directive level — **privilege buys you visibility of other sessions' tasks.**
+
+### Correction: `TCB+$28` was already documented
+
+Last turn I listed `TCB+$28` among fields "not in the documented map". That is wrong — `CLAUDE.md`
+names it explicitly: seven privileged directives begin `btst.b #$F,$28(a6)` and fail with status
+`+9` when the flag is clear. `+$28` is the task **flags word**, and it is documented through its
+bit 7.
+
+What is new about it stands: **bits 3 and 4 gate the `$F00B74` dispatch** (from the descriptors'
+bit-number fields), and bit 6 — reached as `$29(a6)` — is used ten times with `bset`/`btst`/`bclr`.
+So one word carries the privilege flag, two dispatch enables and at least one further state bit.
+My error was in the reference list I checked against, not in the analysis.
+
+### Where the TCB map stands
+
+| offset | field | status |
+|---|---|---|
+| `+$10` | task **name** | recorded |
+| **`+$14`** | **session** | **new** |
+| `+$28` | flags word — bit 7 privilege | recorded; **bits 3, 4, 6 new** |
+| `+$2C`/`+$2D` | state word — `$2D` bits 4, 5, 7 seen | partly new |
+| **`+$36`** | **logical→physical translation base** | **new** |
+| `+$48`, `+$4C` | task-supplied dispatch tables | new |
+
+`TCB+$00` is **not** a field: all 23 bare-`(a6)` accesses are `lea`/`pea`, passing the TCB pointer
+itself as an argument. A census that counts the bare form as offset zero over-reports by exactly
+that much.
