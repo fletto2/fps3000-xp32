@@ -25491,3 +25491,49 @@ That is worth knowing before patching the tail. `monitor/patch_rom.py` places th
 `$F0A826`, **26 bytes before that slot**, so a monitor grown past 26 bytes into the seventh slot
 would need its first longword checked — though in practice the monitor's code would have to begin
 with exactly `$21544342` to cause trouble.
+
+## The consolidated TCB field map (2026-07-31)
+
+Every TCB displacement used in the kernel, by frequency, with what this project has established.
+`a5` and `a6` are TCB pointers throughout the kernel, so these are the fields the RTOS actually
+touches.
+
+| offset | uses | field |
+|---|---:|---|
+| **`+$102`** | **122** | **directive status / return code** — codes 1..16, cleared at TRAP #1 entry |
+| **`+$02C`** | 41 | **task STATE word** — bit 4 ready-at-creation, 9 SUSPND, 12 WTEVNT, 14 WAIT |
+| **`+$02D`** | 31 | **the same field, byte-addressed** — `btst` here reaches state bits 0-7 |
+| **`+$036`** | 37 | **pointer to the task's `!TST`** — the segment table |
+| `+$014` | 33 | unidentified |
+| **`+$028`** | 33 | **the privilege/capability word** — bit 7 of the byte gates 20 sites |
+| **`+$120`** | 26 | **saved a0-a6** — and `+$120` itself is saved `a0`, which is where `$3B` reads its key |
+| **`+$100`** | 21 | **saved d0-d7** |
+| `+$010` | 20 | unidentified |
+| **`+$040`** | 17 | **ASQ pointer**, validated against the `!ASQ` marker |
+| `+$148` | 15 | unidentified |
+| **`+$029`** | 14 | **flag bits** — bit 3 set by directive `$1B`, bit 4 by `$1A` |
+| **`+$13C`** | 11 | **saved stack pointer** |
+| **`+$004`** | 9 | **`TCBALL` link** (the all-tasks list) |
+| `+$008`, `+$026` | 9 each | unidentified |
+| `+$070` | 9 | unidentified |
+| **`+$0FA`** | 8 | **saved SR** |
+| **`+$0FC`** | 8 | **saved resume PC** |
+| `+$018` | 7 | unidentified |
+| **`+$00C`** | 6 | **`TCBREADY` link** (the ready list) |
+| `+$158`, `+$02E` | 6 each | unidentified |
+| **`+$048`/`+$04A`/`+$04C`** | | **a generated `jsr` thunk** — opcode at `+$4A`, operand at `+$4C` |
+| **`+$0B0`** | | **`'EXEC'` termination tag** |
+| **`+$138`** | | **ASQ/stack block pointer** |
+| **`+$140`/`+$144`** | | **owner name / session copies**, the `RSTATE` permission check |
+
+### Two observations from the census itself
+
+**`+$2C` and `+$2D` are one field accessed two ways** — as a word (41 sites) and as a byte
+reaching bits 0-7 (31 sites). Together that is **72 accesses**, making the state word the
+second-busiest field in the TCB after the status code, and it means a reader must treat
+`btst.b #$n,$2D(a6)` as addressing **state bits 0-7**, not some separate byte.
+
+**Motorola's `TCB.EQ` is displaced by 6 in this region**, as this project already records, so the
+usage-derived map above should be preferred throughout. The unidentified entries — `+$14`,
+`+$10`, `+$148`, `+$8`, `+$26`, `+$18`, `+$158`, `+$2E` — are all in the kernel's own bookkeeping
+and none is touched by FPS code, so they bound what a task-level model needs to carry.

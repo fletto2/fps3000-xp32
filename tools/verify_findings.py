@@ -5810,6 +5810,23 @@ check('...and the seventh slot lies in the all-zero blank tail',
       and _rom[0xF0A840 - 0xF00000:0xF0A844 - 0xF00000] == b'\x00' * 4)
 check('so "six tasks" is not a constant -- it is where the !TCB records stop',
       all(_rom[0xF0A600 - 0xF00000 + n * 96:][:4] == b'!TCB' for n in range(6)))
+
+# ---- the consolidated TCB field census (2026-07-31) ----
+_tcbf = _mcol.Counter()
+for _a, (_m, _o, _) in _mins.items():
+    if _a >= 0xF04488: continue
+    for _mm in _mre.finditer(r'\$([0-9a-f]{1,3})\((a5|a6)\)', _o):
+        _tcbf[int(_mm.group(1), 16)] += 1
+check('TCB+$102, the directive status, is the busiest field by far',
+      _tcbf[0x102] == 122 and _tcbf[0x102] > 2 * _tcbf[0x02C], _tcbf[0x102])
+check('the state word is accessed as a WORD at +$2C and a BYTE at +$2D',
+      _tcbf[0x02C] == 41 and _tcbf[0x02D] == 31)
+check('...making it the second-busiest field at 72 accesses combined',
+      _tcbf[0x02C] + _tcbf[0x02D] == 72)
+check('TCB+$36, the !TST pointer, is used 37 times', _tcbf[0x036] == 37)
+check('TCB+$28, the privilege word, is used 33 times', _tcbf[0x028] == 33)
+check('the register-save areas +$100 and +$120 are both heavily used',
+      _tcbf[0x100] == 21 and _tcbf[0x120] == 26)
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')
