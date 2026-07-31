@@ -18842,3 +18842,36 @@ That closes the channel status decode tree. Every branch is now accounted for:
 `$F07EB6`'s apparent re-test of bit 11 is not redundant: it is the join point where the
 bit-11-clear arm falls through after its `SGSEM`, so the bit is genuinely re-examined for a
 path that arrived with it clear.
+
+### CORRECTION: the 42-entry table is entered on the OPERATION CODE, not a chassis response
+
+Above I wrote that `$F07F84` enters the dispatch table "with a response code the **channel**
+supplies". That is wrong, and the check is simple — list every write to `d0` between the
+transaction start and the dispatch:
+
+```
+$F07F4C  move.w #$26c,d0      <- timeout path only
+$F07F5C  move.w #$269,d0      <- error path only
+$F07F66  move.w $21a(a4),d0   <- teardown path only
+$F07F84  lsl.w  #$2,d0
+```
+
+On the **success** path nothing writes `d0`, so it still holds the value passed in — the
+**operation code**. The XP tasks therefore index the 42-entry table by the operation they
+just issued, and only two slots can be reached from the normal request path:
+
+| slot | operation | handler |
+|---|---|---|
+| 14 | `$0E` | **`D1_SEND`** (`$F0810A`) |
+| 16 | `$10` | **`D1_SEND`** |
+
+Which closes the chain and makes sense of the pairing: `D1_SEND` pushes `d1` as two words
+and issues `$8004`, and the request path calls the primitive twice — once with `d1 = $10`,
+once with `d1` pre-decremented out of the `$101E` file. Two `D1_SEND`s is exactly what
+"send the operation, then send the operand" looks like.
+
+Census of XP1I's copy, measured: **13 slots empty, `POLL` 9, `D1_SEND` 10, `BLK_XFR` 9,
+`D2_FIN` 1**. This project records the RDHC copy as 12/10/11/1 and describes the XP copies as
+having an "identical index-to-handler pattern"; the `POLL` and `BLK_XFR` counts differ here.
+Worth re-checking against RDHC's table directly rather than assuming either count — the
+handler *set* is certainly the same four, and `D1_SEND` and `D2_FIN` agree exactly.
