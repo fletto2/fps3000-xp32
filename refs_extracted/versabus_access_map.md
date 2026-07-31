@@ -34622,3 +34622,45 @@ Method note: the two listings use different address formats (`F04488` in `fps3k_
 which is how the kernel column first came out empty — the same narrow-matcher failure as elsewhere
 in this session, and again caught only because the result was implausible rather than by the sweep
 itself.
+
+## The kernel's executed surface: 14 regions, ~1 KB of 17.5 KB (2026-07-31)
+
+Clustering the 262 executed kernel PCs from a boot stopped at its **first** arrival in the idle loop:
+
+| region | bytes | what |
+|---|---:|---|
+| `$F00100` | 2 | the trampoline — the FPS→RTOS handoff |
+| `$F001AC`-`$F001D4` | 42 | TRAP #0 entry and dispatch |
+| `$F00262`-`$F00264` | 4 | TRAP #1 entry |
+| `$F0050C`-`$F005B4` | 170 | **the scheduler** |
+| `$F006E8`-`$F006FE` | 24 | **`T0P`** semaphore wait |
+| `$F00788`-`$F0079E` | 24 | **`T0V`** semaphore signal |
+| `$F00FC2`-`$F00FE6` | 38 | the idle loop |
+| `$F0123E`-`$F012FA` | 190 | a `move.w sr,-(a7)` / `movem.l d3-d5/a3-a5` routine |
+| `$F01346`/`$F0136C`/`$F013A4`/`$F013BE` | 62 | fragments of the same area |
+| `$F0170E`-`$F01756` | 74 | same dual-entry shape |
+| `$F02894`-`$F02A32` | 416 | the largest executed kernel routine |
+
+Every landmark this project has named independently — trampoline, both trap entries, the scheduler,
+the P/V pair, the idle loop — appears, and essentially nothing else does.
+
+### Three measured absences
+
+- **`$F00186` never executes.** This is the routine that writes the whole register snapshot
+  (`$0800` PC, `$0806` SR, `$0808`-`$0847` registers, `$0848` USP, `$084C` bus-error vector). The
+  file records a correction establishing it is reachable via **22 ordinary `bsr`s** rather than only
+  the vector path — true statically, but **none of them runs in a clean boot**. So the hardware
+  prediction should be stated the other way round: **on a healthy board that snapshot area is
+  untouched**, and any non-zero content there is itself evidence something went wrong.
+- **The ISR-exit chain never runs** — `$F00280`, `$F0029A` (the `!IDV` walk), `$F002B2`
+  (`T0WAKEUP`) are all unreached. Consistent with all six tasks blocking and nothing waking them.
+- **`$F002C6` never runs**, confirming it is not the TRAP #1 vector, as recorded.
+
+### One scope caveat, stated because it looks like a contradiction
+
+**`$F00ED6`, the tick ISR, is also unreached** — yet this project records it executing ~2330 times
+per boot. Both are right: the trace here stops at the **first** arrival at `$F00FC2`, so it measures
+the boot *up to* the scheduler, while the tick fires once the machine is idling. The correct
+statement is that **no RTOS tick occurs during the entire self-test and RTOS init** — which follows
+from the PTM being programmed late, and which is worth knowing before assuming timer interrupts can
+perturb any self-test stage. They cannot; the suite runs tick-free.

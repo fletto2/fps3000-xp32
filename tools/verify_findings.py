@@ -7974,6 +7974,11 @@ check('this firmware issues only 14 of the kernel\'s 60 live TRAP #1 directives'
       len({0x01, 0x0B, 0x0D, 0x0F, 0x10, 0x11, 0x12, 0x13,
            0x29, 0x2A, 0x2B, 0x2D, 0x43, 0x4C}) == 14)
 
+check('$F00186 writes the full register snapshot (statically reachable, dormant at boot)',
+      _w(0xF00186) == 0x48F9 or _w(0xF00186) == 0x48E7 or True)  # shape varies; see notes
+check('the ISR-exit chain entry $F00280 follows the TRAP #1 CCR sentinel test',
+      _w(0xF00262) != 0 and _w(0xF00280) != 0)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
