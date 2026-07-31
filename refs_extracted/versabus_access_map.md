@@ -22521,3 +22521,43 @@ is not a write.
 
 So **`$FF0010` remains unaccessed**, and the documented conclusion stands unchanged: it is a
 register the emulator models and the firmware never touches.
+
+## Refinement: chassis op `$0`'s middle arm IS the SLC S-record loader (2026-07-31)
+
+Chassis operation `$0` is documented here as a three-way launcher: `$28` = the direct staging
+bulk loop, `$1`-`$10` = a per-channel transfer, and **`$0` = "bulk port `$FF0008` with the full
+handshake"**. Following the `$0` arm to its end shows it is more specific than that:
+
+```
+$F04AC8  cmpi.l  #$28,$E5C / bne $F04B08      not $28 -> fall through
+$F04B08  cmpi.l  #$0,$E5C  / bne $F04C72      not $0  -> the per-channel arm
+$F04B16  btst.b  #$5,$E87  / bne $F04C50      direction split
+$F04B22  move.w  $4(a0),d0 / btst #$0 / beq   poll $FF0004 bit 0
+$F04B2C  move.w  #$4,$20C(a0)                 declare the burst counter
+$F04B32  ...arm $FF0218, poll bit 15, clear...
+$F04B48  lea     $8(a0),a0                    -> $FF0008
+$F04B64  move.w  (a0),d1                      read the first word
+$F04B68  ...falls straight into the SLC S-record dispatcher...
+```
+
+**It falls through into `$F04B68`**, which ASCII-converts the word and dispatches on `$5330`/
+`$5331` — `S0`/`S1`. So the `$0` arm is not a raw bulk transfer that happens to use the bulk
+port; it is **the entry point of the ASCII S-record loader**, and the handshake and counter
+declaration are its preamble.
+
+That tightens the three-way description to:
+
+| `$E5C` | arm |
+|---|---|
+| `$28` | **raw** staging bulk loop — words straight to `$E58`, no framing, no bound |
+| **`$0`** | **the SLC ASCII S-record loader** — `$FF0004` ready poll, `$FF020C = 4`, then per-word `$FF0218` handshake into the record parser |
+| `$1`-`$10` | per-channel transfer through the `((ch+1)<<5)` window |
+
+and it explains why `$FF020C = 4` appears on both bulk-ish paths: it is declared whenever
+`$FF0008` is the *source*, which both of them make it.
+
+**For a chassis model this matters**: presenting `$E5C = 0` starts an S-record conversation and
+the firmware will then expect ASCII hex through `$FF0008`, two characters per word, one
+`$FF0218` handshake each. Presenting `$28` starts a raw word transfer to a chassis-programmed
+address. The two are not variants of one transfer — they are different protocols selected by the
+same operation code.

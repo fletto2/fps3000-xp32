@@ -4817,6 +4817,11 @@ check('the $8(a5) load at $F04AD6 is on the OTHER branch, skipped by $F04AD2',
       insn(0xF04AD2) == 'bne.w $f04b08' and insn(0xF04AD6) == 'lea.l $8(a5), a0')
 check('$FF0010 is still never referenced anywhere in the ROM',
       not any('ff0010' in o for _, (_, o, _) in _mins.items()))
+check("chassis op $0's middle arm falls through into the SLC S-record dispatcher",
+      insn(0xF04AC8) == 'cmpi.l #$28, $e5c.l' and insn(0xF04B08) == 'cmpi.l #$0, $e5c.l'
+      and insn(0xF04B12) == 'bne.w $f04c72'
+      and insn(0xF04B68) == 'move.w #$400, $218(a5)'
+      and insn(0xF04B82) == 'jsr $f05150.l' and insn(0xF04B8A) == 'cmpi.w #$5330, d1')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
