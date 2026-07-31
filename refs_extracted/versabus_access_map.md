@@ -35764,3 +35764,43 @@ A model could return a frozen T3 counter and pass every test this project runs. 
 becomes live only when host software issues `$1C`, or when the trace mask at `$F0A52A` is made
 non-zero — and the latter is a one-word change that would exercise it nine times per relevant kernel
 event.
+
+## Audit: which documented emulator requirements have a LIVE WITNESS (2026-07-31)
+
+Checking, for each recorded modelling requirement, whether the instruction that *implements* it
+executes in a default boot:
+
+| requirement | gate | witness |
+|---|---|---|
+| SCM: 16 KB window, 4 patterns, both directions | `$F09B20` | **yes** |
+| `$FF0216` bit-7 bus-error gate | `$F0984A` | **yes** |
+| 16→32 width mux and the `$FF0214` latch | `$F09776` | **yes** |
+| `$FF0218` bit-4 sizes the BIM walk | `$F09518` | **yes** |
+| mailbox readable at boot through page `$F` | `$F0A1E0` | **yes** |
+| interrupt delivery inside 16 `dbeq` iterations | `$F0903C` | **yes** |
+| `tas` atomicity (the `T0P` spinlock) | `$F006E8` | **yes** |
+| **PTM T3 counter readable and running mid-period** | `$F00F96` | **NO** |
+| **runtime-constructed `jsr` (`$4EB9`)** | `$F02126`, `$F03FD4`, `$F040E2` | **NO — all three** |
+| **register snapshot at `$0800`** | `$F00186` | **NO** |
+| **`$F70030` read-modify-write** | `$F00A3A` | **NO** |
+
+**Five requirements have no live witness**, so a model could get each of them wrong and pass
+everything this project runs. Three were already recorded as dormant (`CMR`/`!CCB`, `$F70030`,
+`$F00186`); the other two are new to this audit — the PTM running counter and, more surprisingly,
+**every runtime `jsr` construction in the image.**
+
+### A correction made in the course of the audit
+
+I first recorded the self-modifying-code requirement as *exercised*, on the grounds that `$F02216`
+(`CNCTIRQ`) executes. That was the wrong address: the `move.w #$4eb9,(a3)+` is at **`$F02126`**, 240
+bytes earlier, and it does **not** execute. The other two sites are `CMR`'s, already known dormant —
+including `$F040E2`, which carries the recorded latent bug (`move.l` where `move.w` was meant).
+
+So the divergence note "the kernel BUILDS `jsr` instructions at runtime … any model that caches
+decoded instructions must invalidate on RAM writes" describes a requirement **nothing currently
+tests**. A recompiling emulator would pass this project's entire suite and then fail the first time
+host software issued `$3C` or reached `$F02126`.
+
+The error was checking the reachability of the *routine I had named* rather than of the *instruction
+that implements the requirement* — the same mistake as reading `$F08614` as the leak discriminator
+when `$F0857A` was.

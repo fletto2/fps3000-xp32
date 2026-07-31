@@ -8281,6 +8281,15 @@ check('T0RDTIM reads the live T3 counter and interpolates against $0C58 and $0C4
       and _w(0xF00FB4) == 0xD2B8 and _w(0xF00FB6) == 0x0C42
       and _w(0xF00FB8) == 0x4A38 and _w(0xF00FBA) == 0x0C5A)
 
+check('all three runtime jsr constructions write $4EB9',
+      _w(0xF02126) == 0x36FC and _w(0xF02128) == 0x4EB9
+      and _w(0xF03FD4) == 0x337C and _w(0xF03FD6) == 0x4EB9
+      and _w(0xF040E2) == 0x297C and _l(0xF040E4) == 0x00004EB9)
+check('...and the second CMR thunk uses move.l where move.w was meant',
+      _w(0xF03FD4) == 0x337C          # move.w #$4eb9,$4a(a1)
+      and _w(0xF040E2) == 0x297C      # move.l #$00004eb9,$4a(a4) -- opcode two bytes low
+      and _w(0xF03FDA) == 0x004A and _w(0xF040E8) == 0x004A)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
