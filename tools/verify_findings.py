@@ -5109,6 +5109,10 @@ check('so the trace hook is dark for TWO reasons: zero mask AND no CCB',
       _bst.unpack('>H', _rom[0xF0A52A - 0xF00000:][:2])[0] == 0)
 check('the ASQ-post wrapper IS called, from $F043E8', insn(0xF043E8) == 'bsr.w $f04488.l'
       or insn(0xF043E8) == 'bsr.w $f04488')
+check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
+      0xF03D0C < 0xF043E8 < 0xF04488 and _t1[0x3C][0] == 0xF03D0C)
+check('so BOTH FPS kernel extensions belong to CMR, which is never issued',
+      _t1[0x3C][0] == 0xF03D0C)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

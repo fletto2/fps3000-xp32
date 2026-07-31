@@ -23434,3 +23434,36 @@ It would enable the other nine hook sites and leave this one dark.
 
 That is worth knowing before anyone tries the experiment: the obvious test of the trace-mask
 finding would appear to fail at exactly the site the finding was discovered at.
+
+### Both FPS kernel extensions belong to `CMR`, and both are dormant
+
+The ASQ-post wrapper's single caller is `$F043E8`, and locating it against the directive tables
+puts it inside the handler at **`$F03D0C` — TRAP #1 directive `$3C` = `CMR`**, the same directive
+that registers the driver-chain walker at CCB+`$4C`.
+
+So the FPS pre-task glue region contains **two routines, both belonging to the channel-request
+subsystem**:
+
+| routine | bytes | registered/called by | runs? |
+|---|---:|---|---|
+| `$F04488` ASQ post from interrupt (`T0QEVNTI`) | 25 | `CMR` at `$F043E8` | **no** |
+| `$F044A2` trace hook + driver-chain walker | 59 | `CMR` at `$F03FDA`/`$F040EA`, into CCB+`$4C` | **no** |
+| `$F04500` panel-command issuer copy 1 | 50 | the FPS layer | yes |
+| padding | 238 | | |
+
+**`CMR` is never issued by this firmware**, so both extensions are dead code — and that is the
+whole explanation for the region's oddities. The 376 bytes are 84 bytes of dormant
+channel-request machinery, 50 bytes of live issuer, and 238 bytes of padding.
+
+It also completes a picture this project has assembled in pieces. The FPS layer's relationship to
+the RMS68K kernel is **three hooks, of which two are dead**:
+
+1. the exception vector overrides (`$F0A23A`-`$F0A27A`) — **live**, nine reporters
+2. the CMR ASQ post — **dead**, `CMR` never issued
+3. the CMR driver-chain walker — **dead**, same reason
+
+Everything else the FPS layer does, it does through the documented directive interface. The
+firmware talks to its channels through the AP I/F windows directly rather than through the RTOS —
+a statement already in this file, derived from `!CCB` having no instance. Here is the code that
+would have been used had it gone the other way, sitting unused in the join between the two halves
+of the firmware.
