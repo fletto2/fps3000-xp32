@@ -27495,3 +27495,34 @@ The general rule, then, is not "prefer operand matching" but: **check whether th
 displacement is distinctive first**. If it is, provenance is unnecessary and unsound
 sweeps cannot mislead you. If it is not, provenance is unavoidable and the result is only as
 good as the agreement between variants.
+
+## The clearest case: an unsound method producing a confident wrong correction
+
+The `$FF020C` episode is worth isolating, because it is the failure mode this project should
+most guard against.
+
+1. The register table recorded **7 sites** writing the operational value `$04`.
+2. A provenance sweep — following base registers loaded with `$FF0000` — found **6**.
+3. I wrote the correction into three files, with a structural story that *fit*: one site
+   before RDHC's bulk loop plus one per `POLL` copy, five copies at the documented `$2858`
+   and `$A00` offsets. The arithmetic was right and the story was tidy.
+4. The regression harness failed the check on the next run.
+5. Operand-form matching finds **7**: the sweep had missed `$F04B2C`, whose base register's
+   load it never captured.
+
+The structural story survived with one more member — two RDHC sites, the SLC preamble and
+the bulk loop, plus five `POLL` copies — so the tidiness of the explanation was no evidence
+at all for the count.
+
+**Two lessons, both already visible elsewhere in this file but never so cleanly:**
+
+- **A plausible structural explanation is not corroboration.** Six decomposed neatly into
+  1 + 5; seven decomposes just as neatly into 2 + 5. The decomposition could not distinguish
+  them, and I treated it as if it did.
+- **Prefer the method that cannot miss.** For a distinctive displacement like `$20C`,
+  operand-form matching is exhaustive by construction. Provenance was never needed here, and
+  using it introduced the only error.
+
+The harness caught this because the check was written against the *new* figure, so the next
+run compared it to the ROM rather than to my reasoning. That is the whole value of asserting
+findings mechanically rather than recording them in prose.
