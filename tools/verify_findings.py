@@ -4218,6 +4218,18 @@ check('FPS3K_MODE1_BUSY makes it run, and $1064 reads $000A as the decode predic
 check('...and the all-channels-idle sweep runs with it',
       _mb['on'][0]['F086A0'] >= 1)
 
+# The full readback chain: the encoder writes $1064, op $A hands it to $E74.
+# Both halves were decoded independently; they must meet on the same value.
+with tempfile.TemporaryDirectory() as _tdr:
+    subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000',
+                    '-dump-ram', f'{_tdr}/r'], capture_output=True, timeout=400,
+                   env={**os.environ, 'FPS3K_XPIRQ': '1,6', 'FPS3K_CHCMD': 'C000',
+                        'FPS3K_RESP': '0x0A', 'FPS3K_MODE1_BUSY': '1'})
+    _rb = open(f'{_tdr}/r', 'rb').read()
+check('the status readback chain runs: $1064 == $E74 == $000A',
+      struct.unpack('>H', _rb[0x1064:0x1066])[0] == 0x000A
+      and struct.unpack('>H', _rb[0xE74:0xE76])[0] == 0x000A)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
