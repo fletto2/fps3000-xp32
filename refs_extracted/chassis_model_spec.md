@@ -122,8 +122,20 @@ composes `(4*10-1)<<8 | (800/4-1)` = `$27C7` into the MC6840 T3 latch in dual-8-
 
 ## 8. Things that must fault
 
-- **`$600`**, the bus-timeout watchdog test, *requires* a BERR somewhere in `$F80001`-`$F82001`.
-  A model returning zero for unmapped space hangs here.
+- **`$600`**, the bus-timeout watchdog test, requires a BERR in `$F80001`-`$F82001`, and the
+  requirement is more specific than that (decoded 2026-07-31 at `$F08F1C`):
+  - the probes are **byte reads at ODD addresses** — `$F82001` stepping **down** by two, so
+    `$F82001`, `$F81FFF`, … `$F80001`. A model faulting only on word accesses or only on even
+    addresses never satisfies it.
+  - **one fault suffices** — the loop exits the moment its private handler sets `d1`, so the
+    model need not fault across the whole range.
+  - **five `nop`s** separate the access from the test, the only place this firmware accommodates
+    bus-error *latency*.
+  - failure **retries the entire sweep**, so a non-faulting model produces an infinite re-probe
+    with the address bus cycling `$F82001` downward — externally visible on a scope.
+  - the routine **saves and restores `$8.w`** around itself, so during this test the bus-error
+    vector reads `$F08F06`, a value it holds nowhere else. That is what lets the kernel-fatal
+    snapshot at `$084C` identify a fault as belonging to phase `$600`.
 - **`$FF0216` bit 5 set** must make the `$400000` window raise BERR.
 - The self-test installs its own handler on **both** bus and address error and **counts** faults
   at `$1F800` (or `$400` when the stack has been relocated), discarding 8 bytes and `rte`-ing —
