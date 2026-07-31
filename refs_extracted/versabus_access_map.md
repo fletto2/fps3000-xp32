@@ -19847,3 +19847,41 @@ invisible to the executed-PC check precisely *because* the trace mask at `$F0A52
 decodes correctly" is satisfied and the listing is still wrong — a reminder that the property
 bounds errors in *reachable* code only, and that a permanently-disabled feature is exactly
 where a static gap can hide indefinitely.
+
+## The last unidentified structure: a top-of-RAM initialiser that brackets the VMOD register
+
+The largest remaining unattributed item was 46 bytes of mostly-`$008E` words at `$F0A4BE`.
+`$F0A468`-`$F0A482` consumes it:
+
+```
+$F0A452  lea $F0A54A,a1 / move.l $6(a1),d0     ; d0 = $00020000 (top of RAM)
+$F0A45C  +1 / bclr #0 / -1 / andi.l #$fffff000 ; round DOWN to 4 KB -> $1F000
+$F0A468  lea $F0A4BE,a1                        ; the table
+$F0A472  d4 = 3                                ; three groups
+$F0A474  movea.w (a1)+,a2 / adda.l d0,a2       ; group base = d0 + a table word
+$F0A478  d3 = 7
+$F0A47A  move.w (a1)+,-(a2)                    ; seven words, written DOWNWARD
+```
+
+So the table is **three groups of {base word, 7 data words}** — 48 bytes — with bases
+`$1000`, `$0FF0`, `$0FE0` added to `$1F000`:
+
+| group | base | writes |
+|---|---|---|
+| 1 | `$20000` | `$1FFFE` down to **`$1FFF2`** |
+| 2 | `$1FFF0` | **`$1FFEE`** down to `$1FFE2` |
+| 3 | `$1FFE0` | `$1FFDE` down to `$1FFD2` |
+
+**The three runs bracket `$1FFF0`-`$1FFF1` exactly and never write it** — group 1 stops two
+bytes above, group 2 (pre-decrementing from `$1FFF0`) starts two bytes below. That address is
+the **VERSAmodule control register**, and this file records the RAM/register partition as
+derived from *eight independent sites that skip it*. This is a ninth, and the sharpest of
+them: the other sites skip the register with a comparison, while here the three base
+addresses are **chosen** so that a blind descending loop steps around it.
+
+The initialised area is `$1FFD2`-`$1FFFE` — everything from just above the supervisor stack
+top (`$1FFD0`) to the end of RAM, minus the register. The values written (`$008E` repeatedly,
+with `$008C`, `$008D`, `$0093`, `$001C`, `$001F`, `$0074`-`$0071`) are not identified; what is
+established is the structure, the target, and the deliberate exclusion.
+
+**With this, every data structure in the application region is accounted for.**
