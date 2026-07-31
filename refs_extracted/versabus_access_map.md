@@ -28497,3 +28497,30 @@ remains unestablished and I am not going to infer one from four consecutive inte
 > observation proves nothing unless the writer runs *last*. I verified the overlap and not
 > the sequence, which is the same shape of error as attributing a count to a tidy
 > decomposition.
+
+### Which of the table's writes survive the boot
+
+Applying the ordering check to all four passes:
+
+| pass | target | fate |
+|---|---|---|
+| 0 | `$1FFF0`-`$1FFFE` | **survives** — the VMOD register block, above the heap top `$1FE00` |
+| 1 | `$1F07E`-`$1F08D` | overwritten by TDTI's `!TST` fill |
+| 2 | `$1F07E`-`$1F08D` | overwritten by TDTI's `!TST` fill |
+| 3 | `$176F0`-`$176FE` | **survives** — in the staging-buffer region, which nothing writes after |
+
+**A checkable hardware prediction**: on a machine that has completed boot,
+`$176F0`-`$176FE` should read
+
+```
+$176F0 = $0000   $176F2 = $0000   $176F4 = $0C00   $176F6 = $0000
+$176F8 = $4600   $176FA = $00F0   $176FC = $0100   $176FE = $00F0
+```
+
+That is verifiable from one RAM dump and needs no instrumentation.
+
+The individual words `$4600`, `$00F0`, `$0100`, `$0C00` are recognisable **fragments** of
+`$F04600` (RDHC's code start), `$F00100` (the RTOS trampoline) and `$0C00` (the scheduler
+block base). But they do not assemble into those longwords at the alignment they are written
+— `$176F8` would give `$460000F0`, not `$00F04600` — so the resemblance is suggestive and no
+more. Noted as a lead rather than a reading.

@@ -6201,6 +6201,11 @@ check('the table writes land inside the !TST of the TCB at $1EF00, which TDTI\n'
       0x1EF00 + 0x160 <= 0x1F07E and 0x1F08D <= 0x1EF00 + 0x1AF
       and insn(0xF0A056) == 'bsr.w $f0a44a')
 
+check('pass 3 targets $176F0, below the heap and above the staging bound',
+      0x10000 <= 0x176F0 < 0x1DD00)
+check('...and pass 0 targets the VMOD block, above the heap top',
+      0x1FFF0 > 0x1FE00)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
