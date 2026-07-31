@@ -5485,6 +5485,31 @@ check('...failing with status $E when the vector has no owner',
       insn(0xF0228E) == 'move.w #$e, $102(a6)')
 check('$33 is gated on the general privilege flag and translates via T0LOGPHY',
       insn(0xF03A18) == 'btst.b #$f, $28(a6)' and _t0rev.get(0xF0175C) == 0x08)
+
+# ---- the RTOS privilege model: seven gated directives (2026-07-31) ----
+_privd = []
+for _n, (_h, _) in sorted(_t1.items()):
+    if _h == 0xF003D0: continue
+    _p = _h
+    for _ in range(6):
+        if _p not in _mins: break
+        _m, _o, _sz = _mins[_p]
+        if _m.split('.')[0] == 'btst' and '$28(a6)' in _o and '#$f' in _o:
+            _privd.append(_n); break
+        _p += _sz
+check('exactly seven live directives are privilege-gated on TCB+$28 bit 15',
+      _privd == [0x0E, 0x10, 0x16, 0x18, 0x1C, 0x33, 0x49], [hex(n) for n in _privd])
+check('...including TERMT (kill another task) and SETTOD (set the clock)',
+      0x10 in _privd and 0x49 in _privd)
+check('...but NOT $0F TERM -- a task may always end itself', 0x0F not in _privd)
+check('$18 checks the TARGET\'s flag too, a two-sided permission model',
+      insn(0xF02DBE) == 'btst.b #$f, $28(a6)' and insn(0xF02DC6) == 'btst.b #$f, $28(a0)')
+check('...all failing with status +9',
+      insn(0xF02DCE) == 'addi.w #$9, $102(a6)' and insn(0xF03CCA) == 'addi.w #$9, $102(a6)')
+check('no task in this firmware issues any of the seven',
+      not any(_mre.search(r'#\$%x, d0' % n, o) and 0xF04600 <= a < 0xF08700
+              for n in (0x0E, 0x16, 0x18, 0x1C, 0x33, 0x49)
+              for a, (_, o, _) in _mins.items()))
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

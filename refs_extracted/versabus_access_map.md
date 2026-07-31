@@ -24645,3 +24645,54 @@ of the request survives. Status `+$C` on failure.
 **Five singletons remain undecoded**: `$18` (9 bytes), `$1C` (14), `$23` (18), `$36` (20), and
 `$1D` — which is already named `RQSTPA`, the periodic-activation request, so **four** genuinely
 remain.
+
+## The RTOS privilege model: seven directives, gated on `TCB+$28` bit 15 (2026-07-31)
+
+Decoding the singleton-size directives turned up the same opening in several of them, and
+censusing it gives the complete set. **Seven of the 60 live directives begin with
+`btst.b #$F,$28(a6)` and fail with status `+9`:**
+
+| directive | size | |
+|---|---:|---|
+| `$0E` | 0 | |
+| **`$10` `TERMT`** | 10 | **terminate ANOTHER task** |
+| `$16` | 0 | |
+| `$18` | 9 | also checks the **target's** flag |
+| `$1C` | 14 | |
+| `$33` | 6 | privileged address translation |
+| **`$49` `SETTOD`** | 8 | **set the system clock** |
+
+### The set is coherent in a way that validates it
+
+Only two members are independently named, and they are **exactly the two operations a permission
+model would obviously protect**: killing another task, and setting the machine's clock.
+
+**And the boundary falls in the right place.** `$0F` `TERM` — terminate *yourself* — is **not**
+privileged; `$10` `TERMT` — terminate a *named* task — is. A task may always end itself and needs
+permission to end anyone else. That distinction is not something a misread of the flag would
+produce.
+
+### `$18` implements a two-sided check
+
+```
+$F02DBE  btst.b #$F,$28(a6)     is the CALLER privileged?
+$F02DC4  bne.b  $F02DD6         yes -> proceed
+$F02DC6  btst.b #$F,$28(a0)     no  -> is the TARGET privileged?
+$F02DCC  beq.b  $F02DD6         no  -> proceed anyway
+$F02DCE  addi.w #$9,$102(a6)    yes -> refuse
+```
+
+So an unprivileged caller **may** act on an unprivileged target and **may not** act on a
+privileged one. That is a genuine permission model rather than a single capability flag, and `a0`
+being the target's TCB means the directive is inherently cross-task.
+
+### For emulation and for host software
+
+A faithful TRAP #1 implementation must carry `TCB+$28` bit 15 and refuse these seven with status
+`+9` when it is clear. **None of this firmware's own tasks exercises any of them** — no task
+issues `$0E`, `$10`, `$16`, `$18`, `$1C`, `$33` or `$49` — so the model is dormant here and exists
+for host-loaded software, exactly like the `$3B` key and the `$4A` clock read.
+
+That makes three independent capability mechanisms in this kernel, all unused by the firmware
+that ships with it: the **`TCB+$28` privilege flag** (7 directives), the **`$4BAA7BFB` key** on
+`$3B`, and the **TRAP #0 supervisor-only interface** whose 12 sites all lie outside task code.
