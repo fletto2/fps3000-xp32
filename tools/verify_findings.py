@@ -77,6 +77,27 @@ if _elseblk:
 if _bad_g:
     print('  FATAL: names used in the emulator block but defined below it:',
           sorted(_bad_g)[:6])
+    sys.exit(2)          # this exit was lost in an edit; the guard printed but did not stop
+
+# --- STRUCTURAL SELF-AUDIT #3: vacuous checks ------------------------------
+# A check whose condition is a literal True, or a comparison between two
+# constants, always passes and silently inflates the count.  Five were found
+# and removed on 2026-07-31 -- and two more were introduced later the SAME day,
+# which is why this is a permanent guard rather than a one-off scan.
+_vac = []
+for _n in _ast_g.walk(_tree_g):
+    if isinstance(_n, _ast_g.Call) and getattr(_n.func, 'id', '') == 'check' \
+            and len(_n.args) > 1:
+        _c = _n.args[1]
+        if isinstance(_c, _ast_g.Constant) and _c.value is True:
+            _vac.append((_n.lineno, 'literal True'))
+        elif isinstance(_c, _ast_g.Compare) and isinstance(_c.left, _ast_g.Constant) \
+                and all(isinstance(_x, _ast_g.Constant) for _x in _c.comparators):
+            _vac.append((_n.lineno, 'constant vs constant'))
+if _vac:
+    print('  FATAL: vacuous check(s) that can never fail:', _vac[:6])
+    sys.exit(2)
+
 
 def word(a): return struct.unpack('>H', d[a-B:a-B+2])[0]
 def long_(a): return struct.unpack('>I', d[a-B:a-B+4])[0]
