@@ -27320,3 +27320,42 @@ applying the mod-8 rule there would be equally wrong.
 
 The reliable discriminator is the destination operand, not the `.b` suffix: capstone prints
 `.b` in both cases.
+
+## `$FF020C` is written at SIX sites, not seven — and the six are structural (2026-07-31)
+
+Counting every write to `XLTR_COUNTER`, through base registers **and** absolute references:
+
+| value | sites |
+|---|---|
+| `$0004` | `$F04AC2`, `$F05A2C`, `$F0646C`, `$F06E84`, `$F07884`, `$F08284` — **6** |
+| `$0001` | `$F09546`, `$F0959A` — self-test only |
+| `$00FF` | `$F098C4` — self-test only |
+
+This file records "operational value `$04` (**7 sites**, incl. before the bulk loop)". It is
+**six**, and the six decompose exactly:
+
+- **one** at `$F04AC2`, before RDHC's bulk-transfer loop;
+- **five** in the `POLL` handler — one per copy of the dispatch subsystem. `$F05A2C` is
+  RDHC's, and `$F05A2C + $2858 = $F08284` is XP1I's, the documented offset between the two
+  dispatch tables. The remaining three sit at `$A00` intervals below it, with XP4I's at
+  `$A18` — **the same irregular shift** that appears in that task's abort routine, its
+  dispatch table and its template `nop`.
+
+So the operational value is written once per bulk transfer and once per `POLL` dispatch,
+which is what "the counter is declared when the bulk port is the source" predicts — five
+copies of one handler plus the one bulk loop. The seventh site does not exist.
+
+### The `$FF0218` / `$FF021A` vocabulary is closed
+
+| register | values |
+|---|---|
+| `$FF0218` STATUS/IRQ | **only `$0400` and `$0000`**, 22 writes each, with 22 reads between them |
+| `$FF021A` IRQ MASK | `$0FFF` twice at init, then **30 read-modify-write pairs** (`move.w d0,$21a(a4)`) |
+
+`$FF0218`'s discipline is perfectly balanced — arm with `$400`, poll bit 15, clear with
+`$0000` — 22 of each, so every arm has exactly one clear. A model can treat it as a
+one-shot: writing `$400` arms, reading returns bit 15 when the operation completes, writing
+`$0000` disarms. **No other value is ever written.**
+
+`$FF021A`'s 30 read-modify-writes are the per-channel bit clears documented in the transfer
+teardown; the only literals are the two `$0FFF` at initialisation.
