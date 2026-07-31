@@ -23064,3 +23064,66 @@ that hid three task entry points as `DC.W 0x7001` until the TDTI table was used 
 six ISR entries escaped that fate because each has a `beq.w` pointing at it, dead or not. **A
 disassembler bug and a firmware bug cancelling out** is worth knowing about before anyone
 "cleans up" either.
+
+## The TRAP #1 table read out in full: 60 live, 17 dead, and paired handlers (2026-07-31)
+
+Reading all 77 slots of the table at `$F003D8` — handler = entry + signed word 0, flags = word 1:
+
+**17 slots point at the error stub `$F003D0`**, and their directive numbers are
+
+```
+$00 $0A $0C $26 $27 $28 $2F $30 $31 $32 $37 $38 $39 $3F $46 $47 $4B
+```
+
+leaving **60 live**, exactly the figure this project measured by execution.
+
+### Every documented parameter-block size confirms
+
+The flags word decodes as `{size in the high byte, flags in the low byte}`. Reading the whole
+column against the sizes derived earlier from Motorola's equate files:
+
+| directive | flags | size | previously derived |
+|---|---|---:|---|
+| `$01` GTSEG | `$1CC0` | **28** | 28 (`SGPBL` in `SEG.EQ`) |
+| `$0B` CRTCB | `$1C80` | **28** | 28 |
+| `$29` ATSEM | `$0A80` | **10** | 10 (the semaphore descriptor) |
+| `$2D` CRSEM | `$0A80` | **10** | 10 |
+| `$0D` START | `$0A82` | **10** | 10 |
+| `$2A` WTSEM | `$0880` | **8** | 8 |
+| `$2B` SGSEM | `$0880` | **8** | 8 |
+| `$43` RSTATE | `$0CC0` | **12** | 12 |
+| `$4C` CNCTIRQ | `$10C0` | **16** | 16 |
+| `$1F` GTASQ | `$18C2` | **24** | 24 |
+| `$0F` TERM, `$11` SUSPND, `$13` WAIT, `$22` RDEVNT | `$0003`/`$0001`/`$0001`/`$0000` | **0** | take no parameters |
+
+**Eleven for eleven.** New sizes from the same read: `$10` TERMT **10**, `$02` DESEG **24**,
+`$1D` RQSTPA **22**, `$3D` CISR **16**, `$3A` CDIR **8**, `$3C` CMR / `$3B` / `$25` **0**.
+
+### The four semaphore directives are TWO routines, not four
+
+`$2B` SGSEM points at `$F032F8` and `$2A` WTSEM at `$F032FC` — four bytes apart. `$2D` CRSEM
+points at `$F0314A` and `$29` ATSEM at `$F03150` — six apart. Decoding shows why:
+
+```
+$F032F8  clr.w   d7           <- $2B SGSEM enters here, d7 = 0
+$F032FA  bra.b   $F03300
+$F032FC  move.w  #$1,d7       <- $2A WTSEM enters here, d7 = 1
+$F03300  ...one shared body...
+
+$F0314A  moveq   #$1,d7 / swap d7    <- $2D CRSEM enters here, d7 = $00010000
+$F0314E  bra.b   $F03152
+$F03150  clr.l   d7                  <- $29 ATSEM enters here, d7 = 0
+$F03152  ...one shared body...
+```
+
+**Two entry points per routine, each setting a mode flag in `d7`, then falling into a common
+body.** Signal/wait share an implementation; create/attach share another.
+
+This is a **different** pattern from the "29 of 33 handlers have two entry points two bytes
+apart" already recorded here — that one is the `move.w sr,-(a7)` convention distinguishing
+internal `bsr` callers from the TRAP path. This is two *distinct directives* sharing one
+implementation, and it explains why the semaphore directives always appear in pairs in the
+firmware's usage: they are pairs in the kernel too.
+
+Note the asymmetry: SGSEM/WTSEM flag with a **word** (0 / 1); CRSEM/ATSEM flag with a
+**longword** whose bit 16 is set (`$00010000` / 0). Two authors, or one author on two days.

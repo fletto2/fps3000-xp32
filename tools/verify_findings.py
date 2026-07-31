@@ -4972,6 +4972,35 @@ check('the ROM contains exactly six such Bcc.b+4 / same-Bcc.w pairs',
       sum(1 for _o in range(0, len(_rom) - 6, 2)
           if _rom[_o] in (0x64, 0x65, 0x66, 0x67, 0x6A, 0x6B, 0x6C, 0x6D, 0x6E, 0x6F)
           and _rom[_o + 1] == 0x04 and _rom[_o + 2] == _rom[_o] and _rom[_o + 3] == 0x00) == 6)
+
+# ---- the TRAP #1 table: 60 live, 17 dead, paired semaphore handlers (2026-07-31) ----
+_t1 = {}
+for _n in range(77):
+    _o = 0xF003D8 - 0xF00000 + _n * 4
+    _disp = _bst.unpack('>h', _rom[_o:_o + 2])[0]
+    _fl = _bst.unpack('>H', _rom[_o + 2:_o + 4])[0]
+    _t1[_n] = ((0xF003D8 + _n * 4 + _disp) & 0xFFFFFF, _fl)
+_t1dead = [n for n, (h, _) in _t1.items() if h == 0xF003D0]
+check('exactly 17 of the 77 TRAP #1 slots point at the error stub',
+      len(_t1dead) == 17, len(_t1dead))
+check('...leaving the 60 live slots measured by execution', 77 - len(_t1dead) == 60)
+check('the dead directive numbers are the expected set',
+      _t1dead == [0x00, 0x0A, 0x0C, 0x26, 0x27, 0x28, 0x2F, 0x30, 0x31, 0x32,
+                  0x37, 0x38, 0x39, 0x3F, 0x46, 0x47, 0x4B], [hex(n) for n in _t1dead])
+for _dv, _sz in ((0x01, 28), (0x0B, 28), (0x29, 10), (0x2D, 10), (0x0D, 10),
+                 (0x2A, 8), (0x2B, 8), (0x43, 12), (0x4C, 16), (0x1F, 24), (0x10, 10)):
+    check('directive $%02X declares a %d-byte parameter block' % (_dv, _sz),
+          (_t1[_dv][1] >> 8) == _sz, hex(_t1[_dv][1]))
+check('TERM/SUSPND/WAIT/RDEVNT declare no parameter block',
+      all((_t1[_d][1] >> 8) == 0 for _d in (0x0F, 0x11, 0x13, 0x22)))
+check('SGSEM and WTSEM share one routine, four bytes apart',
+      _t1[0x2B][0] == 0xF032F8 and _t1[0x2A][0] == 0xF032FC
+      and insn(0xF032F8) == 'clr.w d7' and insn(0xF032FC) == 'move.w #$1, d7'
+      and insn(0xF032FA) == 'bra.b $f03300')
+check('CRSEM and ATSEM share one routine, six bytes apart',
+      _t1[0x2D][0] == 0xF0314A and _t1[0x29][0] == 0xF03150
+      and insn(0xF0314A) == 'moveq #$1, d7' and insn(0xF03150) == 'clr.l d7'
+      and insn(0xF0314E) == 'bra.b $f03152')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
