@@ -26592,3 +26592,38 @@ mean B), and the stride follows from the table above.
 `!IDV`'s record layout is already documented as `{vector, TCB, ISR entry, ISR exit}` at
 `+$00`/`+$02`/`+$06`/`+$0A`; the walk confirms both the `+$0A` compare and the `+$02` fetch
 (`movea.l -$c(a5),a6` after the stride add is record + 2).
+
+### `!PAT` is a third header variant, and its free-list build has a testable edge
+
+```
+move.l #$21504154,(a0)     ; +$00  tag
+lsl.w  #$8,d2
+move.l d2,$10(a0)          ; +$10  size in bytes (pages << 8)
+lea.l  (a0,d2.w),a2        ;       ...the end pointer
+lea.l  $14(a0),a1          ; +$14  first slot
+lea.l  $4(a0),a4           ; +$04  FREE-LIST HEAD
+loop:  move.l a1,(a4)
+       move.l #$ffffffff,$4(a1)   ; each free slot marked $FFFFFFFF at +$04
+       movea.l a1,a4
+       lea.l $1e(a1),a1            ; STRIDE $1E = 30
+       cmpa.l a1,a2 / beq done / bgt loop
+done:  clr.l (a4)                  ; terminate the list
+```
+
+So `!PAT`'s header is 20 bytes with **list heads rather than counts**: `+$04` free list,
+`+$08` and `+$0C` the two lists the tick path walks and the day rollover rebases, `+$10`
+the size. Entries start at `+$14` like convention B, but nothing counts them — the bound
+is the size at `+$10`. It is a hybrid of the two conventions rather than a member of
+either, so the split described above is a useful generalisation, not a law.
+
+**The edge worth checking on hardware.** The loop links a slot whenever the *next* pointer
+is still below the end, so with a single 256-byte page it links **8 slots** and the eighth
+spans offsets 230-259 — four bytes past the page. With two pages it links 17 and the last
+fits. This project's notes record "8 free slots of `$1E` bytes", which matches the
+one-page case, so either `!PAT` is allocated two pages (and there are more slots than
+recorded) or the eighth slot's tail lies in the next structure's page.
+
+That is decidable from a single RAM dump: read `$1F710` for the size field. It is stated
+here as a question rather than a finding because the ROM alone does not settle which page
+count the allocator was asked for — the constant feeding that allocation is not one of the
+seven this project has already tied to its structure.
