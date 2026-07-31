@@ -378,3 +378,65 @@ a stuck `CHANNEL_SELECT` sub-phase, not a message.
 Two further fault requirements documented elsewhere complete the picture: the phase-`$600`
 watchdog needs a fault somewhere in `$F80001`-`$F82001`, and the earlier `$20000`-`$EFFFFF`
 sweep needs unmapped space to fault at a `$800` stride.
+
+## Board-status derivation: what the firmware actually requires (2026-07-31)
+
+`versabus.c` derives `$F70019` from a set of bit equations described in the notes as
+reverse-engineered by tuning until the self-test passed. **Five of the six are specified
+outright by the suite**, in the form of arms that set VMOD state and demand a particular
+board-status reading. This is the implementable contract, with the site that proves each.
+
+### Resting state — phase `$0500`
+
+`($F70018 & $3F31) == $3F11`: **bit 0 set, bit 4 set, bit 5 clear, bits 8-13 set.**
+
+### Board bit 3 — phase `$0800`, full 2x2 truth table
+
+With `$1FFF1` bit 6 forced clear by the helper at `$F0903C`:
+
+| `$1FFF1` bit 7 | `$1FFF0` bit 1 | board bit 3 |
+|:-:|:-:|---|
+| 0 | 0 | set |
+| 0 | 1 | set |
+| 1 | 0 | set |
+| 1 | 1 | **clear** |
+
+i.e. `bit 3 = NOT( bit6 OR (bit7 AND bit1) )`. Four arms, all four combinations.
+
+### Board bit 1 — phase `$1200`
+
+| `$1FFF1` bit 5 | `$1FFF0` bit 0 | board bit 1 |
+|:-:|:-:|---|
+| set | — | set |
+| clear | — | clear |
+| set | clear | set |
+
+The second term of `NOT(bit4) OR (bit5 AND NOT bit0)`; the first term is not exercised.
+
+### Board bit 2 — phase `$1400`
+
+| condition | board bit 2 |
+|---|---|
+| request-level field zero | clear |
+| line 2 gated on (bit 3) **and** level requested | set |
+
+The equation's `bit 3 AND bit 0` is **the interrupt request condition** — bit 3 gates the
+second request line, bit 0 is the level field's low bit. Bit 2 is a *status* line, not a
+combinational echo of control bits.
+
+### Board bit 5 — phase `$0200`
+
+Parameterised mapping test with `d0 = 6`, `d1 = 3`: **clear `$1FFF1` bit 6 ⇒ board bit 3
+reads 1**. (The documented "bit 5 = `$1FFF1` bit 6 directly" is the same relationship seen
+from the other end.)
+
+### `$FF0216` gates — phases `$1700`, `$1800`, `$1A00`
+
+Nine fault assertions: bit 5 set ⇒ `$400000` faults both directions; bit 7 set with
+`$FF0218` armed ⇒ `$FF000E` faults; bit 6 inert in all four combinations.
+
+### Board bit 4 — NOT specified
+
+`MODE1 <- $8000` occurs only at the three checkpoints, and board bit 4 is literal-tested at
+one site. The "busy/ready from MODE1 bit 15" reading is inferred from the handshake's shape.
+A model should implement it, but should not treat it as pinned the way the others are.
