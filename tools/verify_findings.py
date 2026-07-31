@@ -5098,6 +5098,17 @@ check('...and 238 bytes of the 376 are zero padding',
       set(_rom[0xF044E0 - 0xF00000:0xF04500 - 0xF00000]) == {0}
       and set(_rom[0xF04532 - 0xF00000:0xF04600 - 0xF00000]) == {0}
       and (0xF04500 - 0xF044E0) + (0xF04600 - 0xF04532) == 238)
+check('$F044A2 is REGISTERED at CCB+$4C by CMR, not called',
+      insn(0xF03FDA) == 'move.l #$f044a2, $4c(a1)'
+      and insn(0xF040EA) == 'move.l #$f044a2, $4c(a4)')
+check('...and both sites are inside the kernel below the glue region',
+      0xF03D0C < 0xF03FDA < 0xF04488 and 0xF03D0C < 0xF040EA < 0xF04488)
+check('the walker returns into the kernel interrupt-exit path',
+      insn(0xF008B0) == 'movem.l (a7)+, d0-d7/a0-a6' and insn(0xF008B4) == 'addq.l #$6, a7')
+check('so the trace hook is dark for TWO reasons: zero mask AND no CCB',
+      _bst.unpack('>H', _rom[0xF0A52A - 0xF00000:][:2])[0] == 0)
+check('the ASQ-post wrapper IS called, from $F043E8', insn(0xF043E8) == 'bsr.w $f04488.l'
+      or insn(0xF043E8) == 'bsr.w $f04488')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

@@ -23399,3 +23399,38 @@ would want an event trace.
 | checksum `$F0FFFE` | verified |
 
 There is no region of this image left unexamined.
+
+### And the driver walker is the CCB handler — which unifies three separate observations
+
+`$F044A2` is not called. It is **installed as a pointer**:
+
+```
+$F03FDA  move.l  #$F044A2,$4C(a1)
+$F040EA  move.l  #$F044A2,$4C(a4)
+```
+
+Both sites are inside the kernel's `$3C` = `CMR` ("request channel") region, so **`CMR` registers
+the FPS driver-chain walker at `+$4C` of the channel control block it creates**. And the walker
+returns to `$F008B6`, which sits immediately after `move a0,usp` / `movem.l (a7)+,d0-d7/a0-a6` —
+**the interrupt-exit path**. So the design is: on interrupt exit, walk the CCB's driver chain,
+calling each driver's `+$1E` entry until one sets carry.
+
+This firmware **never issues `$3C`**, so no `!CCB` is ever created, so `+$4C` is never written,
+so the walker never runs.
+
+**Three observations this project recorded separately are the same fact:**
+
+| observation | |
+|---|---|
+| "`!CCB` has no instance, because `CMR` is never issued and its head at `$0C18` is null" | the *cause* |
+| "the 18 bytes at `$F044A2` are real code the disassembler misses" | the *symptom* in the listing |
+| "the FPS trace hook escapes the executed-PC property because the trace mask is zero" | **only half right** |
+
+That last one needs correcting. The trace hook at `$F044A2` is unexecuted for **two** independent
+reasons, not one: the trace mask at `$0C34` is zero *and* the routine it guards is only reachable
+from a CCB that is never created. Switching on kernel tracing by writing a nonzero word at
+`$F0A52A` — the single-word change this file proposes — would **not** make `$F044A2` execute.
+It would enable the other nine hook sites and leave this one dark.
+
+That is worth knowing before anyone tries the experiment: the obvious test of the trace-mask
+finding would appear to fail at exactly the site the finding was discovered at.
