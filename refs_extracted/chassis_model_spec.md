@@ -667,7 +667,10 @@ and 0 after it.** So model it as an ordinary writable bit of `$FF0218` that **po
    `$610` readback now yields `$400`; **and**
 2. **walk all 24 BIM registers** in phase `$1600`, because `$F09522` samples bit 4 *before* the
    arm write and picks the `$D8` limit — which means **`$FF025E` gets written for the first time**,
-   closing the last "never touched" register on the card.
+   closing the last "never touched" register on the card. **And the phase then READS THEM BACK**
+   (`$F095CE`-`$F095E4`, `cmp.w (a6,a0.w),d0` against `$C0+n`), so `$FF025E` must be a working
+   read/write latch, not merely writable. The pass condition is boot-to-idle **plus 24 successful
+   read-backs**.
 
 Both outcomes are checkable in one run (final PC, plus an access log filtered to `$FF025E`). If
 the boot completes but `$FF025E` stays untouched, the sampling order is wrong; if `$FF025E` is

@@ -6895,6 +6895,20 @@ check('...and three TASKS write BIM2 control registers, so BIM2 is not optional'
       and _w(0xF06018) == 0x3B7C and _w(0xF0601A) == 0x005F and _w(0xF0601C) == 0x0252
       and _w(0xF05DB8) == 0x3B7C and _w(0xF05DBA) == 0x005F and _w(0xF05DBC) == 0x0254)
 
+check('phase $1600 has a VERIFY pass that reads back the four walking-bit registers',
+      _w(0xF095B8) == 0x303C and _w(0xF095BA) == 0x0010
+      and _w(0xF095BC) == 0x307C and _w(0xF095BE) == 0x0210
+      and _w(0xF095C0) == 0xB076 and _w(0xF095C2) == 0x8000
+      and (insn(0xF095C4) or '').startswith('bne'))
+check('...and reads back every BIM register, requiring the distinct value $C0+n',
+      _w(0xF095CE) == 0x303C and _w(0xF095D0) == 0x00C0
+      and _w(0xF095D2) == 0x307C and _w(0xF095D4) == 0x0230
+      and _w(0xF095D6) == 0xB076 and _w(0xF095D8) == 0x8000
+      and _w(0xF095E0) == 0x5240 and _w(0xF095E2) == 0xB041
+      and (insn(0xF095DA) or '').startswith('bne'))
+check('...so with bit 4 set the walk ends on $FF025E with value $D7',
+      0x230 + 2 * (0xD8 - 0xC0 - 1) == 0x25E)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

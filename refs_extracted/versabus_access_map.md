@@ -30746,3 +30746,45 @@ Two consequences worth stating plainly:
   genuinely unused vector register rather than a modelling gap: `$FF0256` (BIM2 CR3) *is*
   programmed, so that channel is configured with no vector, exactly as this project already
   recorded.
+
+## Phase `$1600` verifies by READ-BACK — all 24 BIM registers must be latches (2026-07-31)
+
+The phase is a write pass followed by a **verify pass**, and the verify half had not been written
+down:
+
+```
+--- write ---
+$F09558  d0=$10, a0=$210 : move.w d0,(a6,a0.w) ; a0+=2 ; lsl.b #1,d0 ; bcc
+$F0956C  d0=$C0, a0=$230 : move.w d0,(a6,a0.w) ; a0+=2 ; addq #1,d0 ; cmp d1 ; bne
+--- verify ---
+$F095B8  d0=$10, a0=$210 : cmp.w (a6,a0.w),d0  ; bne -> FAULT
+$F095CE  d0=$C0, a0=$230 : cmp.w (a6,a0.w),d0  ; bne -> FAULT
+```
+
+So the firmware **reads every one of those registers back and requires the exact value it wrote**:
+
+| registers | values | requirement |
+|---|---|---|
+| `$FF0210`, `$FF0212`, `$FF0214`, `$FF0216` | `$10`, `$20`, `$40`, `$80` | one walking bit each, read back exactly |
+| `$FF0230` … `$FF024E` (16) or `… $FF025E` (24) | `$C0` … `$CF` / `$D7` | **distinct ascending** values, each read back exactly |
+
+Two things follow that a model must honour:
+
+- **The BIM registers are read/write latches, not write-only.** My own block-scoped direction sweep
+  reported them as write-only; that was its conservatism (it discards uses whose base was set in an
+  earlier block), and this verify loop is the counter-example. `$FF0230` was already known to be
+  read-modify-written by chassis op `$7`; this extends it to all of them.
+- **Distinct ascending values are the point.** Writing the same value everywhere would pass a
+  presence test but not an aliasing test; `$C0 + n` means two registers decoding to the same
+  address are caught by the read-back.
+
+### This sharpens the bit-4 prediction
+
+With bit 4 set, the walk covers 24 registers — verified arithmetically: `d0` runs `$C0`..`$D7`,
+`a0` runs `$230`..`$25E`, so **`$FF025E` receives `$D7`** — and the verify pass then **reads it
+back and requires `$D7`**. So the prediction is not merely "`$FF025E` gets written" but
+"`$FF025E` must be a working latch". A model that maps it to nothing, or aliases it onto another
+register, fails the verify half even if the write half looks fine.
+
+That makes the proposed fix a genuine test of the third BIM's register file rather than a cosmetic
+change: **boot to the idle loop, plus 24 successful read-backs, is the pass condition.**
