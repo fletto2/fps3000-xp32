@@ -5910,6 +5910,20 @@ for _x in range(0xF00000, 0xF10000, 2):
 check('$FF0218 takes only $0400 and $0000, in equal numbers',
       set(_st218) == {0x400, 0x0} and _st218[0x400] == _st218[0x0], dict(_st218))
 
+check('no 32-bit operation touches $FF0214 or $FF0216 anywhere',
+      not [x for x in range(0xF00000, 0xF10000, 2)
+           if (insn(x) or '').split()[0].endswith('.l')
+           and _mre.search(r'(?<!-)\$21[46]\(a\d\)', (insn(x) or '').lower())])
+check('...$FF0214 has exactly one site, a word write in the self-test',
+      [x for x in range(0xF00000, 0xF10000, 2)
+       if _mre.search(r'(?<!-)\$214\(a\d\)', (insn(x) or '').lower())] == [0xF0981C]
+      and insn(0xF0981C) == 'move.w d1, $214(a6)')
+check('...and $FF0216 has 23, all word-sized',
+      len([x for x in range(0xF00000, 0xF10000, 2)
+           if _mre.search(r'(?<!-)\$216\(a\d\)', (insn(x) or '').lower())]) == 23)
+check('the $240/$25E hits are misaligned decodes, not instruction boundaries',
+      insn(0xF03652) == 'movep.l $240(a0), d0' and insn(0xF0426E) == 'ori.b #$0, -$25e(a0)')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

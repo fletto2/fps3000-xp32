@@ -27401,3 +27401,47 @@ provenance only to disambiguate.
 
 This is the fifth false-negative/false-positive mechanism recorded in base-register analysis
 here, and the first that produces errors in **both** directions from the same tool.
+
+## The definitive XLTR register census — operand form at validated boundaries (2026-07-31)
+
+Given that both provenance-sweep variants proved unsound, here is the same question answered
+without provenance at all: match the operand form `$xxx(aN)` and keep only sites the
+listings render as **instructions** (not `DC.W`).
+
+| register | sites | | register | sites |
+|---|---:|---|---|---:|
+| `$FF0204` CHANNEL_SELECT | **107** | | `$FF0216` 4-bit control | 23 |
+| `$FF021A` IRQ MASK | **102** | | `$FF0210` MODE2 | 18 |
+| `$FF0202` MODE1 | 71 | | `$FF020C` COUNTER | 10 |
+| `$FF0218` STATUS/IRQ | 66 | | `$FF0214` DATA | **1** |
+| `$FF0200` MODE0 | 42 | | BIM registers `$230`-`$25C` | 1-5 each |
+
+**466 sites in total**, and the gaps are exactly where the register table says they are:
+`$206`, `$208`, `$20A`, `$20E`, `$212` are never referenced.
+
+**The three never-referenced BIM registers are confirmed by a third independent method.**
+`$FF0240` (BIM1 CR0), `$FF0248` (BIM1 VR0) and `$FF025E` (BIM2 VR3) have zero sites. Naive
+operand matching *without* boundary filtering appears to find `$240` and `$25E` — one site
+each — but both are **misaligned decodes** (`movep.l $240(a0),d0` at `$F03652` and
+`ori.b #$0,-$25e(a0)` at `$F0426E`, neither an instruction boundary in any listing). So the
+21-of-24 figure stands, now supported by absolute scanning, provenance sweeping and
+operand-form matching alike.
+
+### Correction: `$FF0214` is not "the leading half of a 32-bit access"
+
+This file records that `$FF0214` "never appears standalone; every access is the leading half
+of a 32-bit access paired with `$FF0216`". Statically that is not what the code does:
+
+- `$FF0214` has **exactly one** access site, `$F0981C: move.w d1,$214(a6)` — a standalone
+  **16-bit write**, in the self-test;
+- `$FF0216` has **23** sites, all word-sized (16 `move.w`, 7 `clr.w`);
+- **no `move.l` — or any 32-bit operation — touches either address anywhere in the image.**
+
+A 32-bit CPU access would have to be a `.l` instruction, and none exists. So the pairing
+seen in the bus log has some other cause; whatever produced it, it is not a longword access
+by the firmware. The related note about `$FF0212` — that its bus-log accesses are the second
+half of 32-bit accesses to `$FF0210` — needs the same scrutiny, since `$FF0210` likewise has
+no `.l` access here.
+
+**What is unaffected**: `$FF0216`'s bit map, its role as the 4-bit control register, and its
+bracketing around `CPLOAD` all rest on the 23 word-sized sites and are untouched.
