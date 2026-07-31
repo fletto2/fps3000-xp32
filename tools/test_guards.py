@@ -50,6 +50,18 @@ def main():
         ('vacuous check (literal True)',
          src.replace("def word(a):", "check('vacuous', True)\n\n\ndef word(a):", 1),
          'fired'),
+        # "<expr> or True" is not a literal True, so guard #3's original
+        # Constant test walked straight past it.  Two of these were written
+        # here in one session before the guard learned the form.
+        ('vacuous check ("... or True")',
+         src.replace("def word(a):", "check('vac2', 1 == 2 or True)\n\n\ndef word(a):", 1),
+         'fired'),
+        # And the negative control for the same form: a genuine `or` between
+        # two real expressions must NOT be flagged.
+        ('genuine or-expression is not flagged',
+         src.replace("def word(a):",
+                     "check('real or', (1 == 2) or (2 == 2))\n\n\ndef word(a):", 1),
+         'quiet'),
     ]
     bad = 0
     for i, (name, text, want) in enumerate(cases):

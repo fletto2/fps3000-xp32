@@ -121,6 +121,14 @@ for _n in _ast_g.walk(_tree_g):
         _c = _n.args[1]
         if isinstance(_c, _ast_g.Constant) and _c.value is True:
             _vac.append((_n.lineno, 'literal True'))
+        elif isinstance(_c, _ast_g.BoolOp) and isinstance(_c.op, _ast_g.Or) \
+                and any(isinstance(_v, _ast_g.Constant) and _v.value is True
+                        for _v in _c.values):
+            # "<expr> or True" always passes.  Guard #3 originally tested only
+            # for a bare literal, and this form slipped past it twice in one
+            # session -- both times written by me while drafting a check I
+            # could not yet express.
+            _vac.append((_n.lineno, '"... or True"'))
         elif isinstance(_c, _ast_g.Compare) and isinstance(_c.left, _ast_g.Constant) \
                 and all(isinstance(_x, _ast_g.Constant) for _x in _c.comparators):
             _vac.append((_n.lineno, 'constant vs constant'))
@@ -6701,9 +6709,9 @@ check('...and otherwise reading T1/T2/T3 counters must leave the status byte ZER
 check('...and it signals delivery with the same d2 = $ffff convention, then rte',
       _w(0xF0914C) == 0x343C and _w(0xF0914E) == 0xFFFF and _w(0xF09152) == 0x4E73)
 
-check('the board status register is never written: no bset/bclr with a $F70018 base',
-      not _re21a.search(r'(bset|bclr)\.\w+\s+\S+,\s*\$1\(a4\)', _asm21a)
-      or True)
+check('the board status register is never written: zero bset/bclr on $1(a4)',
+      len(_re21a.findall(r'(?:bset|bclr)\.\w+\s+\S+,\s*\$1\(a4\)', _asm21a)) == 0
+      and len(_re21a.findall(r'(?:bset|bclr)\.\w+\s+\S+,\s*\$1\(a5\)', _asm21a)) > 0)
 check('the walking-bit phases pair a computed VMOD write with a computed board-status test',
       _w(0xF08C84) == 0x01AD and _w(0xF08C86) == 0x0001
       and _w(0xF08C88) == 0x032C and _w(0xF08C8A) == 0x0001
