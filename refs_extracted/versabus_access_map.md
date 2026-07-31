@@ -27179,21 +27179,29 @@ only one of them is the usual suspect: **10 sites use a computed bit number** (`
 and friends — the walking-bit tests), which no literal-bit census can see; the remaining
 14 were missed by a narrower base-register sweep.
 
-> **QUALIFIED 2026-07-31, later the same day.** The figure 52 comes from the *permissive*
-> provenance variant, which crosses control transfers. The strict variant gives **42**. The
-> 10 disputed sites are all small routines or handlers in the self-test that use `a5`
-> **without setting it** — `$F09052` is `bset.b #$6,$1(a5)` followed immediately by `rte`,
-> an exception handler inheriting `a5` from whatever it interrupted. `a5` is loaded with
-> `$1FFF0` at nine points in the self-test but *also* with `$EFF8`, `$10008` and from `d1`,
-> so it does not always hold the VMOD base there.
+> **QUALIFIED, then RESOLVED — 2026-07-31.** The figure 52 comes from the permissive
+> provenance variant; the strict variant gives 42, and I recorded the count as "42 certain,
+> at most 52" because the 10 disputed sites use `a5` without setting it.
 >
-> **So the count is 42 certain and at most 52**, and the specific claim "bit 6 is set
-> exactly once, at `$F09052`" is **conditional on `a5` holding `$1FFF0` at exception time** —
-> which no static method available here can establish. The downstream remark that bit 6 is
-> therefore clear during the SCM test should be read with the same qualification.
+> **The interrupter decode settles it: all 10 are reachable only with `a5 = $1FFF0`.**
+> Six are subroutines reached by `bsr` from within a routine that set `a5` two instructions
+> earlier. The other four are **interrupt handlers**, and the tests that install them do so
+> immediately after `lea.l $1fff0.l,a5` and then execute `andi.w #$f8ff,sr` to lower the CPU
+> mask — so the interrupt fires inside that routine, with `a5` live:
 >
-> Two instruction maps agreeing (decode-at-every-address and linear walk) validated the
-> *decoding*, not the *provenance* — a distinction I elided when I first wrote this.
+> ```
+> $F08F80  lea.l  $1fff0.l,a5      ; a5 = the VMOD base
+> $F08F8C  move.w d0,-$e(a5)       ; program the vector register
+> $F08F90  move.l a3,$144.l        ; install $F09052 at vector $51
+> $F08F96  andi.w #$f8ff,sr        ; ...and LET IT FIRE
+> ```
+>
+> Each disputed site has such an enclosing setter — `$F08F80`, `$F09190`, `$F0923A` or
+> `$F093E4` — and these vectors are installed nowhere else. **So the count is 52**, and
+> "bit 6 is set exactly once, at `$F09052`" holds: it is vector `$51`'s handler.
+>
+> The original caution stands as a method note: two instruction maps agreeing validated the
+> *decoding*, not the *provenance*. What resolved the provenance was decoding the callers.
 
 Bit-by-bit on `$1FFF1`, from the literal sites:
 

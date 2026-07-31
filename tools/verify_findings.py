@@ -5842,8 +5842,11 @@ for _a in sorted(_mins):
 # 52 is the PERMISSIVE provenance figure; the strict variant gives 42.  Assert the
 # bound rather than a point value -- the 10 disputed sites are handlers that
 # inherit a5, and no static method here settles them.
-check('the VMOD pair carries between 42 and 52 bit operations, not the 28 recorded',
-      42 <= sum(sum(v) for v in _vm.values()) <= 52, _vm)
+check('the VMOD pair carries 52 bit operations, not the 28 recorded',
+      sum(sum(v) for v in _vm.values()) == 52, _vm)
+check('...the disputed sites are ISRs whose test sets a5 then lowers the CPU mask',
+      insn(0xF08F80) == 'lea.l $1fff0.l, a5' and insn(0xF08F90) == 'move.l a3, $144.l'
+      and insn(0xF08F96) == 'andi.w #$f8ff, sr')
 check('...of which TEN use a computed bit number and evade a literal census',
       _vm['$1FFF1'][1] == 10 and _vm['$1FFF0'][1] == 0, _vm)
 check('VMOD bit 6 is set exactly once, at $F09052',
