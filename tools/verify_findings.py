@@ -8068,6 +8068,19 @@ check('$F046B0 is RDHC\'s GTSEG block: RDHC / STCK / length $190 / USER',
 check('...and $190 rounds up to exactly one 256-byte page pair ($200)',
       (0x190 + 0xFF) // 0x100 * 0x100 == 0x200)
 
+check("IO1I's semaphore template at $F05D2C is 'HIO1', longword 0, word 2",
+      _l(0xF05D2C) == 0x48494F31 and _l(0xF05D30) == 0x00000000
+      and _w(0xF05D34) == 0x0002
+      and 0xF05D36 - 0xF05D2C == 10)
+check('...and it is copied DOWNWARD into the segment, high word first',
+      _w(0xF05D5A) == 0x227C and _l(0xF05D5C) == 0x00F05D34
+      and _w(0xF05D62) == 0x3B11 and _w(0xF05D64) == 0x5589
+      and _w(0xF05D66) == 0xB3FC and _l(0xF05D68) == 0x00F05D2C)
+check('...then CRSEM once, CNCTIRQ, BIM2 ch2 CR = $5F, and WAIT',
+      _w(0xF05D6E) == 0x702D and _w(0xF05D8C) == 0x704C
+      and _w(0xF05DB8) == 0x3B7C and _w(0xF05DBA) == 0x005F and _w(0xF05DBC) == 0x0254
+      and _w(0xF05DBE) == 0x7013)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

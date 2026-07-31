@@ -34932,3 +34932,42 @@ the runtime `!TST`; **`$190`** is the very number recorded for the allocator's r
 requested stack becomes `$200`"), here seen as the *request* rather than inferred from the result;
 and `'USER'` sits at `+$18`. Three facts established by other means, all visible in one 28-byte ROM
 constant.
+
+## IO1I's executed life: 29 instructions, and the semaphore template confirmed (2026-07-31)
+
+```
+$F05D36  moveq #$1,d0 / lea $F05D14,a0 / trap #1     ; GTSEG
+$F05D50  lea $10a(a0),a7                              ; stack at base + $10A
+$F05D54  movea.l a0,a6                                ; structure pointer
+$F05D56  lea $a(a6),a5                                ; the descriptor slot
+$F05D5A  movea.l #$F05D34,a1
+$F05D62  move.w (a1),-(a5) / subq.l #$2,a1
+         cmpa.l #$F05D2C,a1 / bge                     ; copy a ROM template BACKWARD
+$F05D6E  moveq #$2d,d0 / lea (a5),a0 / trap #1        ; CRSEM
+$F05D74  move.l a0,$4(a5)                             ; file the returned handle
+$F05D8C  moveq #$4c,d0 / lea $F05D00,a0 / trap #1     ; CNCTIRQ
+$F05DB8  move.w #$5f,$254(a5)                         ; BIM2 ch2 CR = $5F, level 7
+$F05DBE  moveq #$13,d0 / trap #1                      ; WAIT
+```
+
+**The copied template is exactly the documented semaphore descriptor.** `$F05D2C`-`$F05D35` reads:
+
+```
+48 49 4F 31  00 00 00 00  00 02      =  'HIO1', $00000000, $0002
+```
+
+Ten bytes — which is the size `CRSEM` declares in the TRAP #1 table, the `{4-byte name, longword,
+word}` shape derived from the task-block descriptors, and the same form as XP4I's `'AXP4'` template
+at `$F05F2C`. Four independent routes to the same 10-byte structure, now including the ROM constant
+itself and the loop that installs it.
+
+Note the copy runs **downward** (`move.w (a1),-(a5)` with `subq.l #$2,a1`), from `$F05D34` to
+`$F05D2C` — five words, high address first. A forward-copy assumption would place the name field at
+the wrong end.
+
+`$FF0254 <- $5F` matches the recorded BIM table for TCBIO1I exactly, and `CRSEM` appears **once**,
+matching the recorded 2/2/2/2/1/0 semaphore declaration counts.
+
+So both traced tasks follow the same startup shape — **`GTSEG` → set stack and structure pointer →
+(install semaphore descriptors and `CRSEM` them) → `CNCTIRQ` → arm one BIM channel → `WAIT`** — with
+RDHC skipping the semaphore step entirely, exactly as its zero declaration count predicts.
