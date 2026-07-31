@@ -32654,3 +32654,55 @@ Two consequences worth having:
 `TCB+$2A` also gains a reading: it takes the **low word of `a0`** (the parameter-block pointer)
 with **bit 15 set when that word is zero** — a stored handle with a marker for the zero case, which
 is why the field is a word rather than a longword.
+
+## The delay subsystem: directives `$15` and `$1E`, and `TCB+$58` (2026-07-31)
+
+Two size-0, non-returning directives share one implementation, distinguished only by a flag:
+
+```
+$F02CCA  moveq #$1,d7          ; directive $1E enters here
+$F02CCC  bra.b $F02CD0
+$F02CCE  clr.l d7              ; directive $15 enters here
+$F02CD0  move.l a0,d2
+$F02CD2  cmpi.l #$5265c00,d2   ; 86,400,000 -- MILLISECONDS IN A DAY
+$F02CD8  bls.b $F02CE0
+$F02CDA  move.l #$5265c00,d2   ; ... clamped
+```
+
+`$5265C00` is exactly the constant the tick ISR wraps `$0C42` against, so both directives take a
+**millisecond delay clamped to one day**. `d7` = 0 or 1 selects the variant — plausibly relative
+versus absolute, though the ROM does not say which is which.
+
+Further along the same path the delay block is built:
+
+```
+$F02D90  move.l a6,$4(a2)              ; the block links BACK to the TCB at +$4
+$F02D94  clr.w  $14(a2)                ; a counter/flag at +$14
+$F02D98  move.l #$21444c59,$16(a2)     ; '!DLY' -- the tag, at block +$16
+$F02DA0  move.l a2,$58(a6)             ; the block pointer -> TCB+$58
+```
+
+**Three results:**
+
+1. **`TCB+$58` is the delay-block pointer** — previously an unidentified single-access field.
+2. **The `'!DLY'` tag sits at block +`$16`, not at the block's base.** Every other marker in this
+   machine tags its structure's *first* longword. So **a RAM scan looking for `!DLY` at structure
+   bases would miss it even on a machine that used delays** — which is worth knowing, because the
+   absence of a `!DLY` instance here has been established from the code side ("exactly one write
+   site, and it never executes") rather than from scanning, and scanning would have been the wrong
+   test.
+3. It completes the subsystem: two directives, a one-day clamp, a TCB-linked block, and a pointer
+   at `TCB+$58` — all dormant, since neither directive is issued.
+
+### `$16` is termination-related
+
+```
+$F02DB6  lea.l (a6),a0        ; its own TCB as the argument
+$F02DB8  bsr.w $F00804
+$F02DBC  rte
+```
+
+`$F00804` is the head of the routine whose tail performs the `'EXEC'` rename at `$F00838`, so `$16`
+— privileged, size 0, non-returning — hands its own TCB to the termination path. That makes it a
+third termination entry alongside `$0F` `TERM` and `$10` `TERMT`; what distinguishes it is not
+determinable from the ROM alone.

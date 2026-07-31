@@ -7454,6 +7454,18 @@ check('...and TCB+$2A takes the low word of a0, with bit 15 marking the zero cas
       _w(0xF02F3A) == 0x3D48 and _w(0xF02F3C) == 0x002A
       and _w(0xF02F40) == 0x08EE and _w(0xF02F42) == 0x000F and _w(0xF02F44) == 0x002A)
 
+check('directives $15 and $1E share one delay path, clamped to 86,400,000 ms',
+      _t1slot(0x15)[0] == 0xF02CCE and _t1slot(0x1E)[0] == 0xF02CCA
+      and _w(0xF02CCA) == 0x7E01 and _w(0xF02CCE) == 0x4287
+      and _l(0xF02CD4) == 0x05265C00 and 0x5265C00 == 24 * 60 * 60 * 1000)
+check("...and the delay block tags '!DLY' at +$16 with its pointer in TCB+$58",
+      _w(0xF02D98) == 0x257C and _l(0xF02D9A) == 0x21444C59 and _w(0xF02D9E) == 0x0016
+      and _w(0xF02DA0) == 0x2D4A and _w(0xF02DA2) == 0x0058
+      and _w(0xF02D90) == 0x254E and _w(0xF02D92) == 0x0004)
+check('directive $16 hands its own TCB to the termination path at $F00804',
+      _t1slot(0x16)[0] == 0xF02DB6
+      and _w(0xF02DB6) == 0x41D6 and _bsrw(0xF02DB8) == 0xF00804)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
