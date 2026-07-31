@@ -33903,3 +33903,52 @@ all four bit-4 rows "MUST FAULT". Both were artefacts: the firmware **alternates
 after `tst.l d7`; and the bit-4 stage has no `d1` test at all, so every row matched the retry branch.
 The disagreement with the already-documented bit-5 behaviour is what exposed it. Same rule as the
 register-census failures: when an extractor contradicts a known-good control, believe the control.
+
+## Phase `$1600` decoded: a written bit-existence spec for the XLTR register file (2026-07-31)
+
+`$F09536`-`$F095E6` writes a distinct value to every XLTR register, then reads every one back with
+an explicit mask. **The masks are the specification** — they say which bits must exist, which must
+read back, and which the firmware refuses to constrain.
+
+### Write phase
+
+```
+$FF0202 <- $2000 ; $FF0200 <- $0000 ; $FF020C <- $0001
+$FF0218 <- $0400 ; $FF021A <- $0FFF
+d0 = $10, a0 = $210:  (a6,a0.w) <- d0 ; a0 += 2 ; lsl.b #1,d0 ; bcc
+      -> $10,$20,$40,$80 into $FF0210/$0212/$0214/$0216, exactly four iterations
+d0 = $C0, a0 = $230:  (a6,a0.w) <- d0 ; a0 += 2 ; d0 += 1 ; cmp d1 ; bne
+      -> $C0,$C1,$C2,... into $FF0230 upward until d0 == d1
+```
+
+`d1` is the walk length — `$D8` gives 24 registers (`$FF0230`-`$FF025E`, three BIMs), the other arm
+gives 16. **That is the whole of the `$FF0218` bit-4 "two-BIM / three-BIM" question**: it selects a
+loop bound and nothing else, which is what this project concluded from a different direction.
+
+### Read-back requirements
+
+| register | requirement | what it proves |
+|---|---|---|
+| `$FF0204` | `cmp.w $204(a6),d6` — must still hold the phase counter | **CHANNEL_SELECT is a readable latch** |
+| `$FF0202` | `== $2000` exactly | MODE1 is a full 16-bit R/W latch |
+| `$FF0200` | `& $00FF` must be **zero** | only MODE0's **low byte** is constrained; the high byte is left to the chassis |
+| `$FF020C` | `== $0001` exactly | full R/W latch |
+| `$FF0218` | `& $0610` must `== $0400` | bit 10 **set**, bits 9 and **4 clear** |
+| `$FF021A` | `== $0FFF` exactly | 12-bit R/W latch |
+| `$FF0210`-`$0216` | each `== $10/$20/$40/$80` | **four independent word registers** |
+| `$FF0230`+ | each `== $C0,$C1,…` | the BIM registers are readable latches |
+
+**Three things this settles that were previously inferred:**
+
+1. **`$FF0212` is independently a register** — it is written `$20` and read back `$20`, in a loop
+   that touches four consecutive addresses. This project retracted and re-established that fact
+   twice; here is the loop, with the mask.
+2. **`$FF0218` bit 4 must read ZERO once armed with `$400`.** That is exactly the constraint whose
+   violation was traced to the `FPS3K_BIMS=3` derailment, stated by the firmware itself.
+3. **MODE0's low byte must read back zero while its high byte is unconstrained** — consistent with
+   the chassis driving the high byte (the operation/flags byte latched at `$E87`) and the SBC owning
+   the low byte. A model that returns a chassis response code in the *low* byte fails this phase.
+
+The verify phase re-walks both register runs comparing against the same generated values, so a model
+that aliases any two of `$FF0210`/`$0212`/`$0214`/`$0216`, or any two BIM registers, fails at the
+first aliased pair.

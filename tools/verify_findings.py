@@ -7816,6 +7816,30 @@ check('the bit-4 stage is a width-mux data test, not a fault test',
       and _w(0xF0980A) == 0xB490 and _w(0xF0980C) >> 8 == 0x67
       and _w(0xF097B2) == 0x243C and _l(0xF097B4) == 0xAAAA5555)
 
+check('phase $1600 seeds the XLTR registers with distinct values',
+      _w(0xF0953A) == 0x3D7C and _w(0xF0953C) == 0x2000 and _w(0xF0953E) == 0x0202
+      and _w(0xF09546) == 0x3D7C and _w(0xF09548) == 0x0001 and _w(0xF0954A) == 0x020C
+      and _w(0xF0954C) == 0x3D7C and _w(0xF0954E) == 0x0400 and _w(0xF09550) == 0x0218
+      and _w(0xF09552) == 0x3D7C and _w(0xF09554) == 0x0FFF and _w(0xF09556) == 0x021A)
+check('...walking $10/$20/$40/$80 across $FF0210-$FF0216 via lsl.b/bcc',
+      _w(0xF09558) == 0x303C and _w(0xF0955A) == 0x0010
+      and _w(0xF0955C) == 0x307C and _w(0xF0955E) == 0x0210
+      and _w(0xF09560) == 0x3D80 and _w(0xF09562) == 0x8000
+      and _w(0xF09568) == 0xE308 and _w(0xF0956A) >> 8 == 0x64)
+check('...and $C0 upward across the BIM block until d0 == d1',
+      _w(0xF0956C) == 0x303C and _w(0xF0956E) == 0x00C0
+      and _w(0xF09570) == 0x307C and _w(0xF09572) == 0x0230
+      and _w(0xF0957C) == 0x5240 and _w(0xF0957E) == 0xB041
+      and _w(0xF09532) == 0x323C and _w(0xF09534) == 0x00D8)
+check('read-back: MODE0 low byte must be zero, $FF0218 & $610 must equal $400',
+      _w(0xF09590) == 0x302E and _w(0xF09592) == 0x0200
+      and _w(0xF09594) == 0x0240 and _w(0xF09596) == 0x00FF
+      and _w(0xF09598) >> 8 == 0x66
+      and _w(0xF095A6) == 0x0240 and _w(0xF095A8) == 0x0610
+      and _w(0xF095AA) == 0x0C40 and _w(0xF095AC) == 0x0400)
+check('...and $FF0204 must still read back the phase counter',
+      _w(0xF09582) == 0xBC6E and _w(0xF09584) == 0x0204)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
