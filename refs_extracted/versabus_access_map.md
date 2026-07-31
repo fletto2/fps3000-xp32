@@ -18507,3 +18507,11 @@ the `$0E00-$1100` window the false positives are `$0FF0`, `$0FFF` and `$1000`, w
 $202(a6)` — MODE1 with **bit 12**, the command-valid bit, set by three self-test sites. None
 is an address. Any future sweep of this window should filter on the `#` prefix; the
 consolidated table above already excludes them.
+
+*Convergence check on the transmit spec:* `emulator/versabus.c` already gates panel
+responses on `xltr.mode1 & 0x1000`, and its comment cites `bset #$c at F056A0` — the same
+instruction the transmit sequence above decodes. The model was derived from that site
+empirically ("panel responses gated on MODE1 bit 12 so they stop corrupting MODE0 during
+register walks"); reading the issuer end to end reaches the same bit for a stated reason.
+Implementation and specification agree, which is the useful outcome — the six-step sequence
+above is now the written form of what the emulator already does.
