@@ -5107,6 +5107,22 @@ check('the tagging routine also stamps TCB+$2A bit 15, TCB+$29 bit 1 and clears 
       insn(0xF00826) == 'bset.b #$f, d7' and insn(0xF0082A) == 'move.w d7, $2a(a0)'
       and insn(0xF0082E) == 'clr.w $5c(a0)' and insn(0xF00832) == 'bset.b #$1, $29(a0)')
 
+# ---- the kernel's shared helpers (2026-07-31) ----
+check('$F010F0 is an interrupt-masked list insert exiting by rte',
+      insn(0xF010F2) == 'ori.w #$700, sr' and insn(0xF010FA) == 'move.l #$ffffffff, $4(a2)'
+      and insn(0xF01106) == 'rte')
+check('$F016FE substitutes the current TCB when the pointer is null',
+      insn(0xF01700) == 'move.l a0, d0' and insn(0xF0170A) == 'movea.l a6, a0')
+check('$F017F4 and $F01876 are search helpers on directory slots $0C20 and $0C24',
+      insn(0xF017FA) == 'movea.l $c20.w, a1' and insn(0xF0187E) == 'movea.l $c24.w, a1')
+check('...with $F017F4 walking a stride-$14 record', insn(0xF01802) == 'lea.l $14(a1), a2')
+check('+$1E is an entry-point field dereferenced by three unrelated routines',
+      insn(0xF044C0) == 'movea.l $1e(a5), a1' and insn(0xF026C2) == 'movea.l $1e(a4), a0'
+      and insn(0xF02772) == 'movea.l $1e(a4), a3')
+check('$F02764 rounds a length up to even before taking +$1E and +$22',
+      insn(0xF02768) == 'addq.l #$1, d1' and insn(0xF0276A) == 'bclr.b #$0, d1'
+      and insn(0xF02776) == 'movea.l $22(a4), a0')
+
 
 # ---------------------------------------------------------------------------
 # STOP.  ADD NEW check() CALLS *ABOVE* THIS LINE.

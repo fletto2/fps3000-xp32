@@ -22106,3 +22106,48 @@ $F015E8  cmpi.l  #$21415351,(a4)      '!ASQ'
 something carrying an `!ASQ` tag** — a distinct field, and the one the validity check at
 `$F015E8` (already noted here as "how a torn-down structure is rejected") actually dereferences.
 The two should not be conflated when reading a dump.
+
+## The kernel's 13 shared helpers characterised (2026-07-31)
+
+Of the 51 kernel subroutines not individually documented, **38 are private to one directive
+handler and 13 are shared** across several. The 13 are the kernel's real utility layer, and
+reading their first few instructions places all of them:
+
+| routine | what it is |
+|---|---|
+| `$F007FC` / `$F00804` | byte-field copy into `+$26` of a structure — `$F00804` masks with `$F0` first, so the pair is "copy the whole field" vs "copy its high nibble" |
+| **`$F00824`** | the **termination tagger** — `'EXEC'` into `TCB+$B0`, bit 15 of `+$2A`, bit 1 of `+$29`, clear `+$5C` |
+| `$F00D58` | parameter unpack — `$10(a6)`, `$12(a6)`, `$16(a6)` into `d2`/`d3`/`d4` behind a `bsr $F0073C` |
+| `$F010F0` | **interrupt-masked list insert** — `ori.w #$700,sr`, link `a2` after `a1`, terminate with `$FFFFFFFF`, exit by **`rte`** |
+| `$F0110C` | ordered list walk — `lea $8(a1),a4`, follow `(a4)`, compare `$8(a4)` against `d2` |
+| `$F015BC` | two-pointer entry wrapper around `$F016FE` |
+| `$F015D8` | **`!TCB` then `!ASQ` validation**, the latter through **`TCB+$40`** |
+| `$F016FE` | null-pointer dispatch: `a0 == 0` substitutes `a6` (the current TCB) |
+| **`$F017F4`** | **structure-table search on `$0C20`**, stride `$14` |
+| **`$F01876`** | **structure-table search on `$0C24`** |
+| `$F026A8` | driver dispatch — gated on `$2D(a5)` bit 7 and `$4(a4)` bit 10, entry from **`$1E(a4)`** |
+| `$F02764` | buffer setup — rounds a length up to even (`addq.l #$1` / `bclr #$0`), then takes **`$1E(a4)`** and `$22(a4)` |
+| `$F029F4` | parameter selection on bits 15/14 of `d7`, reading `$18(a6)`/`$1C(a6)` |
+
+### Two structural facts fall out
+
+**`+$1E` is an entry-point field on a structure class used in three unrelated places.**
+`$F044C0` (the FPS-side driver call, status in carry), `$F026C2` and `$F02772` all do
+`movea.l $1E(aN),a0` and then use it as a pointer. `$F02764` additionally takes `+$22`. That is
+consistent with the `!IOV` record this firmware allocates at `$1F900`, and it means the driver
+convention is not FPS-specific glue — it is the kernel's own.
+
+**`$0C20` and `$0C24` have dedicated search helpers.** Those two slots are in the documented
+directory of eight (`$0C20`, `$0C24`, `$0C66`, `$0C6A`, `$0C6E`, `$0C2C`, `$0C28`, `$0C30`), and
+each gets its own linked-list walk — `$F017F4` with stride `$14`, `$F01876` with a different
+shape. So the eight directory slots are not a uniform array of pointers to identical structures;
+at least two have distinct record formats with distinct search code.
+
+### Coverage after this pass
+
+- FPS layer: **110 of 110** subroutines documented
+- Kernel shared helpers: **13 of 13** characterised
+- Kernel directive-private helpers: 38 remaining, each reachable from exactly one named directive
+  handler, so bounded by that directive's documented semantics
+
+**Nothing in the ROM is now both undocumented and unattributed.**
