@@ -31741,3 +31741,58 @@ resuming a saved register — and will not predict that clobbering `+$120` hands
 
 It also collapses several apparent mysteries. There is no puzzle about why `+$102` is cleared at
 TRAP #1 entry and accumulated into by directives: it is `d0`, the return register, being staged.
+
+## `TCB+$FA`/`+$FC` is the saved exception frame — which explains the `-6` on the saved SP (2026-07-31)
+
+Four more genuine fields identify themselves from their access forms.
+
+### `+$FA` = saved SR (word), `+$FC` = saved PC (longword)
+
+```
+$F006CA  move.w -$6(a1),$fa(a6)     ; SAVE   the SR from the task's stack
+$F006A2  move.l $6(a7),$fc(a6)      ; SAVE   the PC from the exception frame
+$F0060A  move.w $fa(a6),-$6(a4)     ; RESTORE both back onto the task's stack ...
+$F00610  move.l $fc(a6),-$4(a4)     ; ... as a 6-byte frame at a4-6
+```
+
+Together they are **the 68000 group-1/2 exception frame `{SR, PC}`, held in the TCB** and copied
+back onto the task's stack before the `rte` that resumes it.
+
+**That explains an arithmetic this project documents but did not account for.** `TCB+$13C` — now
+known to be the saved `a7` — is adjusted on suspend by
+
+```
+$F00616  subq.l #$6,$13c(a6)        ; room for {SR, PC}      <- exactly this frame
+$F0063A  subi.l #$3c,$13c(a6)       ; room for 60 bytes of registers
+```
+
+`$6` and `$3C` are the frame and the `movem` block, so the suspend path reserves **66 bytes** on
+the task's own stack and the resume path fills them from `+$FA`/`+$FC` and the register frame. The
+two constants were recorded as "a 68000 group-1/2 exception frame (SR + PC)" and "`movem.l
+d0-d7/a0-a6` = 60 bytes"; this is where the saved values live.
+
+### `+$FB` = the saved CCR
+
+`move.b d1,$fb(a6)` and `clr.b $fb(a6)` — a byte **inside** the saved SR, i.e. its low half, the
+condition codes. The kernel writes a task's condition codes directly, which is how a directive
+returns flags as well as a status code.
+
+### `+$5E` = a staged return status
+
+```
+$F02C54  move.w $5e(a6),$102(a6)    ; move it into saved d0 ...
+$F02C5A  clr.w  $5e(a6)             ; ... and consume it
+```
+
+A pending status parked in a real field and later transferred into the task's return register.
+So there are **two** routes into `d0`: directives accumulating into `+$102` directly, and this
+deferred one.
+
+### `+$72` = a dispatch-time byte
+
+Read at `$F0054E` inside the dispatch path, written `#$FA` at `$F006A8` and from `d7` at
+`$F00778`. Role unestablished; recorded rather than guessed.
+
+**Taken together with the register-frame result, the TCB's context area is now fully mapped**:
+registers at `+$74` (full) and `+$100`-`$13F` (normal, including `a6` and `a7`), the exception
+frame at `+$FA`-`+$FF`, and the stack-pointer arithmetic that reserves room for both.

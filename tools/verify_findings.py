@@ -122,8 +122,8 @@ for _n in _ast_g.walk(_tree_g):
         if isinstance(_c, _ast_g.Constant) and _c.value is True:
             _vac.append((_n.lineno, 'literal True'))
         elif isinstance(_c, _ast_g.BoolOp) and isinstance(_c.op, _ast_g.Or) \
-                and any(isinstance(_v, _ast_g.Constant) and _v.value is True
-                        for _v in _c.values):
+                and any(isinstance(_n2, _ast_g.Constant) and _n2.value is True
+                        for _v in _c.values for _n2 in _ast_g.walk(_v)):
             # "<expr> or True" always passes.  Guard #3 originally tested only
             # for a bare literal, and this form slipped past it twice in one
             # session -- both times written by me while drafting a check I
@@ -7175,6 +7175,22 @@ check('...and $120/$138/$13C are saved a0/a6/a7 in the same frame',
 check('...while $77 is saved d0+3 in the $74 frame, as already recorded',
       (0x77 - 0x74) // 4 == 0 and (0x77 - 0x74) % 4 == 3
       and (0x94 - 0x74) // 4 == 8)
+
+# Encodings read from the ROM, not guessed: I had the destination register
+# wrong (a4, not a6) in the restore pair, and left an "or True" in the save
+# check that guard #3 could not see because the True was nested inside an And.
+check('TCB+$FA/$FC hold the saved {SR, PC} exception frame',
+      _w(0xF006CA) == 0x3D69 and _w(0xF006CC) == 0xFFFA and _w(0xF006CE) == 0x00FA
+      and _w(0xF006A2) == 0x2D6F and _w(0xF006A4) == 0x0006 and _w(0xF006A6) == 0x00FC)
+check('...restored onto the task stack as a 6-byte frame before rte',
+      _w(0xF0060A) == 0x396E and _w(0xF0060C) == 0x00FA and _w(0xF0060E) == 0xFFFA
+      and _w(0xF00610) == 0x296E and _w(0xF00612) == 0x00FC and _w(0xF00614) == 0xFFFC)
+check('...and the saved SP is decremented by 6 then $3C to make room',
+      _w(0xF00616) == 0x5DAE and _w(0xF00618) == 0x013C
+      and _w(0xF0063A) == 0x04AE and _l(0xF0063C) == 0x0000003C)
+check('TCB+$5E is a staged status moved into saved d0 then cleared',
+      _w(0xF02C54) == 0x3D6E and _w(0xF02C56) == 0x005E and _w(0xF02C58) == 0x0102
+      and _w(0xF02C5A) == 0x426E and _w(0xF02C5C) == 0x005E)
 
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
