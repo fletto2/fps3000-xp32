@@ -32957,3 +32957,46 @@ the consuming site, the mask directive and the family are all one picture.
 
 **The lesson is about order of operations**: when a project has already extracted vendor names into
 its tooling, read the tooling before decoding by hand. I had the listing open throughout.
+
+## The two "undecoded `movem.l` prologues" are mislabelled by two bytes (2026-07-31)
+
+`CLAUDE.md` records that after the disassembler improvements "executed-PC failures drop 16 -> 2
+(the residual pair being `$F08F70`/`$F098EC`, `movem.l` prologues that are labelled but not
+decoded; **cause unestablished**)".
+
+**The cause is that the labels sit two bytes past the routine start:**
+
+```
+$F08F70:  48 e7 80 1c ...    movem.l d0-d1/a2-a5,-(a7)
+$F08F72:  ^^^^^^^^^^^        <- IOChannelDiagnostic is labelled HERE
+
+$F098EC:  48 e7 80 e0 ...    movem.l d0-d2/a0-a2,-(a7)
+$F098EE:  ^^^^^^^^^^^        <- ROMChecksum_XOR is labelled HERE
+```
+
+In both cases the label lands on the `movem.l`'s **register-mask word**. The disassembler seeds
+from the label, begins decoding mid-instruction, and the first two bytes fall out as data — which
+is exactly the symptom recorded. Both routines really do start at the `movem.l`; nothing is
+undecodable about them.
+
+That also explains the census artefact found earlier today: sweeping the board-status register
+turned up an `or.b` at `$F08F72` that is not an instruction at all — it is `80 1c`, the mask word,
+read as an opcode because the label put a decode boundary there.
+
+**The fix is to seed those two labels two bytes lower.** With that, the executed-PC property should
+go from 2 residual failures to 0, since the two are the only ones left.
+
+## The application listing still carries the corrected-away `TCBDefinitionTable` label
+
+`fps3k_custom.asm` labels `$F0A57E` as `TCBDefinitionTable`. This project established that this is
+a **misnomer** — `$F0A57E` is the eighth panel-command issuer, and the real `!TCB` table is at
+`$F0A600` — and corrected it in `fps3k.asm`'s header. The correction never reached
+`fps3k_custom.asm`, which is the file most of this session's analysis reads.
+
+Byte-level confirmation: **`$F0A57E` and `$F04500` are identical for 12 bytes** (`33 c0 00 00 0e 6e
+20 7c 00 ff 00 00` — stash the command at `$0E6E`, then `movea.l #$FF0000,a0`), which is the
+issuer's opening, not a table's.
+
+This is the same hazard the project already documented once, where a rename was made in the
+generators but the outputs were not regenerated for three days. The generated listings and the
+notes have drifted again on this label.

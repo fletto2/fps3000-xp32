@@ -7541,6 +7541,14 @@ check('$1A/$1B are EXPVCT/TRPVCT, so $F00B74 dispatches task-registered handlers
       'TRAP1_EXPVCT' in _klab and 'TRAP1_TRPVCT' in _klab
       and _w(0xF03134) == 0x08EE and _w(0xF03142) == 0x08EE)
 
+check('the two residual undecoded sites are movem.l instructions at -2 from their labels',
+      _w(0xF08F70) == 0x48E7 and _w(0xF098EC) == 0x48E7)
+check('...so IOChannelDiagnostic and ROMChecksum_XOR are labelled on the mask word',
+      _w(0xF08F72) == 0x801C and _w(0xF098EE) == 0x80E0)
+check('$F0A57E is the panel-command issuer, byte-identical to $F04500',
+      all(_w(0xF0A57E + 2 * _i) == _w(0xF04500 + 2 * _i) for _i in range(6))
+      and _w(0xF0A57E) == 0x33C0 and _l(0xF0A580) == 0x00000E6E)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
