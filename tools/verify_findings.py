@@ -4265,6 +4265,22 @@ check('op $A auto-increment walks 13 words and stops at index 13',
 check('...and the fourteenth read is rejected on the 0..12 bound',
       _wt['F04FD2'] == 1)
 
+# Op $A validates its index; op $C -- structurally identical -- does not.
+def _walkidx(resp):
+    with tempfile.TemporaryDirectory() as _t:
+        subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000',
+                        '-dump-ram', f'{_t}/r'], capture_output=True, timeout=400,
+                       env={**os.environ, 'FPS3K_XPIRQ': '6', 'FPS3K_RESP': resp})
+        return struct.unpack('>I', open(f'{_t}/r', 'rb').read()[0xE7A:0xE7E])[0]
+
+
+check('op $A stops at its 0..12 bound but op $C runs far past the file',
+      _walkidx('0x1A') == 13 and _walkidx('0x1C') > 100)
+check('...and op $C reaches the index with no comparison at all',
+      insn(0xF0502C) == 'move.l $e7a.l, d1'
+      and insn(0xF05032) == 'lsl.w #$2, d1'
+      and insn(0xF05034) == 'movea.w d1, a1')
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.

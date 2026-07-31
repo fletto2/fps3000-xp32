@@ -19365,3 +19365,43 @@ triple the ISR latches.
 **Operation `$A` is therefore fully demonstrated**: populate via the encoder, read index 0
 for the packed nibbles, auto-increment through the four per-channel triples, and hit a
 defined error at the end. That is the complete SBC→chassis status interface, running.
+
+## Operation `$C` has NO bounds check, unlike the structurally identical `$A`
+
+The two array operations index the same way — `$E7A`, scaled, with bit-4 auto-increment —
+but only one validates:
+
+```
+op $A ($F04FBA)                        op $C ($F0502C)
+  cmpi.l #$0,$e7a / blt reject           move.l $e7a,d1
+  cmpi.l #$c,$e7a / ble ok               lsl.w  #$2,d1
+  (panel $25D on violation)              movea.w d1,a1
+                                         ...index $101E(a1) immediately
+```
+
+Op `$C` goes from the index straight to the access. Driven with auto-increment
+(`FPS3K_RESP=0x1C` against `0x1A`):
+
+| | op `$A` | op `$C` |
+|---|---:|---:|
+| final index `$E7A` | **13** — stopped at the bound | **1468** |
+| address reached | `$001052` | **`$00270E`** |
+
+So op `$A` halts after its 13 words and op `$C` walks **1,468 entries past the 16-longword
+register file** and is still going when the run ends. Two further details sharpen it: the
+scaling is `lsl.w`/`movea.w`, so the index is a **word** and `movea.w` **sign-extends** —
+the reachable range therefore runs in *both* directions from `$101E`, not just upward.
+
+**A chassis using operation `$C` with auto-increment can read or write arbitrary SBC RAM**,
+depositing CHANNEL_SELECT values wherever the index points. That is a firmware robustness
+gap rather than a decode subtlety: the SBC trusts the chassis completely on this path, while
+the neighbouring operation checks its index carefully.
+
+For emulation the consequence is concrete: **a model must not assume op `$C` stays inside
+`$101E`-`$105D`.** In the run above it walked through the kernel-global area, and the machine
+ended at `$F00518` in the scheduler rather than the idle loop.
+
+*Why this was worth checking:* the two operations look alike in every summary of the command
+set — same index global, same auto-increment bit, adjacent opcodes, both described as "read
+an array". The difference is one comparison, and it does not show up in any behaviour until
+someone auto-increments past the end.
