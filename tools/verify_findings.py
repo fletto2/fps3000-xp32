@@ -5191,6 +5191,23 @@ check("so $3B's key at $120(a6) is the SAVED a0, not a parameter block",
       and (_t1[0x3B][1] >> 8) == 0)
 check('...and $3B loads the callee registers from the saved d0-d7 area',
       insn(0xF03A02) == 'movem.l $100(a6), d0-d7/a0-a4')
+
+# ---- the 34 unnamed live directives cluster by declared block size (2026-07-31) ----
+_t1live = [n for n, (h, _) in _t1.items() if h != 0xF003D0]
+check('60 TRAP #1 slots are live', len(_t1live) == 60, len(_t1live))
+_sizes = _mcol.Counter(_t1[n][1] >> 8 for n in _t1live)
+check('the declared sizes fall into a small set, not scattered',
+      len(_sizes) <= 14, dict(_sizes))
+check('the segment family declares 24 or 28',
+      all((_t1[n][1] >> 8) in (24, 28) for n in (0x03, 0x04, 0x05, 0x06, 0x07, 0x09, 0x48)))
+check('$2C declares 10, the semaphore-descriptor size', (_t1[0x2C][1] >> 8) == 10)
+check("...and its handler calls T0FNDSEM",
+      _t1[0x2C][0] == 0xF03362 and insn(0xF03366) == 'movea.l (a5), a0'
+      and insn(0xF03368) == 'bsr.w $f01876.l')
+check('the task-state family $42/$44/$45 declares 12 like RSTATE',
+      all((_t1[n][1] >> 8) == 12 for n in (0x42, 0x44, 0x45, 0x43)))
+check('eight live directives declare no parameter block at all',
+      sum(1 for n in _t1live if (_t1[n][1] >> 8) == 0) >= 8)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

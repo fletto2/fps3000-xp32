@@ -23789,3 +23789,52 @@ accident and easier to supply deliberately — a caller does `movea.l #$4BAA7BFB
 Likewise `$3B`'s `movem.l $100(a6),d0-d7/a0-a4` loads the target routine's registers from the
 **saved d0-d7 area** — so a caller controls both the key and the callee's entire register state
 through the ordinary register-save mechanism.
+
+## The 34 unnamed live directives cluster into families by declared block size (2026-07-31)
+
+Sixty TRAP #1 slots are live; 26 have names from Motorola's equate files or from work here. The
+other **34** can still be grouped, because the table declares each one's parameter-block size and
+directives in a family share a block shape:
+
+| directives | size | family — inferred from the named members |
+|---|---:|---|
+| `$03` `$04` `$05` `$07` | 24 | **segment operations** — `$02` `DESEG` declares 24 |
+| `$06` `$09` `$48` | 28 | **segment operations** — `$01` `GTSEG` declares 28 (`SGPBL` in `SEG.EQ`) |
+| `$17` `$19` `$49` `$4A` `$14` | 8 | **semaphore-shaped** — `$2A` `WTSEM` / `$2B` `SGSEM` declare 8 |
+| **`$2C`** | 10 | **semaphore** — `$29` `ATSEM` / `$2D` `CRSEM` / `$0D` `START` declare 10 |
+| `$42` `$44` `$45` | 12 | **task-state** — `$43` `RSTATE` declares 12 |
+| `$40` `$41` | 16 | `$4C` `CNCTIRQ` declares 16 |
+| `$1C` | 14 | |
+| `$23` | 18 | |
+| `$36` | 20 | |
+| `$1A` | 36 | |
+| `$1B` | 56 | the largest block in the table |
+| `$0E` `$15` `$16` `$1E` `$21` `$2E` `$34` `$35` | 0 | parameterless, like `$0F` `TERM` / `$13` `WAIT` |
+
+**`$2C` is placed more firmly than the rest.** Its handler `$F03362` is reached from within the
+SGSEM/WTSEM region and immediately calls **`T0FNDSEM`**:
+
+```
+$F03362  movea.l d6,a5
+$F03364  movea.l a6,a4
+$F03366  movea.l (a5),a0
+$F03368  bsr.w   $F01876        T0FNDSEM
+```
+
+So `$2C` is a semaphore operation taking the 10-byte descriptor, sitting in the middle of the run
+`$29 ATSEM`, `$2A WTSEM`, `$2B SGSEM`, **`$2C`**, `$2D CRSEM`. The obvious candidate is
+detach/delete — the operation that run is otherwise missing — but **the name is not in the equate
+files this project has, so it is left unnamed** rather than guessed.
+
+### Why this is worth having
+
+An emulator or a host-side program does not need every directive's *name*; it needs to know how
+many bytes of parameter block to marshal and roughly what class of object is involved. The table
+supplies the first exactly and the family grouping bounds the second. Combined with the flags
+byte — bit 7 "has a block to validate/translate", bit 6 a second translation — a faithful TRAP #1
+dispatcher can be written for all 60 live directives without knowing what 34 of them do.
+
+**And the sizes are self-consistent in a way that validates the decode.** Every named directive's
+declared size matches the structure it is documented to take, eleven for eleven; the unnamed ones
+fall into the same small set of sizes rather than scattering. A misread flags word would produce
+neither property.
