@@ -5766,6 +5766,34 @@ check('...while its failure path clears VMOD bit 6 and writes MODE1 = $1000',
 check('the mismatch reporter retries the write and compare before failing',
       insn(0xF08A18) == 'move.l d0, (a0)' and insn(0xF08A1A) == 'cmp.l (a0), d0')
 
+# --- the VMOD bit-operation census, provenance-tracked ----------------------
+_vm = {'$1FFF0': [0, 0], '$1FFF1': [0, 0]}
+for _a in sorted(_mins):
+    _m, _o, _sz = _mins[_a]
+    _mm = _mre.match(r'(?:#\$|\$)(1fff0)(?:\.l)?, (a\d)$', _o)
+    if not (_m.startswith(('movea', 'lea')) and _mm):
+        continue
+    _rg = _mm.group(2)
+    _p = _a + _sz
+    for _ in range(300):
+        if _p not in _mins:
+            break
+        _m2, _o2, _s2 = _mins[_p]
+        if _m2.startswith(('lea', 'movea')) and _o2.endswith(', ' + _rg):
+            break
+        if _m2.startswith(('bset', 'bclr', 'bchg')):
+            for _off, _nm in ((f'$1({_rg})', '$1FFF1'), (f'({_rg})', '$1FFF0')):
+                if _o2.endswith(_off):
+                    _vm[_nm][0 if _o2.startswith('#') else 1] += 1
+                    break
+        _p += _s2
+check('the VMOD pair carries 52 bit operations, not the 28 recorded',
+      sum(sum(v) for v in _vm.values()) == 52, _vm)
+check('...of which TEN use a computed bit number and evade a literal census',
+      _vm['$1FFF1'][1] == 10 and _vm['$1FFF0'][1] == 0, _vm)
+check('VMOD bit 6 is set exactly once, at $F09052',
+      insn(0xF09052) == 'bset.b #$6, $1(a5)')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

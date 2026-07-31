@@ -27162,3 +27162,40 @@ called — so its unreachability is *doubly* determined, exactly like the trace 
 directions, "no discoverable entry" is weaker than "unreachable". It is recorded as the one
 place worth a targeted look, and as an honest counterpart to the 72 candidates that are not
 worth reporting.
+
+## The VERSAmodule control register: 52 bit operations, not 28 (2026-07-31)
+
+A provenance-tracked sweep — following every base register loaded with `$1FFF0` and
+recording `bset`/`bclr`/`bchg` on `(aN)` and `$1(aN)` — gives:
+
+| register | total | literal-bit | **computed-bit** |
+|---|---:|---:|---:|
+| `$1FFF0` | 8 | 8 | 0 |
+| `$1FFF1` | **44** | 34 | **10** |
+| pair | **52** | 42 | 10 |
+
+This project previously recorded **28** for the pair. The undercount has two causes, and
+only one of them is the usual suspect: **10 sites use a computed bit number** (`bset.b d0,$1(a5)`
+and friends — the walking-bit tests), which no literal-bit census can see; the remaining
+14 were missed by a narrower base-register sweep.
+
+Bit-by-bit on `$1FFF1`, from the literal sites:
+
+| bit | `bset` | `bclr` |
+|---:|---:|---:|
+| 7 | 8 | 11 |
+| 6 | **1** | 6 |
+| 5 | 3 | 2 |
+| 3 | 1 | 2 |
+
+**Bit 6 is set exactly once**, at `$F09052`, inside the self-test's VMOD bit walk — and it is
+cleared six times, including by the SCM test's own fault reporter. Since board-status bit 5
+mirrors `$1FFF1` bit 6, and the SCM test aborts when board-status bits 4 **and** 5 are both
+set, this matters: during the memory test bit 6 is clear, so the abort cannot trigger. The
+one `bset` is transient and belongs to a different phase.
+
+**Two independent routines constrain these bits identically.** `BoardStatusPoll_3F11`
+(`$F08DF8`) requires `$F70019` masked `$3F31` to equal `$3F11` — bit 4 set, bit 5 clear —
+and the SCM test aborts on bit 4 *and* bit 5. The emulator's initial `board_status =
+0x3F110000` satisfies both, having been derived from only the first. That is a convergence
+worth noting rather than a new requirement.
