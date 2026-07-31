@@ -4195,6 +4195,29 @@ check('TCB+$140/$144 are copies of the owner TCBNAME/TCBSESSN',
       insn(0xF0354A) == 'move.l $10(a5), $140(a2)'
       and insn(0xF03550) == 'move.l $14(a5), $144(a2)')
 
+# --- FPS3K_MODE1_BUSY brings the status subsystem to life ----------------
+# The encoder's classification predicts $1064 = seq+1+9 = $A for a $C000 status
+# (bit 15 set, 14 set, 11 clear).  Confirmed numerically.
+_mb = {}
+for _nm, _extra in (('off', {}), ('on', {'FPS3K_MODE1_BUSY': '1'})):
+    with tempfile.TemporaryDirectory() as _tdm:
+        subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000',
+                        '-trace', f'{_tdm}/t', '-dump-ram', f'{_tdm}/r'],
+                       capture_output=True, timeout=400,
+                       env={**os.environ, 'FPS3K_XPIRQ': '1',
+                            'FPS3K_CHCMD': 'C000', **_extra})
+        _mb[_nm] = (collections.Counter(
+            re.findall(r'[0-9A-F]{6}', open(f'{_tdm}/t').read())),
+            open(f'{_tdm}/r', 'rb').read())
+check('without MODE1 bit 7 the status encoder never runs and $1064 stays zero',
+      _mb['off'][0]['F08616'] == 0
+      and struct.unpack('>H', _mb['off'][1][0x1064:0x1066])[0] == 0)
+check('FPS3K_MODE1_BUSY makes it run, and $1064 reads $000A as the decode predicts',
+      _mb['on'][0]['F08616'] >= 1
+      and struct.unpack('>H', _mb['on'][1][0x1064:0x1066])[0] == 0x000A)
+check('...and the all-channels-idle sweep runs with it',
+      _mb['on'][0]['F086A0'] >= 1)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
