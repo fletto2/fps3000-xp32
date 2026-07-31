@@ -25159,3 +25159,39 @@ test — appears in **both** fan-in handlers (`$F00A96` for the TRAPs, `$F00AF2`
 TRAP #0's dispatcher at `$F001AE`, which this project documents as "what makes TRAP #0 a
 supervisor-only executive interface". It is the kernel's standard "did this come from user mode?"
 test, used three times, and recognising it saves decoding it again.
+
+## The static-dispatch census: two unique tables plus one replicated five times (2026-07-31)
+
+Scanning for runs of same-stride `jmp` instructions finds **22 tables**, and they resolve into
+exactly three structures:
+
+| table | entries | stride | |
+|---|---:|---|---|
+| **`$F05102`** | 16 | 4 | the chassis-operation table, `jmp d16(pc)` |
+| **`$F05358`** | 4 | 6 | RDHC's four host commands, `jmp abs.l` — matching its `mulu #$6` |
+| **the 42-entry dispatch table** | 10 + 4 + 10 + 4 | 4 | **x5 copies** = 20 of the 22 runs |
+
+**No other static jump table exists in the image.**
+
+### The 42-entry table fragments in a way that describes it
+
+It appears as four runs rather than one because the **`rts`/`nop` no-op slots break them**. The
+pattern 10, 4, 10, 4 = **28 `jmp` entries in runs**, plus one isolated `jmp` too short to count,
+giving **29 jumps and 13 no-ops** — exactly the census this project derived by decoding the
+signed displacements (`D1_SEND` 10, `POLL` 9, `BLK_XFR` 9, `D2_FIN` 1 = 29). Two independent
+methods, the same split.
+
+### Combined with the computed-dispatch census, control flow is closed twice over
+
+| census | result |
+|---|---|
+| computed dispatches (`jmp (aN,dN)`, `jsr (aN)`) | **25**, all identified |
+| **static jump tables** | **22 runs = 3 structures**, all identified |
+| `bsr` fan-in tables | **2**, both identified |
+
+Three orthogonal scans over the same question — *where can control go that a linear read does not
+show?* — and none finds anything the others miss. The remaining transfers are ordinary branches
+and calls with literal targets, which recursive descent follows by construction.
+
+That is as close to a proof of control-flow completeness as static analysis of a hand-written
+binary allows.

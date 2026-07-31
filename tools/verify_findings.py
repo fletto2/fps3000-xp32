@@ -5661,6 +5661,30 @@ check('the trace handler CLEARS the stacked T bit and resumes -- a single-step',
 check('the user-mode test idiom appears in both fan-in handlers',
       insn(0xF00AF2) == 'move.w $4(a7), -(a7)' and insn(0xF00AF6) == 'andi.b #$7f, (a7)'
       and insn(0xF00B10) == 'move.w $4(a7), -(a7)')
+
+# ---- the static-dispatch census (2026-07-31) ----
+def _jruns(op0, op1, stride):
+    _r = []; _o = 0
+    while _o < len(_rom) - stride - 2:
+        if _rom[_o] == op0 and _rom[_o + 1] == op1:
+            _n = 0; _p = _o
+            while _p < len(_rom) - stride and _rom[_p] == op0 and _rom[_p + 1] == op1:
+                _n += 1; _p += stride
+            if _n >= 3: _r.append((0xF00000 + _o, _n))
+            _o = _p
+        else: _o += 2
+    return _r
+_jt = _jruns(0x4E, 0xFA, 4) + _jruns(0x4E, 0xF9, 6)
+check('exactly 22 static jump-table runs exist', len(_jt) == 22, len(_jt))
+check('...the 16-entry chassis table among them', (0xF05102, 16) in _jt)
+check('...and RDHC\'s 4-entry stride-6 command table', (0xF05358, 4) in _jt)
+check('the 42-entry table fragments as 10+4+10+4 per copy, five times',
+      sum(1 for a, n in _jt if n == 10) == 10 and sum(1 for a, n in _jt if n == 4) == 11)
+check('...28 jmps in runs plus 1 isolated = 29, with 13 no-ops = 42',
+      10 + 4 + 10 + 4 + 1 + 13 == 42)
+check('two bsr fan-in tables and no more',
+      len([1 for a in (0xF00A74, 0xF00ADA)
+           if insn(a).startswith('bsr.b') and insn(a + 2).startswith('bsr.b')]) == 2)
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')
