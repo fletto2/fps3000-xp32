@@ -7867,6 +7867,11 @@ check('...and the four expectations invert between the two routes',
       and _w(0xF097DC) == 0x243C and _l(0xF097DE) == 0x00005555  # bit4 set, latch inert
       and _w(0xF097F4) == 0x2401)                             # bit4 clear, latch -> d1
 
+check('the emulator models the width mux on the READ side at $400002',
+      "0x400002" in open('/home/fletto/ext/src/claude/fps3000/emulator/fps3k_sbc.c').read())
+check('...gated on $FF0216 & $30 (bit 4 clear AND bit 5 clear)',
+      "& 0x30" in open('/home/fletto/ext/src/claude/fps3000/emulator/fps3k_sbc.c').read())
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

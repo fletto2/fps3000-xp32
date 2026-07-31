@@ -34065,3 +34065,42 @@ contract above should not be used to "fix" the emulator**: the model currently p
 a change made on the strength of a reading that disagrees with a passing run is as likely to break it
 as to improve it. The unmodelled mux is real and worth implementing; the polarity table needs that
 one measurement before it is acted on.
+
+## RESOLVED, and the "unmodelled" claim above is WITHDRAWN (2026-07-31)
+
+`FPS3K_LOGCHASSIS` settles it. The two `$F09806` calls log differently:
+
+```
+WR 400000-3 = 55 @F09806 ; WR 400000-1 = AA @F09808 ; RD = AA AA 55 55 @F0980A   -> $AAAA5555
+WR 400000-3 = 55 @F09806 ;      (no $F09808 access at all)      ; RD = 55 55 55 55 @F0980A
+```
+
+**The second call produces no chassis write from `$F09808`** — the model suppresses the 16-bit write
+when bit 4 is clear, which is exactly the behaviour the firmware demands, so the sub-stage passes
+legitimately.
+
+**The width mux IS modelled — in `fps3k_sbc.c`, not `versabus.c`.** My sweep covered only the latter,
+so "bit 4 is read nowhere" and "`$FF0214` is never applied" were both wrong. The read side is
+explicit:
+
+```c
+if (a == 0x400002 && !(versabus_xltr_data_hi() & 0x30))
+    return versabus_xltr_data_lo() & 0xFFFF;
+```
+
+with a comment already naming sub-stages `$1903`/`$1904` and explaining the `& 0x30` mask: gating on
+bit 4 alone would swallow the word probes of the `$17xx` BERR phases, which set `$216 = $20`.
+
+**What survives, and it is the useful part.** The polarity table derived from the ROM — bit 4 set ⇒
+window word writes reach the high half and `$FF0214` is inert; bit 4 clear ⇒ window word writes are
+absorbed and `$FF0214` supplies the low half — **matches the implementation exactly**, having been
+derived independently from the instruction stream without reading the model. That is a genuine
+cross-check of a subtle, easy-to-invert mechanism, which is worth more than the false gap it was
+wrapped in.
+
+**Process note.** The error was a single-file sweep presented as an image-wide negative — the same
+shape as the register-census failures this file already records, and the third time today that a
+matcher scoped too narrowly produced a confident wrong negative. The rule that caught the others
+applies here too: **a negative claim needs a known-positive control**, and I had none for "the model
+does not implement X". The correct control was cheap — `FPS3K_LOGCHASSIS` — and it should have run
+before the claim, not after.
