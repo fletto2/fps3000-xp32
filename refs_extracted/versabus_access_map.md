@@ -18953,3 +18953,32 @@ instance of it.
 
 The map bounds what a chassis can ask for: **29 codes do something, 13 are accepted and
 ignored, and everything above `$29` is out of the table entirely.**
+
+### Who can issue those codes: RDHC from a descriptor, the XP tasks only `$10`/`$0E`
+
+`D1_SEND` does not re-dispatch — it sends `d1` as two words, waits, then sends **`d2`** the
+same way and returns (timeout → panel `$26C`, error → `$26A`). It also has a per-code special
+case: `cmpi.w #$4,d0 / bne` at `$F08118`, so operation `$04` sends and returns immediately
+without waiting. No handler loops back into the table.
+
+So the XP tasks can only ever issue the two codes their request path passes in, `$10` and
+`$0E`. The other 27 live slots are reachable from the **other** caller. `$F05460` shows how:
+
+```
+$F05460  d2 = $8(a6) ; d3 = $10(a6)      ; from a descriptor at a6
+$F05468  jsr $F056BA                     ; PanelSendAndWait -> $F0572C -> the table
+$F0546E  d0 = (a6)                       ; the descriptor's FIRST longword = the op code
+$F05470  cmpi.w #$14,d0 / bne
+$F05476  post to 'HXP0' + $4(a6)         ; the per-channel host semaphore
+$F05492  bclr #$1,$10A1(ch*2)            ; clear the host-notify-enabled flag
+```
+
+So RDHC's operation descriptor is `{op code, channel, d2, …, d3}` and `PanelSendAndWait`
+carries `d0` — the op code — straight into the 42-slot dispatch. **The 29-code vocabulary is
+RDHC's, driven by host command records; the XP tasks use a fixed pair of it.**
+
+And the `$14` special case completes the transfer lifecycle: when the finalize operation
+returns, RDHC **posts to `HXP<ch>` and clears `$10A0` bit 1**, i.e. signals the host that the
+transfer is done and disables further notification until re-armed. That is the other end of
+the flag whose *set* side is RDHC command 1 — the two halves of `$10A0` bit 1 now both have
+a site and a meaning.
