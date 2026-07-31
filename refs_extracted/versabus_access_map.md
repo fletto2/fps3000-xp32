@@ -19313,3 +19313,28 @@ nibbles on successive events, and the classes are distinguishable only modulo th
 wrap. That is worth knowing before writing a chassis model that decodes it: **read the
 sequence counter `$107E` alongside `$1064`**, which is precisely why operation `$A` can walk
 past the array into it.
+
+### The idle sweep's condition and the counter semantics, validated
+
+The sweep after the encode looks for a channel with **bit 15 set and bit 14 clear** — raised
+but unserviced — and only if none is found resets `$107E` and sets MODE1 bit 6 / MODE0 bit 11.
+Both arms are now driven:
+
+| channel status | b15 | b14 | reset path `$F086A0` | `$107E` after |
+|---|:---:|:---:|---:|---|
+| `$C000` | 1 | **1** | **1** | `$00` — reset, nothing outstanding |
+| `$8000` | 1 | **0** | **0** | **`$01`** — not reset, the encoder's increment survives |
+
+So the condition is exactly as decoded, and the counter's lifecycle is confirmed: it
+**advances once per encode** and is **reset only when no channel is outstanding**. A chassis
+therefore sees the sequence number climb while work is pending and return to zero when the
+SBC has nothing left — which makes `$107E` a "quiet" indicator in its own right, not merely
+a disambiguator for the nibbles.
+
+`$1064` reads `$000A` in both cases, which is also right: `$8000` has bit 15 set and bit 11
+clear, the same class as `$C000`, so both encode `seq+1+9 = 10`.
+
+**The status subsystem is now validated end to end** — all four classification branches, the
+sweep condition, the counter reset semantics, the two mode bits, and the readback through
+operation `$A` — every one against a prediction made by reading the code before it had ever
+executed.

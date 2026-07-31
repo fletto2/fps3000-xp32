@@ -4230,6 +4230,26 @@ check('the status readback chain runs: $1064 == $E74 == $000A',
       struct.unpack('>H', _rb[0x1064:0x1066])[0] == 0x000A
       and struct.unpack('>H', _rb[0xE74:0xE76])[0] == 0x000A)
 
+# Every branch of the encoder's classification, and the sweep's condition.
+def _nib(chcmd):
+    with tempfile.TemporaryDirectory() as _t:
+        subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000',
+                        '-dump-ram', f'{_t}/r'], capture_output=True, timeout=400,
+                       env={**os.environ, 'FPS3K_XPIRQ': '1',
+                            'FPS3K_CHCMD': chcmd, 'FPS3K_MODE1_BUSY': '1'})
+        r = open(f'{_t}/r', 'rb').read()
+    return struct.unpack('>H', r[0x1064:0x1066])[0], r[0x107E]
+
+
+check('the encoder classifies b11-set as seq+1 and b15-set as seq+1+9',
+      _nib('C800')[0] == 0x0001 and _nib('C000')[0] == 0x000A)
+check('...b13-set (error) as the FIXED value 9, carrying no sequence number',
+      _nib('2000')[0] == 0x0009)
+check('...and a plain status as seq+1+4',
+      _nib('4000')[0] == 0x0005)
+check('the idle sweep resets $107E only when no channel has b15 set with b14 clear',
+      _nib('C000')[1] == 0 and _nib('8000')[1] == 1)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
