@@ -27205,3 +27205,44 @@ one `bset` is transient and belongs to a different phase.
 and the SCM test aborts on bit 4 *and* bit 5. The emulator's initial `board_status =
 0x3F110000` satisfies both, having been derived from only the first. That is a convergence
 worth noting rather than a new requirement.
+
+## The provenance sweeps had a lookahead cap, and it hid a register (2026-07-31)
+
+Every base-register sweep in this project walks forward from a `lea`/`movea` until the
+register is reloaded — **but with an instruction cap**, 300 to 500 depending on the sweep.
+That cap is itself a false-negative source, because a base register can stay live for
+thousands of instructions: `$F08752` does `lea.l $ff0000.l,a6` and `a6` still holds the
+AP I/F base at `$F09B24`, roughly 5,000 bytes later, in the SCM test.
+
+Re-running the `$FF0000` sweep with and without the cap:
+
+| | capped at 400 | uncapped |
+|---|---:|---:|
+| access sites | 328 | **431** |
+| distinct offsets | 49 | **50** |
+| MODE2 (`$FF0210`) accesses | 8 | **14** |
+
+**The hidden register is `$FF0214`.** This file records it as "never appears standalone;
+every access is the leading half of a 32-bit access paired with `$FF0216`" — the uncapped
+sweep now sees it through the base register directly, which is a second route to the same
+register rather than a new one.
+
+**The structural conclusions survive, which is the point of checking.** Uncapped, the
+AP I/F window map is unchanged —
+
+```
+window 0 (+$00): +$00 +$04 +$08 +$0E
+windows 2-5    : +$04 +$08 +$0A +$0E
+windows 1, 6, 7: untouched
+```
+
+— and the BIM census is unchanged: `$FF0240`, `$FF0248` and `$FF025E` remain the three
+registers with no reference of any kind. So the cap cost 103 access sites and one register
+but changed no finding.
+
+The regression harness's own sweeps carried the same caps and have been raised.
+
+**This is the fourth distinct false-negative mechanism this project has hit** in
+base-register analysis, after absolute-address-only scanning, literal-vs-computed operands,
+and branch-path provenance. The pattern is consistent enough to state as a rule: *when a
+sweep reports an absence, the first question is what the sweep cannot see.*

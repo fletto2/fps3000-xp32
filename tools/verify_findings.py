@@ -4836,7 +4836,7 @@ check('nine sites load $F70018 into a base register',
 _bsseen, _bswrites = {}, 0
 for _st, _rg in _bsleas.items():
     _p = _st + _mins[_st][2]
-    for _ in range(400):
+    for _ in range(20000):   # effectively uncapped: see the lookahead-cap note
         if _p not in _mins: break
         _m, _o, _sz = _mins[_p]
         if _m.startswith(('lea', 'movea')) and _o.endswith(', ' + _rg): break  # reg reloaded
@@ -4867,7 +4867,7 @@ check('thirteen sites load $1FFF0 into a base register', len(_vleas) == 13, len(
 _vbits, _vd0 = _mcol.defaultdict(_mcol.Counter), 0
 for _st, _rg in _vleas:
     _p = _st + _mins[_st][2]
-    for _ in range(300):
+    for _ in range(20000):   # effectively uncapped: see the lookahead-cap note
         if _p not in _mins: break
         _m, _o, _sz = _mins[_p]
         if _m.startswith(('lea', 'movea')) and _o.endswith(', ' + _rg): break
@@ -5775,7 +5775,7 @@ for _a in sorted(_mins):
         continue
     _rg = _mm.group(2)
     _p = _a + _sz
-    for _ in range(300):
+    for _ in range(20000):   # effectively uncapped: see the lookahead-cap note
         if _p not in _mins:
             break
         _m2, _o2, _s2 = _mins[_p]
@@ -6539,7 +6539,7 @@ for _st, _rg in [(a, o.split(', ')[1]) for a, (m, o, _) in sorted(_mins.items())
                  if m.startswith(('movea.l', 'lea'))
                  and _mre.match(r'(#\$ff0000|\$ff0000\.l), a\d$', o)]:
     _p = _st + _mins[_st][2]
-    for _ in range(500):
+    for _ in range(20000):   # effectively uncapped: see the lookahead-cap note
         if _p not in _mins: break
         _m, _o, _sz = _mins[_p]
         if _m.startswith(('lea', 'movea')) and _o.endswith(', ' + _rg): break
