@@ -33071,3 +33071,41 @@ is the one at `$F04600`. So the label names the wrong entry, by one record.
 So of six named tables checked against their own bytes this session, **three were wrong**
 (`TCBDefinitionTable`, `PanelErrorMaskTable`, `TCBDefEntry_RDHC`) and three were right. That ratio
 is worth knowing before trusting a label as evidence.
+
+## The whole IRQ wiring is a static ROM table — six 20-byte records (2026-07-31)
+
+Every task's code region **begins with its own interrupt-record template**, in a uniform 20-byte
+format `{4-byte name, longword 0, vector, ISR entry, ISR exit}`:
+
+| task | at | vector | ISR entry | ISR exit |
+|---|---|---|---|---|
+| RDHC | `$F04600` | `$41` | `$F04930` | `$F050FC` |
+| IO1I | `$F05D00` | `$4A` | `$F05DD6` | `$F05E4C` |
+| XP4I | `$F05F00` | `$48` | `$F060CE` | `$F060F0` |
+| XP3I | `$F06900` | `$47` | `$F06AE6` | `$F06B08` |
+| XP2I | `$F07300` | `$46` | `$F074E6` | `$F07508` |
+| XP1I | `$F07D00` | `$45` | `$F07EE6` | `$F07F08` |
+
+**All six match the live `!IDV` records read from a boot dump** — vector, entry and exit, six for
+six. So `!IDV` is built by copying these templates, and **the machine's entire interrupt wiring is
+derivable statically**, without running anything.
+
+The 20 bytes are followed immediately by the task's `CRTCB`/`GTSEG` parameter block, which opens
+with the name again — `$F05F14` is `TCBXP4I_CRTCBParams`, exactly `$F05F00 + $14`. So each task
+region's head has a fixed two-part layout:
+
+```
++$00  20-byte interrupt record  {name, 0, vector, ISR entry, ISR exit}
++$14  the CRTCB/GTSEG parameter block, starting with the name again
+```
+
+uniform across all six tasks including RDHC, which is otherwise the odd one out everywhere else in
+the task layer.
+
+That also rehabilitates the `TCBLookupTable` label at `$F04600`: it *is* a task-definition record,
+and the name is roughly right — it is just RDHC's copy of a six-way replicated structure rather
+than a table of all six.
+
+**For an emulator this is the cheapest possible source for the IRQ map**: six fixed ROM addresses,
+20 bytes each, no boot required — and it can be cross-checked against `!IDV` after a boot as this
+session did.

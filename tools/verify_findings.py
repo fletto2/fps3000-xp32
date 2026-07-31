@@ -7564,6 +7564,19 @@ check('TCBDefEntry_UPGM confirms the CPRUN segment: $10000, length $D000',
       _l(0xF046D4) == 0x5550474D and _l(0xF046D8) == 0x00010000
       and _l(0xF046DC) == 0x0000D000)
 
+check('every task region opens with a 20-byte {name, 0, vector, entry, exit} record',
+      all(_l(_t) == _nm and _l(_t + 4) == 0 and (_l(_t + 8) & 0xFF) == _v
+          and _l(_t + 12) == _e and _l(_t + 16) == _x
+          for _t, _nm, _v, _e, _x in (
+              (0xF04600, 0x52444843, 0x41, 0x00F04930, 0x00F050FC),
+              (0xF05D00, 0x494F3149, 0x4A, 0x00F05DD6, 0x00F05E4C),
+              (0xF05F00, 0x58503449, 0x48, 0x00F060CE, 0x00F060F0),
+              (0xF06900, 0x58503349, 0x47, 0x00F06AE6, 0x00F06B08),
+              (0xF07300, 0x58503249, 0x46, 0x00F074E6, 0x00F07508),
+              (0xF07D00, 0x58503149, 0x45, 0x00F07EE6, 0x00F07F08))))
+check('...with the CRTCB parameter block immediately after, at +$14',
+      _l(0xF05F14) == 0x58503449 and _l(0xF04614) == 0x55534552)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
