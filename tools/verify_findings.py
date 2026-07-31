@@ -3941,10 +3941,11 @@ check('cmd 1 stores $101E into the per-channel pointer $1080+(ch-1)*4',
 check('cmd 3 copies a counted longword array into $E8A',
       insn(0xF054EA) == 'lea.l $e8a.l, a2'
       and insn(0xF054F4) == 'move.l (a0)+, (a2)+')
-# $E8A has exactly ONE absolute reference in the ROM -- that write.
-check('...and $E8A has no absolute reader anywhere in the ROM',
+# The claim is that the ONLY absolute reference is that write -- so the word
+# $0E8A must occur exactly once in the whole 64 KB.  ">= 1" would be vacuous.
+check('...and $E8A is referenced exactly once in the ROM: by that write',
       sum(1 for a in range(0xF00000, 0xF10000, 2)
-          if struct.unpack('>H', _rom[a - _B:a - _B + 2])[0] == 0x0E8A) >= 1)
+          if struct.unpack('>H', _rom[a - _B:a - _B + 2])[0] == 0x0E8A) == 1)
 check('cmd 4 (CPLOAD) sets the transfer count $E64 and arms $FF0216 bit 4',
       insn(0xF05504) == 'move.l d2, $e64.l'
       and insn(0xF0550E) == 'bset.b #$4, d2'
