@@ -8390,6 +8390,10 @@ check('the SLC address parser accumulates MSB-first and adds $10000',
       and _w(0xF052D0) == 0xD3FC and _l(0xF052D2) == 0x00010000
       and _w(0xF052D6) == 0x23C9 and _l(0xF052D8) == 0x00000E7E)
 
+check('$E7E is written by the SLC path at $F052D6 and by CPLOAD at $F05646',
+      _w(0xF052D6) == 0x23C9 and _l(0xF052D8) == 0x00000E7E
+      and _w(0xF05646) == 0x23C9 and _l(0xF05648) == 0x00000E7E)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

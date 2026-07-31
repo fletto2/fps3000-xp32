@@ -37224,3 +37224,31 @@ desynchronisation in one, the bound rejection in the other.
 not the second's (`$00010004`). So it is written once per session rather than per record, or the
 second record reaches the store by a path that skips `$F05298`. Not resolved; recorded so the value
 is not read as "the last record's address".
+
+## CORRECTION: `$F05298` is a once-per-session parse, not the per-record one
+
+Execution counts over the two-record run:
+
+| site | entries |
+|---|---:|
+| `$F04BA4` S1 dispatch | **2** |
+| `$F051A2` `SRecordDataHandler` | **2** |
+| **`$F05298` address parser** | **1** |
+| `$F052D6` write to `$E7E` | **1** |
+
+**Both records are dispatched and both are handled — but the `$F05298` parser runs once.** So it is
+not the per-record address parser I called it. `SRecordDataHandler` does its own address handling per
+record (seeded `a1 = $10`, as this project records at `$F051A2`); `$F05298` is a **separate,
+once-per-session** parse whose only product is `$E7E`.
+
+That fits the recorded role of `$E7E` exactly. Chassis operation `$8` is the **pre-upload
+handshake** — "conditional on `CHANNEL_SELECT == 0` **and** on `$E7E` lying in `$10000`-`$1FFFF`" —
+so `$E7E` is the session's declared base destination, established once before records start flowing
+and validated before the upload proceeds. A per-record value would be useless for a pre-upload check.
+
+**What survives from the earlier entry**: the decode itself (MSB-first accumulation, `d5` as a
+width-dependent shift stepping down by 8, `adda.l #$10000`, store to `$E7E`) and the per-pair
+`$FF0218` handshake. **What does not**: calling it "the S-record address-field parser" as though every
+record passed through it, and the implied puzzle about why `$E7E` held the first record's address
+rather than the last. There was no puzzle — it holds the *session's* address, and only one was ever
+parsed.
