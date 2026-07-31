@@ -53,3 +53,4 @@ talk to the SBC over the on-board SIO. No public XPMLIB binary
 exists; the FPS-100 archive (11.5K AP-120B microinstructions) is
 the closest validation substitute.
 - `11-rtos-structures.md` — every RMS68K structure, header convention, entry layout, TCB field map and the clock, in one reference
+- `12-selftest-phases.md` — every self-test phase code, the routine it runs, and what a model must do to pass it
