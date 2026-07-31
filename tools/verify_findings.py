@@ -6974,6 +6974,20 @@ check('the S8/S9 width selector maps d4=2 -> shift 0, d4=3 -> shift $10, else pa
       and _w(0xF05608) == 0x0C44 and _w(0xF0560A) == 0x0003 and _w(0xF05610) == 0x0010
       and _w(0xF05616) == 0x0260)
 
+check('XP4I sets a0 from a6 BEFORE the SGSEM trap, so the target is (a6)',
+      _w(0xF0609A) == 0x41D6 and _w(0xF0609C) == 0x4E41
+      and _w(0xF06098) == 0x702B
+      and _w(0xF060AA) == 0x3010 and _w(0xF060B2) == 0x30BC and _w(0xF060B4) == 0x1F41)
+check('...and a6 is assigned once, from the segment $01 GTSEG returns',
+      _w(0xF05F4A) == 0x7001 and _w(0xF05F52) == 0x4E41
+      and _w(0xF05F64) == 0x4FE8 and _w(0xF05F66) == 0x0114
+      and _w(0xF05F68) == 0x2C48)
+check('...so the task segment is data at base, stack at base+$114',
+      _w(0xF05F66) == 0x0114)
+check('$1F41 and $1F45 are 8001 and 8005, and BOTH have bit 11 set',
+      0x1F41 == 8001 and 0x1F45 == 8005
+      and (0x1F41 & 0x800) and (0x1F45 & 0x800))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

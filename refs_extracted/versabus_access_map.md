@@ -31000,3 +31000,68 @@ checking loader in the machine.
 `$F055FC` is the matching width selector for the terminator records — `d4 == 2` → shift 0 (S9),
 `d4 == 3` → shift `$10` (S8), anything else → panel `$260` — the same shift-count mechanism the
 S1/S2/S3 selector uses, confirming that `$260` is a width error rather than a type error.
+
+## RESOLVED: XP4I's `$1F41`/`$1F45` target is statically determined after all (2026-07-31)
+
+`CLAUDE.md` records XP4I's divergence as writing `$1F41`/`$1F45` "through whatever pointer the trap
+left in `a0`", with "its target ... not statically determined". It is determined, and the chain is
+four instructions long.
+
+**The pointer is `a6`, not something the trap returns:**
+
+```
+$F0609A  lea    (a6),a0          ; a0 <- a6, BEFORE the trap
+$F0609C  trap   #$1              ; d0 = $2B, SGSEM
+$F060AA  move.w (a0),d0          ; ... so (a0) is (a6)
+$F060AC  btst   #$b,d0
+$F060B2  move.w #$1f41,(a0)      ; bit 11 clear
+$F060B8  move.w #$1f45,(a0)      ; bit 11 set
+```
+
+**And `a6` is fixed for the life of the task**, assigned exactly once, at entry:
+
+```
+$F05F4A  moveq #$1,d0                    ; directive $01 = GTSEG
+$F05F4C  lea   TCBXP4I_CRTCBParams,a0    ; (label is a misnomer -- this is GTSEG, not CRTCB;
+$F05F52  trap  #$1                       ;  the $26D failure code confirms $01)
+$F05F64  lea   $114(a0),a7               ; the task STACK = segment base + $114
+$F05F68  movea.l a0,a6                   ; a6 = the ALLOCATED SEGMENT BASE
+$F05F6A  lea   $a(a6),a5                 ; then a ROM template is copied in downward
+```
+
+So `(a6)` is **the first word of the segment `$01` GTSEG hands the task**, and that same block is
+what is passed to SGSEM. The read-modify-write is on a value SGSEM leaves there.
+
+**Two facts fall out that are useful beyond this one anomaly:**
+
+- **The per-task segment layout is `base + $0` … `base + $113` data, `base + $114` upward stack.**
+  `a6` is the data pointer, `a7` starts `$114` above it. That is why `a6` is a structure pointer
+  throughout the XP tasks and never a frame pointer.
+- **`a6`'s value is not knowable statically** (it is whatever the allocator returns) **but its
+  referent is** — which is the distinction the original note missed. "Not statically determined"
+  was true of the *address* and false of the *target*.
+
+The values themselves decode as this project already recorded: `$1F41` = 8001 and `$1F45` = 8005
+as semaphore counts with the lock bit clear, and **both have bit 11 set** while the branch selects
+on bit 11 — so once set it stays set, a one-way latch rather than a counter. What survives is that
+XP4I uses its segment's first word as private state, and that the mechanism is now traceable end
+to end rather than opaque.
+
+## The SBC→AC command vocabulary is exactly three values (2026-07-31)
+
+Censusing every literal written to a channel's `+$0E` register:
+
+| value | count | meaning |
+|---|---:|---|
+| `$8004` | 30 | REQUEST-TRANSFER |
+| `$8005` | 20 | CONTINUE-TRANSFER |
+| `$8000` | 3 | the trigger issued after loading the data pair |
+
+And across the **whole ROM** the only `$8xxx` immediates are those three plus `$8020` — XP4I's
+one-off MODE1 write, which goes to `$FF0202`, not to a channel. So **the SBC can issue exactly
+three commands to an arithmetic controller**, and the operation being requested is carried in the
+data pair (`$1B`, `$10`, `$0E`), not in the command word.
+
+That is a tight bound on the CP→AC interface: a chassis model needs to recognise three command
+values, and any richer AC behaviour must be driven by the operation codes or by host-loaded CP
+code, not by this register.
