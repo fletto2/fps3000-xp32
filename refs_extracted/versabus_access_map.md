@@ -36123,3 +36123,37 @@ register, the routine points **every vector from `$10` to `$3FF`** — plus vect
 catch-all `rte` handler, then masks to level 7. Any exception the test provokes lands harmlessly.
 That is 252 vectors rewritten for one test, and it is why a model must tolerate the entire vector
 table being overwritten mid-self-test and restored afterwards.
+
+## A SECOND AP I/F board variant (photo supplied 2026-07-31)
+
+Saved as `refs/FPS-3000/cards/4448_APIF_F.JPG` (6000x4000), alongside a re-supplied copy of the
+existing card photo kept as `04_APIF_exif.JPG` (the original `04_APIF.JPG` is retained — the two
+differ in encoding, not resolution).
+
+**This is not the same board as the documented AP I/F.** Silkscreen reads **`412-4448-002`** and
+`50879`; the card list records the AP I/F assembly as `612-4448-401-F`. A `412`/`612` prefix
+difference may be bare-PCB versus assembly numbering, so that alone is not decisive — but the PROMs
+are:
+
+| | documented card (`04_APIF.JPG`) | this board |
+|---|---|---|
+| FPS PROMs | `225-0057-001`, `225-0041-002/3/4` | **`225-0012-000`, `225-0012-001`** |
+
+Different PROM part numbers on the same card function means **two AP I/F variants exist**, and any
+attempt to dump the AP I/F PROMs must record which board it came from.
+
+**Parts legible at full resolution** in the PROM area (grid rows C/D, columns 11-16):
+
+- **`AM25LS2569PC`** (date code 8328) — AMD 4-bit binary up/down counter. **Not previously recorded
+  for this card**, and a counter here is consistent with the AP I/F's block-transfer word counting
+  (`$FF0000`, the remaining-word count register whose reads must decrement).
+- `SN74S74N`, `SN74S08N`, `SN74S04N`, `SN74S02N`, `SN74LS51N`, `SN74LS37x` — S/LS-series glue.
+
+The board carries **substantially more green-wire rework** than the documented card — a dozen or more
+hand-run wires across the whole surface, against the single rework near a 74S02 recorded for the
+other. That is consistent with an earlier or engineering revision.
+
+**Not yet checked on this board:** the eight `Am29705` 16x4 dual-port SRAMs that give the AP I/F its
+32-bit width, and the `MC3487`/`MC3486` differential drivers by the PA/PB connectors. Both are
+recorded from the other photo; confirming or refuting them here would establish whether the variants
+differ in interface as well as in PROM content.
