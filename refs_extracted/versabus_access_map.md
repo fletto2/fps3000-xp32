@@ -17412,3 +17412,33 @@ number — `$F003A8` pushes the word at `+$04` and `$F003B2` masks it `#$f` to i
 jump table at `$F00650`, which is precisely an "EXIT NUMBER" use. So either the two option
 bytes are swapped in this build or the global bit lives in `UDREXIT` here; this is the
 same revision skew that gives this kernel a directive 76 that `TR1.EQ` does not name.
+
+### `!UST` decoded: the semaphore registry, read out in full
+
+`UST.EQ` gives a 20-byte header and 22-byte entries. The live table at `$1FB00`:
+
+```
+USTNSEG  = 1        USTNPAGE = 2 pages
+USTMENT  = 22       max entries
+USTCENT  = 9        CURRENT entries
+USTFENT  = $1FB14
+```
+
+| # | owner task | semaphore | users | type |
+|---|---|---|---|---|
+| 0,1 | `XP1I` | `AXP1`, `HXP1` | 1 | 2 |
+| 2,3 | `XP2I` | `AXP2`, `HXP2` | 1 | 2 |
+| 4,5 | `XP3I` | `AXP3`, `HXP3` | 1 | 2 |
+| 6,7 | `XP4I` | `AXP4`, `HXP4` | 1 | 2 |
+| 8 | `IO1I` | `HIO1` | 1 | 2 |
+
+This is the whole semaphore picture in one structure, and it closes several loops at once:
+**`USTCENT = 9`** matches the 9 descriptors at the task block bases, the 2/2/2/2/1/0
+per-task counts, the 9 `CRSEM` declarations, and the **9 executions of `T0FNDSEM`**
+counted from the TRAP #0 profile — four independent routes to the same number.
+`RDHC` owns none, as documented. The `A`+name / `H`+name convention (AC-side / host-side)
+is visible directly, with the owning task named beside each.
+
+Note the entries carry `USTSESSN = 0` for all nine — the same session field the `!UDR`
+owner check compares against `TCB+$14`, and it is zero throughout because this firmware
+never establishes distinct sessions.

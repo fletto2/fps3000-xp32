@@ -3547,6 +3547,25 @@ with tempfile.TemporaryDirectory() as _tdq:
           all(_rq.count(t) == 0
               for t in (b'!CCB', b'!DLY', b'!ASQ', b'!VCT')))
 
+    # --- !UST: the semaphore registry, per Motorola UST.EQ -----------------
+    # 20-byte header, 22-byte entries {task name, session, sem name, users,
+    # xcnt, type, semaphore}.  USTCENT is a fourth independent route to the
+    # count 9 -- the others being the descriptors at the task block bases, the
+    # CRSEM declarations, and the 9 executions of T0FNDSEM.
+    _ust = 0x1FB00
+    check('!UST reports 9 current entries in 22 slots across 2 pages',
+          _rq[_ust:_ust + 4] == b'!UST'
+          and struct.unpack('>H', _rq[_ust + 14:_ust + 16])[0] == 9
+          and struct.unpack('>H', _rq[_ust + 12:_ust + 14])[0] == 22
+          and _lw(_ust + 16) == 0x1FB14)
+    _ue = [(_rq[0x1FB14 + 22 * k:0x1FB14 + 22 * k + 4].decode('latin1'),
+            _rq[0x1FB14 + 22 * k + 8:0x1FB14 + 22 * k + 12].decode('latin1'))
+           for k in range(9)]
+    check('...and they are AXPn/HXPn per XP task plus HIO1, with RDHC owning none',
+          _ue == [('XP1I', 'AXP1'), ('XP1I', 'HXP1'), ('XP2I', 'AXP2'),
+                  ('XP2I', 'HXP2'), ('XP3I', 'AXP3'), ('XP3I', 'HXP3'),
+                  ('XP4I', 'AXP4'), ('XP4I', 'HXP4'), ('IO1I', 'HIO1')])
+
     # --- !PAT and the trace table: the last two unexplained allocations ---
     check('$1F700 !PAT has 8 free periodic-activation slots and an EMPTY active list',
           _rq[0x1F700:0x1F704] == b'!PAT'
