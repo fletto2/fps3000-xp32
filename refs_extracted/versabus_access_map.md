@@ -20059,3 +20059,51 @@ before rescheduling, so a quantum that expires inside supervisor code sets the f
 `rte`s rather than switching — the switch happens on the way out to user mode. That is why a
 task spinning in a supervisor-level ISR (the `bra .` panel-command issuers) can never be
 preempted by the quantum, which is an independent route to the deadlock this file documents.
+
+## Retested: delayed acknowledgement works, and MODE1 bit 7 becomes a real model
+
+The arithmetic critique above held. `FPS3K_CHACK_DELAY=<cycles>` makes the channel
+acknowledgement late instead of immediate, and transfers still complete:
+
+| delay | poll iterations | timeout reports | dispatch reached |
+|---|---:|---:|---:|
+| none | 2 | 0 | 2 |
+| 2,000 | 60 | **0** | 2 |
+| 40,000 | 1,333 | **0** | 2 |
+
+So the original note's reason — "the poll fits inside one batch" — is simply wrong, and a
+delayed model is feasible. The iteration counts also **confirm the cycle estimate
+independently**: 2,000 cycles buys ~30 iterations per transaction, i.e. ~66 cycles each,
+against the 62 predicted from counting the instructions.
+
+### And that makes the busy bit modellable properly
+
+MODE1 bit 7 now **derives from whether a transfer is actually outstanding**
+(`ch_xfer_delay[] != 0`), rather than being forced. This costs nothing by default: with
+immediate acknowledgement every delay is zero, the bit is never set, and behaviour is
+unchanged (clean boot still `$F00FD6`).
+
+It becomes meaningful exactly when transfers have a duration — and the semantics turn out to
+be **contention**, not self-reference. The XP task tests busy *after waking and before
+issuing*, so the bit can only be set by *another* channel's outstanding transfer. Driven that
+way:
+
+```
+FPS3K_XPIRQ=1,2 FPS3K_CHCMD=4000 FPS3K_CHACK_DELAY=200000
+```
+
+| | without delay | with |
+|---|---:|---:|
+| encoder `$F08616` | 0 | **1** |
+| `$1064` | `$0000` | **`$0005`** |
+
+A channel found the chassis busy with the other channel's transfer, and encoded its status —
+**`$0005` being exactly the class the decode predicts for status `$4000`** (bits 15, 13, 11
+all clear → `seq+1+4`).
+
+**This supersedes `FPS3K_MODE1_BUSY` as a model.** The probe forced the bit and was useful for
+exercising the path; this reproduces the same subsystem from a cause. The probe is kept for
+the case where no contention is available, and is still labelled as what it is.
+
+**And it retires my own "needs finer tick scheduling" conclusion**, which was too pessimistic
+and rested on the same wrong premise as the comment that prompted it.

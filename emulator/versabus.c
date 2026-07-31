@@ -129,6 +129,20 @@ static void ch_request_transfer(int c) {
      * with a 1000-iteration budget, so any chassis fast enough to answer within
      * that budget is indistinguishable from one that answers immediately, and
      * nothing here establishes the real latency. */
+    /* FPS3K_CHACK_DELAY=<cycles> makes the acknowledgement LATE instead of
+     * immediate, which is what a non-zero "outstanding" window needs.
+     *
+     * The comment above justified immediacy by saying the ISR's 1000-iteration
+     * poll "fits inside one batch".  It does not: the batch is
+     * m68k_execute(1024) -- 1024 CYCLES -- and one poll iteration is
+     * subq.l + move.w (a0) + btst + bne + cmpi.l + bne, about 62 cycles, so a
+     * full poll is ~62,000 cycles or ~61 batches.  A delay of a few thousand
+     * cycles therefore elapses well inside the poll's budget.  Opt-in, so the
+     * default behaviour and every golden master are unchanged. */
+    {
+        const char *dl = getenv("FPS3K_CHACK_DELAY");
+        if (dl) { ch_xfer_ack[c] = 0; ch_xfer_delay[c] = (uint32_t)strtoul(dl, NULL, 0); return; }
+    }
     ch_xfer_ack[c]   = 1;
     ch_xfer_delay[c] = 0;
 }
@@ -805,9 +819,17 @@ static uint16_t xltr_read(uint32_t addr) {
      * Opt-in and gated on boot completion, for the reason every other forcing
      * hook is: the diagnostics walk these registers and a constant read-back
      * fails their write/read-back tests. */
-    if (addr == XLTR_MODE1 && getenv("FPS3K_MODE1_BUSY")
-        && versabus_boot_complete()) {
-        return (uint16_t)(xltr.mode1 | 0x0080);
+    if (addr == XLTR_MODE1 && versabus_boot_complete()) {
+        /* FAITHFUL busy: bit 7 reflects whether a channel transfer is actually
+         * outstanding.  This costs nothing by default -- with immediate
+         * acknowledgement every ch_xfer_delay[] is 0, so the bit is never set
+         * and behaviour is byte-identical to before.  It becomes meaningful
+         * exactly when FPS3K_CHACK_DELAY gives transfers a real duration. */
+        for (int c = 0; c < 4; c++)
+            if (ch_xfer_delay[c]) return (uint16_t)(xltr.mode1 | 0x0080);
+        /* FPS3K_MODE1_BUSY forces it regardless -- a PROBE, not a model: it
+         * asserts busy unconditionally, which no chassis does. */
+        if (getenv("FPS3K_MODE1_BUSY")) return (uint16_t)(xltr.mode1 | 0x0080);
     }
     /* Default: return raw backing store (handles $200..$25F uniformly) */
     int idx = (addr - XLTR_BASE) / 2;
