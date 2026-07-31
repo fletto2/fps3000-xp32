@@ -17282,3 +17282,63 @@ FPS3K_RESP=0x94 FPS3K_XPIRQ=6 FPS3K_CHASSIS_CMD=4,8,53310004,0000DEAD,BEEF0000
 Note `FPS3K_DATAIN=1` is now required for the first of those, because `$FF0004`'s ready
 bit was changed this session to track whether a data source actually exists rather than
 reading ready unconditionally.
+
+## The TRAP #0 execution profile confirms three separate counts (2026-07-30)
+
+With `STR.EQ` supplying names for the TRAP #0 table, counting how often each handler runs
+in a clean boot turns the directive layer into an independent check on structure counts
+derived elsewhere in this file from RAM contents:
+
+| dir | name | runs | |
+|---|---|---:|---|
+| `$01` | `T0P` — semaphore P (wait) | 20 | |
+| `$02` | `T0V` — semaphore V (signal) | 20 | |
+| `$04` | `T0PAGAL` — allocate physical pages | **20** | **= the 20 page allocations that tile `$1DD00-$1FDFF`** |
+| `$06` | `T0GETTCB` — search TCB list | 18 | |
+| `$07` | `T0FNDSEG` — find segment name in TST | **6** | = one per task |
+| `$08` | `T0LOGPHY` — logical to physical | 27 | |
+| `$0C` | `T0FNDSEM` — find entry in User Semaphore Table | **9** | **= the 9 declared semaphores, 2/2/2/2/1/0** |
+| `$1A` | `T0LOGPHO` — logical to physical, odd OK | 27 | |
+| `$1F` | `T0CRTCB` — create task control block | **6** | **= the six tasks TDTI creates** |
+
+Three of these are counts this project derived by reading RAM structures — twenty
+allocator pages, nine semaphore descriptors at the task block bases, six TCBs — and all
+three are reproduced exactly by counting *directive invocations* instead. That is a
+different measurement of the same quantity, not a restatement of it.
+
+Note the `$04`-count distinction: this file records **8 static `$04` sites** and the
+handler runs **20** times. Both are right; they are sites and executions.
+
+Nine handlers execute, against the five TRAP #0 directives this file previously listed.
+The five were the ones issued *from FPS code*; `T0P`/`T0V`/`T0FNDSEG`/`T0LOGPHY`/
+`T0FNDSEM`/`T0LOGPHO` are issued by the kernel to itself, which is visible only now that
+the kernel is disassembled and its table named.
+
+### `FPS3K_SEQ` silently overrides `FPS3K_RESPSEQ` too (2026-07-30)
+
+This file already records that `FPS3K_SEQ` overriding `FPS3K_RESP` *silently* cost real
+analysis time — a sweep of `FPS3K_RESP` run with `FPS3K_SEQ` still set produced five
+identical results and read as "the response code has no effect". A warning was added for
+that pair. **The same conflict exists with `FPS3K_RESPSEQ` and is still silent**, because
+the warning tests only `getenv("FPS3K_RESP")`.
+
+Measured, on a 16-entry script covering every chassis operation:
+
+| configuration | operations dispatched |
+|---|---|
+| `FPS3K_SEQ` alone, 16 entries | **1 / 16** |
+| `FPS3K_SEQ` + `FPS3K_XPIRQ=6` | 1 / 16 |
+| `FPS3K_SEQ` + `FPS3K_XPIRQ=6` + `FPS3K_RESPSEQ` (24 codes) | 1 / 16 — *`RESPSEQ` has no effect* |
+| `FPS3K_XPIRQ=6 FPS3K_RESP=0x94` | 1 / 16 |
+| `FPS3K_XPIRQ=6` + `FPS3K_RESPSEQ` (24 codes), no `SEQ` | **3 / 16** |
+
+So the interrupt-driven code sequence does deliver more than a constant, but only while
+`FPS3K_SEQ` is unset — and the delivery wall this file documents is not lifted by it. The
+recorded workaround stands: **one operation per run, unioned**, which is what took RDHC
+from 36% to 47%.
+
+Note the two hooks are not redundant and cannot simply be merged: `FPS3K_SEQ` carries
+`code:chsel` **pairs**, so it can supply an operation *and its argument*, while
+`FPS3K_RESPSEQ` carries codes only but is delivered by repeated BIM raises rather than by
+waiting for the SBC to arm. A hook that paired arguments with interrupt-driven delivery is
+the obvious missing combination, and is the concrete next step on this path.

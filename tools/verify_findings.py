@@ -3715,6 +3715,23 @@ check('...and the directive error stub $F003D0 never runs at all',
 check('$4C is what connects the six BIM vectors, and CISR never runs',
       _dpcs['F02216'] == 6 and _dpcs['F020E2'] == 0)
 
+
+def _t0(n):
+    return struct.unpack('>I', _rom[0xF001D6 - _B + 4 * n:
+                                    0xF001D6 - _B + 4 * n + 4])[0] & 0xFFFFFF
+
+
+# Counting directive invocations measures the same quantities this harness
+# reads out of RAM structures -- independently, from the other side.
+check('T0CRTCB ($1F) runs 6 times: the six tasks TDTI creates',
+      _dpcs[f'{_t0(0x1F):06X}'] == 6)
+check('T0FNDSEM ($0C) runs 9 times: the 9 declared semaphores, 2/2/2/2/1/0',
+      _dpcs[f'{_t0(0x0C):06X}'] == 9)
+check('T0PAGAL ($04) runs 20 times: the 20 pages tiling $1DD00-$1FDFF',
+      _dpcs[f'{_t0(0x04):06X}'] == 20)
+check('T0FNDSEG ($07) runs 6 times, once per task',
+      _dpcs[f'{_t0(0x07):06X}'] == 6)
+
 # Regression: FPS3K_RAMWATCH used to strtoul() the whole string, so a
 # "<lo>-<hi>" range collapsed to a single longword and the rest of a
 # structure read as never-written.  Assert the range form actually widens.
