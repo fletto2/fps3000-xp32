@@ -6185,6 +6185,10 @@ check('the only address-indexed DEVICE accesses are the phase $1600 walks',
 check('$F08E9A lies inside the $F08E8C pattern table, so it is data',
       0xF08E8C <= 0xF08E9A < 0xF08E8C + 8 * 4)
 
+check('the VMOD offset table is 72 bytes: 4 passes of 1 + 8 words',
+      insn(0xF0A472) == 'moveq #$3, d4' and insn(0xF0A474) == 'movea.w (a1)+, a2'
+      and insn(0xF0A478) == 'moveq #$7, d3' and 4 * 9 * 2 == 72)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

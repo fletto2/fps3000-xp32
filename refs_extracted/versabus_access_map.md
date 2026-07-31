@@ -28379,3 +28379,40 @@ inline parameters rendered as `addx.b`/`roxr.b`/`lsr.b`. **"The listing shows an
 instruction" is evidence, not proof** — the listings are a disassembler's output and carry
 its mistakes. Where a region is known to be data on independent grounds, that knowledge
 outranks the rendering.
+
+## Listing audit: five data regions rendered as code (2026-07-31)
+
+Checking how the listings render every data region this project has identified:
+
+| region | extent | rendered as code |
+|---|---|---|
+| TRAP #1 table `$F003D8` | 308 B | **0%** — guarded |
+| TRAP #0 table `$F001D6` | 140 B | **0%** — guarded |
+| static vector table `$F0011E` | 92 B | **0%** — guarded |
+| TDTI task table `$F0A600` | 576 B | **0%** — guarded |
+| PanelStatusDispatch `$F05BA4`, `$F083FC` | 168 B each | 2% |
+| chassis jump table `$F05102` | 64 B | 3% |
+| **VMOD pattern table `$F08E8C`** | **32 B** | **70%** |
+| **task name/block table `$F0467E`** | **48 B** | **63%** |
+| **channel→`$FF021A` bit map `$F084A4`** | **8 B** | **66%** |
+| **SCM pattern table `$F09BB6`** | **24 B** | **55%** |
+| **VMOD offset table `$F0A4BE`** | **72 B** | mostly |
+
+The four tables the disassembler explicitly guards render perfectly; the dispatch tables are
+nearly clean. **The five data regions discovered *after* the guard list was written are the
+ones rendered as code** — which is exactly what one would expect, and makes the fix concrete.
+
+`$F0A4BE`'s extent is derivable rather than guessed: the reader loop is
+`moveq #$3,d4` (four outer passes), each taking one offset word with `movea.w (a1)+,a2`
+followed by eight `move.w (a1)+,-(a2)` — so `4 x 9` words = **72 bytes**.
+
+**Actionable**: adding these five extents to `disasm_kernel.py`'s `DATA_REGIONS` would remove
+the last known systematic mis-rendering. Note `fps3k.asm` itself cannot be regenerated — its
+build chain has an unrunnable link and the annotated asm is frozen — so the regions are
+recorded here for readers of that file as well as for the tool.
+
+**And it bounds the boundary-filter technique** used throughout this session. Filtering
+candidate addresses through "the listing renders an instruction here" rejects bytes the
+disassembler declined to decode, but cannot reject bytes it decoded **wrongly**. On these
+five regions the filter is blind, which is how `$F08E9A` — inside the VMOD pattern table —
+survived it.
