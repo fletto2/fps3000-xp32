@@ -36412,3 +36412,43 @@ interrupts anywhere in the path".
 
 **`WCCLK` still not located.** It is not on this sheet; `RDCLK` is generated here and remains the
 best candidate, but sheet 13 is the remaining place to look.
+
+## Sheet 13 `FIFO CONTROL, ADDR, RAM CTL` — the pointer counters (2026-07-31)
+
+**The FIFO's two pointers are `74S161` 4-bit binary counters**: `E13` and `D13`, producing
+`WADDR00`-`WADDR03` and `RADDR00`-`RADDR03` — exactly the address inputs sheet 14's RAMs consume.
+Four bits each confirms the **16-word depth** from the pointer side as well as the RAM side.
+
+Also generated here: `CS1#`/`CS2#` and `WRTE1#`/`WRTE2#` — the **two-bank** chip-select and
+write-enable pair sheet 14 uses, plus `WRT1`, `WRT2`, `WRTCLKDLA`, `WRTREGCLK`, `DMASTBEN`,
+`HDMACT`, `BUFREDA`, `SHDCPL`.
+
+`RDCLK` arrives on this sheet and clocks the read pointer, closing the read path:
+
+```
+SBC reads $FF0008  ->  RDFIFO# / RDCLK  ->  D13 74S161 advances  ->  RADDR00-03
+                   ->  new word presented from the 27S03 array (sheet 14)
+```
+
+### The host cable has more signals than the two received strobes
+
+A second `3487` differential driver (`H18`) appears here, driving **`SHSTX`/`SHSTXR`**,
+**`CTLACK`/`CTLACKR`** and **`BRDMT`** to connector pins **B-33, B-35, B-3, B-5**. With sheet 12's
+`DMASTB` (B-22/23), `SAPX` (B-25/27) and `DMA2HOST`, the host link so far is:
+
+| signal | direction | pins |
+|---|---|---|
+| `DMASTB` | host → APIF | B-22 / B-23 |
+| `SAPX` | host → APIF | B-25 / B-27 |
+| `SHSTX` | APIF → host | B-33 / B-35 |
+| `CTLACK` | APIF → host | B-3 / B-5 |
+| `DMA2HOST`, `BRDMT` | APIF → host | — |
+
+Each is a **differential pair**, which is why the counterpart "host adapter" card is not optional:
+the link is not a TTL bus that could be bit-banged from a modern interface without matching drivers
+and terminations.
+
+**`WCCLK` is still not located.** It is on neither sheet 12 nor 13, so the word counter is clocked
+from the DMA control logic — sheets 8, 9, 10 (`AP DMA CTL`, `FMT & DMA CONTROL`) are where to look
+next. The read-pointer chain is now complete without it, so the remaining question is narrowly
+"what decrements WC", not "how does the FIFO work".
