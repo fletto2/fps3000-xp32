@@ -689,3 +689,29 @@ out: rts
 `$F089EE`, the mismatch reporter, does the same two writes and then **retries the failing
 write and compare**, so a single transient does not immediately fail the test — the marker
 `$F0F0F0F0` in `d7` is what makes the failure sticky.
+
+## `XLTR_MODE2` — the complete paging discipline (2026-07-31, uncapped sweep)
+
+Fourteen access sites, and the firmware only ever *selects* **two** pages:
+
+| region | sites | what |
+|---|---|---|
+| **RDHC** | `$F05312`/`$F05316`/`$F0567E` | read the current page, set **0**, restore it afterwards |
+| **TCBIO1I** | `$F05DE6`/`$F05DEA`/`$F05E44` | read, set **`$F`**, restore — the mailbox window |
+| **self-test** | `$F095F8`, `$F0961A`, `$F096DC`, `$F09782`, `$F09AE2`, `$F09B24` | always **0** |
+| **init** | `$F0A1E0`/`$F0A1FE` | set **`$F`**, then clear to **0** |
+
+**Only `$0` and `$F` are ever written as literals.** Every other value that appears on the
+bus is a *restore* — `move.w (a7)+,$210(a0)` in RDHC and `move.w d7,$210(a5)` in TCBIO1I
+write back whatever was read a moment earlier. So a bus log showing a third value (this
+project recorded `$10` from a runtime trace) is observing a restored value, not a page the
+firmware chose.
+
+**For a chassis model that means only two pages need backing**: page 0 for SCM and the
+`$400000` window generally, page `$F` for the host mailbox.
+
+**The discipline is uniform**: read the current value, set the page needed, restore. Three
+independent code regions do it the same way, and the self-test — which has the window to
+itself — skips the save and simply clears. A model that latches MODE2 without honouring the
+restore will diverge only when two users interleave, which is exactly the case the
+save/restore exists to handle.

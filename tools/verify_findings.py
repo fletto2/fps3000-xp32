@@ -5794,6 +5794,16 @@ check('...of which TEN use a computed bit number and evade a literal census',
 check('VMOD bit 6 is set exactly once, at $F09052',
       insn(0xF09052) == 'bset.b #$6, $1(a5)')
 
+check('MODE2 literals are only $0 and $F, in three regions',
+      insn(0xF05316) == 'move.w #$0, $210(a5)' and insn(0xF05DEA) == 'move.w #$f, $210(a5)'
+      and insn(0xF0A1E0) == 'move.w #$f, $210(a0)' and insn(0xF0A1FE) == 'clr.w $210(a0)')
+check('...and RDHC and IO1I both save and RESTORE the previous page',
+      insn(0xF05312) == 'move.w $210(a5), -(a7)' and insn(0xF0567E) == 'move.w (a7)+, $210(a0)'
+      and insn(0xF05DE6) == 'move.w $210(a5), d7' and insn(0xF05E44) == 'move.w d7, $210(a5)')
+check('the self-test always selects page 0 for the chassis window',
+      all(insn(x) in ('clr.w $210(a6)', 'move.w #$0, $210(a6)')
+          for x in (0xF095F8, 0xF0961A, 0xF096DC, 0xF09782, 0xF09AE2, 0xF09B24)))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
