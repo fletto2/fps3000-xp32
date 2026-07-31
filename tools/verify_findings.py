@@ -61,18 +61,48 @@ _elseblk = None
 for _n in _ast_g.walk(_tree_g):
     if isinstance(_n, _ast_g.If) and _n.orelse and _n.end_lineno - _n.lineno > 500:
         _elseblk = (_n.orelse[0].lineno, _n.end_lineno)
-_late = {}
-for _n in _tree_g.body:
-    if isinstance(_n, (_ast_g.FunctionDef, _ast_g.Assign)) and _elseblk \
-            and _n.lineno > _elseblk[1]:
-        for _t in ([_n] if isinstance(_n, _ast_g.FunctionDef)
-                   else [x for x in _n.targets if isinstance(x, _ast_g.Name)]):
-            _late[getattr(_t, 'name', getattr(_t, 'id', ''))] = _n.lineno
+# Collect EVERY binding of every name, at any nesting depth -- a name assigned
+# inside a for/if within the emulator block is perfectly fine, and an earlier
+# version of this guard flagged six such names and aborted the run.
+def _tgt_names(_t):
+    """Every name bound by an assignment target, at any nesting depth."""
+    if isinstance(_t, _ast_g.Name):
+        return [_t.id]
+    if isinstance(_t, (_ast_g.Tuple, _ast_g.List)):
+        return [_x for _e in _t.elts for _x in _tgt_names(_e)]
+    if isinstance(_t, _ast_g.Starred):
+        return _tgt_names(_t.value)
+    if isinstance(_t, _ast_g.Subscript) and isinstance(_t.value, _ast_g.Name):
+        return [_t.value.id]
+    return []
+
+
+_binds = {}
+for _n in _ast_g.walk(_tree_g):
+    _names = []
+    if isinstance(_n, (_ast_g.FunctionDef, _ast_g.AsyncFunctionDef)):
+        _names = [_n.name]
+    elif isinstance(_n, (_ast_g.Import, _ast_g.ImportFrom)):
+        _names = [(_al.asname or _al.name.split('.')[0]) for _al in _n.names]
+    elif isinstance(_n, _ast_g.Assign):
+        _names = [_x for _t in _n.targets for _x in _tgt_names(_t)]
+    elif isinstance(_n, (_ast_g.AugAssign, _ast_g.AnnAssign)):
+        _names = _tgt_names(_n.target)
+    elif isinstance(_n, (_ast_g.For, _ast_g.comprehension)):
+        _names = _tgt_names(_n.target)
+    elif isinstance(_n, _ast_g.arg):
+        _names = [_n.arg]
+    for _nm in _names:
+        _ln = getattr(_n, 'lineno', 0)
+        if _nm not in _binds or _ln < _binds[_nm]:
+            _binds[_nm] = _ln
+# A use is suspect only if the FIRST binding of that name anywhere is below it.
 _bad_g = set()
 if _elseblk:
     for _n in _ast_g.walk(_tree_g):
         if isinstance(_n, _ast_g.Name) and isinstance(_n.ctx, _ast_g.Load) \
-                and _elseblk[0] <= _n.lineno <= _elseblk[1] and _n.id in _late:
+                and _elseblk[0] <= _n.lineno <= _elseblk[1] \
+                and _n.id in _binds and _binds[_n.id] > _n.lineno:
             _bad_g.add((_n.id, _n.lineno))
 if _bad_g:
     print('  FATAL: names used in the emulator block but defined below it:',

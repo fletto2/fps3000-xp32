@@ -256,3 +256,24 @@ registers are modified **register-side** (`move.w` → `bclr.b #$e,d1` → `move
 numbers are **mod 32**, not mod 8. A memory-side sweep finds none of them. Across the image
 the split is 742 register-target versus 666 memory-target bit instructions, with 198 memory
 sites carrying a literal bit number above 7 — so neither convention is the default.
+
+### The harness guards now have tested positive controls
+
+Three structural self-audits protect the regression harness from defects that **inflate the
+pass count instead of failing**: orphaned `check()` calls below `sys.exit()`, use-before-
+definition inside the emulator block, and vacuous checks (literal `True`, constant-vs-
+constant).
+
+**Every one of those guards has been wrong at least once**, all discovered in this session:
+
+- the orphaned-check guard initially matched its own source text;
+- the use-before-definition guard **lost its `sys.exit()` in an edit**, so it printed
+  `FATAL` and carried on — then, once restored, over-reported six false positives because
+  it did not treat `import ... as` aliases, nested tuple unpacking or function parameters
+  as bindings;
+- the vacuous-check audit existed only as a one-off script, and two more vacuous checks
+  were introduced afterwards.
+
+`tools/test_guards.py` now asserts each guard is **both** quiet on the real file **and**
+fires on a synthetic instance of the defect it exists to catch. A guard nobody tests is
+worth nothing; a fatal guard that over-reports is worse than none, because it blocks work.
