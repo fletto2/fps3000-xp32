@@ -19117,3 +19117,50 @@ addressing exists in the handlers and nothing here uses it.
 vector table — but `D2_FIN` is the one handler that never dereferences `a2`, so the value is
 a sentinel rather than a pointer. It is a reminder that `a2` is only meaningful for the two
 mover handlers.
+
+## `TCB+$13C` is the saved stack pointer — which resolves the retracted `a3` reading
+
+Earlier I read `RSTATE`'s block offset `$3C` as the target task's `a7`, then **retracted** it
+on the ground that the sixteen copied longwords start at `TCB+$100`, which `TCB.EQ` fills
+with `TCBSR`/`TCBPC`/exception-monitor fields rather than registers. The retraction of the
+*reasoning* was right. The *conclusion* turns out to be right too, by a different route.
+
+Offset `$3C` of the block is the sixteenth longword copied from `TCB+$100`, i.e.
+**`TCB+$13C`**. Sweeping the kernel for that field shows what it is:
+
+```
+$F0058E  movea.l $13c(a6),a0        ; used as a POINTER
+$F006C2  move.l  a1,$13c(a6)        ; stored FROM an address register
+$F00616  subq.l  #$6,$13c(a6)       ; make room for 6 bytes
+$F0063A  subi.l  #$3c,$13c(a6)      ; make room for 60 bytes
+$F027F0  add.l   d7,$13c(a6)        ; release
+```
+
+**Six bytes is a 68000 group-1/2 exception frame (SR + PC). Sixty bytes is
+`movem.l d0-d7/a0-a6`.** A field that a pointer is stored into, that gets exactly those two
+amounts subtracted from it when a task is suspended and added back when it resumes, is the
+task's **saved stack pointer**.
+
+So `RSTATE` hands the caller the target task's SP at block offset `$3C`, and the callback's
+`movea.l $3c(a7),a3` picks it up — which is exactly why the argument frame is built with
+`-(a3)` pushes. The original conclusion stands on this evidence; what was wrong was
+inferring it from a register-save-area layout that isn't there.
+
+`TCB.EQ` is no help here — it calls `+$13C` a pad and puts `TCBUSP` at `+$0FC` — but this
+project already records `TCB.EQ` as displaced in this region, and the arithmetic is
+self-evidencing.
+
+### And `TCB+$140`/`+$144` are the owner's name and session
+
+The same sweep explains the ownership check in `$F035E0`:
+
+```
+$F0354A  move.l $10(a5),$140(a2)    ; TCBNAME    -> +$140
+$F03550  move.l $14(a5),$144(a2)    ; TCBSESSN   -> +$144
+$F035E8  cmp.l  $140(a5),d0 ...     ; compared against the CALLER's $10(a6)/$14(a6)
+```
+
+So `+$140`/`+$144` hold a **copy of the owning task's name and session**, written when the
+block is set up and compared when another task asks for its state. That is the permission
+model: `RSTATE` succeeds only for a caller whose own `TCBNAME`/`TCBSESSN` match the copy
+stored in the target.
