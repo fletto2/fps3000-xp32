@@ -354,6 +354,15 @@ static uint8_t bus_read8(uint32_t a) {
                 fprintf(stderr, "[CHASSIS-MEM ] RD 1-byte %06X = %02X @%06X\n",
                         a, chassis_mem[a - CHASSIS_MEM_BASE],
                         m68k_get_reg(NULL, M68K_REG_PPC));
+            /* FPS3K_FAULT=scm_bitrot: corrupt ONE byte of the SCM region on
+             * read, violating the phase-$2300 pattern test.  Third fault mode;
+             * aimed at the shared fault reporter $F089EE, which neither
+             * apif_berr nor xltr_alias reaches. */
+            { static int f = -1;
+              if (f < 0) { const char *e = getenv("FPS3K_FAULT");
+                           f = (e && !strcmp(e, "scm_bitrot")); }
+              if (f && a == 0x401234)
+                  return chassis_mem[a - CHASSIS_MEM_BASE] ^ 0xFF; }
             return chassis_mem[a - CHASSIS_MEM_BASE];
         }
         chassis_mem_berrs++;

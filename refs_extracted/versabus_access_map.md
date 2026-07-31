@@ -34404,3 +34404,44 @@ machine stops and *what* the phase counter shows. That is the check this session
 needed: a derived requirement that cannot be violated in the model is not a tested requirement, and
 until now none of them had been. The remaining two failure paths need injections aimed at the stages
 that use them — the SCM test for `$F089EE`, and an unexpected bus error for `$F08912`.
+
+## Three injections, three confirmed predictions, three distinct failure signatures (2026-07-31)
+
+`FPS3K_FAULT=scm_bitrot` corrupts **one byte** (`$401234`) of the SCM region on read, violating the
+phase-`$2300` pattern test.
+
+| injection | violates | final PC | `CHANNEL_SELECT` | MODE1 | failure path reached |
+|---|---|---|---|---|---|
+| *(control)* | — | `$F00FE6` idle | `$2903` | `$8020` | — |
+| `apif_berr` | `$FF0216` bit-7 BERR gate | `$F08940` | **`$1A00`** | `$1000` | inline `d7` |
+| `xltr_alias` | `$FF0212` independence | `$F09578` | **`$1600`** | `$2000` | `$F095E8` epilogue |
+| `scm_bitrot` | SCM pattern integrity | `$F08A18` | **`$2900`** | `$FFFF` | **`$F089EE`** shared reporter |
+
+**Every prediction held**: the machine stalls, the phase counter names the failing stage, and the
+final PC lands in the handling code for that stage. The three signatures are mutually distinguishable
+from `CHANNEL_SELECT` and MODE1 alone — which is exactly what a technician reads off a dead board.
+
+**The SCM contract is now tested.** Corrupting a single byte in `$400000`-`$403FFF` produces the
+predicted failure, so the decode of that stage — region bounds, four patterns, the fill-then-verify
+structure — is validated rather than merely read. Note the counter stops at `$2900` against `$2903`
+clean: the failure lands in the stage's **first** sub-stage, which is right, since the corrupted byte
+fails the very first (`$00000000`) verification pass.
+
+**Failure-path coverage is now 3 of 4:**
+
+| path | status |
+|---|---|
+| inline `d7 = $F0F0F0F0` | ✅ `apif_berr` |
+| `$F095E8` stage epilogue | ✅ `xltr_alias` |
+| `bsr $F089EE` shared reporter | ✅ `scm_bitrot` |
+| `$F08912` bus-error **counter** | ❌ — needs an *unexpected* BERR, which no contract violation produces |
+
+The last one is structurally hard to reach by violating a requirement, because every bus error the
+suite expects is one it deliberately provokes. Reaching it means faulting an address the firmware
+believes is safe — a different class of injection, and arguably one that tests the *board* rather
+than the model.
+
+**MODE1 is a second diagnostic axis.** `$1000`, `$2000` and `$FFFF` in the three failures are written
+by three different pieces of code (`PollBoardStatus`'s failure arm, phase `$1600`'s own setup, and
+the shared reporter). Combined with the phase counter it separates *which handler* is running from
+*which stage* failed — two independent facts from two registers, on hardware with no console.

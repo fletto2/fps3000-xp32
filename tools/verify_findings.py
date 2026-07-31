@@ -7925,6 +7925,11 @@ check('phase $1600 failure epilogue raises d7, polls, and retries the whole stag
       and _w(0xF095F4) == 0x6600 and 0xF095F6 + _w(0xF095F6) == 0xF09536
       and _w(0xF095F8) == 0x426E and _w(0xF095FA) == 0x0210)
 
+check('all three FPS3K_FAULT modes are present and opt-in',
+      all(_m in open('/home/fletto/ext/src/claude/fps3000/emulator/versabus.c').read()
+                 + open('/home/fletto/ext/src/claude/fps3000/emulator/fps3k_sbc.c').read()
+          for _m in ('apif_berr', 'xltr_alias', 'scm_bitrot')))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
