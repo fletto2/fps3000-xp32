@@ -5962,6 +5962,9 @@ check('no 32-bit operation touches ANY XLTR register',
            if (insn(x) or '').split()[0].endswith('.l')
            and _mre.search(r'(?<!-)\$2[0-5][0-9a-f]\(a\d\)', (insn(x) or '').lower())])
 
+check("op $3's window arithmetic reaches $7FFFFC -- 4 MB, not 1",
+      0x400000 + (0xFFFFF << 2) == 0x7FFFFC)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

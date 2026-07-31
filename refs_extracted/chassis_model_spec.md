@@ -265,3 +265,33 @@ Related requirements this makes concrete:
 - **The faulting instruction need not be restartable.** Recovery is by `rts` to a
   continuation, not by resuming the access, so a model does not need precise bus-error
   restart semantics — only a correctly-sized frame and a correct stacked PC.
+
+## The chassis window: the model backs 1 MB, the firmware can address 4 MB (2026-07-31)
+
+Chassis operation `$3` computes its window address as
+
+```
+offset = (addr & $FFFFF) << 2        ; addr is the chassis-supplied longword address
+target = offset + $400000            ; rebased if it is not already in the window
+```
+
+so the reachable range is **`$400000`-`$7FFFFC`, four megabytes**. The emulator declares
+`CHASSIS_MEM_SIZE = 1 << 20` and indexes with `chassis_mem[a - CHASSIS_MEM_BASE]`, backing
+only `$400000`-`$4FFFFF`.
+
+**This is adequate for everything the firmware does by itself** — the SCM self-test uses
+`$400000`-`$403FFF`, 16 KB — but a chassis driving op `$3` with an address whose low 20 bits
+exceed `$3FFFF` lands outside the array. Worth fixing by construction rather than waiting
+for it to bite, since the size is a one-line constant.
+
+**Related, and already recorded as a divergence: `XLTR_MODE2` is stored but never used to
+index the window.** The model keeps `xltr.mode2` and reports it in dumps, but the address
+decode ignores it, so two chassis addresses differing only above bit 19 alias onto the same
+byte. On hardware they select different pages. The firmware itself cannot expose this — it
+uses page 0 for SCM and page `$F` for the mailbox, and the mailbox is served by a separate
+handler in the model — but **op `$3` makes the page chassis-controlled**, so any experiment
+driving it with a paged address is mismodelled.
+
+The two together give the fix: index the window as `page * $100000 + offset` and size the
+array accordingly, or explicitly document the model as single-page and reject non-zero
+pages rather than silently aliasing.
