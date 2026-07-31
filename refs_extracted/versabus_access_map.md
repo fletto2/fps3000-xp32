@@ -18464,3 +18464,39 @@ None of the callback findings depend on this: the `lea`-not-`movea` at `$F085F4`
 into `$10AE + (ch-1)*4`, the three argument pointers, the count word `$000C` and the result
 read back out of `$10DE` are all read directly off the instructions, and the runtime test
 with a 4-byte `rts` stub confirms them independently.
+
+## Consolidated map of the FPS low-RAM globals (2026-07-30)
+
+Sweeping every absolute reference in `$0E00-$1100` from the FPS region gives 56 distinct
+globals. Collected with what is now known about each, they form adjacent, exactly-sized
+structures rather than a scatter:
+
+| range | structure |
+|---|---|
+| `$0E58`/`$0E5A` | transfer address halves (chassis op `$1`) |
+| `$0E5C` | CHANNEL_SELECT readback latch |
+| `$0E60`/`$0E62` | selected channel — written **only** by op `$5`, `XPSEL` |
+| `$0E64`/`$0E66` | transfer count (chassis op `$2`, and `CPLOAD`) |
+| `$0E68`/`$0E6A` | third parameter (op `$9`) |
+| `$0E6E` | the last panel command issued (all eight issuers stash it here) |
+| `$0E74` | operation result — the busiest of these, 37 sites |
+| `$0E7A` | array index for ops `$A` and `$C`, auto-incremented on bit 4 |
+| `$0E86`/`$0E87` | the latched MODE0 word; `$0E87` is its low byte, the op/flags |
+| `$0E8A`… | command-3 longword array (written, never read here) |
+| **`$101E`-`$105D`** | **16-longword shared register file** (op `$C`, host cmd 2) |
+| `$105E` | channel-present count — *immediately after the file* |
+| `$1062` | **the channel number of the last bit-15-clear event** (each task writes its own: 1/2/3/4) |
+| **`$1064`-`$107C`** | **the op-`$A` status array**: [0] packed nibbles, [1-12] four `{status, hi, lo}` records |
+| `$107E` | status sequence counter — *immediately after the array* |
+| `$1080`-`$108F` | per-channel pointer to `$101E` (longword, stride 4) |
+| `$1098`-`$109F` | per-channel word, cleared with the pointer at teardown (stride 2) |
+| `$10A0`-`$10A7` | per-channel flag word: bit 0 completion-with-no-`USER`, bit 1 host-notify enabled |
+| `$10A8`/`$10AA` | the chassis-written class/DMA word |
+| **`$10AE`-`$10ED`** | **the CP-program callback interface** — trampoline, arg 1, arg 2, result (four 16-byte arrays) |
+
+Three of these boundaries are exact and were each found independently: the register file
+ends where `$105E` begins, the status array ends where `$107E` begins, and the `$1098` word
+array ends where `$10A0` begins. That last one is worth the caution it nearly cost: the
+clearing routine at `$F08536` computes `(ch-1)*4` for `$1080` and then **halves it** before
+`$1098`, so `$1098` is stride 2, not 4. Read as stride 4 it would alias `$10A0` and produce
+a contradiction that is not there.
