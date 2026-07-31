@@ -35040,3 +35040,45 @@ This also sharpens the recorded statement that "AC3 and AC4 task slots are dorma
 dormant in the sense of never initialising a port and never waking on their own — **not** in the
 sense of being disconnected from the interrupt system. `$1062` reads 0 after the forced interrupt,
 so the ISR ran and recorded no bit-15-clear event, which is what an empty channel window produces.
+
+## The channel ISR and wake path, observed on a forced interrupt (2026-07-31)
+
+`FPS3K_XPIRQ=3` carries XP3I from its 45-instruction baseline to **83**, exposing the ISR and the
+task's wake path. The ISR is six instructions:
+
+```
+$F06AE6  move.l  a5,-(a7)
+$F06AE8  movea.l #$ff0000,a5
+$F06AEE  move.w  $8e(a5),$1072.l      ; +$0E  status
+$F06AF6  move.w  $88(a5),$1074.l      ; +$08  data high
+$F06AFE  move.w  $8a(a5),$1076.l      ; +$0A  data low
+$F06B06  movea.l (a7)+,a5
+```
+
+**This confirms the recorded latch arithmetic to the byte.** The per-channel record is
+`$1066 + (ch-1)*6`, and for channel 3 that is `$1066 + 12 = $1072` — exactly where the status lands,
+with data-high and data-low following at `$1074`/`$1076`. Order of reads is `+$0E`, `+$08`, `+$0A`,
+as recorded.
+
+The wake path then runs:
+
+```
+$F06A1C  move.w #$3,d0                ; the channel number, as a literal
+$F06A20  move.l $1074.l,d1            ; the latched data
+$F06A26  movea.l #$ff008e,a0          ; cmd/status port
+$F06A2C  movea.l #$ff0088,a1          ; data-high port
+$F06A32  move.w $202(a5),d2 / btst #$7,d2    ; MODE1 BUSY, tested BEFORE issuing
+$F06A4C  btst.b #$f,$1072.l           ; status bit 15 of the LATCHED word
+$F06A56  movea.l #$ff0250,a3          ; this channel's BIM control register
+$F06A60  jsr $F070AA
+```
+
+Three recorded facts confirmed in one path: the **busy test happens after waking and before
+issuing** (which is why only *another* channel's transfer can set it); the task interprets the
+**latched** status at `$1072` rather than re-reading the port; and `a3` is loaded with the BIM CR so
+the primitive can mask its own channel.
+
+**Note the ISR does no acknowledgement of its own** — it latches three words and returns through the
+`move.w #$c,ccr` / `trap #1` exit. Everything else is the task body. A model expecting the ISR to
+clear a chassis flag will wait forever; the clearing happens later, in the transaction primitive's
+teardown.

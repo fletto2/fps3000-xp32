@@ -8105,6 +8105,17 @@ check('every XP task arms its BIM and connects its vector OUTSIDE the presence g
       and 0xF07E00 + (_w(0xF07DFE) & 0xFF) == 0xF07E06
       and 0xF07E12 > 0xF07E06)
 
+check("XP3I's ISR latches +$0E/+$08/+$0A into $1072/$1074/$1076",
+      _w(0xF06AEE) == 0x33ED and _w(0xF06AF0) == 0x008E and _l(0xF06AF2) == 0x00001072
+      and _w(0xF06AF6) == 0x33ED and _w(0xF06AF8) == 0x0088 and _l(0xF06AFA) == 0x00001074
+      and _w(0xF06AFE) == 0x33ED and _w(0xF06B00) == 0x008A and _l(0xF06B02) == 0x00001076
+      and 0x1066 + (3 - 1) * 6 == 0x1072)
+check('...and the wake path tests MODE1 bit 7 before testing latched status bit 15',
+      _w(0xF06A32) == 0x342D and _w(0xF06A34) == 0x0202
+      and _w(0xF06A36) == 0x0802 and _w(0xF06A38) == 0x0007
+      and _w(0xF06A4C) == 0x0839 and _w(0xF06A4E) == 0x000F
+      and _l(0xF06A50) == 0x00001072)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
