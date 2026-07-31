@@ -19075,3 +19075,45 @@ With this, **all four handlers are decoded**: `D1_SEND` (send `d1`, then `d2`, w
 returning early), `D2_FIN` (send `d2`, `$8005`, panel `$26C`), `POLL` (memory → channel) and
 `BLK_XFR` (channel → memory), plus the `{mode, opcode}` pair that parameterises them and the
 `$FF0008` source/destination asymmetry.
+
+### RDHC's six-field operation descriptor, named
+
+This file records that "the RDHC command descriptor turned out to have six fields, not the
+three published", derived by grouping `a6` accesses. `$F05440`-`$F05468` names all six and
+shows how they reach the handlers:
+
+```
+$F05440  move.w #$ffff,d0 / swap d0     ; build {mode $FFFF, opcode} in d0
+$F05446  d1 = $C(a6)
+$F0544A  a2 = $14(a6)                   ; the memory pointer
+$F0544E  cmpi.l #$14,(a6) / bne         ; if the operation is $14 (D2_FIN)...
+$F05456  movea.l #$6,a2                 ; ...substitute a sentinel; D2_FIN ignores a2
+$F0545C  d4 = $4(a6)                    ; channel
+$F05460  d2 = $8(a6)
+$F05464  d3 = $10(a6)
+$F05468  jsr $F056BA                    ; PanelSendAndWait -> the 42-slot dispatch
+```
+
+| offset | reaches | role |
+|---|---|---|
+| `+$00` | `d0` low word | the **operation code** (the whole longword is compared against `$14`) |
+| `+$04` | `d4` | channel |
+| `+$08` | `d2` | the `D1_SEND`/`D2_FIN` second word pair, and `BLK_XFR`'s loop limit |
+| `+$0C` | `d1` | the `D1_SEND` first word pair |
+| `+$10` | `d3` | |
+| `+$14` | `a2` | the **memory pointer** — the source for `POLL`, the destination for `BLK_XFR`, or `$FF0008` for the bulk port |
+
+Two details worth having.
+
+**The mode is hard-wired to `$FFFF` on this path.** `move.w #$ffff,d0` / `swap d0` places
+`$FFFF` in the mode half, so every RDHC-issued transfer uses **consecutive** addressing with
+post-increment. The same-address mode (`$0000`) is therefore *not* reachable from a host
+command record — only from a caller that builds `d0` differently, which in this ROM is the
+XP request path at `$F08500` (`d0 = $FFFF0010` — also `$FFFF`). **No path in this firmware
+ever selects the same-address mode**, which is a bound worth stating: the alternative
+addressing exists in the handlers and nothing here uses it.
+
+**Operation `$14` substitutes `a2 = $6`.** That looks alarming — address 6 is inside the
+vector table — but `D2_FIN` is the one handler that never dereferences `a2`, so the value is
+a sentinel rather than a pointer. It is a reminder that `a2` is only meaningful for the two
+mover handlers.
