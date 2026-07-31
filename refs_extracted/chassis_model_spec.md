@@ -761,3 +761,73 @@ followed by a test within five instructions. It misses tests through a base-regi
 (board status, which is why that row is completed from the separate census) and anything where the
 value is stored and tested later (the channel status, latched into `$1066` first). Those are
 filled in from findings established independently, and are marked as such.
+
+---
+
+# The AC-side contract: what an XP-32 model owes the SBC
+
+The objective asks for communications to and from the EU/AU. The SBC cannot reach either — the
+self-test's board coverage stops at the XP-32 boundary and no operational path addresses an EXEC
+or ARITH register. What the ROM *does* specify completely is the **arithmetic controller's
+obligations at the AP I/F channel window**, which is the entire CP↔AC interface. Collected here as
+a model contract.
+
+Each populated channel *N* (windows 2-5, i.e. `$FF0040 + $20*(N+1)`) owes exactly this:
+
+### Registers
+
+| offset | direction | contract |
+|---|---|---|
+| `+$04` | SBC writes `#$0` | acknowledged; no observable effect required |
+| `+$08` | both | **high half** of a 32-bit data register |
+| `+$0A` | both | **low half** of the same register |
+| `+$0E` | **bidirectional** | **command on write, status on read** |
+
+### Commands the SBC can issue — and there are only three
+
+| value | meaning | what the AC must do |
+|---|---|---|
+| `$8000` | trigger | act on the 32-bit value just written to `+$08`/`+$0A` |
+| `$8004` | REQUEST-TRANSFER | begin; set **bit 14 (DONE)** or **bit 13 (ERROR)** at `+$0E` |
+| `$8005` | CONTINUE-TRANSFER | same, for the second half of a two-part transfer |
+
+**No other value is ever written.** A census of every literal reaching a channel `+$0E` finds
+`$8004` ×30, `$8005` ×20, `$8000` ×3, and nothing else anywhere in the ROM.
+
+### Timing
+
+The SBC polls `+$0E` **1000 times** after `$8004`/`$8005`, roughly 62 cycles per iteration — about
+**62,000 CPU cycles**, ~7.75 ms at 8 MHz. Completing inside that window is the only timing
+requirement; the emulator measured ~66 cycles per iteration against 62 predicted. Missing it
+reports panel `$26C` (timeout); setting bit 13 reports `$269`.
+
+### Status the AC supplies at `+$0E`
+
+The ISR latches `+$0E`, `+$08`, `+$0A` into `$1066`/`$1068`/`$106A`; the task body decodes:
+
+| b15 | b14 | b11 | the SBC's response |
+|:-:|:-:|:-:|---|
+| 0 | — | — | the data's high byte is an opcode; non-zero ⇒ `$10` TERMT on `'USER'` |
+| 1 | 0 | — | panel `$262` — interrupt with no valid transaction |
+| 1 | 1 | 0 | notify the `USER` handle at `$10AE+(N-1)*4`, or set `$10A1+(N-1)*2` bit 0 |
+| 1 | 1 | 1 | write `$0000`/`$001B` to the data pair, then `$8000` |
+
+### Operation codes the SBC can emit unaided
+
+**`$1B`, `$10`, `$0E`** — carried in the *data* pair, not the command word. Anything richer comes
+from host-loaded CP code. **And `$1B` is issued by three channels only**: XP4I contains no `#$1b`
+immediate at all, so channel 4 can never request it.
+
+### Interrupts
+
+Each channel owns a BIM channel (`$FF0244`/`$0246`/`$0250`/`$0252`, control `$5F` = level 7) and a
+vector register eight bytes above it (`$45`-`$48`). The AC raises its channel; the BIM supplies the
+vector.
+
+### What the ROM cannot tell us
+
+Everything past `+$0E`: how the AC decodes an operation code, how the EU sequences the AU, how
+microcode reaches the WCS once it leaves `$FF0008`, and anything about UNIV FMT's conversion on
+AC-initiated traffic. Those need a schematic, an EU PROM dump, or a bus trace — and the machine's
+own diagnostics draw the same boundary, which is the strongest evidence that the boundary is real
+rather than an artefact of what has been read so far.
