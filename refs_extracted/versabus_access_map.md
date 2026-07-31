@@ -30091,10 +30091,23 @@ stack starts, and where the diagnostics start.
 `$F0A4FE` = `$00000C00` is the same value the scheduler control block holds at `$0C08`, so the
 config supplies the stack base to both the early boot and the RTOS.
 
-**One tension worth recording rather than smoothing over.** `$F09E3C` writes the self-test entry
-into **`$0C14`**, which this project identifies as the RMS68K **ready-list head** (cleared once at
-`$F0A062`, pushed six times thereafter). Both readings cannot hold simultaneously; the likeliest
-resolution is that `$0C14` carries an early boot value which `$F0A062` discards when the
-scheduler takes over, so the slot is reused rather than shared. That is consistent with the
-measured "cleared once" — but it is an inference, and a RAM watch on `$0C14` across the boot
-would settle it directly.
+**`$F09E3C`'s store into `$0C14` is a DEAD STORE.** That address is the RMS68K **ready-list
+head**, and there are exactly four references to it in the whole application region:
+
+```
+$F09E3C  move.l $F0A4F2(pc),$c14.w   ; write the self-test entry
+$F0A062  clr.l  $c14.w               ; ... cleared, with no reader in between
+$F0A0BC  move.l $c14.w,$c(a5)        ; the ready-list push: old head -> new TCB's link
+$F0A0C2  move.l a5,$c14.w            ; ... new TCB becomes the head
+```
+
+Nothing reads `$0C14` between the write and the clear, so the value never reaches a consumer.
+`$0C14` is therefore unambiguously the ready-list head — the early write is simply discarded, and
+`$F0A4F2` is a config field whose only use is a store that is thrown away.
+
+Two caveats keep this honest. The census is of **absolute** references, and this project's
+standing hazard is that base-register displacement forms are invisible to exactly that kind of
+sweep — though the ready-list operations themselves all use the absolute short form, which is
+some evidence the slot is addressed that way throughout. And "dead" here means *on this boot
+path*: a config with a different `$F0A546` (the relocator) or `$F0A506` (the display) takes
+branches this one does not.

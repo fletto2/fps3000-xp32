@@ -6661,6 +6661,11 @@ check('...each is read pc-relative, and the displacements resolve exactly',
           ((0xF09C2A, 0x8D2, 0xF0A4FE), (0xF09C6C, 0x888, 0xF0A4F6),
            (0xF09D26, 0x7D2, 0xF0A4FA), (0xF09E3C, 0x6B4, 0xF0A4F2))))
 
+check('$0C14 has exactly four references: dead store, clear, then the ready-list push',
+      _asm21a.count('$c14.w') == 4
+      and _w(0xF09E3C) == 0x21FA and _w(0xF0A062) == 0x42B8
+      and _w(0xF0A0BC) == 0x2B78 and _w(0xF0A0C2) == 0x21CD)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
