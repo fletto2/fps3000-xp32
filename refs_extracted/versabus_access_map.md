@@ -27069,3 +27069,41 @@ therefore does **not** need to satisfy that handshake, and any emulator hang obs
 What the surviving code does do is write **four blocks of eight words** through a small
 offset table at `$F0A4BE`, based at the 4 KB-rounded RAM top — that part is live, and it is
 what a model must reproduce.
+
+## Which RMS68K code cannot execute on this machine (2026-07-31)
+
+Having documented a dead handler as live, the systematic version of the question is worth
+answering once. The kernel's static vector table has 23 entries; the FPS layer overrides
+**9** of them (`$05`, `$18`, `$8D`, `$8E`, `$8F`-`$93`). A handler is dead only if it is
+overridden **and** no code branches to it:
+
+| vector | handler | verdict |
+|---|---|---|
+| `$05` divide-by-zero | `$F00ADE` | **dead** — FPS installs its `$2A1` reporter |
+| `$18` spurious | `$F009EA` | **dead** — the `$0C5C` divider and the display writes |
+| `$8D` | `$F00A58` | **dead** — the 16-register dump routine |
+| `$8E` | `$F00186` | **live** — 22 `bsr` callers inside the kernel |
+| `$93` | `$F009DC` | **dead** — the unguarded null-pointer `andi.w` |
+| `$8F`-`$92` | `$000000` | null entries |
+
+**The distinction between `$8D` and `$8E` is the whole point.** Both write the low-RAM
+snapshot; both have their vector overridden. `$F00A58` has no other caller and is genuinely
+unreachable, while `$F00186` is reached 22 times from ordinary kernel code and is very much
+live. A census that stopped at "the vector is overridden" would call both dead — which is
+exactly the error in this project's earlier reachability note, and the mirror image of the
+error I made with the display heartbeat.
+
+**Rule this establishes:** *overridden vector* and *unreachable code* are different claims.
+Check for code references before calling anything dead, and check the vector before calling
+anything live.
+
+Combined with the two unreachable blocks found separately — `$F0A492`-`$F0A4AC` (the VMOD
+caching and handshake, jumped over by an unconditional `bra`) and `$F044A2` (the FPS trace
+hook, dark for two independent reasons) — the inventory of code that **cannot run on this
+machine** is now: four dead vector handlers, the VMOD handshake, the trace hook, the kernel
+relocator, the display-device probe's positive arm, and the nine trace hook sites gated by
+`$F0A52A = 0`.
+
+That is a useful list in its own right: **none of it needs modelling**, and any emulator
+observation that appears to involve it is a bug in the model rather than a finding about
+the machine.

@@ -5712,6 +5712,17 @@ check('one $0E48 reader guards against null, the other does not',
 check('...but the unguarded one is vector $93, inside the override range',
       insn(0xF0A14A) == 'movea.l #$124, a0' and 0x124 <= 0x93 * 4 <= 0x3F0)
 
+check('the FPS layer overrides vectors $05, $18, $1C, $20, $3C explicitly',
+      insn(0xF0A11A) == 'move.l a1, $14.w' and insn(0xF0A122) == 'move.l a1, $18.w'
+      and insn(0xF0A13A) == 'move.l a1, $3c.w')
+check('...and vectors 73-252 in a loop, skipping vector 140',
+      insn(0xF0A146) == 'move.w #$b6, d0' and insn(0xF0A150) == 'cmpa.l #$230, a0'
+      and 0x230 // 4 == 140)
+check('vector $8D ($F00A58) is dead but vector $8E ($F00186) is NOT -- 22 bsr callers',
+      len(_fatal) == 22
+      and not [x for x in range(0xF00000, 0xF10000, 2)
+               if 'f00a58' in (insn(x) or '') and (insn(x) or '')[0] in 'bjd'])
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
