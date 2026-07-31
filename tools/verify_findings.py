@@ -4910,6 +4910,15 @@ check('10 are the channel map address', _dvals['5c4c'] == 10)
 check('one is the 42-entry dispatch table address', _dvals['5ba4'] == 1)
 check('...so every fixup is an address, not a per-channel data constant',
       _dvals['5688'] + _dvals['5c4c'] + _dvals['5ba4'] + _dvals['5bf8'] == 25)
+_t26c = _mcol.Counter()
+for _a, (_m, _o, _) in _mins.items():
+    if _m.startswith('move') and '#$26c, d0' in _o:
+        _t26c['RDHC' if _a < 0xF05D00 else 'IO1I' if _a < 0xF05F00 else
+              'XP4I' if _a < 0xF06900 else 'XP3I' if _a < 0xF07300 else
+              'XP2I' if _a < 0xF07D00 else 'XP1I' if _a < 0xF08700 else 'other'] += 1
+check('the 45 $26C emitters are exactly 9 per region across five regions',
+      dict(_t26c) == {'RDHC': 9, 'XP4I': 9, 'XP3I': 9, 'XP2I': 9, 'XP1I': 9}, dict(_t26c))
+check('...i.e. a poll tail inlined 9x inside a block copied 5x', 9 * 5 == 45)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

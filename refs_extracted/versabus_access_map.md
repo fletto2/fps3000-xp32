@@ -22837,3 +22837,50 @@ sharpens the modification hazard: a patch to the transaction logic must be appli
 **and any patch that changes the block's length breaks the fixups**, which is precisely what
 happened to XP4I — its copy sits `$18` off the grid because an edit elsewhere in the task shifted
 it, and the 28 fixups had to be recomputed for that copy alone.
+
+## The replication is TWO-LEVEL: a tail inlined 9x inside a block copied 5x (2026-07-31)
+
+A self-similarity scan of the application region — every 48-byte window that occurs more than once,
+excluding mostly-zero windows — turns up 554 repeated windows and four distinct groups:
+
+| group | occurrences | what it is |
+|---|---:|---|
+| x8 | `$F04500`, `$F05688`, `$F05E56`, `$F068A8`, `$F072C0`, `$F07CC0`, `$F086C0`, `$F0A57E` | the **panel-command issuers** |
+| x15 | 3 per region x 5 regions | a sequence appearing three times per block copy |
+| x10 | 2 per region x 5 | another, twice per copy |
+| **x9** | all nine inside RDHC alone (`$F056CE`-`$F05B50`) | **the poll-and-report tail, inlined nine times per copy** |
+
+And the `$26C` timeout emitters land exactly on that structure:
+
+```
+RDHC 9   XP4I 9   XP3I 9   XP2I 9   XP1I 9   =  45
+```
+
+**Nine per region, five regions.** So the 45 `$26C` sites — the figure that identified `$26C` as
+the generic timeout code earlier today — are not 45 independent decisions. They are **one
+poll-and-report tail, inlined nine times inside a 1,431-byte block, which is then copied five
+times**.
+
+### The firmware's largest structure, described completely
+
+| level | unit | multiplicity | bytes |
+|---|---|---:|---:|
+| inner | poll / DONE / ERROR / timeout tail | **9 per copy** | ~24 each |
+| outer | the transaction + dispatch block | **5 copies** | 1,431 each |
+| total | | | **7,155 = 28% of the application region** |
+
+Every handler in the block — `POLL`, `D1_SEND`, `BLK_XFR`, `D2_FIN` — carries its own inlined
+copy of the tail rather than calling a shared one, which is why the same four instructions
+(`btst #$d,d4` / `cmpi.l #$0,d5` / two panel codes) appear over and over in the listing.
+
+**Two independent hand-assembly fingerprints in one structure**: inlining a 24-byte tail nine
+times instead of a `bsr`, and copying a 1,431-byte block five times instead of parameterising it.
+Both cost space to avoid indirection, and both are choices a toolchain would not make.
+
+### The regions that are *not* replicated
+
+Duplicated-window occurrences by region: XP4I 546, XP3I 545, XP2I 545, XP1I 544, **RDHC 358**,
+**init 19, IO1I 13**. The four XP tasks are almost entirely the shared block; RDHC has ~5.9 KB of
+unique code around its copy; and **TCBIO1I and the init code are essentially free of
+replication** — 13 and 19 occurrences, i.e. incidental matches rather than structure. Those two
+regions are where per-byte reading pays, and both are already fully documented.
