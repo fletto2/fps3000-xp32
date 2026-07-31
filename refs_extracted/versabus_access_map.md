@@ -20267,3 +20267,48 @@ Note the config block holds `$F00100` **twice** — at `$F0A4F6` (this scan base
 `$F0A512` (the RTOS entry pointer used by the `rts` handoff). `$F00100` is the base of the
 kernel's low structure area, used once as a search origin and once, via the trampoline
 sitting there, as the entry point.
+
+## The firmware contains a kernel-relocation mechanism, disabled by one config longword
+
+`$F09C66`-`$F09C94`, immediately before the `!VCT` scan, is a relocator:
+
+```
+$F09C66  d1 = [$F0A546]              ; the SOURCE, from the config block
+$F09C6A  beq $F09C96                 ; zero -> skip relocation entirely
+$F09C6C  a3 = [$F0A4F6] = $F00100    ; the DESTINATION
+$F09C70  a2 = d1                     ; the source
+$F09C72  a4 = $F0A57E + $800         ; the limit
+$F09C7C  a0 = $F09C96 - a2 + a3      ; the continuation, RELOCATED by the same delta
+$F09C84  a1 = $F09C94 ; $8.w = a1    ; a temporary BUS-ERROR handler at vector 2
+$F09C8C  move.l (a2)+,(a3)+          ; copy
+$F09C94  jmp (a0)                    ; continue at the relocated address
+```
+
+Measured: **`$F0A546` is `$00000000`**, so the enable test runs once, the copy path never, and
+the skip target runs once. **The mechanism is present and switched off by a single config
+longword.**
+
+Three things this explains that previously just looked odd.
+
+**Why `$F00100` is a trampoline.** It is the relocation *destination*, and also the entry the
+`rts` handoff jumps to. A `jmp $F0050C` sitting at the base of the relocatable region works
+whether or not the copy happened.
+
+**Why the config block holds `$F00100` twice** (`$F0A4F6` and `$F0A512`) — once as the
+relocation destination / scan base, once as the entry pointer.
+
+**Why the vector table is found by scanning for `!VCT` rather than by address.** If the kernel
+can be relocated, its structures' addresses are not fixed, so a hard-coded address would be
+wrong in the relocated case. Searching from the (configurable) base for a **tag** is exactly
+how you find a table whose address you cannot know at assembly time. The marker convention
+that looked like a debugging aid is, at least here, load-time addressing.
+
+**And the bus-error handler is the tell.** Installing a temporary vector-2 handler around a
+copy loop is what you do when the source or destination extent is not certain — the fault
+lands on `jmp (a0)` and execution continues at the relocated continuation regardless. A
+mechanism designed to survive a copy that runs off the end of real memory is a mechanism
+meant to relocate into RAM whose size is not known in advance.
+
+For emulation: **one longword at `$F0A546` turns this on**, and a model that supports it must
+also expect the kernel to run from somewhere other than `$F00000` — including the `!VCT` scan
+finding its table at a relocated address.
