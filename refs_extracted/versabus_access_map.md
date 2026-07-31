@@ -31377,3 +31377,49 @@ independently confirms the register count from the addressing.
 So the kernel's undecoded residue is **566 bytes, of which 532 are genuine tables and 34 are code
 the disassembler could not reach** (nothing branches to `$F00A1C`; it is entered only as a vector
 target, and this project records it as executing zero times in a full boot).
+
+### The rest of the kernel residue: inline tables and never-executed trace blocks
+
+Outside the three dispatch tables and the reset vector, only **39 words** of the kernel are data,
+in 11 runs. Seventeen were the undecoded code at `$F00A1C`. The rest resolve into two idioms:
+
+**1. Data inside never-executed trace blocks.** The two lone `$Axxx` words are not Line-A opcodes
+awaiting execution — they sit inside trace-mask-guarded blocks:
+
+```
+$F00AB4  btst.b #$c,$c34.w      ; the TRACE MASK (bit 4 of the byte at $0C34, mod 8)
+$F00ABA  beq.b  $F00AC6         ; mask clear -> skip the whole block
+$F00ABC  move.w sr,-(a7)
+$F00ABE  bsr.w  $F01688
+$F00AC2  dc.w   $AA12           ; <- an inline word belonging to that call
+$F00AC4  addq.l #$2,a7
+```
+
+`$F00AB4` and `$F00B52` are two of the nine trace hook sites this project has catalogued, and the
+mask at `$0C34` is loaded from config `$F0A52A` = `$0000`. **So these blocks never execute**, which
+is exactly why recursive descent never resolved their inline words — the same reason the FPS trace
+hook at `$F044A2` stays dark, and a second instance of the general rule that *a permanently
+disabled feature is where a static gap hides*.
+
+**2. Inline dispatch tables addressed through `a5`.** Both remaining 5-word runs are pointed at by
+a `lea <pc>,a5` immediately before a branch to a shared routine:
+
+```
+$F00AC6  lea.l $f00ace(pc),a5   ; the table ...
+$F00ACA  bra.w $f00b74          ; ... and the consumer
+
+$F00B74  move.l (a7)+,d7
+$F00B76  sub.l  (a5),d7         ; index = (stacked address - table base)
+$F00B78  lsr.l  #$1,d7          ; ... halved
+$F00B7A  cmpi.b #$18,d7 / bgt   ; bounded at 24
+$F00B82  move.w $4(a5),d1
+```
+
+So `$F00ACE` and `$F00B6A` are **inline parameter/dispatch tables**, correctly classified as data,
+and `$F00B74` is a shared consumer that derives an index by subtracting the table's own base from a
+stacked address. That is a computed dispatch keyed on *where it was called from* — which is why
+the tables must sit adjacent to their call sites and cannot be pooled.
+
+With those two idioms plus the `$F00A1C` code block, **the kernel's 566 bytes of non-zero data are
+fully accounted for**: 488 bytes of dispatch/vector tables, 34 bytes of unreachable code, and 44
+bytes of inline tables and trace-block words.

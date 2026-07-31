@@ -7084,6 +7084,17 @@ check('...and it saves FIFTEEN registers, not sixteen: mask $FFFE excludes a7',
 check('...so $3C(a7) is the stacked SR, 15 registers x 4 bytes past the save',
       _w(0xF00A2E) == 0x46EF and _w(0xF00A30) == 0x003C and 15 * 4 == 0x3C)
 
+check('the two lone $Axxx words sit inside trace-mask-guarded blocks',
+      _w(0xF00AB4) == 0x0838 and _w(0xF00AB6) == 0x000C and _w(0xF00AB8) == 0x0C34
+      and _w(0xF00AC2) == 0xAA12
+      and _w(0xF00B52) == 0x0838 and _w(0xF00B60) == 0xAA11)
+check('...and the inline tables are addressed by lea <pc>,a5 then a branch to $F00B74',
+      _w(0xF00AC6) == 0x4BFA and _w(0xF00ACA) == 0x6000
+      and _w(0xF00B64) == 0x4BFA and _w(0xF00B68) == 0x600A)
+check('$F00B74 derives an index by subtracting the table base from a stacked address',
+      _w(0xF00B74) == 0x2E1F and _w(0xF00B76) == 0x9E95
+      and _w(0xF00B78) == 0xE28F and _w(0xF00B7A) == 0x0C07 and _w(0xF00B7C) == 0x0018)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
