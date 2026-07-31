@@ -8193,6 +8193,18 @@ check('...splits same-address vs consecutive on the swapped mode word, then issu
       and _w(0xF0839E) == 0x588A
       and _w(0xF083A0) == 0x30BC and _w(0xF083A2) == 0x8004)
 
+check('POLL and BLK_XFR move in opposite directions',
+      _w(0xF082AA) == 0x3C12 and _w(0xF082AC) == 0x3286      # POLL: (a2)->(a1)
+      and _w(0xF08384) == 0x3C11 and _w(0xF08386) == 0x3486) # BLK_XFR: (a1)->(a2)
+check('...and only POLL writes XLTR_COUNTER = $4, inside the bulk-port branch',
+      _w(0xF08284) == 0x397C and _w(0xF08286) == 0x0004 and _w(0xF08288) == 0x020C
+      and not any(_w(_a) == 0x020C for _a in range(0xF08366, 0xF083A4, 2)))
+check('...and POLL polls TWO ready mechanisms on the bulk path',
+      _w(0xF0827A) == 0x382C and _w(0xF0827C) == 0x0004     # $FF0004 bit 0
+      and _w(0xF0827E) == 0x0804 and _w(0xF08280) == 0x0000
+      and _w(0xF08294) == 0x397C and _w(0xF08296) == 0x0400  # $FF0218 <- $400
+      and _w(0xF0829E) == 0x0804 and _w(0xF082A0) == 0x000F) # ...bit 15
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

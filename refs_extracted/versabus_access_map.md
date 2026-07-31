@@ -35442,3 +35442,38 @@ The reading does confirm four recorded facts about `BLK_XFR` in one routine: the
 selector**, the **`$FF0008` bulk-port special case with its `$FF0004` bit-0 ready poll**, the
 **one-address-versus-consecutive split**, and that it ends in **`$8004`** rather than a distinct
 command.
+
+## All four dispatch handlers decoded; `POLL` is `BLK_XFR`'s exact mirror (2026-07-31)
+
+```
+POLL  $F0826A                                BLK_XFR  $F08366
+  swap d0                                      swap d0
+  a5 = $FF0008                                 a5 = $FF0008
+  if (a2 == bulk port):                        if (a2 == bulk port):
+      poll $FF0004 bit 0                           poll $FF0004 bit 0
+      $FF020C <- $4          <-- POLL ONLY        (no counter write)
+  ...
+  if (a2 == bulk port):
+      $FF0218 <- $400
+      poll $FF0218 bit 15
+      $FF0218 <- $0
+  move.w (a2),d6 / move.w d6,(a1)              move.w (a1),d6 / move.w d6,(a2)
+       ^ a2 -> a1                                   ^ a1 -> a2   (OPPOSITE)
+```
+
+Every recorded claim about this pair is confirmed with its instructions:
+
+- **The direction is mirrored** — `POLL` moves `(a2)→(a1)`, `BLK_XFR` moves `(a1)→(a2)`. The recorded
+  reading that "`POLL` is misnamed: it is `BLK_XFR`'s mirror" is exactly right.
+- **Only `POLL` writes `XLTR_COUNTER = $4`**, and it does so *inside the bulk-port branch* — so the
+  recorded inference that "the counter is declared when the bulk port is the **source**" is precisely
+  what the code says, since `a2` is `POLL`'s source and `BLK_XFR`'s destination.
+- Both share the **`swap d0` mode selector** and the **`$FF0008` special case**.
+
+**One detail not previously recorded: the bulk-port path polls TWICE, on two different mechanisms.**
+`$FF0004` bit 0 (ready) gates entry, and then `$FF0218` bit 15 (done) is armed with `$400`, waited
+on, and cleared. A chassis model that implements only one of the two will hang in whichever loop it
+omitted, and the two are 32 bytes apart in the same routine.
+
+With `D1_SEND` and `D2_FIN` already documented, **all four handlers of the dispatch subsystem are now
+read end to end**, and no claim recorded about them has needed correction.
