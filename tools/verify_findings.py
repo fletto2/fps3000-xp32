@@ -6623,6 +6623,25 @@ _c20c = _re21a.findall(r'move\.w\s+#\$([0-9a-f]+),\s*\$20c\(a\d\)', _asm21a)
 check('$FF020C is written $4 at exactly SEVEN sites (third independent derivation)',
       _c20c.count('4') == 7 and _c20c.count('1') == 1 and _c20c.count('ff') == 1)
 
+check('the $F0A4BE init table is THREE blocks of SEVEN words (48 bytes), not four of eight',
+      _w(0xF0A472) == 0x7803 and _w(0xF0A478) == 0x7607
+      and _w(0xF0A474) == 0x3459 and _w(0xF0A47A) == 0x3519)
+check('...with offsets $1000/$0FF0/$0FE0 from the 4KB-rounded RAM top $1F000',
+      _w(0xF0A4BE) == 0x1000 and _w(0xF0A4D0) == 0x0FF0 and _w(0xF0A4E2) == 0x0FE0
+      and _l(0xF0A462) == 0x0280FFFF and _w(0xF0A466) == 0xF000)
+check('...so the three runs are $1FFF2-$1FFFE, $1FFE2-$1FFEE, $1FFD2-$1FFDE',
+      all(_w(0xF0A4C0 + 2 * i) == 0x008E for i in range(7)))
+check('...block 1 carries the panic vectors $8D/$8E/$93 and specific $1C/$8C',
+      [_w(0xF0A4D2 + 2 * i) for i in range(7)] == [0x8E, 0x8C, 0x1C, 0x93, 0x8E, 0x8E, 0x8D])
+check('...block 2 carries a RUN of four consecutive vectors $71-$74',
+      [_w(0xF0A4E4 + 2 * i) for i in range(7)] == [0x1F, 0x8E, 0x74, 0x73, 0x72, 0x71, 0x8E])
+check('...and the control word $0CD0 then goes to $1F000+$FF0 = $1FFF0',
+      _w(0xF0A486) == 0xD5FC and _l(0xF0A488) == 0x00000FF0
+      and _w(0xF0A48C) == 0x34BC and _w(0xF0A48E) == 0x0CD0)
+check('nothing in the ROM READS $1FFD2-$1FFFE: the four negative-a5 sites are all writes',
+      all((insn(x) or '').startswith('move.w d')
+          for x in (0xF09074, 0xF0925C, 0xF09354, 0xF093F0)))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
