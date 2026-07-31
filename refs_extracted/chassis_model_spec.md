@@ -631,3 +631,49 @@ No self-test touches **XP-32 EXEC, XP-32 ARITH or UNIV FMT**, and there is **no 
 interface** — System Common Memory is reached purely as paged memory through the window. The
 mux's **read**-side behaviour is never exercised. These are gaps only hardware can close, and
 they are the same boundary the machine's own diagnostics draw.
+
+---
+
+## The `$FF0218` bit-4 fix, stated precisely (2026-07-31)
+
+The model currently does, on every read of `$FF0218`:
+
+```c
+if (xltr.bim3_present) xltr.status_irq |= (1u << 4);   /* versabus.c:804 */
+```
+
+That is a **sticky strap**: bit 4 is re-asserted after every write, so the sequence
+
+```
+$F0954C  $FF0218 <- $400
+$F095A2  read $FF0218, mask $610, require == $400
+```
+
+reads back `$410`, fails, and the phase retries forever. This is the whole of why `FPS3K_BIMS=3`
+"derails the boot" — it is not evidence about how many BIMs exist.
+
+**The firmware's requirement is exact and easy to satisfy: bit 4 must read 1 before the arm write
+and 0 after it.** So model it as an ordinary writable bit of `$FF0218` that **powers up set**:
+
+```c
+/* at reset */          xltr.status_irq |= (1u << 4);
+/* on CPU write */      xltr.status_irq = value;        /* the $400 write clears bit 4 */
+/* on read */           return xltr.status_irq;         /* no re-assertion */
+```
+
+**Prediction, and it is a sharp one.** With that change the machine should
+
+1. **boot to the RTOS idle loop** exactly as the default two-BIM configuration does, because the
+   `$610` readback now yields `$400`; **and**
+2. **walk all 24 BIM registers** in phase `$1600`, because `$F09522` samples bit 4 *before* the
+   arm write and picks the `$D8` limit — which means **`$FF025E` gets written for the first time**,
+   closing the last "never touched" register on the card.
+
+Both outcomes are checkable in one run (final PC, plus an access log filtered to `$FF025E`). If
+the boot completes but `$FF025E` stays untouched, the sampling order is wrong; if `$FF025E` is
+written but the boot stalls, something else in the `$610` mask is mismodelled.
+
+This supersedes the "RETRACTED — setting that bit DERAILS THE BOOT" note: the retraction was
+correct about the observation and wrong about the cause. Three BIMs are not optional — BIM2 is
+programmed unconditionally by init and by three tasks — so a correct model has **three BIMs and
+bit 4 clear after arming**, which were never in tension.

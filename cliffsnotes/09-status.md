@@ -277,3 +277,17 @@ constant).
 `tools/test_guards.py` now asserts each guard is **both** quiet on the real file **and**
 fires on a synthetic instance of the defect it exists to catch. A guard nobody tests is
 worth nothing; a fatal guard that over-reports is worse than none, because it blocks work.
+
+
+### 2026-07-31 — the three-BIM anomaly is resolved
+
+`$FF0218` bit 4 was read as "a third BIM is fitted", and forcing it derailed the boot. Both halves
+were wrong. **BIM2 (`$FF0250`-`$FF025F`) is programmed unconditionally** — init writes vectors
+`$47`/`$48`/`$4A` at `$F0A1B2`/`$F0A1B8`/`$F0A1C4`, and XP3I, XP4I and TCBIO1I write their control
+registers at `$F06A12`/`$F06018`/`$F05DB8` — with no reference to bit 4 anywhere near them. Three
+of the six live interrupt channels are on BIM2, so the machine has three BIMs whatever bit 4 says.
+
+Bit 4 only sizes phase `$1600`'s register **walk** (16 or 24). The derailment is a separate,
+now-explained fact: `$F095A2` requires `($FF0218 & $610) == $400` *after* `$FF0218 <- $400`, so
+**bit 4 must read zero once armed**, and the model re-asserts it on every read. Fix and prediction
+in `refs_extracted/chassis_model_spec.md`.
