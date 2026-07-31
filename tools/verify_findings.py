@@ -7992,6 +7992,18 @@ check('...and the four genuine exceptions are $1A, $1B, $1E, $1F',
        if _w(_l(0xF001D6 + 4*_i) - 2) != 0x40E7
        and _l(0xF001D6 + 4*_i) != 0xF00182] == [0x1A, 0x1B, 0x1E, 0x1F])
 
+def _t1h(_i):
+    """TRAP #1 handler address for slot _i (entry + signed first word)."""
+    _e = 0xF003D8 + 4 * _i
+    _o = _w(_e)
+    return _e + (_o - 0x10000 if _o >= 0x8000 else _o)
+check('NO TRAP #1 handler has the sr-push two bytes before (0 of 77)',
+      sum(1 for _i in range(77) if _w(_t1h(_i) - 2) == 0x40E7) == 0)
+check('...while 29 TRAP #0 handlers do — a complete split between the two tables',
+      sum(1 for _i in range(35) if _w(_l(0xF001D6 + 4*_i) - 2) == 0x40E7) == 29)
+check('TRAP #1 slot $00 points at the error stub $F003D0',
+      _t1h(0) == 0xF003D0)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

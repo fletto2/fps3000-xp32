@@ -34730,3 +34730,28 @@ The fix is one line in any tool that uses the rule: **subtract 2 only when the w
 this session has repeatedly found that conventions in this firmware hold for the majority and have
 named exceptions — the `$A00` task grid (XP4I at `-$1E`), the `!`-prefixed markers (`'EXEC'` is not
 one), the panel-code families (`$25C`-`$260` are rejections, not configs), and now this.
+
+## The dual-entry convention is TRAP #0 only — 29/33 there, 0/77 in TRAP #1 (2026-07-31)
+
+Running the same audit against the TRAP #1 table (`$F003D8`, 4-byte slots, handler = entry + signed
+first word):
+
+| table | handlers with `move.w sr,-(a7)` two bytes before |
+|---|---|
+| TRAP #0 (`$F001D6`, 35 slots) | **29** |
+| TRAP #1 (`$F003D8`, 77 slots) | **0** |
+
+A complete split, and it explains the convention rather than just counting it. This project records
+the second entry as existing "for internal `bsr` callers" — and **TRAP #0 is the interface the kernel
+calls itself through**. Its handlers therefore need two ways in: a `bsr` from kernel code, which must
+push SR itself, and the trap, which enters past that push because the trap already stacked SR.
+**TRAP #1 handlers have no internal callers at all**, so they need no second entry, and none has one.
+
+That is independent structural support for the documented reading of the two interfaces — TRAP #0 as
+the supervisor-only executive interface (12 sites, all in kernel/init code, never in a task) and
+TRAP #1 as the directive interface for tasks. The evidence there was *where the call sites are*;
+this is *how the handlers are shaped*, and the two agree.
+
+Incidental: most TRAP #1 handlers show `$4E73` at `[-2]`, i.e. they are packed consecutively with
+each preceded by the previous handler's `rte`. Slot `$00` points at `$F003D0`, the error stub this
+project measures as executing zero times — consistent, since a valid directive never reaches it.
