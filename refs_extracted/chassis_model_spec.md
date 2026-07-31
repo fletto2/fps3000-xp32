@@ -165,3 +165,71 @@ Two counterparties are missing from the image and cannot be inferred from it:
 And the meaning of the three AC operation codes lives in the XP-32 EXEC card's 80-bit PROM, which
 the SBC cannot read and the self-test never touches. **The SBC-side boundary is closed; past it
 needs hardware.**
+
+
+---
+
+# Addendum: findings since the first draft (2026-07-31)
+
+## 11. Two unmapped-space requirements, not one
+
+| test | range | probe | stride | on failure |
+|---|---|---|---|---|
+| `$F08EB6` (runs FIRST) | **`$20000`-`$EFFFFF`** | **longword** read | 2 KB | retry forever |
+| `$F08F1C` phase `$600` | `$F80001`-`$F82001` | **byte** read, **odd addresses** | 2, downward | retry forever |
+
+A model returning zero for unmapped reads hangs in the **first**, before ever reaching the
+documented watchdog phase. Both exit on the first fault, so faulting anywhere in range suffices.
+Both save and restore `$8.w` around themselves.
+
+## 12. Three fault handlers with three policies
+
+| handler | policy |
+|---|---|
+| `$F08902` | **count** at `$1F800` (or `$400` when the stack is low) |
+| `$F08F06` | **flag** `d1` only |
+| `$F098E0` | **flag and advance the stacked PC by 4** |
+
+The probes are **two-byte** instructions followed by **four `nop`s**, so `+4` lands in padding.
+**Byte-exact bus-error PC semantics are NOT required** — only that the stacked PC be at or just
+after the faulting instruction.
+
+## 13. The chassis window is paged, not indexed
+
+`$FF0210` selects the page for the whole `$400000`-`$7FFFFF` range. Every access is at
+displacement `+$0000` except the **mailbox** at page `$F`, offsets `$1C` (inbound) and `$20`
+(outbound). The mailbox and the SCM share the window at different pages — the only place two
+structures do.
+
+## 14. The AP I/F is exactly five windows of four registers
+
+Windows 0, 2, 3, 4, 5 each touch `+$00`, `+$04`, `+$08`, `+$0E` and nothing else. **Windows 1, 6
+and 7 have zero references by any addressing form.** Window 1 is additionally skipped by the
+firmware's own `((ch+1)<<5)` arithmetic, so it is reserved rather than merely unused.
+
+## 15. `$FF0000` is a remaining-word count
+
+Both S-record error paths spin `while ($FF0000 > 0) read (a0)` to drain a rejected record. A
+constant non-zero value hangs the firmware — **but only on a malformed record**, the case least
+likely to be exercised.
+
+## 16. CPU-model requirements beyond the instruction set
+
+- **`moveq` must sign-extend** — phase `$101` fails otherwise, at the second stage of boot.
+- **`move usp,aN` / `move aN,usp`** must round-trip 32 bits — needed in three places.
+- **The trace exception must fire once and let the handler clear the stacked T bit** — `$F005BA`
+  dispatches a task with T set and `$F00AF2` clears it. This is a **stock-ROM** facility, not only
+  the monitor's.
+- **`tas` must be atomic against bus masters**, not only against interrupts — five kernel locks
+  depend on it and the chassis is a master.
+- **The firmware is self-modifying**: it builds `jsr` instructions at runtime in three places. No
+  68000 icache exists, but any model caching decoded instructions must invalidate on RAM writes.
+- **The CPU never halts** — no `stop` anywhere. A hung machine spins, with visible bus activity.
+- **`reset` is never issued** — peripherals are reset only through their own registers.
+
+## 17. Task creation is data-driven and self-terminating
+
+Six tasks exist because six consecutive `!TCB` records precede the blank tail; the seventh slot at
+`$F0A840` is zero. **"Six" is not a constant anywhere.** Each record differs from the others in
+only three fields — name, entry point, PROG pages — and its `+$18` word becomes the TCB's initial
+state, with **bit 4 meaning "enqueue on the ready list"**.
