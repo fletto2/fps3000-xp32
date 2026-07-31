@@ -5417,6 +5417,22 @@ check('$0848/$084C sit immediately past the 16-register snapshot',
       0x808 + 16 * 4 == 0x848 and 0x848 + 4 == 0x84C)
 check('the display fallback $800 overlaps the snapshot area',
       0x800 <= 0x804 < 0x848)
+
+# ---- $1FFF0 is computed from the RAM top and cached in $0E48 (2026-07-31) ----
+check('the VMOD address is derived from the config RAM top, not hard-coded',
+      insn(0xF0A456) == 'move.l $6(a1), d0' and insn(0xF0A462) == 'andi.l #$fffff000, d0'
+      and insn(0xF0A486) == 'adda.l #$ff0, a2')
+check('...and the arithmetic yields $1FFF0 from a $20000 RAM top',
+      ((((0x20000 + 1) & ~1) - 1) & 0xFFFFF000) + 0xFF0 == 0x1FFF0)
+check('...then caches it in $0E48', insn(0xF0A492) == 'move.l a2, $e48.l')
+check('the boot toggles VMOD bit 5 and spins on $F70019 bit 1',
+      insn(0xF0A498) == 'move.w #$cd0, (a2)' and insn(0xF0A49C) == 'move.w #$cf0, (a2)'
+      and insn(0xF0A4A4) == 'move.w $18(a0), d0' and insn(0xF0A4AC) == 'beq.b $f0a498')
+check('...with $CD0 and $CF0 differing by exactly bit 5', (0xCD0 ^ 0xCF0) == 0x20)
+check('two more VMOD bit-5 sites are reached through the cached pointer',
+      insn(0xF008C2) == 'ori.w #$20, (a0)' and insn(0xF009E2) == 'andi.w #$ffdf, (a0)')
+check('...one of them on the interrupt-exit path',
+      insn(0xF008B6) == 'movem.l d0/a0, -(a7)' and insn(0xF008BA) == 'move.l $e48.w, d0')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

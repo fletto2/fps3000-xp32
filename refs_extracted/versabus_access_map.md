@@ -24454,3 +24454,69 @@ shipped, and every field in it has been traced to the instruction that writes it
 So on a board without the optional display, the spurious-interrupt reporter and the boot-progress
 driver write to `$0804`, four bytes past the saved PC. A dump must be read knowing which
 mechanism ran last.
+
+## `$1FFF0` is COMPUTED from the RAM top, and `$0E48` caches it (2026-07-31)
+
+The VERSAmodule control register's address is not a constant in this firmware. `$F0A452`
+derives it:
+
+```
+$F0A452  lea     $F0A54A(pc),a1
+$F0A456  move.l  $6(a1),d0        <- config $F0A550 = the RAM TOP, $00020000
+$F0A45A  addq.l  #$1,d0
+$F0A45C  bclr.b  #$0,d0
+$F0A460  subq.l  #$1,d0
+$F0A462  andi.l  #$FFFFF000,d0    round DOWN to a 4 KB boundary -> $0001F000
+$F0A484  movea.l d0,a2
+$F0A486  adda.l  #$FF0,a2         -> $0001FFF0
+$F0A492  move.l  a2,$E48.l        CACHE the address
+```
+
+`$20000 -> $1F000 -> +$FF0 -> $1FFF0`. **So a machine configured with a different RAM top puts
+its control register somewhere else and the firmware finds it**, which is consistent with the
+relocatable-kernel machinery documented elsewhere in this file: nothing about this build assumes
+a fixed memory size except the config block.
+
+### The boot's first chassis handshake
+
+Immediately after caching the address:
+
+```
+$F0A498  move.w  #$CD0,(a2)       write $1FFF0
+$F0A49C  move.w  #$CF0,(a2)       ...and again with BIT 5 set
+$F0A4A0  movea.l $F0A52C(pc),a0   = $00F70000, the device base
+$F0A4A4  move.w  $18(a0),d0       read $F70018 as a WORD
+$F0A4A8  btst.b  #$1,d0
+$F0A4AC  beq.b   $F0A498          loop until it responds
+```
+
+`$CD0` and `$CF0` differ by `$20` — **bit 5**. So the boot **toggles VMOD bit 5 and spins until
+`$F70019` bit 1 goes set**, which is exactly the relationship the emulator's chassis equation
+models: `bit 1 of $F70019 = NOT(bit 4 of $1FFF1) OR (bit 5 AND NOT bit 0 of $1FFF0)`. Reading
+`$18(a0)` as a word puts `$F70019` in the low byte, so `btst #$1` addresses `$F70019` bit 1.
+
+**This is the earliest chassis interaction in the boot** — before the self-test's own VMOD work —
+and a model that never satisfies it hangs here, at `$F0A498`, with `$CD0`/`$CF0` alternating on
+the control register.
+
+### It corrects the VMOD access census
+
+An earlier sweep here counted VMOD accesses by tracking the **13 `lea $1FFF0,aN` sites**. That
+misses every access made through the cached pointer:
+
+| site | access |
+|---|---|
+| `$F008C2` | `ori.w #$20,(a0)` — **set bit 5** |
+| `$F009E2` | `andi.w #$FFDF,(a0)` — **clear bit 5** |
+| `$F0A48C`, `$F0A498`, `$F0A49C` | the init writes above |
+
+So **VMOD bit 5 has two more manipulators than the census found**, reached through `$0E48` in the
+interrupt-exit path (`$F008B6`) and the spurious-interrupt path (`$F009DC`). The bit is not just
+a self-test signal — **it is toggled on every interrupt exit**, which makes it the busiest VMOD
+bit in normal operation and gives the chassis a per-interrupt handshake this project had not
+recorded.
+
+**The general lesson is the one this file keeps relearning**, now with a fourth instance: a census
+keyed on one addressing form — absolute, immediate, `lea`-derived — is a census of that form.
+Here the missing form was *a pointer cached in a global*, which no static base-register sweep can
+follow without tracking the store.
