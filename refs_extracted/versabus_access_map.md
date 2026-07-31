@@ -27445,3 +27445,41 @@ no `.l` access here.
 
 **What is unaffected**: `$FF0216`'s bit map, its role as the 4-bit control register, and its
 bracketing around `CPLOAD` all rest on the 23 word-sized sites and are untouched.
+
+## `$FF0212` too: no 32-bit access to `$FF0210` exists either (2026-07-31)
+
+Applying the same test to the sibling claim: `$FF0210` has **18 access sites, every one
+word-sized**. No `.l` operation touches it. So the explanation that `$FF0212`'s bus-log
+entries are "the second half of 32-bit accesses to `$FF0210`, split by the logger" has the
+same problem as the `$FF0214` version — the firmware issues no longword access there.
+
+Both `$FF0212` and `$FF0214` should be treated as **unexplained bus-log artefacts** rather
+than as understood consequences of 32-bit accesses. What is solid either way: neither is a
+register the firmware programs, and `$FF0212` has zero access sites of any size.
+
+## Where operand-form matching works, and where it does not
+
+The previous section recommended matching the operand form first and using provenance only
+to disambiguate. That is right for the XLTR block and **wrong for the AP I/F windows**, for
+a reason worth stating:
+
+| displacement | distinctive? | method |
+|---|---|---|
+| `$200`-`$25F` | **yes** — no other structure in this firmware uses displacements that large | operand form alone is sound |
+| `$04`, `$08`, `$0A`, `$0E` | **no** — every TCB, list node and parameter block uses them | operand form is useless |
+
+Counting `$4(aN)` across the image at validated boundaries returns **174 sites**; the AP I/F
+window-0 register accounts for a handful of them. The rest are TCB fields, list links and
+stack frames. So for the base window there is no alternative to provenance.
+
+**This retroactively justifies the AP I/F window map.** It is the one finding that could not
+be checked by the sound method, and it is also the finding that came out **identical under
+both provenance variants** — the one that over-reports by crossing branches and the one that
+under-reports by stopping at them. Two methods with opposite biases agreeing on the same 20
+offsets is the strongest evidence available for a result that cannot be obtained any other
+way.
+
+The general rule, then, is not "prefer operand matching" but: **check whether the
+displacement is distinctive first**. If it is, provenance is unnecessary and unsound
+sweeps cannot mislead you. If it is not, provenance is unavoidable and the result is only as
+good as the agreement between variants.

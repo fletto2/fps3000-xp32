@@ -5924,6 +5924,14 @@ check('...and $FF0216 has 23, all word-sized',
 check('the $240/$25E hits are misaligned decodes, not instruction boundaries',
       insn(0xF03652) == 'movep.l $240(a0), d0' and insn(0xF0426E) == 'ori.b #$0, -$25e(a0)')
 
+check('$FF0210 has no 32-bit access either -- 18 sites, all word',
+      not [x for x in range(0xF00000, 0xF10000, 2)
+           if (insn(x) or '').split()[0].endswith('.l')
+           and _mre.search(r'(?<!-)\$210\(a\d\)', (insn(x) or '').lower())])
+check('small displacements are NOT distinctive: $4(aN) occurs all over the firmware',
+      len([x for x in range(0xF00000, 0xF10000, 2)
+           if _mre.search(r'(?<!-)\$4\(a\d\)', (insn(x) or '').lower())]) > 100)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
