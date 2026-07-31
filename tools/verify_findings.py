@@ -6142,6 +6142,18 @@ check('...while the port still round-trips $AAAA with the status cleared',
 check('the probe handler steps the PC over exactly the 4-byte probe instruction',
       insn(0xF098E6) == 'addq.w #$4, $4(a7)' and insn(0xF098D4) == 'nop')
 
+check('the window probes are a read and a write, each with a nop landing zone',
+      insn(0xF096AC) == 'move.w (a1), d0' and insn(0xF096B8) == 'clr.w (a1)'
+      and insn(0xF096AE) == 'nop' and insn(0xF096BA) == 'nop')
+check('bit 5 must FAULT on both the read and the write probe',
+      insn(0xF09626) == 'move.w #$20, $216(a6)' and insn(0xF09630) == 'bne.b $f09638'
+      and insn(0xF09668) == 'move.w #$20, $216(a6)' and insn(0xF09672) == 'bne.b $f0967a')
+check('bit 6 must NOT fault, in all four set/clear x read/write combinations',
+      insn(0xF096E8) == 'move.w #$40, $216(a6)' and insn(0xF096F4) == 'beq.b $f096fc'
+      and insn(0xF0970C) == 'clr.w $216(a6)' and insn(0xF09716) == 'beq.b $f0971e'
+      and insn(0xF0972E) == 'move.w #$40, $216(a6)' and insn(0xF0973A) == 'beq.b $f09742'
+      and insn(0xF09752) == 'clr.w $216(a6)' and insn(0xF0975C) == 'beq.b $f09764')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

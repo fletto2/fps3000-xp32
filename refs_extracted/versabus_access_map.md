@@ -28210,3 +28210,43 @@ never faults there fails sequence B, and one that always faults fails the `$AAAA
 This also attributes the `addq.w #$4,$4(a7)` noted earlier as "a fault handler steps the
 stacked PC by exactly 4": it is this handler, and the 4 bytes are precisely the `tst.w $e(a6)`
 probe instruction, landing execution on the four `nop`s that follow.
+
+## `$FF0216` bits 5 and 6, tested four ways each (2026-07-31)
+
+Two probes serve both tests — `$F096AC` is `move.w (a1),d0` (a **read** of `$400000`) and
+`$F096B8` is `clr.w (a1)` (a **write**), each followed by four `nop`s and returning `d1`
+non-zero if the bus-error handler ran.
+
+| bit | value | probe | required |
+|---|---|---|---|
+| **5** | set | read | **fault** |
+| **5** | set | write | **fault** |
+| **6** | set | read | no fault |
+| **6** | clear | read | no fault |
+| **6** | set | write | no fault |
+| **6** | clear | write | no fault |
+
+**Bit 5 blocks the `$400000` window in both directions** — this project recorded "set ⇒
+BERR" from the read case; the write case is tested too, at `$F09668`.
+
+**Bit 6 is explicitly verified NOT to gate the window**, in all four combinations. That is a
+deliberate check that the two bits are independent — the suite is confirming the decode logic
+does not conflate them — rather than an accidental silence.
+
+So `$FF0216` now reads:
+
+| bit | role |
+|---:|---|
+| 4 | the 16→32 width mux, bracketed around `CPLOAD` |
+| 5 | gates the `$400000` chassis window — set ⇒ bus error on **read and write** |
+| 6 | **tested to have no effect on the window**; its actual function is still unidentified |
+| 7 | gates the AP I/F command port `$FF000E` — set (with `$FF0218` armed) ⇒ bus error |
+
+Bit 6 remains functionally unknown, but "unidentified" is now a stronger statement than it
+was: the firmware *checks* that it does nothing to the chassis window, so whatever it
+controls lies elsewhere. The remaining candidates are things the self-test never exercises —
+the UNIV FMT path, or a direction/enable the operational code sets but never probes.
+
+**Emulator requirements**: bit 5 set must fault both reads and writes at `$400000`; bit 6
+must be inert with respect to that window; bit 7 set with `$FF0218` armed must fault
+`$FF000E`. All three are testable in a model without any chassis behaviour beyond the fault.
