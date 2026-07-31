@@ -33186,7 +33186,7 @@ against a dump afterwards. This session did exactly that for `!IDV` (six for six
 +$00  "!TCB"        the tag
 +$04  "RDHC"        the task NAME              <- differs per record
 +$08  0             session
-+$14  $00009600     PRIORITY $96 in the high word
++$14  $00009600     PRIORITY $96 -- the BYTE at +$16
 +$18  $0010A000     options / attributes
 +$1C  $00F046F0     the ENTRY POINT            <- differs per record
 +$20  $F046F05C     code segment first/last PAGE, packed  <- differs per record
@@ -33201,7 +33201,7 @@ same priority, same options, same segment name, same attributes.
 
 Two confirmations fall out, each from a different direction:
 
-- **`+$14` carries priority `$96`**, and the RAM dump showed `TCB+$26` reading **`$96` in every live
+- **The byte at `+$16` carries priority `$96`**, and the RAM dump showed `TCB+$26` reading **`$96` in every live
   TCB**. The ROM record is where that value comes from, and its uniformity across all six explains
   why the measured priorities were identical.
 - **`+$40` is `"PROG"`**, the code segment's name. This project's `!TST` analysis found "the two live

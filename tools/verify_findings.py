@@ -7593,8 +7593,10 @@ check('the TDTI table holds name, entry and code-segment pages for six tasks',
 check('...and each region head sits at the base of the segment that record describes',
       _w(0xF0A600 + 96 * 5 + 0x20) == 0xF07D and _l(0xF07D00) == 0x58503149)
 
-check('the TDTI record carries priority $96 and the PROG segment name',
-      all((_l(0xF0A600 + 96 * _i + 0x14) >> 16) == 0x0096 for _i in range(6))
+# The priority byte is at +$16 (the longword at +$14 is $00009600), NOT the
+# high word -- my first shift gave 0.  Read the byte directly.
+check('the TDTI record carries priority $96 at +$16 and the PROG segment name',
+      all(_rom_bytes[0xF0A600 - 0xF00000 + 96 * _i + 0x16] == 0x96 for _i in range(6))
       and all(_l(0xF0A600 + 96 * _i + 0x40) == 0x50524F47 for _i in range(6)))
 check('...and the six records differ only in name, entry and segment pages',
       len({_rom_bytes[0xF0A600 - 0xF00000 + 96 * _i + 0x14] for _i in range(6)}) == 1
