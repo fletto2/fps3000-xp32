@@ -7851,6 +7851,22 @@ check('...and the two walk lengths are exactly 16 and 24 registers',
       (0xD0 - 0xC0) == 16 and (0xD8 - 0xC0) == 24
       and 0x230 + 2 * 16 - 2 == 0x24E and 0x230 + 2 * 24 - 2 == 0x25E)
 
+check('the width-mux stage targets the chassis window at page 0',
+      _w(0xF09782) == 0x3D7C and _w(0xF09784) == 0x0000 and _w(0xF09786) == 0x0210
+      and _w(0xF09788) == 0x207C and _l(0xF0978A) == 0x00400000
+      and _w(0xF0978E) == 0x203C and _l(0xF09790) == 0x55555555
+      and _w(0xF09794) == 0x323C and _w(0xF09796) == 0xAAAA)
+check('probe A writes a word to the WINDOW; probe B writes it to $FF0214',
+      _w(0xF09806) == 0x2080 and _w(0xF09808) == 0x3081 and _w(0xF0980A) == 0xB490
+      and _w(0xF0981A) == 0x2080
+      and _w(0xF0981C) == 0x3D41 and _w(0xF0981E) == 0x0214
+      and _w(0xF09820) == 0xB468 and _w(0xF09822) == 0x0002)
+check('...and the four expectations invert between the two routes',
+      _w(0xF097B2) == 0x243C and _l(0xF097B4) == 0xAAAA5555   # bit4 set, window
+      and _w(0xF097CA) == 0x2400                              # bit4 clear, window -> d0
+      and _w(0xF097DC) == 0x243C and _l(0xF097DE) == 0x00005555  # bit4 set, latch inert
+      and _w(0xF097F4) == 0x2401)                             # bit4 clear, latch -> d1
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

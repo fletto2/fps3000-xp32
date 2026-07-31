@@ -33992,3 +33992,44 @@ walked 24 registers and then retried forever.
 three MC68153s; three of the six live interrupt channels are on BIM2, which is programmed
 unconditionally; bit 4 sizes only *this test's walk*; and a correct model has three BIMs **and** bit 4
 reading clear once armed. Nothing here is a hardware-inventory bit.
+
+## The 16->32 width conversion fully specified — two complementary routes (2026-07-31)
+
+Phase `$1900` (`$F09776`) sets **window page 0** and `a0 = $400000`, so **the mux operates on the
+chassis window**, not on some abstract port. Baseline first: `move.l #$55555555,(a0)` must read back
+exactly. Then four sub-stages using two probes, with `d0 = $55555555` and `d1 = $AAAA` throughout:
+
+```
+$F09806:  move.l d0,(a0)        ; the 32-bit baseline
+          move.w d1,(a0)        ; a 16-BIT WRITE TO THE WINDOW
+          cmp.l  (a0),d2
+$F0981A:  move.l d0,(a0)
+          move.w d1,$214(a6)    ; a 16-BIT WRITE TO $FF0214
+          cmp.w  $2(a0),d2      ; ...checked against the LOW half
+```
+
+| # | `$FF0216` bit 4 | route | expected (`d2`) | meaning |
+|---:|---|---|---|---|
+| 1 | **set** | word → window | `$AAAA5555` | the word lands in the **HIGH** half, low half preserved |
+| 2 | clear | word → window | `$55555555` (`d2 = d0`) | the word write has **no effect** |
+| 3 | **set** | word → `$FF0214` | `$5555` (`d2 = $00005555`) | the latch has **no effect** on the low half |
+| 4 | clear | word → `$FF0214` | `$AAAA` (`d2 = d1`) | the latch **writes** the low half |
+
+**So bit 4 selects between two mutually exclusive injection routes**, and the polarity is the
+opposite of the obvious guess:
+
+- **bit 4 set** — a 16-bit write *to the window address* is routed to the high half; `$FF0214` is inert.
+- **bit 4 clear** — window word writes are absorbed; `$FF0214` supplies the low half.
+
+Together they compose a 32-bit chassis word from two 16-bit SBC writes, which is exactly what a
+16-bit VersaBus master needs to drive a 32-bit chassis. This confirms the recorded reading
+("bit 4 is the 16->32 width mux with `$FF0214` as low-half latch") and pins the polarity, which that
+phrasing leaves open — a model that enables the latch on bit 4 *set* fails sub-stages 3 and 4.
+
+It also explains the standing oddity that **`$FF0214` has exactly one access site in the whole
+image**: it is not a general register but a one-way injection port for the low half, used by the
+`CPLOAD` path that brackets `$FF0216` bit 4 and by this test.
+
+**Provenance of the `d2` values**, since three of the four are computed rather than literal:
+`$F097B2` `move.l #$aaaa5555,d2`; `$F097CA` `move.l d0,d2` (= `$55555555`); `$F097DC`
+`move.l #$5555,d2`; `$F097F4` `move.l d1,d2` (low word `$AAAA`, and only `cmp.w` is used).
