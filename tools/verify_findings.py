@@ -6421,6 +6421,18 @@ check('...writing every offset before reading any of them back',
 check('the DRAM refresh test skips $1FFF0 in BOTH its fill and its verify loop',
       _l(0xF09A96) == 0x0001FFF0 and _l(0xF09ABE) == 0x0001FFF0)
 
+check('the SCM pattern table at $F09BB6 is two pairs: 0/FF then 55/AA',
+      _l(0xF09BB6) == 0x00000000 and _l(0xF09BBA) == 0xFFFFFFFF
+      and _l(0xF09BBE) == 0x55555555 and _l(0xF09BC2) == 0xAAAAAAAA)
+check('...and the march loop terminates on d1 == $AAAAAAAA, i.e. by content',
+      _w(0xF09B90) == 0x0C81 and _l(0xF09B92) == 0xAAAAAAAA)
+check('the SCM march spans $400000-$404000 and is a fill-then-verify-and-flip',
+      _l(0xF09B32) == 0x00400000 and _l(0xF09B38) == 0x00404000
+      and _w(0xF09B58) == 0xB090 and _w(0xF09B70) == 0x2081 and _w(0xF09B72) == 0xB290)
+check('...and neg.w d2 reruns it descending, so it executes exactly twice',
+      _w(0xF09BAC) == 0x4442 and (insn(0xF09BAE) or '').startswith('blt')
+      and _l(0xF09BA2) == 0x00403FFC and _l(0xF09BA8) == 0x003FFFFC)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

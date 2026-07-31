@@ -29410,3 +29410,51 @@ self-test never touches XP-32 EXEC, ARITH or UNIV FMT either).
 For completeness, the DRAM refresh test immediately before it (`$F09A82`) skips `$1FFF0` in
 **both** its fill and its verify loop — a ninth and tenth independent site drawing the
 register block at exactly four bytes.
+
+## `$F09B20` is the SCM march test, and it runs twice in opposite directions (2026-07-31)
+
+The address-line test above is followed by a data test over the same 16 KB of System Common
+Memory, and between them they are the entirety of the SBC's dealings with MEM CTL.
+
+```
+$F09B24  clr.w $210(a6)            ; page 0 again
+$F09B2C  d2 = 4                    ; the STRIDE, and it is a variable
+$F09B30  a2 = $400000  a1 = $404000
+$F09B3C  a3 = $F09BB6              ; the pattern table
+$F09B42  d0 = (a3)+   d1 = (a3)+   ; a PAIR of patterns
+$F09B48  move.l d0,(a0)            ; fill the whole span with A ...
+$F09B58  cmp.l  (a0),d0            ; ... then per cell: verify A ...
+$F09B70  move.l d1,(a0)            ;                    ... write B ...
+$F09B72  cmp.l  (a0),d1            ;                    ... and verify B
+$F09B84  lea (a0,d2.w),a0          ; advance BY THE STRIDE
+$F09B90  cmpi.l #$aaaaaaaa,d1 / beq ; last pair?
+$F09BA0  a2 = $403FFC  a1 = $3FFFFC
+$F09BAC  neg.w d2 / blt $F09B3C    ; negate the stride and do it all again
+```
+
+**That is a march test** — fill with one pattern, then walk the span verifying the old value and
+depositing the new one cell by cell. It catches cells disturbed by writes to their neighbours,
+which a fill-then-verify pass cannot.
+
+The pattern table at `$F09BB6` is **two pairs, sixteen bytes** (the eight bytes after it are
+zero padding):
+
+| pair | fill | overwrite |
+|---:|---|---|
+| 1 | `$00000000` | `$FFFFFFFF` |
+| 2 | `$55555555` | `$AAAAAAAA` |
+
+All-zeros against all-ones, then the two alternating-bit patterns — every bit is driven both
+ways, and adjacent bits are driven oppositely. The loop terminates on `d1 == $AAAAAAAA`, so the
+table is self-terminating by content rather than by count.
+
+**`neg.w d2` is the whole descending pass.** Rather than duplicating the code, the routine
+negates its stride, swaps the endpoints to `$403FFC`/`$3FFFFC`, and branches back to the top;
+`blt` is taken the first time (4 → -4) and not the second (-4 → 4), so it runs **exactly twice,
+ascending then descending**. Address-dependent failures that only appear in one traversal order
+are caught by the second pass.
+
+**Emulator requirement, complete for SCM**: `$400000`-`$403FFF` at page 0 must be 16 KB of
+plain read/write longword storage with no aliasing, no side effects on read, and no
+write-to-read latency the CPU can observe. Both tests fault into the unbounded retry on any
+deviation, so a shortcut here presents as a hang parked on the phase code, not as an error.
