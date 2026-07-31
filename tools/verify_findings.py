@@ -4895,3 +4895,21 @@ check('the five validation codes have 5/2/1/2/2 emitters',
       [_v25[c] for c in range(0x25C, 0x261)] == [5, 2, 1, 2, 2],
       {hex(k): v for k, v in sorted(_v25.items())})
 check('$261 is emitted nowhere', not any('#$261, d0' in o for _, (_, o, _) in _mins.items()))
+
+# ---- $259-$25B are validation failures too (2026-07-31) ----
+check('$259 rejects an op-$0 argument outside 1..$10 and not $28',
+      insn(0xF04A8E) == 'cmpi.w #$10, d0' and insn(0xF04A94) == 'cmpi.w #$28, d0'
+      and insn(0xF04A9A) == 'move.w #$259, d0')
+check('...and an RDHC command number outside 1..4',
+      insn(0xF05324) == 'cmpi.l #$0, d1' and insn(0xF0532C) == 'cmpi.l #$4, d1'
+      and insn(0xF05334) == 'move.w #$259, d0')
+check('$25A guards the $10000-$1FFFF staging range',
+      insn(0xF04F70) == 'cmpi.l #$10000, $e7e.l' and insn(0xF04F7C) == 'cmpi.l #$1ffff, $e7e.l'
+      and insn(0xF04F88) == 'move.w #$25a, d0')
+check('...and the S-record address bound', insn(0xF055D4) == 'cmpa.l #$1ffff, a1'
+      and insn(0xF055E0) == 'move.w #$25a, d0')
+check('$25B guards RDHC cmd 2 index+count <= 16 longwords',
+      insn(0xF054B4) == 'cmpi.l #$10, d3' and insn(0xF054BC) == 'move.l #$25b, d0')
+check('$258 is the only ACTION in $258-$260: the CH1 reset arm of op $8',
+      insn(0xF04F56) == 'btst.b #$e, d0' and insn(0xF04F5C) == 'cmpi.w #$0, $204(a0)'
+      and insn(0xF04F64) == 'move.w #$258, d0')

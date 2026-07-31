@@ -21449,3 +21449,42 @@ the `$27C` gap sits between the `USER`-lifecycle codes and the TCBIO1I family.
 issued is still readable at `$0E6E` and at `$FF000E` on a stalled board — so a machine that hangs
 in a validation reject names which class of input the chassis got wrong, and `$25C` versus `$25D`
 distinguishes "bad channel" from "bad index" without any further instrumentation.
+
+### The family is wider: `$259`-`$260` are ALL validation failures (2026-07-31)
+
+Applying the same emitter-guard reading to `$258`-`$25B`, whose labels (`PCMD_CH1_RESET`,
+`_INIT`, `_ACK`, `_FLUSH`) also date from the first pass:
+
+| code | sites | the guard that fails | old label |
+|---|---:|---|---|
+| `$258` | 1 | **not a failure** — `$F04F56`: bit 14 set **and** `CHANNEL_SELECT == 0`, the CH1-reset arm of chassis op `$8` | `PCMD_CH1_RESET` — **survives** |
+| **`$259`** | 2 | **invalid operation argument** — `$F04A8E`: op `$0`'s value not in `1..$10` and not `$28`; `$F05324`: RDHC command number not in `1..4` | ~~`PCMD_CH1_INIT`~~ |
+| **`$25A`** | 3 | **staging address out of range** — `$F04F70`: `$E7E` outside `$10000`-`$1FFFF`; `$F055D4`: S-record address past `$1FFFF`; plus a bulk-port wait failure at `$F05218` | ~~`PCMD_CH1_ACK`~~ |
+| **`$25B`** | 1 | **register-file window overflow** — `$F054B4`: RDHC cmd 2's `index + count > $10` longwords | ~~`PCMD_CH1_FLUSH`~~ |
+
+So the corrected picture is that **`$258` is the only action in the run and `$259`-`$260` are
+eight validation-failure codes**, one per class of bad input:
+
+```
+$258        CH1 reset (chassis op $8)          -- an action
+$259        invalid operation / command number
+$25A        staging address out of range
+$25B        register-file window overflow
+$25C        channel number out of range
+$25D        array index out of range
+$25E        register-access code out of range
+$25F        bad terminator record / port wait
+$260        bad data record
+$261        (unused)
+```
+
+**Three of these guards are bounds this project derived independently and documented elsewhere**
+— the `$10000`-`$1FFFF` staging range (three enforcers), the `index+count <= 16` register-file
+bound, and the `1 <= ch <= $105E` channel check. Finding that each has a *dedicated panel code*
+confirms them from the reporting side and shows the firmware treats them as distinct, externally
+visible error classes rather than as internal assertions.
+
+**The `CH1_*` labels were a systematic error, not four independent ones.** They came from reading
+`$258`-`$25B` as a four-code per-channel group because `$258` genuinely concerns channel 1. The
+run is not per-channel at all; it is per-error-class, and only its first member mentions a
+channel.
