@@ -33766,3 +33766,47 @@ Unlike most of this suite, **these waits fail by falling through rather than ret
 counter expires and the routine `rts`es. So a model that never delivers the interrupt does not hang
 here; it proceeds with the chassis in an unexpected state and fails somewhere later, which is a
 harder symptom to trace back than the usual retry-forever.
+
+## Every self-test interrupt handler decoded — 12 `rte` sites, three classes (2026-07-31)
+
+The suite installs handlers at **vectors `$50`-`$54`** (slots `$140`, `$144`, `$148`, `$14C`,
+`$150` — five consecutive user vectors) and contains **twelve** `rte` sites in total.
+
+### Class 1 — bus-error handlers, identified by the frame release
+
+Three handlers do `lea $8(a7),a7` before `rte`. A 68000 group-0 frame is **14 bytes**; `rte` pops 6
+(SR + PC), so releasing 8 first is exactly right. **This is a third independent confirmation that
+the 68000-format frame is required**, alongside the kernel's `'BE'` guard releasing `$14`:
+
+| handler | what it records | |
+|---|---|---|
+| `$F08912` | `addq.l #$1,$400.w` | the fault counter at `$0400` |
+| `$F08F10` | `addi.l #$1,d1` | the **bus-timeout watchdog** count (phase `$700`) |
+| `$F098E0` | `moveq #$1,d1` + **`addq.w #$4,$4(a7)`** | **skips the faulting instruction** |
+
+That last idiom is worth naming. After the `lea`, the stack holds `{SR word, PC long}`, so
+`$4(a7)` is the **low word of the stacked PC** and adding 4 advances it past a 4-byte instruction —
+resume-after-fault rather than count-and-return. It is how a probe that *expects* to fault
+continues, and it is the only place in the image that edits a stacked PC arithmetically.
+
+### Class 2 — chassis handlers, which WRITE `$1FFF0`/`$1FFF1`
+
+| handler | action |
+|---|---|
+| `$F09330` | `bclr.b #$5,$1(a5)` — installed at vector `$53` by the bit-1 stage |
+| `$F093BE` | `andi.w #$fff8,(a5)` + `move.w #$f0f0,d2` — clear the level field, flag |
+| `$F093C8` | `andi.w #$fff8,(a5)` — clear the level field |
+| `$F094DC` | `btst #$1,d2` / `dbne d3` then `bclr.b #$7,$1(a5)` |
+| `$F094E4` | `bset.b #$1,d2` then `bclr.b #$7,$1(a5)` |
+| `$F09052` | `bset.b #$6,$1(a5)` (the delivery-proof handler documented above) |
+
+**Six of the twelve handlers write the VMOD control register.** Interrupt-context writes to
+`$1FFF0`/`$1FFF1` are the norm in this suite, not an exception — and every one of them is a
+read-modify-write against a register the board manual calls image-only, so the model must let an
+interrupt handler and the main line interleave on it.
+
+### Class 3 — trivial
+
+`$F088FA` (bare `rte`), `$F088FC` (`move.w #$ffff,d2`), `$F09150` (`move.w #$ffff,d2` +
+`bsr PTMInit`). The `$FFFF` in `d2` is the same "handler ran" sentinel the chassis handlers set to
+`$F0F0`, so `d2` is this suite's interrupt-observation register.

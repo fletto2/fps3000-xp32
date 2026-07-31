@@ -7758,6 +7758,27 @@ check('...while the main line clears bit 6 and waits for $F70019 bit 3 to fall',
 check('...and that wait falls through on timeout (rts), it does not retry',
       _w(0xF09050) == 0x4E75)
 
+check('the self-test installs handlers at vectors $50-$54',
+      sorted({_l(_a + 2) for _a in
+              (0xF08F90, 0xF0907E, 0xF09260, 0xF0935E, 0xF09364, 0xF093FE, 0xF09404)})
+      == [0x140, 0x144, 0x148, 0x14C, 0x150])
+check('three handlers release the 68000 group-0 frame with lea $8(a7),a7',
+      all(_w(_a) == 0x4FEF and _w(_a + 2) == 0x0008
+          for _a in (0xF08916, 0xF08F16, 0xF098E2))
+      and _w(0xF08912) == 0x52B8 and _w(0xF08914) == 0x0400
+      and _w(0xF08F10) == 0x0681 and _l(0xF08F12) == 0x00000001)
+check('...and $F098E6 SKIPS the faulting instruction by editing the stacked PC',
+      _w(0xF098E0) == 0x7201
+      and _w(0xF098E6) == 0x586F and _w(0xF098E8) == 0x0004
+      and _w(0xF098EA) == 0x4E73)
+check('six self-test handlers write $1FFF0/$1FFF1 from interrupt context',
+      _w(0xF09330) == 0x08AD and _w(0xF09332) == 0x0005
+      and _w(0xF093BE) == 0x0255 and _w(0xF093C0) == 0xFFF8
+      and _w(0xF093C8) == 0x0255 and _w(0xF093CA) == 0xFFF8
+      and _w(0xF094DC) == 0x08AD and _w(0xF094DE) == 0x0007
+      and _w(0xF094E8) == 0x08AD and _w(0xF094EA) == 0x0007
+      and _w(0xF09052) == 0x08ED and _w(0xF09054) == 0x0006)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
