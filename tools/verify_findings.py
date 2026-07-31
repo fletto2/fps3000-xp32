@@ -7345,9 +7345,12 @@ check('CNCTIRQ derives the task number as an !IDV record index, (x+6)/14',
       _w(0xF02264) == 0x5C87 and _w(0xF02266) == 0x8EFC and _w(0xF02268) == 0x000E
       and _w(0xF0226A) == 0x1387)
 
+# Encodings READ from the ROM.  I guessed $10BC/$4231 and both were wrong --
+# the third time this session that deriving an opcode by hand beat reading it,
+# and lost.  move.b #imm,(d8,An,Xn) is $0x11bc; clr.b (d8,An,Xn) is $0x4233.
 check('!VCT has exactly four writers and no bit-clear',
-      _w(0xF03FF2) == 0x10BC and _w(0xF03FF4) == 0x00FF
-      and _w(0xF0411A) == 0x4231
+      _w(0xF03FF2) == 0x11bc and _w(0xF03FF4) == 0x00ff
+      and _w(0xF0411A) == 0x4233
       and _w(0xF0226A) == 0x1387
       and not _re21a.search(r'bclr\.\w+\s+\S+,\s*\(a\d,\s*d\d', _k36))
 check('$F03FEE claims a vector then dispatches through a link at +$8',
