@@ -146,3 +146,64 @@ Long shots, in roughly decreasing probability:
 - Project plan: [`project_plan.md`](../notes/project_plan.md)
 - Audit triage: [`mc_doc_audit_triage.md`](../notes/mc_doc_audit_triage.md)
 - Hardware substitute plan: [`host_substitute_hardware_plan.md`](../notes/host_substitute_hardware_plan.md)
+
+## Session of 2026-07-31 (second block) — the kernel's own subsystems
+
+The previous session closed the *device* side. This one closed most of what was still open
+on the **RTOS** side, which matters because a model of this machine has to run the RTOS
+before any chassis behaviour is observable.
+
+**Mechanisms newly specified**
+
+- **P and V** (`$F006E8`/`$F00788`) — the blocking primitive everything else reduces to.
+  Semaphore = `{bit 15 TAS lock, bits 14-0 signed count}` + a waiter list linked through
+  `TCB+$20`. Blocking sets state bit 13, releases the lock, installs the scheduler's stack
+  and jumps to `$F0050C` without returning.
+- **`$2A`/`$2B` put the object at `!UST` entry + `$10`** — from the `lea` the handler
+  actually executes. This **corrects** an earlier inference of `+8` made from the layout,
+  and it self-confirms: a word plus a longword at `$10` ends exactly on `USTMENT = $16`.
+- **The task context area**: `TCB+$74` is the 60-byte `movem` save area, `TCB+$26` the
+  priority byte. `TCB+$77` turns out **not to be a field** — it is the low byte of the
+  saved `d0`, which is where the old priority was stashed.
+- **The timebase, end to end from one ROM constant.** `$F0A530 = 10` (milliseconds) is
+  shifted and multiplied into the MC6840 latch `$27C7`, and separately stored at `$0C56`
+  for the software clock. It simultaneously confirms the dual-8-bit PTM mode, the latch
+  value, the 10.0000 ms tick, the 100-tick 1 Hz divider and the ms-of-day arithmetic.
+- **A real time-of-day clock**: `$0C3E` = days, `$0C42` = ms-of-day, rolling over at
+  86,400,000; `$49` sets it (accumulating the adjustment so intervals survive a change),
+  `$4A` reads it. **The day rollover rebases every deadline** in the two timer lists at
+  `$0C2C`.
+- **A 1 Hz display heartbeat** — `$0C5C` divides the tick by 100 and writes four words to
+  the display device. So the front-panel display is used for the life of the machine, not
+  only at boot; with no display fitted it lands at `$0804`, watchable in a RAM dump.
+- **The server registry** (`$0C9A`/`$0CAA`) and the `SERVER`/`DSERVE`/`DERQST`/`AKRQST`
+  family; **`$23` = QEVNT** and **`$36` = AKRQST** decoded from their bodies.
+- **Two calling conventions that defeat static analysis**: the trace logger takes an
+  **inline parameter word** after the `bsr` (11 sites, not the 9 recorded), and
+  `$F0175C` returns into a **two-slot return vector** — 31 of 31 callers reserve exactly
+  4 bytes.
+
+**Corrections made**
+
+- The AP I/F **base window and channel windows have different register maps**; the summary
+  sentence generalised window 0 to all five.
+- `!UST` semaphore field is `+$10`, not `+8`.
+- The trace-hook census is 11, not 9 (two gate on `$0C35`, not `$0C34`).
+- `$0C40` and `$0C41` are **not globals** — the first is the low word of `$0C3E`, the
+  second a misaligned decode at an address no listing treats as a boundary.
+- `$F05666` is a parameter-block update, not a return-address patch; **nothing in RDHC
+  patches a stacked return address**.
+
+**Verification state**
+
+The harness went from 1,557 to ~1,650 live checks. Three defects of the *same family* as
+the previously-recorded orphaned checks were found and fixed: five more vacuous
+assertions, a **use-before-definition** inside the emulator block that aborted three
+consecutive runs, and — the reason that one survived — **both structural self-audits were
+running at the end of the file**, where they cannot catch a crash 5,700 lines above. Both
+now run first.
+
+Worth stating plainly: the AP I/F window failures only appeared **because** the orphaned
+checks were rescued. That assertion had been written from a wrong summary and had never
+once executed. Rescued checks that immediately fail are the expected outcome, not a
+regression.

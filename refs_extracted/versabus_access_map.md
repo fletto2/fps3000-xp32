@@ -26165,3 +26165,159 @@ documented as the kernel's single device access outside the FPS layer, and as ex
 its own saved stack**, which is what one writes for a handler that can interrupt itself.
 The `movem.l (a7)+,d0-d7/a0-a7` restoring `a7` from the frame is the giveaway that the
 stack pointer itself is part of the saved context.
+
+### The clock subsystem, end to end
+
+The globals above assemble into one subsystem, and two directives operate it:
+
+| part | mechanism |
+|---|---|
+| `$0C3E`/`$0C42` | the time value, **two longwords**, advanced in the tick path (`addq.l #$1,$c3e.w`) |
+| `$0C5C` | 100-tick divider → the 1 Hz display heartbeat |
+| **`$49`** (`$F037B4`) | **set time**: takes new values in `d0`/`d1`, computes the delta against the current pair, stores the new pair, and **accumulates the deltas into `$0C46`/`$0C4A`** |
+| **`$4A`** (`$F03862`) | **get time**: reads the pair back |
+
+The interesting half is `$49`'s bookkeeping. It does not simply overwrite the clock — it
+adds the *difference* into a second pair of accumulators, so a caller that measures an
+interval spanning a clock adjustment can still recover the true elapsed time. Both the
+store and the accumulate happen under `ori.w #$700,sr`, so the four longwords are updated
+atomically with respect to the tick.
+
+**A caution on attribution.** Locating a code address by "the nearest preceding TRAP #1
+table entry" places `$F00EF2`/`$F00F02` — the tick path's own arithmetic — inside
+directive `$4B`, whose handler is the *error stub* at `$F003D0` and which never runs.
+The heuristic is wrong there because the tick path is not a directive at all. Directive
+attribution by address ordering is only valid inside the handler region; the `!TST`
+segment bounds are the reliable tool, exactly as for the task regions.
+
+### One ROM constant generates the whole timebase
+
+`$F0A530` in the RTOS configuration block is **`10`** — the tick period **in
+milliseconds** — and `$F0A2A4`-`$F0A2C6` derives everything else from it:
+
+```
+move.l  #$320,d0 / divu.w #$4,d0 / subq.w #$1,d0   ; d0 = 800/4 - 1 = 199
+move.w  $f0a530(pc),d1                              ; d1 = 10
+move.w  d1,$c56.w                                   ; the tick period in ms
+mulu.w  #$4,d1 / subq.w #$1,d1                      ; d1 = 40 - 1 = 39
+move.w  d1,$c58.w
+lsl.w   #$8,d1 / add.w d1,d0                        ; d0 = (39<<8)|199 = $27C7
+movep.w d0,$d(a1)                                   ; -> the MC6840 latch
+```
+
+`$27C7` is exactly the latch value this project already documented, and in the PTM's
+**dual 8-bit** mode it means `(39+1) x (199+1) = 8000` E cycles = **10.0000 ms** at
+E = 800 kHz.
+
+So a single constant closes five separate facts that were established independently:
+
+1. the MC6840 must be modelled in **dual 8-bit** mode, not as a 16-bit reload — the ROM
+   builds the latch as two bytes on purpose;
+2. the latch value `$27C7`;
+3. the **10.0000 ms** tick;
+4. `$0C56 = 10`, the value the tick path adds to the millisecond-of-day clock;
+5. `$0C5C`'s divider of 100, giving the 1 Hz display heartbeat.
+
+**The tick period is now traceable from a ROM constant to the hardware register and to
+two independent software consumers.** An emulator that gets the PTM mode wrong does not
+merely run the tick 27% slow — it disagrees with the firmware's own arithmetic, which
+carries the period in milliseconds separately in `$0C56`.
+
+### The time-of-day format: `{days, milliseconds-of-day}`
+
+Directive `$4A` normalises with `cmpi.l #$5265c00,d1` / `subi.l #$5265c00,d1` /
+`addq.l #$1,d0`, and `$5265C00 = 86,400,000` — **the number of milliseconds in a day**.
+The tick path does the same rollover on the globals:
+
+```
+add.l   d1,$c42.w          ; ms-of-day += $0C56 (= 10)
+move.l  $c42.w,d0
+subi.l  #$5265c00,d0
+bmi     no_rollover
+addq.l  #$1,$c3e.w         ; DAYS += 1
+move.l  d0,$c42.w
+```
+
+So **`$0C3E` = days and `$0C42` = milliseconds within the day** — a genuine time-of-day
+clock, not just an uptime counter, with `$49`/`$4A` to set and read it and
+`$0C46`/`$0C4A` accumulating adjustments so that intervals spanning a clock change remain
+measurable.
+
+## Correction: the AP I/F base window and the channel windows differ (2026-07-31)
+
+A provenance-tracked sweep of every access through a base register holding `$FF0000`
+gives, per window:
+
+| window | offsets touched |
+|---|---|
+| 0 — host/bulk link at `$FF0000` | `+$00`, `+$04`, `+$08`, `+$0E` |
+| 2-5 — the four XP channels | `+$04`, `+$08`, **`+$0A`**, `+$0E` |
+
+**They are not the same map**, and this project's summary sentence — "each populated
+window has exactly four registers at `+$00`, `+$04`, `+$08`, `+$0E`" — described window 0
+and generalised it to all five. The per-channel table elsewhere in the same document,
+which lists `+$04` / `+$08` data-high / `+$0A` data-low / `+$0E` command-status, was right
+all along; the two paragraphs contradicted each other and the wrong one was the summary.
+
+The difference is structural rather than incidental: a channel window's `+$08`/`+$0A` are
+the two halves of one 32-bit data register, and the base window — a byte-wide bulk port —
+has no low half to address. So the base window spends that slot on `+$00` instead.
+
+This surfaced as four harness failures the moment the orphaned checks were rescued, which
+is the point of rescuing them: the assertion had been written from the summary sentence
+and had never once executed.
+
+## `$F05666` is a parameter-block update, not a return-address patch
+
+A sweep for RDHC code writing through `a7` at a displacement returns exactly one
+instruction, `$F05666: move.l a0,$4(a7)`. In context it is benign and informative:
+
+```
+move.l a0,-(a7) / move.w #$2,-(a7) / move.l #$0,-(a7) / move.l d1,-(a7)
+movea.l a7,a0 / moveq #$29,d0 / trap #$1     ; ATSEM -- look the ASQ up by name
+move.l a0,$4(a7)                             ; store the RETURNED HANDLE into the block
+movea.l a7,a0 / moveq #$2a,d0 / trap #$1     ; ...and post to it
+lea $a(a7),a7                                ; release exactly 10 bytes
+```
+
+So the `$29`/`$2A` pair share one stack-built parameter block, with `$29`'s result written
+back into it before `$2A` reads it. The **10 bytes pushed and released** match the
+documented 10-byte descriptor `{4-byte name, longword, word}` exactly — a third
+confirmation of that size, from the caller's stack arithmetic rather than from the
+directive table or the `!UST` header.
+
+**No code in RDHC patches a stacked return address.** That closes, by measurement rather
+than assertion, the last remnant of the retracted claim that `$F04930` escaped its spin by
+rewriting a saved PC.
+
+### `$0C2C` is the timer queue, and the day rollover rebases every deadline
+
+When the millisecond-of-day counter passes 86,400,000 the tick path does more than
+increment the day:
+
+```
+movea.l $c2c.w,a1
+ori.w   #$700,sr
+movea.l $c(a1),a0        ; LIST 1
+loop:  sub.l d0,$8(a0)   ; deadline -= 86,400,000
+       movea.l (a0),a0   ; link at +$00
+       bne loop
+movea.l $8(a1),a0        ; LIST 2 -- same treatment
+...
+```
+
+So `$0C2C` heads a structure with **two list heads, at `+$08` and `+$0C`**, whose elements
+are `{link at +$00, …, deadline at +$08}`, and the deadlines are **absolute times in
+milliseconds-of-day**. Because the clock wraps every 24 hours, every queued deadline has
+to be rebased at the wrap or it would appear a day in the future. The walk runs with
+interrupts masked, so the queue is never observed half-rebased.
+
+This is the mechanism behind the `!DLY` marker that has no tagged instance: the *marker*
+is only written by the one instruction at `$F02D98` that never executes, but the **queue
+itself is live structure**, reached from a kernel global rather than by tag.
+
+**Emulator consequence.** A model that implements timeouts as "deadline in absolute
+milliseconds" must implement this rebase too, or every outstanding timeout silently gains
+24 hours at the first midnight rollover. A model that keeps relative counts does not — but
+then it is not this firmware's design, and the `$49` set-time directive (which adjusts
+`$0C46`/`$0C4A` rather than the deadlines) tells you which one the RTOS chose.

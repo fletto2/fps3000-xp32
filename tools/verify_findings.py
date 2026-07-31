@@ -799,8 +799,13 @@ else:
                 'move', 'add', 'sub', 'clr', 'addq', 'subq', 'or', 'and'):
             if _dst not in ('-(a7)', '(a7)+'):
                 _a7w.append((hex(_a), _i.mnemonic, _i.op_str))
-    check('no RDHC code writes THROUGH the stack pointer to a saved PC',
-          all(w[1] in ('movem.l',) or w[2].endswith('a7') for w in _a7w), _a7w[:4])
+    # MEASURED: exactly one RDHC instruction writes through a7 at a displacement,
+    # and it is NOT a return-address patch -- $F05666 stores the handle that $29
+    # ATSEM returned into the second longword of a parameter block built on the
+    # stack, which $2A then posts to.  The 10 bytes pushed and the lea $a(a7),a7
+    # that releases them are exactly the documented 10-byte descriptor.
+    check('the only RDHC write through a7 is the ATSEM/QSEM parameter block',
+          [w[0] for w in _a7w] == ['0xf05666'], _a7w)
 
     # --- nine bra . sites exist; the census is exact --------------------------
     _spins = [a2 for a2 in range(0xF00000, 0xF0FFFE, 2)
@@ -5416,6 +5421,31 @@ check('$0C3E is a longword tick counter; $0C40 is its low word, not a global',
       insn(0xF00F02) == 'addq.l #$1, $c3e.w' and insn(0xF01082) == 'move.w $c40.w, d3'
       and 0xC40 == 0xC3E + 2)
 
+check('$F0A530 is 10 -- the tick period in MILLISECONDS',
+      _w(0xF0A530) == 10)
+check('...and the ROM derives the MC6840 latch from it as two 8-bit halves',
+      insn(0xF0A2B8) == 'mulu.w #$4, d1' and insn(0xF0A2C2) == 'lsl.w #$8, d1'
+      and ((10 * 4 - 1) << 8) + (0x320 // 4 - 1) == 0x27C7)
+check('...which in dual 8-bit mode is 8000 E cycles = 10.0000 ms at 800 kHz',
+      (10 * 4) * (0x320 // 4) == 8000)
+check('the time-of-day rolls over at 86,400,000 ms = one day',
+      insn(0xF00EFA) == 'subi.l #$5265c00, d0' and 0x5265C00 == 24 * 3600 * 1000)
+check('...incrementing $0C3E (days) and reducing $0C42 (ms of day)',
+      insn(0xF00F02) == 'addq.l #$1, $c3e.w' and insn(0xF00F06) == 'move.l d0, $c42.w')
+check('directive $4A normalises the same way on read',
+      insn(0xF0386A) == 'cmpi.l #$5265c00, d1' and insn(0xF03878) == 'addq.l #$1, d0')
+check('directive $49 accumulates the ADJUSTMENT rather than just overwriting',
+      insn(0xF037E4) == 'sub.l $c3e.w, d4' and insn(0xF037F0) == 'add.l d3, $c46.w'
+      and insn(0xF037F4) == 'add.l d4, $c4a.w')
+
+check('$0C2C heads TWO timer lists, at +$08 and +$0C',
+      insn(0xF00F10) == 'movea.l $c2c.w, a1' and insn(0xF00F1A) == 'movea.l $c(a1), a0'
+      and insn(0xF00F2C) == 'movea.l $8(a1), a0')
+check('...whose elements link at +$00 and hold a deadline at +$08',
+      insn(0xF00F22) == 'sub.l d0, $8(a0)' and insn(0xF00F26) == 'movea.l (a0), a0')
+check('...and the day rollover rebases every deadline, interrupts masked',
+      insn(0xF00F16) == 'ori.w #$700, sr' and insn(0xF00F2A) == 'move.w (a7)+, sr')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
@@ -5919,8 +5949,9 @@ check('...and retrying the whole sweep on failure',
       insn(0xF08EEE) == 'move.l #$f0f0f0f0, d7' and insn(0xF08EFA) == 'bne.b $f08ec8')
 check('...running BEFORE the bus-watchdog test -- both really are code',
       bool(insn(0xF08EB6)) and bool(insn(0xF08F1C)))
-check('...and the sweep really does step by $800 to the ROM base',
-      'a0' in (insn(0xF08EF0) or ''))
+check('...and the sweep starts at $20000 and steps by $800',
+      insn(0xF08EC8) == 'lea.l $1fff0.l, a0' and insn(0xF08ECE) == 'lea.l $10(a0), a0'
+      and insn(0xF08EDE) == 'lea.l $800(a0), a0')
 
 # ---- the instruction-set profile: two significant absences (2026-07-31) ----
 _mn = _mcol.Counter(m.split('.')[0] for m, _, _ in _mins.values())
@@ -6169,10 +6200,21 @@ for _st, _rg in [(a, o.split(', ')[1]) for a, (m, o, _) in sorted(_mins.items())
         if _mre.search(r'\(' + _rg + r'\)', _o) and not _mre.search(r'\$[0-9a-f]+\(' + _rg + r'\)', _o):
             _apw.add(0)
         _p += _sz
-for _n, _base in ((0, 0x00), (2, 0x40), (3, 0x60), (4, 0x80), (5, 0xA0)):
-    check('AP I/F window %d touches exactly four offsets' % _n,
+# MEASURED 2026-07-31: the base window and the channel windows do NOT have the
+# same register map, and asserting one map for all five is what failed here.
+#   window 0 (host/bulk):  +$00 +$04 +$08 +$0E
+#   windows 2-5 (channel): +$04 +$08 +$0A +$0E
+# The +$0A of a channel window is the LOW half of its 32-bit data register, which
+# the base window has no counterpart for.  CLAUDE.md carried both descriptions in
+# different paragraphs; the per-channel table is the correct one.
+for _n, _base, _offs in ((0, 0x00, (0x00, 0x04, 0x08, 0x0E)),
+                         (2, 0x40, (0x04, 0x08, 0x0A, 0x0E)),
+                         (3, 0x60, (0x04, 0x08, 0x0A, 0x0E)),
+                         (4, 0x80, (0x04, 0x08, 0x0A, 0x0E)),
+                         (5, 0xA0, (0x04, 0x08, 0x0A, 0x0E))):
+    check('AP I/F window %d touches exactly its four documented offsets' % _n,
           sorted(o for o in _apw if _base <= o <= _base + 0x1F)
-          == [_base + 0x00, _base + 0x04, _base + 0x08, _base + 0x0E],
+          == [_base + x for x in _offs],
           sorted(hex(o) for o in _apw if _base <= o <= _base + 0x1F))
 check('windows 1, 6 and 7 are touched at NO offset',
       not [o for o in _apw if 0x20 <= o <= 0x3F or 0xC0 <= o <= 0xFF])
