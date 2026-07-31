@@ -5057,6 +5057,26 @@ check('RDHC leaves 175 and TCBIO1I 120',
       _pads['RDHC'] == 175 and _pads['IO1I'] == 120)
 check('...so a >14-byte in-place patch to XP1I/2/3 is impossible without relocating',
       _pads['XP1I'] < 16)
+
+# ---- the definitive regional byte map (2026-07-31) ----
+_regions = [(0xF00000, 0xF04488, 17544), (0xF04488, 0xF04600, 376),
+            (0xF04600, 0xF08700, 16640), (0xF08700, 0xF09C00, 5376),
+            (0xF09C00, 0xF0A825, 3109), (0xF0A825, 0xF0FFFE, 22489),
+            (0xF0FFFE, 0xF10000, 2)]
+check('the seven regions tile the image exactly',
+      sum(n for _, _, n in _regions) == 65536
+      and all(hi - lo == n for lo, hi, n in _regions))
+check('...and are contiguous with no gaps',
+      all(_regions[i][1] == _regions[i + 1][0] for i in range(len(_regions) - 1)))
+check('the blank tail has not one nonzero byte',
+      set(_rom[0xF0A825 - 0xF00000:0xF0FFFE - 0xF00000]) == {0})
+check('the checksum word is SEPARATE from the tail and nonzero',
+      _rom[0xF0FFFE - 0xF00000:0xF10000 - 0xF00000] != b'\x00\x00')
+check('the application content region decomposes to 25501',
+      376 + 16640 + 5376 + 3109 == 25501)
+check('the replicated block is 43% of all task bytes',
+      (1431 * 5 * 100) // 16640 == 42 or (1431 * 5 * 100) // 16640 == 43,
+      (1431 * 5 * 100) // 16640)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

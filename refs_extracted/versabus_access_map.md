@@ -23289,3 +23289,43 @@ with real headroom in proportion (23% of its segment).
 
 **None of this constrains the monitor**, which lives in the blank tail and is reached through the
 reset or panic vector — but it does constrain any in-place change to task behaviour.
+
+## The definitive regional byte map of the 64 KB image (2026-07-31)
+
+Every byte of `FPS3K_U11_U12_JOIN.bin`, by region, summing exactly:
+
+| range | bytes | nonzero | region |
+|---|---:|---:|---|
+| `$F00000`-`$F04487` | 17,544 | 14,357 | reset vector + RMS68K kernel |
+| `$F04488`-`$F045FF` | **376** | 117 | FPS pre-task glue (the trace hook, the driver call) |
+| `$F04600`-`$F086FF` | **16,640** | 12,889 | **the six task segments** |
+| `$F08700`-`$F09BFF` | **5,376** | 4,573 | the power-on self-test |
+| `$F09C00`-`$F0A824` | **3,109** | 2,119 | reset entry, RTOS init, config block, TDTI table |
+| `$F0A825`-`$F0FFFD` | **22,489** | **0** | the blank tail (the monitor's home) |
+| `$F0FFFE`-`$F0FFFF` | 2 | 2 | **the whole-ROM XOR checksum word** |
+| | **65,536** | | |
+
+The application content region is `376 + 16,640 + 5,376 + 3,109 = 25,501` — the figure used
+throughout this file, now decomposed.
+
+**Two details worth having explicitly:**
+
+- **The checksum word is not part of the blank tail.** The tail is `$F0A825`-`$F0FFFD`, 22,489
+  bytes with **not one nonzero byte**, and the final two bytes at `$F0FFFE` are the XOR word that
+  self-test phase `$300` verifies. Anything written into the tail must be followed by
+  recomputing those two bytes or the machine never boots — which is exactly the defect that
+  broke every monitor image this project produced before 2026-07-29.
+- **The six task segments carry 375 bytes of padding**, 2% — and it is not evenly distributed:
+  RDHC 175, TCBIO1I 120, XP4I 38, and **14 bytes each** in XP1I, XP2I and XP3I.
+
+### The structure of the 16,640 task bytes
+
+| | bytes | share |
+|---|---:|---|
+| the replicated transaction/dispatch block, 5 copies | **7,155** | **43%** |
+| padding | 375 | 2% |
+| task-specific code | 9,110 | 55% |
+
+So **43% of all task code is five copies of one 1,431-byte subsystem**, and of the 25,501-byte
+application region it is 28%. Understanding that block once — which is done — accounts for a
+large fraction of everything the tasks do.
