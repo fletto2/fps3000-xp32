@@ -4080,6 +4080,22 @@ check('...and the result at $10DE goes straight into the channel data pair',
       insn(0xF085FE) == 'move.w $10e0(a2), $2(a1)'
       and insn(0xF08604) == 'move.w $10de(a2), (a1)')
 
+# Runtime: a 4-byte rts stub in the trampoline slot makes the callback run.
+# This is the strongest confirmation that $10AE is CALLED, not dereferenced.
+_cbenv = {'FPS3K_XPIRQ': '1', 'FPS3K_CHCMD': 'C000'}
+_cb = {}
+for _nm, _extra in (('bare', {}), ('stub', {'FPS3K_POKE': '10AE=4E75'})):
+    with tempfile.TemporaryDirectory() as _tdb:
+        subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000',
+                        '-trace', f'{_tdb}/t'], capture_output=True, timeout=400,
+                       env={**os.environ, **_cbenv, **_extra})
+        _cb[_nm] = collections.Counter(
+            re.findall(r'[0-9A-F]{6}', open(f'{_tdb}/t').read()))
+check('without a trampoline the CP callback never runs',
+      _cb['bare']['F0858C'] == 0 and _cb['bare']['F085F8'] == 0)
+check('...and a 4-byte rts stub at $10AE makes RSTATE and the jsr both execute',
+      _cb['stub']['F0858C'] >= 1 and _cb['stub']['F085F8'] >= 1)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
