@@ -28607,9 +28607,17 @@ board-status bit), then `bclr.b d0,$1(a5)` / verify the read-back / `bclr` again
 `btst d1,$1(a4)` to be **set**.
 
 Note the polarity: this test *clears* VMOD bit 6 and requires board bit 3 to read **1**,
-where the `$1100` test *sets* VMOD bit 4 and requires board bit 1 to read **1**. So the two
-mappings are inverted relative to each other, which is consistent with the documented
-equations — bit 3's has an outer `NOT`, bit 1's does not.
+while the `$1100` test *sets* VMOD bit 4 and requires board bit 1 to read **0**.
+
+> **CORRECTED 2026-07-31.** An earlier version of this paragraph said the `$1100` test
+> requires board bit 1 to read **1**. It does not. `$F091EC beq.b $f091f4` jumps *past* the
+> fault marker at `$F091EE`, so **`beq` is the OK path** — the test requires board bit 1
+> **clear** after setting VMOD bit 4. I read the branch as going *to* the fault rather than
+> around it.
+>
+> Both mappings are therefore inverting, which is what the equations say: bit 3 is
+> `NOT(bit6 OR ...)` and bit 1 is `NOT(bit4) OR ...`. The emulator implements
+> `bit 1 = NOT(bit 4 of $1FFF1)` and cites these same two sites — it had it right.
 
 **This also corrects a phase attribution.** This project records the bit-3 equation as
 "phase 0x800". The bit 6 ↔ bit 3 test is **phase `$0200`** — the very first test in the

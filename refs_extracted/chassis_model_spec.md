@@ -405,13 +405,15 @@ i.e. `bit 3 = NOT( bit6 OR (bit7 AND bit1) )`. Four arms, all four combinations.
 
 ### Board bit 1 — phase `$1200`
 
-| `$1FFF1` bit 5 | `$1FFF0` bit 0 | board bit 1 |
-|:-:|:-:|---|
-| set | — | set |
-| clear | — | clear |
-| set | clear | set |
+| source | `$1FFF1` bit 4 | bit 5 | `$1FFF0` bit 0 | board bit 1 |
+|---|:-:|:-:|:-:|---|
+| phase `$1100` | **set** | — | — | **clear** |
+| phase `$1200` | — | set | — | set |
+| phase `$1200` | — | clear | — | clear |
+| phase `$1200` | — | set | clear | set |
 
-The second term of `NOT(bit4) OR (bit5 AND NOT bit0)`; the first term is not exercised.
+Both terms of `NOT(bit4) OR (bit5 AND NOT bit0)` are exercised — bit 4 by phase `$1100`
+(**setting** it requires board bit 1 **clear**), bit 5 and `$1FFF0` bit 0 by phase `$1200`.
 
 ### Board bit 2 — phase `$1400`
 

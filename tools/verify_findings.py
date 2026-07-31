@@ -6354,6 +6354,10 @@ check('phase $0500 requires board bit 4 SET and bit 5 CLEAR',
       and (0x3F31 >> 4) & 1 and (0x3F11 >> 4) & 1
       and (0x3F31 >> 5) & 1 and not (0x3F11 >> 5) & 1)
 
+check('phase $1100: setting VMOD bit 4 requires board bit 1 CLEAR (beq skips the fault)',
+      insn(0xF091E4) == 'bset.b d0, $1(a5)' and insn(0xF091EC) == 'beq.b $f091f4'
+      and insn(0xF091EE) == 'move.l #$f0f0f0f0, d7')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

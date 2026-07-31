@@ -25,7 +25,7 @@ steps, so it can be regenerated rather than trusted.
 
 | phase | routine | what it does | model must |
 |---|---|---|---|
-| `$1100` | `$F0918C` | VMOD bit 4 ↔ board bit 1 | set VMOD bit 4 ⇒ board bit 1 reads 1 |
+| `$1100` | `$F0918C` | VMOD bit 4 ↔ board bit 1 | set VMOD bit 4 ⇒ board bit 1 reads **0** |
 | `$1200` | `$F09236` | interrupt delivery, vector `$53`, **CPU mask 2** | honour the SR mask against the request level |
 | `$1300` | `$F09338` | the interrupter and its request-level field | level 0 ⇒ board bit 2 clear; non-zero ⇒ set |
 | `$1400` | `$F093CE` | vectors `$50`/`$52`, **nested delivery** | deliver a second interrupt inside a running handler |
