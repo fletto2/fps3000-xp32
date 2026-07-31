@@ -4164,6 +4164,22 @@ check('...and D2_FIN and D1_SEND differ in exactly 2 of their first 64 bytes',
               if _rom[r - _B + k] != _rom[r + 0x2858 - _B + k]) == 2
           for r in (0xF05738, 0xF058B2)))
 
+# --- d0 is {mode word, operation code}; the handlers swap to reach the mode ---
+check('POLL and BLK_XFR both begin with swap d0, exposing the mode word',
+      insn(0xF0826A) == 'swap d0' and insn(0xF08366) == 'swap d0')
+check('BLK_XFR selects same-address vs consecutive on that mode word',
+      insn(0xF08388) == 'cmpi.w #$0, d0'
+      and insn(0xF0839E) == 'addq.l #$4, a2')
+# Both test the memory pointer against the bulk port; only POLL sets $FF020C.
+check('both handlers special-case the bulk port $FF0008 and poll $FF0004 bit 0',
+      insn(0xF08272) == 'lea.l $8(a4), a5'
+      and insn(0xF0836E) == 'lea.l $8(a4), a5'
+      and insn(0xF0827E) == 'btst.b #$0, d4'
+      and insn(0xF0837A) == 'btst.b #$0, d4')
+check('...but only POLL writes XLTR_COUNTER = $4 for a bulk-port source',
+      insn(0xF08284) == 'move.w #$4, $20c(a4)'
+      and '20c' not in insn(0xF08380))
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
