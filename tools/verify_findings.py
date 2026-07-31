@@ -5656,7 +5656,7 @@ check('$F0A332 zeroes each allocated block downward from its end',
       insn(0xF0A334) == 'lsl.l #$8, d6' and insn(0xF0A33C) == 'move.l d6, -(a6)'
       and insn(0xF0A33E) == 'cmpa.l a0, a6')
 
-def _disp(code, seed):
+def _dispwrite(code, seed):
     _d1 = (~code) & 0xFF
     _d1 = ((_d1 >> 4) | (_d1 << 28)) & 0xFFFFFFFF
     _d0 = seed | (_d1 & 0xFF)
@@ -5669,9 +5669,9 @@ check('...and its two entries differ only in bit 7 of the seed',
 check('...emitting value-then-strobe pairs, $30 being the strobe',
       insn(0xF0A364) == 'ori.w #$30, d1' and insn(0xF0A36C) == 'ori.w #$30, d0')
 check('the model reproduces the MEASURED $0020,$0030,$0013,$0033 for code $C0',
-      _disp(0xC0, 0x10) == [0x20, 0x30, 0x13, 0x33])
+      _dispwrite(0xC0, 0x10) == [0x20, 0x30, 0x13, 0x33])
 check('an init failure ($A2) produces the same data pair as the DEAD spurious handler',
-      _disp(0xA2, 0x10)[2:] == [0x15, 0x35] and insn(0xF009FC) == 'move.w #$15, $4(a1)')
+      _dispwrite(0xA2, 0x10)[2:] == [0x15, 0x35] and insn(0xF009FC) == 'move.w #$15, $4(a1)')
 
 # --- the bus-error recovery protocol ---------------------------------------
 check('the guard is continuation + marker = 6 bytes, and there are 7 sites',
@@ -5730,9 +5730,11 @@ check('...and no longword anywhere in the image points into that block',
       sum(1 for _o in range(0, len(_rom) - 3)
           if 0xF04230 <= struct.unpack('>I', _rom[_o:_o + 4])[0] <= 0xF042A1) == 0)
 
+# _t1live is defined further down; compute the handler set inline instead.
 check('CMR ($3C) at $F03D0C is the LAST dispatch handler in the image',
       _t1[0x3C][0] == 0xF03D0C
-      and not [v for v in (_t1[n][0] for n in _t1live) if 0xF03D0C < v < 0xF04487])
+      and not [v for v in (_t1[n][0] for n in _t1)
+               if 0xF03D0C < v < 0xF04487])
 check('...so the unreachable candidate lies inside CMR, a directive never issued',
       0xF03D0C < 0xF04230 < 0xF04487)
 
