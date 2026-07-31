@@ -28875,3 +28875,34 @@ counts, and all four agree the protected span is exactly `$1FFF0`-`$1FFF3`.
 reverse-order verification — i.e. no write may disturb a neighbour. A model with plain array
 storage satisfies this trivially, which is worth noting: like the refresh test, this phase
 **cannot fail in a model with perfect RAM**, so passing it is no evidence about the model.
+
+## The eight `$1FFF0` skip sites, enumerated (2026-07-31)
+
+This project derives the RAM/register partition from "**8 independent sites skip `$1FFF0`**".
+Enumerating every comparison against `$1FFF0`/`$1FFF4` finds **nine**, of which eight are
+skips and one is something else:
+
+| site | adjustment | phase |
+|---|---|---|
+| `$F098FE` | `+4` | `$2100` exhaustive uniqueness, fill |
+| `$F09916` | `+4` | `$2100`, verify |
+| `$F09946` | `+4` | a DRAM routine at `$F09938` |
+| `$F09960` | `+4` | the same routine |
+| `$F099BE` | `+4` | `$2400` pattern applier, fill |
+| `$F099E0` | **`-4`** at `$1FFF4` | `$2400` applier, **reverse** verify |
+| `$F09A94` | `+4` | `$2600` refresh test |
+| `$F09ABC` | `+4` | `$2600`, second pass |
+| `$F089A4` | *(none)* | **not a skip** — phase `$2500`'s bound test, asking whether DRAM reaches the register |
+
+**All eight skips adjust by exactly four bytes**, and the reverse-direction one brackets the
+same span from `$1FFF4` downward. So the protected extent is `$1FFF0`-`$1FFF3`, agreed by
+eight sites in four routines and in both directions — which is about as well established as
+anything in this ROM.
+
+The ninth comparison is worth separating rather than counting: `$F089A4` compares the DRAM
+*end pointer* against `$1FFF0` to choose which arm of the boundary test to run. It reads like
+a skip and is not one, which is the sort of thing a regex-level census would fold in.
+
+**All eight lie in sequence C's memory tests.** No test in sequences A or B walks memory, so
+none needs the skip — consistent with the partition being about *pattern testing* rather
+than about address decoding.

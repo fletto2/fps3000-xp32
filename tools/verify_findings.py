@@ -6285,6 +6285,14 @@ check('...skipping $1FFF0 forward and $1FFF4 in reverse -- the same four bytes',
       insn(0xF099BE) == 'cmpa.l #$1fff0, a0' and insn(0xF099C6) == 'lea.l $4(a0), a0'
       and insn(0xF099E0) == 'cmpa.l #$1ff' + 'f4, a0' and insn(0xF099E8) == 'lea.l -$4(a0), a0')
 
+_skips = [x for x, (m, o, _) in _mins.items()
+          if m.startswith('cmpa') and _mre.match(r'#\$1fff[04], a\d$', o)]
+check('there are nine comparisons against $1FFF0/$1FFF4',
+      len(_skips) == 9, sorted(hex(x) for x in _skips))
+check('...eight of which are skips; $F089A4 is phase $2500\'s bound test',
+      0xF089A4 in _skips and insn(0xF089A4) == 'cmpa.l #$1fff0, a1'
+      and insn(0xF089AA) == 'blt.b $f089cc')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
