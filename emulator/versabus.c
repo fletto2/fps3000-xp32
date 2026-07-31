@@ -791,6 +791,24 @@ static uint16_t xltr_read(uint32_t addr) {
         xltr.raw[(addr - XLTR_BASE) / 2] = xltr.status_irq;
         return xltr.status_irq;
     }
+    /* FPS3K_MODE1_BUSY=1: assert MODE1 bit 7 ("chassis busy") on read.
+     *
+     * The XP tasks test this bit 1,467 times in a driven run and the model has
+     * never set it -- xltr.mode1 is only ever assigned from a CPU write, so a
+     * chassis-side indication had no way in.  The consequence was that an
+     * entire subsystem never executed: the status encoder at $F08616, the
+     * packed per-channel nibbles in $1064, the sequence counter $107E, the
+     * all-channels-idle sweep that sets MODE1 bit 6 / MODE0 bit 11, and hence
+     * the PAYLOAD of chassis operation $A (which has been driven, but has only
+     * ever read zeros back).
+     *
+     * Opt-in and gated on boot completion, for the reason every other forcing
+     * hook is: the diagnostics walk these registers and a constant read-back
+     * fails their write/read-back tests. */
+    if (addr == XLTR_MODE1 && getenv("FPS3K_MODE1_BUSY")
+        && versabus_boot_complete()) {
+        return (uint16_t)(xltr.mode1 | 0x0080);
+    }
     /* Default: return raw backing store (handles $200..$25F uniformly) */
     int idx = (addr - XLTR_BASE) / 2;
     if (idx >= 0 && idx < (int)(sizeof xltr.raw / sizeof xltr.raw[0])) {

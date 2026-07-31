@@ -19201,3 +19201,44 @@ But that is a reading, not a demonstration. What is demonstrated: **the frame is
 handler must therefore locate its arguments from the task's saved SP rather than from its own
 `a7` — which is the single most important thing to know before writing one, and is not
 something the firmware documents by construction.
+
+## `FPS3K_MODE1_BUSY`: the status subsystem executes for the first time
+
+The gap identified above — MODE1 bit 7 tested 1,467 times and never asserted — is closed by
+an opt-in hook that returns the bit set on reads of `$FF0202`, gated on boot completion for
+the same reason every other forcing hook is (the diagnostics read these registers back).
+
+```
+FPS3K_XPIRQ=1 FPS3K_CHCMD=C000 FPS3K_MODE1_BUSY=1
+```
+
+| | without | with |
+|---|---:|---:|
+| status encoder `$F08616` | 0 | **1** |
+| all-channels-idle sweep `$F086A0` | 0 | **1** |
+| `$1064` | `$0000` | **`$000A`** |
+| MODE1 | `$8020` | **`$80E0`** — bit 6 set |
+| MODE0 | — | **`$0800`** — bit 11 set |
+
+**Every predicted value is confirmed numerically.** The channel status was `$C000` — bit 15
+set, bit 14 set, bit 11 clear — so the encoder's classification says `d4 = $107E + 1 + 9`;
+with the counter starting at 0 that is **10 = `$A`**, deposited in channel 1's nibble, which
+is exactly the `$000A` observed. And the idle sweep set **MODE1 bit 6 and MODE0 bit 11**,
+the two bits this file predicted from reading `bset #$6,d4` / `bset #$b,d4` without ever
+having seen them written.
+
+That is a subsystem going from never-executed to executing-and-agreeing-with-the-decode in
+one bit.
+
+**Two honest limits.**
+
+*The hook is a probe, not a model.* It asserts busy **unconditionally**, which no chassis
+does. One visible consequence is that MODE1 ends holding bit 7 (`$80E0`), because the
+firmware read-modify-writes the register and carries the forced bit back. A faithful model
+must raise the bit while a transfer is outstanding and drop it on completion.
+
+*It changes where the machine settles.* The run ends at `final PC = $F00518`, inside the
+kernel scheduler, rather than the `$F00FD6` idle loop — unsurprising for a permanently-busy
+chassis, but it means this configuration should not be treated as a healthy steady state the
+way the CP-handler run can be. The default boot is unaffected (`$F00FD6`), which is what the
+gating is for.
