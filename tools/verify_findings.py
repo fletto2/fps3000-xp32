@@ -7891,6 +7891,13 @@ check('the fault reporter and PollBoardStatus failure arm are the same fault fla
       and _w(0xF08946) == 0x3D7C and _w(0xF08948) == 0x1000 and _w(0xF0894A) == 0x0202
       and _w(0xF0894E) == 0x6000)
 
+check('$F08732 bit 5 set branches past the entire self-test suite',
+      _w(0xF08732) == 0x0839 and _w(0xF08734) == 0x0005
+      and _l(0xF08736) == 0x00F70019
+      and _w(0xF0873A) == 0x6600
+      and 0xF0873E + _w(0xF0873C) == 0xF088F6
+      and _w(0xF088F4) == 0x4EF9 and _l(0xF088F6) == 0x00F09C06)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

@@ -34246,3 +34246,37 @@ inference into measurement.
 Note the 88.5% is an understatement: 68 of the 181 unreached bytes are the SCM **pattern table**,
 which is data the disassembler renders as instructions. Excluding it, coverage of actual self-test
 code is ~92%.
+
+## The self-test is not a boot prerequisite — measured (2026-07-31)
+
+| run | final PC | `CHANNEL_SELECT` |
+|---|---|---|
+| baseline | `$F00FE6` (idle) | **`$2903`** |
+| `FPS3K_BSTAT19_B5=1` | `$F00FD6` (idle) | **`$0000`** |
+
+Forcing `$F70019` bit 5 set makes `$F08732`'s `btst.b #$5` / `bne $F088F4` jump straight to
+`Phase2Init`, skipping the entire suite — and **the machine still reaches the RTOS idle loop**. So
+the power-on self-test is diagnostic, not a gate: a board that bypasses it boots normally.
+
+Two things worth carrying:
+
+- **`CHANNEL_SELECT` reading `$0000` at rest is the signature of "self-test skipped"**, as distinct
+  from a stall (which leaves the phase where it stopped) or a clean run (which leaves `$2903`, the
+  last sub-stage of sequence C). Three distinguishable end states from one register.
+- The baseline resting value is **`$2903`**, not `$2000` — sequence C, major phase 9, minor 3. The
+  recorded phase list ("`$0100`-`$1A00`, `$2000`") gives the *bases*; the two-level counter runs well
+  past them.
+
+### The fault-injection test proposed above is still not possible
+
+I proposed forcing a derived requirement wrong — e.g. making `$FF0216` bit 7 never fault — to confirm
+the machine hangs in the *predicted* stage. **No hook exists for that.** `FPS3K_BSTAT19_B5` skips the
+suite rather than failing a stage within it, so it exercises the bypass, not the fault path. The
+failure machinery (`$F089EE`, the `$0400` counter, `PollBoardStatus`'s `d7 != 0` arm) remains
+unexecuted, and the retry-forever policy remains inference.
+
+What is needed is a one-line hook that corrupts a single named requirement — a
+`FPS3K_FAULT=<stage>` that, say, suppresses the bit-7 BERR or aliases two XLTR registers. That is a
+code change, and it is the highest-value one outstanding for this area: it would convert every
+contract derived this session from "the model satisfies it" to "the model is *required* to satisfy
+it", which are different claims and only the second is a test.
