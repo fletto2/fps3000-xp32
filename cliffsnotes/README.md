@@ -52,3 +52,4 @@ scheduler, and an in-ROM monitor in 22.4 KB of free ROM lets us
 talk to the SBC over the on-board SIO. No public XPMLIB binary
 exists; the FPS-100 archive (11.5K AP-120B microinstructions) is
 the closest validation substitute.
+- `11-rtos-structures.md` — every RMS68K structure, header convention, entry layout, TCB field map and the clock, in one reference
