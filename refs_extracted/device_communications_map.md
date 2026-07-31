@@ -924,3 +924,48 @@ the one the RTOS uses.
 `$F09176` is the reset helper: `move.b #$1,$2(a0)` selects CR1, `move.b #$1,(a0)` sets its
 bit 0 — the internal reset that holds all three counters, exactly as the initialisation
 sequence does.
+
+## Indexed addressing: two device accesses no displacement sweep can attribute (2026-07-31)
+
+Sweeping for **indexed** operands off a device base — `$xx(aN,dM.w/l)`, the last addressing
+form not yet checked — finds exactly two uses, and both matter.
+
+### The XP idle sweep reads all four channel windows through one instruction
+
+```
+movea.l #$ff0000,a2
+move.w  #$1,d3
+$F08676: move.w $4e(a2,d4.l),d2     ; d4 = (channel-1) * $20
+         btst #$f,d2 / btst #$e,d2  ; bit 15 set, bit 14 clear -> unserviced
+```
+
+Present in all four XP tasks (`$F0685E`, `$F07276`, `$F07C76`, `$F08676`). This is the
+documented idle sweep — "sweep channels 1..`$105E` for any with bit 15 set and bit 14 clear"
+— and it reaches **every** channel's `+$0E` from a single instruction with `$4E` as the base
+displacement.
+
+**Consequence for the access census**: a displacement-based sweep attributes this to `+$4E`
+alone, so the recorded site counts for `$FF006E`, `$FF008E` and `$FF00AE` are *floors*. The
+set of registers is unchanged — the four per window are still the four — but channels 2-4
+are touched more often than a displacement count suggests.
+
+### The SCM test has an address-line phase, not just a pattern phase
+
+```
+moveq #$4,d2 / moveq #$4,d1
+loop: move.l d1,(a0,d1.l)     ; write each offset's own value AT that offset
+      lsl.l #$1,d1            ; 4, 8, $10, $20, ... walking the address bits
+      cmp.l d1,d0 / bge loop
+cmp.l (a0,d2.l),d2 / beq ok   ; ...then check offset 4 still reads 4
+```
+
+This is a classic **address-line uniqueness test**: if two address lines are shorted or
+swapped, a later write lands on an earlier offset and the final check catches it. It runs in
+addition to the complementary-pattern walk documented earlier, so the SCM test has two
+distinct phases.
+
+**Emulator requirement**: distinct offsets in the chassis window must be **distinct
+storage**. This is precisely the test that would catch the aliasing introduced by ignoring
+`XLTR_MODE2` — though only if the walked offsets exceed the window's low bits, which for this
+16 KB region they do not. So the current model passes, and would stop passing if the test
+were extended.

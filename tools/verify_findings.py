@@ -6061,6 +6061,17 @@ check('the latch test walks ones through all 16 bits, on T1, T2 and T3',
 check('$F09176 holds the PTM in reset via CR2 select then CR1 bit 0',
       insn(0xF0917E) == 'move.b #$1, $2(a0)' and insn(0xF09184) == 'move.b #$1, (a0)')
 
+check('the XP idle sweep reads all four channel windows via one indexed instruction',
+      [insn(x) for x in (0xF0685E, 0xF07276, 0xF07C76, 0xF08676)]
+      == ['move.w $4e(a2, d4.l), d2'] * 4)
+check('the SCM test includes an address-line phase writing each offset its own value',
+      insn(0xF09AF6) == 'move.l d1, (a0, d1.l)' and insn(0xF09AFA) == 'lsl.l #$1, d1'
+      and insn(0xF09B00) == 'cmp.l (a0, d2.l), d2')
+check('...and no other device base is reached by indexed addressing',
+      not [x for x in range(0xF00000, 0xF10000, 2)
+           if _mre.search(r'\(a\d, d\d\.[wl]', (insn(x) or '').lower())
+           and _mre.search(r'\$(1fff0|f7000)', (insn(x) or '').lower())])
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
