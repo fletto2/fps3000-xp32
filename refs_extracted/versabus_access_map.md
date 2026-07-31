@@ -32044,3 +32044,48 @@ it is granted and unexercised, which is what one expects if it exists for host-l
 and TCBIO1I and clear for RDHC — the master/dispatch task. Its meaning is unestablished, but the
 partition is exactly "the five worker tasks versus the one that drives them", which is a strong
 hint and a cheap thing to test on hardware.
+
+## The `TCB+$28` flags word decoded, and why RDHC differs (2026-07-31)
+
+Censusing every bit operation on the flags word, then matching against the measured per-task
+values (`$A081` for five tasks, `$A001` for RDHC):
+
+| word bit | reached as | meaning | measured |
+|---:|---|---|---|
+| **15** | `$28` bit 7 | **privilege** | set in all six |
+| 13 | `$28` bit 5 | tested at `$F02F4E` | set in all six |
+| **7** | `$29` bit 7 | **has registered a semaphore** | set in five, **clear in RDHC** |
+| 6 | `$29` bit 6 | an owner is registered at `+$140`/`+$144` | clear everywhere |
+| **0** | `$29` bit 0 | **has connected an interrupt vector** | set in all six |
+
+**Bit 7 explains the RDHC anomaly exactly.** Its only setter is `$F031F0`, and what follows names
+the operation:
+
+```
+$F031F0  bset.b #$7,$29(a6)
+$F031F6  move.l d0,$120(a6)            ; a HANDLE into the task's saved a0
+$F031FC  move.l $10(a6),(a1,d3.w)      ; register the task's NAME ...
+$F03202  move.l $14(a6),$4(a1,d3.w)    ; ... and SESSION into a table
+```
+
+That is semaphore registration — the task's identity written into a name table, with a handle
+returned through the saved-`a0` slot. And **RDHC declares no semaphores**: this project records the
+per-task counts as **2/2/2/2/1/0**, RDHC being the zero. Five tasks register, five have the bit,
+RDHC does not. The static census and the RAM dump agree without either being used to derive the
+other.
+
+**Bit 0 is set by `CNCTIRQ`.** Its setter `$F0226E` sits immediately after `$F0226A`, which this
+project identifies as directive `$4C` writing the owning task number into `!VCT`. All six tasks
+issue `$4C` once, and all six have the bit.
+
+### A mod-8 trap worth flagging
+
+The privilege bit is tested as **`btst.b #$f,$28(a6)`** in the kernel and **`btst.b #$7,$28(a6)`**
+in the FPS layer (`$F04186`, `$F0426A`, `$F04300`). Those are **the same bit** — `btst` on a memory
+operand takes the bit number mod 8, so `$f` and `$7` both select bit 7 of the byte at `$28`. A
+census that treats them as distinct reports two flags where there is one, and would conclude the
+FPS layer checks something the kernel does not.
+
+This is the same rule that makes `btst.b #$c,$c34.w` test bit 4 of the trace mask rather than bit
+12 — already recorded here for that case, and worth stating as general: **on memory, only the low
+three bits of an immediate bit number matter.**

@@ -7236,6 +7236,19 @@ check('the XP prologue puts the stack $114 above the segment base',
           for e in (0xF05F64, 0xF06964, 0xF07364, 0xF07D64))
       and _w(0xF05F68) == 0x2C48)
 
+check('TCB+$29 bit 7 is set only at $F031F0, beside the name/session registration',
+      _w(0xF031F0) == 0x08EE and _w(0xF031F2) == 0x0007 and _w(0xF031F4) == 0x0029
+      and _w(0xF031F6) == 0x2D40 and _w(0xF031F8) == 0x0120
+      and _w(0xF031FC) == 0x23AE and _w(0xF031FE) == 0x0010
+      and _w(0xF03202) == 0x23AE and _w(0xF03204) == 0x0014)
+check('TCB+$29 bit 0 is set by CNCTIRQ, right after the !VCT owner write',
+      _w(0xF0226A) == 0x1387 and _w(0xF0226E) == 0x08EE
+      and _w(0xF02270) == 0x0000 and _w(0xF02272) == 0x0029)
+check('btst.b #$f and #$7 on $28(a6) are the SAME bit (memory bit numbers are mod 8)',
+      0x0F % 8 == 0x07 % 8
+      and _w(0xF0171A) == 0x082E and _w(0xF0171C) == 0x000F
+      and _w(0xF04186) == 0x082E and _w(0xF04188) == 0x0007)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
