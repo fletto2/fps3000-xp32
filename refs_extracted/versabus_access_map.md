@@ -27624,3 +27624,33 @@ This matters because it is the exact inverse of the register-side rule recorded 
 reader who trusts the printed size would apply mod 32 to a memory operand. The reliable
 discriminator remains the **operand**, not the suffix — and this project's bit census
 classified by operand, so it is unaffected.
+
+### Every board-status bit the self-test checks, and the VMOD op before it
+
+Widening the scan to every literal-bit `btst` on `$1(aN)` in the self-test, paired with the
+nearest preceding `bset`/`bclr` on the VMOD control byte:
+
+| site | board `$F70019` bit | nearest preceding VMOD `$1FFF1` op |
+|---|---:|---|
+| `$F09046` | 3 | `bclr` bit 6 |
+| `$F09274` | 1 | `bset` bit 5 |
+| `$F09296` | 1 | `bclr` bit 5 |
+| `$F092D0` | 1 | `bset` bit 5 |
+| `$F0930A` | 1 | **`bset` bit 7** |
+| `$F09420` | 2 | **`bset` bit 7** |
+| `$F09482` | 2 | `bset` bit 3 |
+| `$F09190` | 1 | `bset` bit 4 *(parameterised)* |
+| `$F08C4E` | 3 | `bset` bit 6 *(parameterised)* |
+
+Two sites — `$F092C6` and `$F09300` — `btst` `$1(a5)`, the VMOD register itself, and are
+readback checks rather than mapping tests. And `$F08926`/`$F0892E` test board bits 4 and 5
+with no VMOD op nearby: those are the SCM inner-loop poll documented earlier.
+
+**Read this as observed associations, not as equations.** "Nearest preceding" is a weak
+link — several VMOD writes may intervene, and the emulator's documented equations were fitted
+to make the whole suite pass rather than derived from any one site.
+
+With that caveat, the table is consistent with the documented equations on the variables they
+share (board bit 3 ← VMOD bits 6/7/1; board bit 1 ← VMOD bits 4/5), and it raises one lead:
+**VMOD bit 7 immediately precedes tests of board bits 1 *and* 2**, and the documented equation
+for board bit 2 does not mention bit 7. Anyone refining the chassis model should start there.
