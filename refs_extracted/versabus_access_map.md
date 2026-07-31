@@ -27296,3 +27296,27 @@ independent route.
 matches their documented roles — bit 10 is cleared when issuing a command and again by RDHC
 to acknowledge, bit 11 is set by the idle sweep and cleared when the chassis answers. The
 asymmetry is the signature of a bit the *chassis* sets and the SBC clears, and vice versa.
+
+### How often each bit-numbering convention applies
+
+Censusing every `btst`/`bset`/`bclr`/`bchg` in the image by destination:
+
+| destination | count | bit number |
+|---|---:|---|
+| a **data register** | **742** | **mod 32** — literal, no translation |
+| **memory** | **666** | **mod 8** — must be reduced |
+
+The two are nearly balanced, so neither convention can be treated as the default. More
+usefully: **198 memory-destination sites carry a literal bit number greater than 7**, and
+every one of them reads wrongly without the reduction — `btst.b #$f,$c34.w` is bit 7 of a
+byte, not bit 15 of a word; `bclr.b #$f,$148(a6)` is bit 7; `bclr.b #$f,(a0)` in `P` is the
+TAS lock at bit 7 of the high byte.
+
+This is the same hazard this project already records ("`btst` on memory is always
+byte-sized"), now with a magnitude: it is not an occasional trap but applies to **30% of
+all memory-destination bit instructions**. And the inverse trap is real too — the XLTR mode
+registers are modified *register-side*, where `bclr.b #$e,d1` genuinely is bit 14, so
+applying the mod-8 rule there would be equally wrong.
+
+The reliable discriminator is the destination operand, not the `.b` suffix: capstone prints
+`.b` in both cases.

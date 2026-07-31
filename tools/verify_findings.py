@@ -5822,6 +5822,25 @@ check('...the canonical pair reads MODE1, clears bit 14 and sets bit 12, then wr
 check('...and on a DATA REGISTER those bit numbers are mod 32, i.e. literal word bits',
       0x0E == 14 and 0x0C == 12)
 
+_bitreg = _bitmem = _bitbig = 0
+for _x in range(0xF00000, 0xF10000, 2):
+    _i = insn(_x) or ''
+    if not _i.startswith(('btst', 'bset', 'bclr', 'bchg')):
+        continue
+    _dst = _i.split(', ')[-1].strip()
+    _isreg = _mre.fullmatch(r'd\d', _dst) is not None
+    if _isreg:
+        _bitreg += 1
+    else:
+        _bitmem += 1
+        _mm = _mre.match(r'\w+\.\w\s+#\$([0-9a-f]+)', _i)
+        if _mm and int(_mm.group(1), 16) > 7:
+            _bitbig += 1
+check('bit instructions split roughly evenly between register and memory targets',
+      _bitreg > 700 and _bitmem > 600, (_bitreg, _bitmem))
+check('...and ~30% of memory-target sites carry a literal bit number > 7',
+      0.25 < _bitbig / _bitmem < 0.35, (_bitbig, _bitmem))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
