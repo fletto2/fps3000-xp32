@@ -26748,3 +26748,24 @@ So the practical guidance inverts: on a board that dies with `$2B2` at `$FF000E`
 snapshot at `$0800`-`$084F` **is** expected to be valid, and `$084C` additionally tells you
 which bus-error handler was installed at the time — distinguishing a fault during the
 self-test from one after the RTOS took over.
+
+### The 22 callers are the kernel's assertion mechanism
+
+Every one has the same shape — the *success* path branches over the call:
+
+```
+b<cc>   skip          ; invariant holds
+bsr.w   $f00186       ; ...otherwise snapshot and die
+skip:   ...
+```
+
+Of the 22, 11 are preceded by a conditional branch (`beq` x6, `bne` x4, `ble` x1) and 8 by
+a `bra.b` to the instruction just past the call; the remainder are reached by branches from
+further away. So the kernel is checked at 22 internal points, and a violated invariant does
+not corrupt quietly — it produces a full register dump at `$0800` and `PCMD_KERNEL_FATAL`.
+
+**This is the most useful diagnostic the machine offers a model.** An emulator whose
+divergence breaks a kernel invariant — a mis-set condition code, a wrong `movem` order, a
+structure walked with the wrong stride — announces itself as `$2B2` with the faulting PC at
+`$0800` and all sixteen registers behind it, rather than drifting silently. It is worth
+treating any `$2B2` from a model as an emulator bug first and a firmware finding second.

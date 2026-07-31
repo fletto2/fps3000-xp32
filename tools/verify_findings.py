@@ -5588,6 +5588,9 @@ check('the kernel-fatal reporter has 22 ordinary bsr callers -- it is NOT vector
 check('...one of which is the BE canary release',
       0xF00D08 in _fatal)
 
+check('the fatal reporter ends by hanging, after issuing $2B2',
+      insn(0xF001A0) == 'move.w #$2b2, d0' and insn(0xF001AA) == 'bra.b $f001aa')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
