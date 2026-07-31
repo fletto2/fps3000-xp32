@@ -36214,3 +36214,50 @@ functionally interchangeable, the second must obtain its port separation some ot
 interchangeable, then the earlier board can overlap host and SBC access in a way the later one
 cannot, which would matter to any model of AP I/F contention. Not resolvable from photographs; noted
 so the difference is not silently assumed away.
+
+## AN FPS AP I/F BLOCK DIAGRAM (supplied 2026-07-31) — first schematic-level source
+
+Saved: `refs/FPS-3000/schematics/GE_RDCP_wo_764_schematic_1of2_1983-001_Page169.png` (10625x6850) and
+the 18-page `GE_RDCP_APIF.pdf` it came from (scanned, no text layer).
+
+**It is an FPS document, not a GE one** — the title block reads `F P S FORM NO 4036`, code ident
+`56504`, **drawing `512-3448-010` rev `01`, sheet 20, "BLOCK DIAGRAM"**. Note the number: `512-3448`
+against this chassis's AP I/F assembly `612-4448-401-F` and the photographed board's `412-4448-002`.
+Same family, **not the same drawing**, so read it as a close relative rather than as this card's
+schematic.
+
+### Blocks it names
+
+```
+SP+DP<00:15> -> REG -> DEVICE ADDER DECODE -> DECODE(IN)/DECODE(OUT) -> I/O CTL
+                                            -> FMT & DMA CONTROL -> FMT CTL
+REGSEL -> REG -> DECODE -> PNL CTL CLKS & ENBS
+TO/FROM HOST I/O HANDSHAKE -> I/O HANDSHAKE & TIMING
+READY -> READY LOGIC
+   WC CNT | HMA EXT | HMA REG | APMA CNTR | CTL REG | TEMP REG
+   FIFO IN REG -> DMA FIFO -> FIFO CONTROL <- DMA HANDSHAKE
+   AP INTR (<- INPIN) -> INTERRUPT CONTROL ; AP DMA CTL -> FORMATTER
+buses: DPBUS<12:27>  IOBUS<24:29>  HDBUS<00:15>  RGBS<0:5>  IFIBS<0:5>
+       IFDB<00:15>  IFOUT<00:15>  APMA(DMA)<00:15>  HSTBUS -> HOST ADAPTER HSTNN
+```
+
+### What it confirms that we had only by inference
+
+| our finding | the diagram |
+|---|---|
+| `$FF0000` is a **remaining-word count** that must decrement on reads | a dedicated **`WC CNT`** block |
+| `$FF0008` is a **FIFO port whose reads pop** | **`FIFO IN REG`**, **`DMA FIFO`**, **`FIFO CONTROL`** |
+| `$FF0004` bit 0 is a polled **ready** flag | a **`READY`** input with its own **`READY LOGIC`** |
+| the transfer address auto-increments | **`APMA CNTR`** — a counter, not a register |
+| the panel command path is distinct from the data path | **`PNL CTL CLKS & ENBS`** fed from `REGSEL` via its own decode |
+| the missing counterpart card | named: **`HSTBUS -> TO HOST ADAPTER HSTNN`** |
+
+**The single most useful item is `HMA REG` / `HMA EXT`** — a *host* memory address register with an
+extension. Nothing in the firmware touches a host address, which fits: the SBC programs address and
+count on its own side (`$E58`/`$E64`), and the host adapter holds the host-side address. That is the
+first direct evidence for how the two halves of the link divide the addressing work.
+
+**Caveat on identity.** `512-3448-010` is not `612-4448`. The block names may not map one-for-one onto
+the card in this chassis, and no register addresses appear on this sheet. It is a structural
+reference, not a register map — but it is the first schematic-level source this project has had for
+the AP I/F at all.
