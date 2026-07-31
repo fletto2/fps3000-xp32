@@ -7950,6 +7950,15 @@ check('...and all three callers raise d7 BEFORE calling it',
 check('the DRAM verify bound is $1FFF4, the documented partition boundary',
       _w(0xF099E0) == 0xB1FC and _l(0xF099E2) == 0x0001FFF4)
 
+check('the second forward d7 gate re-seeds and re-runs the same block',
+      _w(0xF09A00) == 0x4A87 and _w(0xF09A02) >> 8 == 0x67
+      and _w(0xF09A04) == 0x204C and _w(0xF09A06) == 0x200B
+      and _w(0xF09A08) >> 8 == 0x60)
+check('...and PollBoardStatus is the only gate that returns with d7 raised',
+      _w(0xF08936) == 0x4A87 and _w(0xF08938) >> 8 == 0x67
+      and _w(0xF0894C) >> 8 == 0x60      # bra to the common return
+      and _w(0xF08952) == 0x4CDF and _w(0xF08956) == 0x4E75)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

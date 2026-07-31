@@ -34527,3 +34527,32 @@ memory faults from logic faults — but by *which loop it hangs in*, not by atte
 Incidental confirmation: the DRAM verify's bound is `cmpa.l #$1fff4,a0`, which is exactly the
 documented RAM/register partition boundary — `$1FFF0`-`$1FFF3` excluded, `$1FFF4` onward ordinary
 RAM. Two unrelated derivations agreeing on the same address.
+
+## The fault policy, established structurally: 65 gates, 64 retries, 1 exception (2026-07-31)
+
+Sweeping every `tst.l d7` immediately followed by a conditional branch in `$F08000`-`$F09FFF`:
+**65 gates, 63 branching backward**. Both apparent exceptions turn out to be retries as well:
+
+| gate | arms | verdict |
+|---|---|---|
+| `$F09A00` | `d7 == 0` → `bsr $F08958` (advance to the next pattern) then the loop head; `d7 != 0` → `a0 = a4`, `d0 = a3`, `bra $F09A0E` | **retry** — the fault arm restores the saved block pointer and pattern and re-runs the *same* block, skipping the advance. Forward branch, retry semantics |
+| `$F08936` | inside `PollBoardStatus` — `d7 == 0` returns; `d7 != 0` clears `$1FFF1` bit 6, writes MODE1 `$1000`, then also returns | **the one genuine exception** |
+
+So **`PollBoardStatus` is the only place in the suite where a raised `d7` leads to a normal return** —
+and it returns precisely so that its *caller* can loop. Every one of the other 64 gates re-runs
+something.
+
+That completes the fault-policy account from the structural side, matching the three fault
+injections from the empirical side:
+
+- **no stage can make forward progress with `d7` raised**, anywhere in the suite;
+- **nothing clears `d7`** except a stage's own successful re-run;
+- the only escapes are the board-status bits 4+5 check (which jumps to `Phase2Init`) and, for the
+  memory tests, `$F08A46`.
+
+**Why this kept catching me out.** I mischaracterised `$F089EE` twice, and both times by reading a
+routine's opening and inferring intent before checking how it exits. A `bsr` to something named
+"reporter" that re-writes and re-verifies *looks* like recovery; only the `tst.l d7` / `bne` four
+instructions from the end shows it cannot succeed. In a codebase where 64 of 65 fault gates are
+retry loops, **the prior should have been "this loops" and the burden of proof on any reading that
+says otherwise.** The sweep above is cheap and would have settled it in one step.
