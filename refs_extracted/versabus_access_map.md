@@ -24050,3 +24050,54 @@ will.
 So the machine's interrupt wiring is: **ten BIM channels vectored, six enabled and owned, four
 vectored-but-disabled, and three registers never named at all** (BIM1 CR0/VR0 and BIM2 VR3).
 Twelve BIM channels exist; the firmware uses half of them.
+
+## Phase `$1600`'s BIM walk decoded — and it reconciles the static and runtime BIM findings
+
+```
+$F09522  move.w  $218(a6),d0
+$F09526  btst    #$4,d0
+$F0952A  bne.b   $F09532
+$F0952C  move.w  #$D0,d1        bit 4 CLEAR -> stop at value $D0
+$F09532  move.w  #$D8,d1        bit 4 SET   -> stop at value $D8
+...
+$F0956C  move.w  #$C0,d0        first VALUE
+$F09570  movea.w #$230,a0       first ADDRESS
+$F09574  move.w  d0,(a6,a0.w)   write
+$F09578  lea     $2(a0),a0      next register
+$F0957C  addq.w  #$1,d0         next value
+$F0957E  cmp.w   d1,d0 / bne
+```
+
+The loop writes **incrementing values from `$C0`** into consecutive registers from `$FF0230`, and
+the terminating comparison is on the **value**, not the address:
+
+- bit 4 **clear**: values `$C0`-`$CF` -> **16 registers**, `$FF0230`-`$FF024E`
+- bit 4 **set**: values `$C0`-`$D7` -> **24 registers**, `$FF0230`-`$FF025E`
+
+### This makes both BIM findings precise and consistent
+
+| register | named by an instruction? | reached by the walk? |
+|---|---|---|
+| `$FF0240` BIM1 CR0 | **no** | **yes, even in 16-register mode** |
+| `$FF0248` BIM1 VR0 | **no** | **yes, even in 16-register mode** |
+| `$FF025E` BIM2 VR3 | **no** | only with bit 4 set (24-register mode) |
+
+So the correct statements are:
+
+- **BIM1 channel 0 is walked by the self-test but never programmed operationally.** Its static
+  absence is about the *operational* configuration, not about the diagnostics — the self-test
+  writes `$C8` to its CR and `$CC` to its VR on every boot.
+- **`$FF025E` is the only register that both is never named and is skipped by the default walk.**
+  That is why the runtime observation "never touched" singled it out, and why the emulator comment
+  attributes the absence to the walk stopping one BIM short. Both accounts are right about
+  different registers.
+
+The caveat attached to the static census — "self-test phase `$1600` walks the block with computed
+addressing and may touch more" — is therefore not hypothetical: it accounts for exactly two of the
+three, and the walk's bound is precisely the `$FF0218` bit-4 selector.
+
+**Emulation consequence.** The walk writes and then verifies, so a model must accept writes to all
+24 registers regardless of how many BIMs it claims — the bit only chooses how far the firmware
+goes. A model that decoded only 16 registers when reporting two BIMs would fault on a boot where
+the bit reads set, which is the shape of the "three BIMs derails the boot" symptom already
+recorded here and still unexplained.

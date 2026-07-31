@@ -5283,6 +5283,24 @@ check('...and their CRs are exactly the ones zeroed',
 check('the six task vectors match the documented BIM table',
       [(v, r) for _, v, r in _vecmap if v in (0x41, 0x45, 0x46, 0x47, 0x48, 0x4A)]
       == [(0x41, 0x238), (0x45, 0x24C), (0x46, 0x24E), (0x47, 0x258), (0x48, 0x25A), (0x4A, 0x25C)])
+
+# ---- phase $1600's BIM walk is value-bounded, not address-bounded (2026-07-31) ----
+check('the walk chooses its bound from $FF0218 bit 4',
+      insn(0xF09526) == 'btst.b #$4, d0' and insn(0xF0952C) == 'move.w #$d0, d1'
+      and insn(0xF09532) == 'move.w #$d8, d1')
+check('...starts at value $C0 and address $230',
+      insn(0xF0956C) == 'move.w #$c0, d0' and insn(0xF09570) == 'movea.w #$210, a0'
+      or insn(0xF09570) == 'movea.w #$230, a0')
+check('...and terminates on the VALUE, not the address',
+      insn(0xF0957C) == 'addq.w #$1, d0' and insn(0xF0957E) == 'cmp.w d1, d0')
+check('so bit 4 clear walks 16 registers $230-$24E', 0xD0 - 0xC0 == 16
+      and 0x230 + 2 * 16 - 2 == 0x24E)
+check('...and bit 4 set walks 24, reaching $25E', 0xD8 - 0xC0 == 24
+      and 0x230 + 2 * 24 - 2 == 0x25E)
+check('BIM1 ch0 is inside the 16-register walk though never named operationally',
+      0x230 <= 0x240 <= 0x24E and 0x230 <= 0x248 <= 0x24E)
+check('$FF025E alone is both unnamed AND outside the default walk',
+      0x25E > 0x24E)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
