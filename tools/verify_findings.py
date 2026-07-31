@@ -5371,6 +5371,29 @@ check('...so one privilege flag gates 21 of them',
       sum(1 for a in _t28 if insn(a) in ('btst.b #$f, $28(a6)', 'btst.b #$7, $28(a6)')))
 check('$F02A18 is NOT a real instruction boundary -- $F02A14 is',
       0xF02A14 in _mins and insn(0xF02A14) == 'btst.b #$f, $28(a6)')
+
+# ---- four kernel facilities from the $0Cxx sweep (2026-07-31) ----
+check('$F00A58 snapshots all 16 registers to $0808, SR to $0806, PC to $0800',
+      insn(0xF00A58) == 'movem.l d0-d7/a0-a7, $808.w'
+      and insn(0xF00A5E) == 'move.w (a7), $806.w'
+      and insn(0xF00A62) == 'move.l $2(a7), $800.w')
+check('...and restores and resumes rather than halting',
+      insn(0xF00A6C) == 'movem.l $808.w, d0-d7/a0-a7' and insn(0xF00A72) == 'rte')
+check('sixteen two-byte bsr entries fan into one handler at $F00A96',
+      all(insn(0xF00A74 + 2 * n) == 'bsr.b $f00a96' for n in range(16))
+      and insn(0xF00A94) == 'nop')
+check('...and TRAP #2 = $F00A78 places the table exactly',
+      0xF00A74 + 2 * 2 == 0xF00A78)
+check('$0C5C counts to 100 then reports on the display device',
+      insn(0xF009EA) == 'addq.w #$1, $c5c.w' and insn(0xF009EE) == 'cmpi.w #$64, $c5c.w'
+      and insn(0xF009F8) == 'movea.l $c3a.w, a1' and insn(0xF00A16) == 'clr.w $c5c.w')
+check('...writing four words, the documented two-digit protocol',
+      all(insn(a).endswith('$4(a1)') for a in (0xF009FC, 0xF00A02, 0xF00A08, 0xF00A0E)))
+check('$0C78 saves the stack around the $F70030 access, re-entrancy guarded',
+      insn(0xF00A1C) == 'tst.l $c78.w' and insn(0xF00A2A) == 'move.l a7, $c78.w'
+      and insn(0xF00A32) == 'movea.l $c78.w, a7' and insn(0xF00A52) == 'clr.l $c78.w')
+check('...masking to level 7 and saving all registers first',
+      insn(0xF00A22) == 'ori.w #$7000, sr' and insn(0xF00A26) == 'movem.l d0-d7/a0-a6, -(a7)')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

@@ -24283,3 +24283,90 @@ neighbouring site is `$F02A14`), and it lies in the `$0D` START region, not `$25
 was written from memory rather than from a sweep. Running the sweep gave a **better** result than
 the invented one: 21 sites rather than two, which makes "general privilege flag" the supported
 reading and "clock-and-SR pair" an unnecessary story.
+
+## Four kernel facilities found by sweeping the `$0Cxx` globals (2026-07-31)
+
+Enumerating every `$0Cxx` reference left ten globals unexplained. Tracing the four most-used
+opened up four facilities.
+
+### 1. `$0800`-`$0847` is a full machine-state snapshot
+
+```
+$F00A58  movem.l d0-d7/a0-a7,$808.w    ALL SIXTEEN registers -> $0808-$0847
+$F00A5E  move.w  (a7),$806.w           the stacked SR         -> $0806
+$F00A62  move.l  $2(a7),$800.w         the stacked PC         -> $0800
+$F00A68  ori.w   #$700,sr
+$F00A6C  movem.l $808.w,d0-d7/a0-a7    restore
+$F00A72  rte                           ...and CONTINUE
+```
+
+**A complete post-mortem dump at a fixed low-RAM address that restores and resumes** — a
+non-destructive snapshot, not a panic. It adds a fifth readout to the no-serial-port diagnostic
+procedure, and the richest one: `$0800` the PC, `$0806` the SR, `$0808`-`$0847` every register.
+
+### 2. TRAP #2-#15 fan into one handler
+
+```
+$F00A74  bsr.b $F00A96      TRAP #0's slot in this table
+$F00A76  bsr.b $F00A96
+$F00A78  bsr.b $F00A96      <- TRAP #2
+   ... sixteen in all, two bytes each ...
+$F00A92  bsr.b $F00A96
+$F00A94  nop
+$F00A96  move.w $4(a7),-(a7) / andi.b #$7F,(a7) / ...
+```
+
+**Sixteen two-byte entries, all `bsr` to one handler.** The static vector table at `$F00114`
+gives **TRAP #2 = `$F00A78`**, which is exactly `$F00A74 + 2x2` — so this table *is* where the
+TRAP vectors point, and the project's note that "the TRAP #2-#15 vectors are not free" now has its
+mechanism: they are all wired into this fan-in. Thirty-four bytes implements sixteen vectors.
+
+The shared handler reads the stacked SR at `$4(a7)` and masks it with `$7F` — the same
+supervisor-mode test TRAP #0's dispatcher uses — so the entries appear to be uniform rather than
+distinguishing the trap number. Whether the handler recovers *which* trap fired from the pushed
+return address is not settled by the instructions decoded here.
+
+### 3. `$0C5C` counts spurious interrupts and reports every hundredth
+
+```
+$F009EA  addq.w  #$1,$C5C.w
+$F009EE  cmpi.w  #$64,$C5C.w        100
+$F009F4  bmi.b   $F00A1A            under -> just rte
+$F009F8  movea.l $C3A.w,a1          THE DISPLAY DEVICE
+$F009FC  move.w  #$15,$4(a1)        four writes -- the two-digit protocol
+$F00A02  move.w  #$35,$4(a1)
+$F00A08  move.w  #$2E,$4(a1)
+$F00A0E  move.w  #$3E,$4(a1)
+$F00A16  clr.w   $C5C.w             reset the count
+```
+
+So the kernel **tolerates 99 spurious interrupts silently and announces the hundredth on the
+front panel**, then starts counting again. On this board the display is unfitted and `$0C3A`
+points at scratch RAM `$800` — which is *inside the snapshot area above*, so a spurious-interrupt
+report and a machine-state snapshot write to overlapping addresses. Worth knowing before reading
+either.
+
+### 4. `$0C78` is a saved interrupt stack, switched around the `$F70030` access
+
+```
+$F00A1C  tst.l    $C78.w / bne $F00A32     already switched?
+$F00A22  ori.w    #$7000,sr                mask ALL interrupts
+$F00A26  movem.l  d0-d7/a0-a6,-(a7)
+$F00A2A  move.l   a7,$C78.w                SAVE the stack
+$F00A2E  move.w   $3C(a7),sr
+$F00A32  movea.l  $C78.w,a7                switch to it
+$F00A3A  move.b   $F70030.l,d0 / ori.b #$20,d0 / move.b d0,$F70030.l
+$F00A4A  movea.l  $C78.w,a7
+$F00A4E  movem.l  (a7)+,d0-d7/a0-a7
+$F00A52  clr.l    $C78.w
+```
+
+This project records `$F70030` as "the RMS68K kernel's ONE device access — reads it, ORs bit 5,
+writes it back, inside an interrupt-masked routine ending in `rte`. Dormant." The wrapper is
+heavier than that suggests: it **saves all sixteen registers, switches to a dedicated stack held
+in `$0C78`, masks to level 7, and is re-entrant-guarded** by the `tst.l` at entry.
+
+Saving the stack pointer before touching a device is what you do when the current stack may be
+unusable — so the routine's shape is that of a **fatal-error or watchdog path**, which fits a
+register the firmware never otherwise touches. It remains dormant; what is new is that its
+context makes it look deliberate rather than vestigial.
