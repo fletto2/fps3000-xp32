@@ -34209,3 +34209,40 @@ of chassis memory" was true of the first 38% of a boot and false of the boot.
 A useful side effect: the phase counter in `CHANNEL_SELECT` now converts to progress. `$2xxx` means
 the machine is in sequence C, i.e. past 80% of the boot; a board stalled showing `$0300` failed the
 ROM checksum in the first few percent.
+
+## What a complete boot exercises: 88.5% of the self-test, and NONE of its failure paths (2026-07-31)
+
+Measured on a boot verified complete by `-breakpc 0xF00FC2`: **1390 of 1571** decoded instruction
+addresses in `$F08700`-`$F09C00` execute — **88.5%**. The unreached remainder is not scattered; it is
+almost entirely the **failure machinery**:
+
+| unreached run | what it is |
+|---|---|
+| `$F089EE`-`$F08A46` (88 B) | **the fault reporter** — the `bsr` target of every failing stage |
+| `$F088EA`-`$F0891A` (48 B) | the trivial `rte` handlers and **`addq.l #$1,$400.w`, the bus-error fault counter** |
+| `$F0893A`-`$F0894E` (20 B) | **`PollBoardStatus`'s `d7 != 0` arm** — clear `$1FFF1` bit 6, `MODE1 <- $1000`, and the `bra Phase2Init` escape |
+| `$F0911E`-`$F09162` (68 B) | includes `$F09152`, the `move.w #$ffff,d2` + `bsr PTMInit` handler — never fires |
+| `$F09BB6`-`$F09BFA` (68 B) | **not code** — the SCM pattern table, rendered as instructions by the disassembler |
+
+**So the model passes every stage, and every path that handles *not* passing is dead.** The three
+independent confirmations agree: the fault reporter never runs, the fault counter at `$0400` never
+increments, and `PollBoardStatus` never takes its `d7 != 0` arm — which is the same statement three
+ways, since `d7` is the suite's only fault flag.
+
+**This bounds what all of this session's self-test work is worth.** The contracts derived above —
+the bus-error gate, the width-mux polarity, the chassis bit equations, the register-file masks — are
+statements about what the firmware *requires*, read off the requiring instruction. They are
+confirmed in the sense that the model satisfies them and the stages pass. They are **not** confirmed
+in the sense of having been seen to reject a wrong answer: the rejection path has never executed.
+The documented "failure is retry-forever, so a wrong model hangs rather than reporting" is itself
+an untested prediction.
+
+A cheap way to test it, and the natural next step: force one requirement wrong (say, make `$FF0216`
+bit 7 never fault) and confirm the machine hangs in the predicted stage with the predicted phase
+counter, rather than failing somewhere unrelated. That would exercise `$F089EE` and
+`PollBoardStatus`'s failure arm for the first time and turn the whole fault-policy account from
+inference into measurement.
+
+Note the 88.5% is an understatement: 68 of the 181 unreached bytes are the SCM **pattern table**,
+which is data the disassembler renders as instructions. Excluding it, coverage of actual self-test
+code is ~92%.

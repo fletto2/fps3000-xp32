@@ -7884,6 +7884,13 @@ check('the SCM loop accounts for essentially all $FF0204 writes',
 check('the SCM stage sits in the last tenth of the boot',
       96836974 / 106143590 > 0.90 and 40000000 / 106143590 < 0.40)
 
+check('the fault reporter and PollBoardStatus failure arm are the same fault flag',
+      # $F08936 tst.l d7 / beq skips the failure arm at $F0893A
+      _w(0xF08936) == 0x4A87 and _w(0xF08938) >> 8 == 0x67
+      and _w(0xF0893A) == 0x43F9 and _l(0xF0893C) == 0x0001FFF0
+      and _w(0xF08946) == 0x3D7C and _w(0xF08948) == 0x1000 and _w(0xF0894A) == 0x0202
+      and _w(0xF0894E) == 0x6000)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
