@@ -34697,3 +34697,36 @@ using that rule to seed a disassembler — which this project's kernel listing d
 
 The remaining executed kernel regions (`$F0123E`, `$F0170E`) share the `move.w sr,-(a7)` /
 `movem.l` opening and are the conventional shape, so the convention is right about them.
+
+## The dual-entry convention audited: 29 of 35, with the four real exceptions named (2026-07-31)
+
+Testing every TRAP #0 table entry for `move.w sr,-(a7)` (`$40E7`) two bytes before the handler:
+
+| result | count |
+|---|---:|
+| convention holds | **29** |
+| points at the error address `$F00182` | 2 (`$00`, `$20`) |
+| **genuine exceptions** | **4** — `$1A`, `$1B`, `$1E`, `$1F` |
+
+| dir | handler | `[-2]` | note |
+|---|---|---|---|
+| `$1A` | `$F01762` | `$0000` | preceded by padding |
+| `$1B` | `$F01490` | `$FE4E` | mid-instruction — entered directly |
+| `$1E` | `$F01108` | `$4E73` | preceded by another routine's **`rte`** |
+| `$1F` | `$F02894` | `$4E73` | **`T0CRTCB`**, likewise |
+
+**So "subtract 2 from every table pointer to find the routine start" is wrong for 4 of the 33 live
+handlers**, and in two of those it lands on an `rte` — detectable, and worth asserting rather than
+assuming. `tools/disasm_kernel.py` seeds from this table, so those four are the places its routine
+boundaries can be off by two bytes.
+
+**A small correction to the recorded figure.** This file says "the TRAP #0 table reads out 33 of 35
+slots live (only `$20` points at the error address `$F00182`)". Both `$00` **and** `$20` point there
+— which is exactly how 35 slots yield 33 live. The count was right; the parenthesis named one of the
+two.
+
+The fix is one line in any tool that uses the rule: **subtract 2 only when the word there is
+`$40E7`**, otherwise take the pointer as the routine start. That turns a convention into a test, and
+this session has repeatedly found that conventions in this firmware hold for the majority and have
+named exceptions — the `$A00` task grid (XP4I at `-$1E`), the `!`-prefixed markers (`'EXEC'` is not
+one), the panel-code families (`$25C`-`$260` are rejections, not configs), and now this.

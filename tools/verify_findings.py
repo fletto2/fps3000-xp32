@@ -7982,6 +7982,16 @@ check('CRTCB has two entries ten bytes apart, the TRAP #0 one flagged with $8001
       and _w(0xF0289E) == 0x264C
       and 0xF0289E - 0xF02894 == 10)
 
+check('29 of 35 TRAP #0 handlers have the sr-push two bytes before',
+      sum(1 for _i in range(35)
+          if _w(_l(0xF001D6 + 4*_i) - 2) == 0x40E7) == 29)
+check('...both slot $00 and slot $20 point at the error address $F00182',
+      _l(0xF001D6) == 0xF00182 and _l(0xF001D6 + 4*0x20) == 0xF00182)
+check('...and the four genuine exceptions are $1A, $1B, $1E, $1F',
+      [_i for _i in range(35)
+       if _w(_l(0xF001D6 + 4*_i) - 2) != 0x40E7
+       and _l(0xF001D6 + 4*_i) != 0xF00182] == [0x1A, 0x1B, 0x1E, 0x1F])
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
