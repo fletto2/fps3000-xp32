@@ -4741,3 +4741,29 @@ check('...and a period of E_kHz x period_ms = 8000 E cycles = 10.0000 ms',
       ((10 * 4 - 1) + 1) * ((800 // 4 - 1) + 1) == 800 * 10 == 8000)
 check('T1 latch is $0100 and CR3 is $C6 (dual 8-bit, bit 2 set)',
       insn(0xF0A2CA) == 'move.w #$100, d0' and insn(0xF0A2D8) == 'move.b #$c6, $1(a1)')
+
+# ---- the board status register is read-only, five bits (2026-07-31) ----
+_bsleas = {0xF0875E: 'a4', 0xF08920: 'a2', 0xF089F8: 'a4', 0xF08C54: 'a4', 0xF08E0C: 'a4',
+           0xF08F7A: 'a4', 0xF09196: 'a4', 0xF0924A: 'a4', 0xF093DE: 'a4'}
+check('nine sites load $F70018 into a base register',
+      all(insn(a).startswith('lea.l $f70018.l,') for a in _bsleas))
+_bsbits, _bswrites = _mcol.Counter(), 0
+for _st, _rg in _bsleas.items():
+    _p = _st + _mins[_st][2]
+    for _ in range(400):
+        if _p not in _mins: break
+        _m, _o, _sz = _mins[_p]
+        _mm = _mre.match(r'#\$([0-9a-f]+), \$([0-9a-f]?)\(' + _rg + r'\)$', _o)
+        if _mm and _m.split('.')[0] == 'btst': _bsbits[int(_mm.group(1), 16)] += 1
+        if (_mre.search(r', \$[0-9a-f]?\(' + _rg + r'\)$', _o)
+                and _m.split('.')[0] in ('move', 'clr', 'bset', 'bclr', 'or', 'and')):
+            _bswrites += 1
+        _p += _sz
+check('the board status register is NEVER written, in any form', _bswrites == 0, _bswrites)
+check('only bits 1-5 of $F70019 are ever tested',
+      sorted(_bsbits) == [1, 2, 3, 4, 5], sorted(_bsbits))
+check('bit 1 is by far the most tested (the two-phase handshake)',
+      _bsbits[1] == 12, dict(_bsbits))
+check('...and an absolute-address scan sees only 2 of the 17 accesses',
+      sum(1 for _, (m, o, _) in _mins.items()
+          if 'f70019' in o and m.split('.')[0] == 'btst') == 2)

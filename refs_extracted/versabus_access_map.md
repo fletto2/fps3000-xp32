@@ -21093,3 +21093,42 @@ treating the latch as a 16-bit reload; the arithmetic here shows the firmware it
 
 **T1's latch is `$0100` and CR1 is never given a mode**, consistent with T1 being an
 external-input counter; T2 is not programmed at all. Only T3 is a timebase.
+
+## The board status register is READ-ONLY, and only five bits exist (2026-07-31)
+
+`$F70018`-`$F7001A` is described as a "board status/control register, PAL-decoded, 28 bits".
+Tracking every access — including the base-register form, since nine `lea $F70018,aN` sites
+dominate and an absolute-address scan sees only two accesses out of seventeen — gives a complete
+and much smaller picture:
+
+| what | result |
+|---|---|
+| writes, any form, anywhere in the 64 KB | **zero** |
+| bytes touched | **`$F70019` only** — `$F70018` and `$F7001A` are never accessed |
+| bits tested | **1, 2, 3, 4, 5** — and nothing else |
+| operations used | `btst` only; no `bset`, `bclr`, `move`, `clr` |
+
+| bit | tests | sites | self-test phase |
+|---:|---:|---|---|
+| 1 | **12** | `$F09274`, `$F09296`, `$F092D0`, `$F0930A`, ... | `$1100`/`$1200` |
+| 2 | 2 | `$F09420`, `$F09482` | `$1400` stage 3 |
+| 3 | 1 | `$F09046` | `$800` |
+| 4 | 2 | `$F08728` (absolute), `$F08926` | self-test entry + `$F0891C` |
+| 5 | 2 | `$F08732` (absolute), `$F0892E` | the suite gate |
+
+**This exactly matches the five equations `emulator/versabus.c` models — no more, no fewer.**
+That is a real confirmation rather than a coincidence: the model was built by reverse-engineering
+individual self-test phases, and a complete access census independently says those five bits are
+the entire observable surface. Bits 0, 6 and 7 can be left undefined without consequence.
+
+**The "control" half of the name is inert in this firmware.** Nothing is ever written here; the
+board's writable control is the VERSAmodule register at `$1FFF0`/`$1FFF1`, which the self-test
+drives constantly. So for emulation `$F70019` is a pure input: a function of VMOD state and
+chassis condition, never a latch.
+
+**And the methodological note, once more with a number attached.** The absolute-address form
+sees `$F08728` and `$F08732` — 2 of 17 accesses, **12%**. A detector built on it would have
+reported bits 4 and 5 only and missed bit 1 entirely, which is the most-tested bit on the
+register and the one carrying the two-phase handshake. This is the same 12%-visibility problem
+recorded for `$FF0204`, and it is why `CLAUDE.md` opens with "absolute-address scanning misses
+essentially every access".
