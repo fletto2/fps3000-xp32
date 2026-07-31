@@ -19742,3 +19742,43 @@ not established; 2 of 2,136 executed PCs.
 through a chain with an unrunnable link, so the fix cannot propagate there. Anyone reading
 the canonical listing should know that **three of the six task entry points appear as
 `DC.W 0x7001`** in it, and that `fps3k_custom.asm` is now correct on that point.
+
+### Why the last two addresses stay undecoded: an overlap race, diagnosed but not fixed
+
+Instrumenting `disasm.py`'s decode loop shows exactly what happens to `$F08F70` and
+`$F098EC`:
+
+```
+[dbg] popped $F08F70  valid=True indata=0 visited=0
+[dbg] $F08F70 REJECT overlap
+```
+
+Both are **popped from the queue, in range, not in a data region, and not themselves
+visited** — and then rejected by the guard `already_visited(addr+1, insn.size-1)`. The
+instruction is 4 bytes (`movem.l …,-(a7)`), so its interior bytes are already claimed:
+**a wandering linear walk decoded something at `$F08F72` before the call target was
+processed**, and the guard — correctly — refuses to overlap it.
+
+So this is not a missing seed. The target is found (both call sites decode as
+`bsr.w $f08f70` / `bsr.w $f098ec`) and queued; it simply loses a race for its own bytes.
+
+**A fix was tried and is not applied.** Targets mined from *actually decoded* instructions
+are stronger evidence than `scan_references()`'s blind whole-ROM sweep, so promoting them to
+the priority tier should let them claim their bytes first. Measured:
+
+| | tracked | promoted |
+|---|---:|---:|
+| bytes | 23,930 | 23,932 |
+| instructions | **6,755** | 6,754 |
+| `$F098EC` | `DC.W` | **decoded** |
+| `$F08F70` | `DC.W` | `DC.W` |
+
+It fixes one of the two, leaves the other, and **loses an instruction somewhere else** — the
+priority change shifts which walk wins some *other* race. That is a wash, not an improvement,
+and it would be wrong to apply it on the strength of one address.
+
+The durable result is the diagnosis: **`disasm.py`'s residue is an ordering artefact, not a
+reachability one.** Its remaining undecoded call targets are found and queued and lose to
+earlier misaligned decodes. Fixing that properly needs eviction — letting a confirmed call
+target displace a conflicting linear decode — rather than reordering, and that is a larger
+change than two addresses justify.
