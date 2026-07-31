@@ -4655,7 +4655,21 @@ for _ch, (_isr, _cmd, _hi, _lo, _rec) in enumerate(
           and insn(_isr + 16) == 'move.w $%x(a5), $%x.l' % (_hi, _rec + 2)
           and insn(_isr + 24) == 'move.w $%x(a5), $%x.l' % (_lo, _rec + 4))
     check('XP%dI ISR exits through the CCR sentinel, not rte' % _ch,
-          insn(_isr + 32) == 'move.w #$c, ccr' and insn(_isr + 36) == 'trap #$1')
+          insn(_isr + 34) == 'move.w #$c, ccr' and insn(_isr + 38) == 'trap #$1')
 check('the status file is contiguous: $1064 nibbles + 4 records of 3 words = 13 words',
       0x107C - 0x1064 == 12 * 2)
 check('...which is exactly the 0..12 bound chassis op $A walks', (0x107C - 0x1064) // 2 == 12)
+
+# ---- $1064 is updated lock-free by four tasks (2026-07-31) ----
+_s1064 = [a for a, (m, o, _) in sorted(_mins.items()) if '$1064' in o]
+check('$1064 has exactly 9 references in the ROM', len(_s1064) == 9, len(_s1064))
+check('...four and.w/or.w pairs, one per XP task, plus one read',
+      _s1064 == [0xF04FE6, 0xF0683A, 0xF06840, 0xF07252, 0xF07258,
+                 0xF07C52, 0xF07C58, 0xF08652, 0xF08658], [hex(x) for x in _s1064])
+check('the update is two whole-word RMW instructions, not load/modify/store',
+      all(insn(a) == 'and.w d2, $1064.l' for a in (0xF0683A, 0xF07252, 0xF07C52, 0xF08652))
+      and all(insn(a) == 'or.w d4, $1064.l' for a in (0xF06840, 0xF07258, 0xF07C58, 0xF08658)))
+check('...which is what makes four unlocked writers safe on one word',
+      insn(0xF0683A).startswith('and.w') and insn(0xF06840).startswith('or.w'))
+check('the only reader is the chassis op $A indexed read',
+      insn(0xF04FE6) == 'move.w $1064(a1), $e74.l')

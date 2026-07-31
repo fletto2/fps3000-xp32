@@ -20828,3 +20828,42 @@ over four driving configurations, which records the *effective* address the CPU 
 and so is immune to all of this. Nothing in it needs revising. What is new is knowing **why**
 the static route cannot be used to check it, and therefore that any future "register X is never
 touched" claim about the AP I/F is inadmissible unless it comes from the log.
+
+## `$1064` is a lock-free shared status word, and the nibble packing is why (2026-07-31)
+
+Nine references in the whole ROM, and they are completely regular:
+
+| site | instruction | task |
+|---|---|---|
+| `$F0683A` / `$F06840` | `and.w d2,$1064` / `or.w d4,$1064` | XP4I |
+| `$F07252` / `$F07258` | same | XP3I |
+| `$F07C52` / `$F07C58` | same | XP2I |
+| `$F08652` / `$F08658` | same | XP1I |
+| `$F04FE6` | `move.w $1064(a1),$E74` | chassis op `$A`, the indexed read |
+
+`d2` is the per-task scan mask (`$FFF0`, `$FF0F`, `$F0FF`, `$0FFF` — "clear my nibble") and `d4`
+is the new nibble value. So **four independent tasks update one shared word with no semaphore,
+no interrupt disable, and no test-and-set** — and it is correct, for a reason that is clearly
+designed rather than lucky:
+
+- `and.w d2,$1064` and `or.w d4,$1064` are each **single instructions**, and the 68000 performs
+  the read and the write inside one indivisible instruction execution. Neither can be split by
+  an interrupt.
+- Each task's mask and value touch **only its own 4 bits**. Two tasks interleaving their
+  AND/OR pairs cannot damage each other, because every write-back preserves the other three
+  nibbles it read.
+- The only visible transient is a task's *own* nibble reading zero between its AND and its OR,
+  and the only reader is the chassis, which is asking for that task's status anyway.
+
+**Had the design used one word per channel, this would have needed no care at all; had it used
+a byte-packed structure with `move.b`, it would still have been safe. What makes the 4-bit
+packing work is that the update is expressed as two whole-word RMW instructions rather than as
+a load, modify, store sequence.** A compiler emitting `move.w $1064,d0 / and.w / or.w / move.w
+d0,$1064` would have introduced a race that the hand-written form does not have — one more
+piece of evidence, alongside the template copies and XP4I's `$1E` displacement, that this
+firmware is hand-written assembly.
+
+**Emulator consequence**: none for correctness, but it means `$1064` is a legitimate place to
+observe all four channels' states from outside without perturbing them, which is what
+`FPS3K_RAMWATCH` on `1064-107C` gives — the whole 13-word status file including the four
+transaction records the ISRs deposit.
