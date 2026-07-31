@@ -29568,3 +29568,65 @@ reads), it is worth having this stated by the firmware: **whatever else CHANNEL_
 latches and returns the last value written.** A model that makes it write-only, or that lets the
 chassis overwrite it asynchronously, fails here — which constrains the "the chassis presents
 `$28` in CHANNEL_SELECT" mechanism to happen only outside this phase.
+
+## `$FF0216` bit 7 gates whether `$FF000E` RESPONDS ON THE BUS (2026-07-31)
+
+The bit-7 test is the last of the four `$FF0216` probes, and it is the only one whose subject is
+the **AP I/F** rather than the chassis window. Its probe routine:
+
+```
+$F098C4  move.w #$ff,$20c(a6)     ; $FF020C <- $FF
+$F098CA  move.w #$400,$218(a6)    ; $FF0218 <- $400
+$F098D0  tst.w  $e(a6)            ; ACCESS $FF000E -- this is what may fault
+$F098D4  nop nop nop nop          ; padding for the imprecise bus-error PC
+$F098DC  tst.w  d1                ; <-- the RETURNED condition is the FAULT FLAG
+$F098DE  rts
+```
+
+**Read that last `tst` carefully.** The routine looks like it returns the value of `$FF000E` —
+`tst.w $e(a6)` is right there in the middle. It does not: four `nop`s later, `tst.w d1`
+overwrites the condition codes, and `d1` is the bus-error flag set by the handler at `$F098E0`.
+The meaningful `tst` is the last one. I very nearly concluded the opposite polarity from this
+routine, and the trap is general — **in a CCR-returning routine, only the final flag-setting
+instruction matters**, however suggestive the earlier ones look.
+
+With that, the two arms read:
+
+| arm | `$FF0216` | required | meaning |
+|---|---|---|---|
+| `$F0984C` | `$80` **set** | `bne` — `d1` nonzero | accessing `$FF000E` **MUST bus-error** |
+| `$F098A0` | **cleared** | `beq` — `d1` zero | accessing `$FF000E` **must not** fault |
+
+So **bit 7 controls whether the AP I/F command/status port acknowledges on the bus** — set, the
+access times out into the watchdog; clear, it completes. This is the first time this bit has
+been tied to a bus-level effect rather than to its use around chassis op `$6` (which clears it
+for the duration of a raw peek/poke and restores it afterwards).
+
+**One caveat, stated rather than papered over.** The middle arm at `$F09872` sets bit 7, writes
+`$AAAA` to `$FF000E` and requires it to read back — which under a plain "bit 7 ⇒ no response"
+reading should have faulted. The difference is that the middle arm writes **`$FF0218` ← `$0`**
+while the probe writes **`$400`**, and the probe also sets `$FF020C` ← `$FF`. So the fault is
+gated by bit 7 *in combination with* the XLTR state, and this test does not isolate which. What
+is proven is that bit 7 flips the outcome with everything else held constant.
+
+## The AP I/F gets almost no self-test coverage (2026-07-31)
+
+Sweeping the whole diagnostic region for accesses through the `$FF0000` base with a
+window-sized displacement finds **exactly three**, all on the same register:
+
+```
+$F0987C  move.w #$aaaa,$e(a6)     ; write the command port
+$F09882  cmpi.w #$aaaa,$e(a6)     ; read it back
+$F098D0  tst.w  $e(a6)            ; the bit-7 fault probe
+```
+
+That is the entirety of the AP I/F self-test: **one write/read-back of `$AAAA` on `$FF000E`,
+plus the bit-7 bus-response probe.** No channel window is touched, no data port, no ready flag,
+and none of `$FF0040`-`$FF00AF` appears anywhere in the suite.
+
+This sharpens the board-coverage boundary already recorded. The self-test genuinely reaches SBC,
+PTM, VMOD interrupter, bus watchdog, XLTR and SCM-via-MEM-CTL — but its AP I/F coverage is a
+single latch check, not an exercise of the host link. **The host interface is proved present,
+not proved working**, and nothing on the far side of it (the counterpart card in the host
+chassis) is touched at all. For a model, that means the AP I/F channel windows have no
+self-test contract to satisfy: they are constrained only by the operational paths.

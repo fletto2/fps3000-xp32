@@ -6460,6 +6460,21 @@ check('$FF0204 is proved a readable latch by a 6-iteration write/read-back test'
       and _w(0xF094FA) == 0x3D46 and _w(0xF094FC) == 0x0204
       and _w(0xF094FE) == 0xBC6E and _w(0xF09500) == 0x0204)
 
+check('the bit-7 probe returns the BUS-ERROR FLAG in CCR, not the port value',
+      _w(0xF098D0) == 0x4A6E and _w(0xF098D2) == 0x000E
+      and _w(0xF098DC) == 0x4A41 and _w(0xF098DE) == 0x4E75)
+check('...with $FF0216 bit 7 SET a fault is REQUIRED, clear it is forbidden',
+      _w(0xF0984C) == 0x3D7C and _w(0xF0984E) == 0x0080 and _w(0xF09850) == 0x0216
+      and (insn(0xF09854) or '').startswith('bne')
+      and _w(0xF098A0) == 0x426E and _w(0xF098A2) == 0x0216
+      and (insn(0xF098A6) or '').startswith('beq'))
+check('...and the probe first writes $FF020C=$FF and $FF0218=$400',
+      _w(0xF098C4) == 0x3D7C and _w(0xF098C6) == 0x00FF and _w(0xF098C8) == 0x020C
+      and _w(0xF098CA) == 0x3D7C and _w(0xF098CC) == 0x0400 and _w(0xF098CE) == 0x0218)
+check('the whole self-test touches the AP I/F at $FF000E only, three sites',
+      _w(0xF0987C) == 0x3D7C and _w(0xF09880) == 0x000E
+      and _w(0xF09882) == 0x0C6E and _w(0xF09886) == 0x000E)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
