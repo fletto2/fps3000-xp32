@@ -26959,3 +26959,49 @@ every successful `T0PAGAL`. So every RTOS structure is **guaranteed zero before 
 is written** — which is why unset fields in a dump read as clean zeros rather than heap
 residue, and why a model that hands out non-zeroed pages will still boot but will diverge in
 any field the firmware leaves untouched.
+
+## The allocatable-RAM region list is BUILT BY PROBING, not read from config (2026-07-31)
+
+`$F0A386`-`$F0A420` is a fault-tolerant memory scanner, and it is what fills the region
+list at `$0C00`:
+
+```
+movea.l d3,a3            ; start
+addi.l  #$ff,d4 / clr.b d4 / movea.l d4,a4   ; end, rounded up to a page
+lea.l   $0.w,a5
+loop:   pea.l $f0a3f6(pc) / move.w #$4245,-(a7)   ; GUARD
+        clr.l (a3)+                               ; ...clear RAM
+        cmpa.l a4,a3 / bcs loop
+        addq.l #$6,a7                             ; drop the guard on success
+
+$F0A404 (the fault continuation):
+        move.l a3,d3 / addi.l #$100,d3 / clr.b d3 ; round UP TO THE NEXT PAGE
+        movea.l d3,a3
+        cmpa.l a4,a3 / bcc done                   ; past the end -> stop
+        pea.l $f0a404(pc) / move.w #$4245,-(a7)   ; re-guard...
+        move.l d0,(a3)+                           ; ...and probe one longword
+        bra loop
+```
+
+So the firmware **writes zeros across RAM and, when a write faults, skips to the next
+256-byte page and carries on probing**. Two of the seven `'BE'` guards exist for this one
+loop — one for the bulk clear, one for the single-longword retry — and the fault
+continuation is itself guarded, so a run of bad pages is skipped one page at a time.
+
+**Consequences worth stating:**
+
+- **The region list at `$0C00` is a measurement, not a configuration.** This project
+  recorded it as holding exactly one record, `$1100`-`$1FE00`; that is because the scan
+  found no holes on this machine, not because one record was declared. A machine with a
+  memory hole produces several records, and the page heap — and therefore the usable
+  staging-buffer bound — changes with it.
+- **This strengthens the "staging bound is dynamic" note** with a second mechanism. The
+  bound moves not only because the heap grows downward as structures are allocated, but
+  because the *region list itself* depends on which pages answered at boot.
+- **A model must decide what unmapped RAM does.** If it never faults, the scan simply clears
+  to `a4` and yields one region — which is what the current emulator does and why its region
+  list matches. If a model ever introduces holes or parity faults, this loop is where the
+  divergence first appears, and it will appear as a *different region list*, not as a crash.
+- **RAM is zeroed by this pass**, which is the deeper reason the firmware "never reads a byte
+  it has not written": low RAM is explicitly cleared at boot, so the parity hazard recorded
+  in the divergence table is avoided by the firmware rather than by luck.

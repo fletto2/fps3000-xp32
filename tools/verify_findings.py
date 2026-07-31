@@ -5684,6 +5684,15 @@ check('vector 2 in the static table is $F00AD8, which reaches the check',
 check('...and a missing marker falls through to the kernel-fatal snapshot',
       insn(0xF00D08) == 'bsr.w $f00186')
 
+check('the RAM scan clears longwords under a guard, bounded by a4',
+      insn(0xF0A3A8) == 'move.l d0, (a3)+' and insn(0xF0A3AC) == 'cmpa.l a4, a3'
+      and insn(0xF0A3B0) == 'addq.l #$6, a7')
+check('...and its fault continuation rounds UP TO THE NEXT PAGE and retries',
+      insn(0xF0A406) == 'addi.l #$100, d3' and insn(0xF0A40C) == 'clr.b d3'
+      and insn(0xF0A410) == 'cmpa.l a4, a3')
+check('...re-guarding the single-longword probe, so bad pages are skipped one by one',
+      insn(0xF0A414) == 'pea.l $f0a404(pc)' and insn(0xF0A41C) == 'move.l d0, (a3)+')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
