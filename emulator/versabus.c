@@ -744,16 +744,28 @@ static void apif_write(uint32_t addr, uint16_t val) {
 
 /* ============== XLTR handler ============== */
 
+static int versabus_boot_complete(void);
+
 static uint16_t xltr_read(uint32_t addr) {
     /* FPS3K_CHSEL_RD=<hex> makes CHANNEL_SELECT read back that value
      * instead of what the SBC last wrote.  F04A84 reads this register
      * and the bulk-transfer loop at F04AE2 only runs when it reads $28,
-     * so this is how the chassis would signal "bulk transfer pending". */
+     * so this is how the chassis would signal "bulk transfer pending".
+     *
+     * GATED ON BOOT COMPLETION, like FPS3K_DMA10AA and FPS3K_POKE before it
+     * and for the same reason: $FF0204 is the phase-broadcast register, and
+     * the power-on diagnostics write it ~33k times and read it back.  A
+     * constant readback fails those tests -- measured, an ungated
+     * FPS3K_CHSEL_RD=28 ends at final PC $F08946, inside the self-test,
+     * against $F00FD6 (the RTOS idle loop) for a clean boot.
+     * FPS3K_CHSEL_RD_FROM_RESET=1 restores the old behaviour. */
     if (addr == XLTR_CHANNEL_SELECT) {
         uint16_t sv;
         if (versabus_seq_chsel(&sv)) return sv;
         const char *e = getenv("FPS3K_CHSEL_RD");
-        if (e) return (uint16_t)strtoul(e, NULL, 16);
+        if (e && (versabus_boot_complete()
+                  || getenv("FPS3K_CHSEL_RD_FROM_RESET")))
+            return (uint16_t)strtoul(e, NULL, 16);
     }
     /* Special-case the registers with side effects */
     if (addr == XLTR_STATUS_IRQ) {

@@ -1051,6 +1051,7 @@ int main(int argc, char **argv) {
             "FPS3K_CHASSIS_UNINIT","FPS3K_LOGCHASSIS","FPS3K_BUSPC",
             "FPS3K_BSTAT19_B5","FPS3K_PCLOG","FPS3K_REGLOG","FPS3K_APIF_LEGACY",
             "FPS3K_RTOSDUMP","FPS3K_CHASSIS_CMD","FPS3K_POKE_FROM_RESET",
+            "FPS3K_CHSEL_RD_FROM_RESET",
             "FPS3K_ACCESSLOG","FPS3K_RESPSEQ",
         };
         int any = 0;

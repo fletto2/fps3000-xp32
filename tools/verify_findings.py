@@ -3666,6 +3666,28 @@ def _t1(n, stride=4):
     return a + struct.unpack('>h', _rom[a - _B:a - _B + 2])[0]
 
 
+def _t1flags(n):
+    a = 0xF003D8 + 4 * n
+    return struct.unpack('>H', _rom[a - _B + 2:a - _B + 4])[0]
+
+
+# The flags word is {parameter-block size in the high byte, flags in the low}.
+# The check on that reading is that it must come out right for directives whose
+# parameter shape is already known independently.
+check('directives that take no parameter block read size 0 with bit 7 clear',
+      all(_t1flags(n) >> 8 == 0 and not (_t1flags(n) & 0x80)
+          for n in (0x0F, 0x11, 0x13, 0x22, 0x3C)))
+check('CRSEM and ATSEM declare a 10-byte block -- the semaphore descriptor',
+      all(_t1flags(n) >> 8 == 10 and (_t1flags(n) & 0x80)
+          for n in (0x29, 0x2D)))
+check('GTSEG/CRTCB declare 28 bytes and GTASQ 24',
+      _t1flags(0x01) >> 8 == 28 and _t1flags(0x0B) >> 8 == 28
+      and _t1flags(0x1F) >> 8 == 24)
+# Two interrupt-connect directives; the firmware uses the one TR1.EQ omits.
+check('$3D CISR and $4C are both live with identical 16-byte parameter blocks',
+      _t1(0x3D) == 0xF020E2 and _t1(0x4C) == 0xF02216
+      and _t1flags(0x3D) >> 8 == 16 and _t1flags(0x4C) >> 8 == 16)
+
 check('at stride 4 exactly 60 of 77 TRAP #1 slots are live',
       sum(1 for n in range(77) if _t1(n) != _t1(0)) == 60)
 check('$4C resolves to $F02216, containing the documented handler $F0226A',
@@ -3690,6 +3712,8 @@ check('the $4C implementation $F0226A runs 6 times, once per task',
       _dpcs['F0226A'] == 6)
 check('...and the directive error stub $F003D0 never runs at all',
       _dpcs['F003D0'] == 0)
+check('$4C is what connects the six BIM vectors, and CISR never runs',
+      _dpcs['F02216'] == 6 and _dpcs['F020E2'] == 0)
 
 # Regression: FPS3K_RAMWATCH used to strtoul() the whole string, so a
 # "<lo>-<hi>" range collapsed to a single longword and the rest of a

@@ -17226,3 +17226,59 @@ shape is already known, and it does: the four that take **no** parameters read s
 bit 7 clear, and **`CRSEM`/`ATSEM` read 10** — independently confirming, from the dispatch
 table, the 10-byte `{4-byte name, longword, word}` block derived elsewhere in this file from
 the descriptors sitting at each task's block base. Two unrelated routes, same number.
+
+### `$4C` and `$3D` are two interrupt-connect directives, and FPS uses the undocumented one
+
+`$3D` is Motorola's `CISR`, "CONNECT TO INTERRUPT SERVICE ROUTINE". `$4C` is the directive
+this firmware actually uses to install its six BIM vectors. **Both are live in this kernel,
+and both declare a 16-byte parameter block** — `$3D` at `$F020E2`, `$4C` at `$F02216`.
+Measured over a boot: `$4C`'s entry and its documented implementation `$F0226A` each execute
+**6 times**, once per task; `$3D` executes **0**.
+
+So the kernel implements a directive that `TR1.EQ` does not name — that file stops at 75 and
+`$4C` is 76. The economical reading is that **our `TR1.EQ` is an earlier revision than the
+RMS68K build in this ROM**, rather than that `$4C` is an FPS private extension: it lives in
+the kernel's own built-in table with an ordinary flags word, not in the `!UDR` extension
+registry that add-on directives use.
+
+*Caution on a method that failed here:* scanning for `moveq #n,d0` immediately before
+`trap #1` finds only 8 of the 14 directives this firmware issues, because the rest are loaded
+with `move.w`. Any "directive X is never used" claim from that scan is a false negative —
+`$4C` is invisible to it while executing 6 times per boot.
+
+## `FPS3K_CHSEL_RD` is now gated on boot completion (2026-07-30)
+
+`$FF0204` (CHANNEL_SELECT) is the phase-broadcast register — the hottest register on the
+board, ~33k writes per run — and the power-on diagnostics both write it and **read it
+back**. Forcing a constant readback from reset therefore fails those tests, exactly as
+`FPS3K_DMA10AA` and `FPS3K_POKE` did before they were gated. Measured:
+
+| configuration | final PC |
+|---|---|
+| clean boot | `$F00FD6` (RTOS idle loop) |
+| `FPS3K_CHSEL_RD=28`, ungated | **`$F08946`** — stuck inside the self-test |
+| `FPS3K_CHSEL_RD=28`, gated (now) | `$F00FD6` |
+
+This was the third instance of the same defect, so the pattern is worth stating: **any
+hook that forces a constant value at an address the self-test walks must be gated on boot
+completion.** `versabus_boot_complete()` (vector `$128` holding `$F05DD6`) already existed
+for the other two. `FPS3K_CHSEL_RD_FROM_RESET=1` restores the old behaviour for comparison.
+
+**Separately: the `FPS3K_CHSEL_RD=28 FPS3K_RESP=0x00` result documented above no longer
+reproduces.** That configuration was recorded as yielding "the first read of `$FF0008` in
+any emulator run"; it now yields **zero**, and so does the ungated `FROM_RESET` arm, so
+this is not a regression introduced by the gate. It is superseded rather than broken — the
+`FPS3K_SEQ` mechanism documented after it does the same job and still works exactly as
+recorded:
+
+```
+FPS3K_SEQ="01:0000,41:0001,02:0008,42:0000,00:0028" FPS3K_DATAIN=1
+  -> 8 reads of $FF0008; $10000 = 1000 1001 1002 1003 1004 1005 1006 1007, then zeros
+
+FPS3K_RESP=0x94 FPS3K_XPIRQ=6 FPS3K_CHASSIS_CMD=4,8,53310004,0000DEAD,BEEF0000
+  -> DE AD BE EF at exactly $10010
+```
+
+Note `FPS3K_DATAIN=1` is now required for the first of those, because `$FF0004`'s ready
+bit was changed this session to track whether a data source actually exists rather than
+reading ready unconditionally.
