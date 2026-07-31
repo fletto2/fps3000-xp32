@@ -8216,6 +8216,21 @@ check('...and $26C follows cmpi.l #$0,d5 in D2_FIN, the timeout signature',
 check('the $F084A4 channel map is 1->5, 2->4, 3->3, 4->2',
       [_rom_bytes[0x84A4 + _c] for _c in range(1, 5)] == [5, 4, 3, 2])
 
+check('the PTM latch is composed from #$320 (E kHz) and config $F0A530 (period ms)',
+      _w(0xF0A2A4) == 0x203C and _l(0xF0A2A6) == 0x00000320
+      and _w(0xF0A2AA) == 0x80FC and _w(0xF0A2AC) == 0x0004
+      and _w(0xF0A530) == 10
+      and _w(0xF0A2B8) == 0xC2FC and _w(0xF0A2BA) == 0x0004
+      and (((4 * 10 - 1) << 8) | (0x320 // 4 - 1)) == 0x27C7)
+check('...stashing the period at $0C56 and the MSB reload at $0C58',
+      _w(0xF0A2B4) == 0x31C1 and _w(0xF0A2B6) == 0x0C56
+      and _w(0xF0A2BE) == 0x31C1 and _w(0xF0A2C0) == 0x0C58)
+check('...and CR3 <- $C6 then CR1 <- $00 via the CR2 bit-0 address select',
+      _w(0xF0A2D2) == 0x137C and _w(0xF0A2D4) == 0x0000 and _w(0xF0A2D6) == 0x0003
+      and _w(0xF0A2D8) == 0x137C and _w(0xF0A2DA) == 0x00C6 and _w(0xF0A2DC) == 0x0001
+      and _w(0xF0A2DE) == 0x137C and _w(0xF0A2E0) == 0x0001 and _w(0xF0A2E2) == 0x0003
+      and _w(0xF0A2E4) == 0x137C and _w(0xF0A2E6) == 0x0000 and _w(0xF0A2E8) == 0x0001)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

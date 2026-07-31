@@ -35540,3 +35540,42 @@ better read as "send `d2`, continue" than as a finalizer, which fits the recorde
 
 Now all four are genuinely read, and the count stands: **no recorded claim about any of them has
 needed correction.**
+
+## The PTM tick programming read directly — provenance confirmed (2026-07-31)
+
+```
+$F0A2A4  move.l  #$320,d0        ; 800 — the E clock in kHz
+$F0A2AA  divu.w  #$4,d0          ; 200
+$F0A2AE  subq.w  #$1,d0          ; 199 = $C7           <- the LSB
+$F0A2B0  move.w  $F0A530(pc),d1  ; 10 — the tick period in MILLISECONDS
+$F0A2B4  move.w  d1,$c56.w       ; stash the period
+$F0A2B8  mulu.w  #$4,d1          ; 40
+$F0A2BC  subq.w  #$1,d1          ; 39 = $27            <- the MSB
+$F0A2BE  move.w  d1,$c58.w       ; stash the MSB reload
+$F0A2C2  lsl.w   #$8,d1 / add.w d1,d0                  ; $27C7
+$F0A2C6  movep.w d0,$d(a1)       ; T3 latch <- $27C7
+$F0A2CA  move.w  #$100,d0 / movep.w d0,$5(a1)          ; T1 latch <- $100
+$F0A2D2  move.b  #$0,$3(a1)      ; CR2 bit 0 = 0 -> address 0 selects CR3
+$F0A2D8  move.b  #$c6,$1(a1)     ; CR3 <- $C6
+$F0A2DE  move.b  #$1,$3(a1)      ; CR2 bit 0 = 1 -> address 0 selects CR1
+$F0A2E4  move.b  #$0,$1(a1)      ; CR1 <- $00
+```
+
+Every recorded claim about the tick is confirmed instruction by instruction: the latch is **`$27C7`**
+composed as `E_kHz x period_ms` split across two bytes; **`$0C58` holds 39**, which is the MSB reload
+the high-resolution clock at `$F00F96` adds back; **CR3 = `$C6`** puts T3 in dual-8-bit mode;
+**CR1 = `$00`** makes T1 an external-input counter; and the period is `40 x 200 = 8000` E cycles =
+**exactly 10.0000 ms** at 800 kHz. The claim that neither number is hard-coded is right — both come
+from `#$320` and the config word `$F0A530`.
+
+**Two details to add.**
+
+- **`$0C56` holds the tick period in milliseconds (10)**, stashed one instruction before `$0C58`.
+  This project names `$0C58` but not `$0C56`; they are a pair, written from the same `d1`, and a
+  reader of `$0C56` gets the period directly rather than the derived reload.
+- **The CR addressing is the MC6840's shared-address trick, used in both directions here.** `$3(a1)`
+  is CR2, whose bit 0 selects whether address 0 is CR1 or CR3 — so the sequence writes CR3 first
+  (with CR2 bit 0 clear) and CR1 second (with it set). A model that treats `$1(a1)` as a single
+  register sees `$C6` overwritten by `$00` and loses the T3 configuration entirely.
+
+**T2 is confirmed never programmed** — `$5(a1)` is T1, not T2; only T1 and T3 receive latches.
