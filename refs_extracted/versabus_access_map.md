@@ -24581,3 +24581,67 @@ All three agree, and the second was the one with a blind spot until now. **The l
 completeness claim about device access needs the pointer-global census as well** — it is cheap,
 it is exhaustive, and it is the only one of the three that catches an address computed at boot
 and used for the rest of the run.
+
+## Four of the nine singleton-size directives characterised (2026-07-31)
+
+The nine directives whose parameter-block sizes belong to no family are where individual decoding
+has to start. Four of them fall out quickly.
+
+### `$1A` and `$1B` are a matched pair of callback installers
+
+```
+$1A ($F0312E)  move.l $120(a6),$48(a6)  / bset.b #$4,$29(a6) / rte
+$1B ($F0313C)  move.l $120(a6),$4C(a6)  / bset.b #$3,$29(a6) / rte
+```
+
+Three instructions each. Both take the caller's **saved `a0`** — `TCB+$120`, the field directive
+`$25`'s context restore writes — and store it into a TCB slot, setting a distinct flag bit in
+`TCB+$29`:
+
+| directive | slot | flag |
+|---|---|---|
+| `$1A` | **`TCB+$48`** | `TCB+$29` bit 4 |
+| `$1B` | **`TCB+$4C`** | `TCB+$29` bit 3 |
+
+**`TCB+$4C` is the slot `CMR` writes with the FPS driver-chain walker** (`move.l #$F044A2,$4C(a1)`
+at `$F03FDA`/`$F040EA`). So directive `$1B` exposes to ordinary tasks the same handler slot the
+channel-request machinery uses internally, and `$1A` is its sibling one longword lower.
+
+Their large declared blocks — 36 and 56 bytes — are what the **dispatcher** validates and
+translates in the *pointed-at* structure; the handlers themselves touch only the pointer. That is
+why the biggest parameter block in the whole table belongs to the shortest handler in it.
+
+### `$3E` queries a vector's owner — and independently confirms a directory slot
+
+```
+$F02280  move.b  $3(a4),d2         a byte from the parameter block
+$F02284  movea.l $C66.w,a1
+$F02288  tst.b   (a1,d2.w)         index the table BY BYTE
+$F0228C  bgt.b   $F02296
+$F0228E  move.w  #$E,$102(a6)      else status = $E
+```
+
+A byte-indexed table of bytes reached through directory slot `$0C66` is exactly `!VCT` — the
+256-byte `byte[vector] = owning task number` table this project locates at `$1FA00`. **`$0C66` is
+already documented as `!VCT`'s slot**, and this is an independent derivation of the same
+assignment from a directive that has nothing to do with how the table was originally found.
+
+So `$3E` **checks whether a given exception vector has an owner**, failing with status `$E` when
+the byte is not positive.
+
+### `$33` is a privileged address translation
+
+```
+$F03A18  btst.b  #$F,$28(a6)       the general privilege flag (21 sites)
+$F03A20  bclr.b  #$E,d7            unprivileged -> clear a capability bit
+$F03A28  moveq   #$4,d5
+$F03A2C  movea.l $36(a6),a0
+$F03A30  bsr.w   $F0175C           T0LOGPHY -- logical to physical
+```
+
+It translates the address in the parameter block, with the privilege flag deciding whether a bit
+of the request survives. Status `+$C` on failure.
+
+**Five singletons remain undecoded**: `$18` (9 bytes), `$1C` (14), `$23` (18), `$36` (20), and
+`$1D` — which is already named `RQSTPA`, the periodic-activation request, so **four** genuinely
+remain.

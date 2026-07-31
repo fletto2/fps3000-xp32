@@ -5466,6 +5466,25 @@ check('no OTHER pointer global holds an address outside RAM',
            (0x0000, 0x0008, 0x0C00, 0x0C08, 0x0C0C, 0x0C10, 0x0C20, 0x0C24, 0x0C28,
             0x0C2C, 0x0C30, 0x0C3A, 0x0C4E, 0x0C66, 0x0C6A, 0x0C6E, 0x0C78, 0x0E48, 0x0E58)],
       sorted(hex(g) for g in _ptrg))
+
+# ---- four singleton-size directives characterised (2026-07-31) ----
+check('$1A and $1B are three-instruction callback installers',
+      insn(0xF0312E) == 'move.l $120(a6), $48(a6)'
+      and insn(0xF0313C) == 'move.l $120(a6), $4c(a6)'
+      and insn(0xF0313A) == 'rte' and insn(0xF03148) == 'rte')
+check('...each flagging a distinct bit of TCB+$29',
+      insn(0xF03134) == 'bset.b #$4, $29(a6)' and insn(0xF03142) == 'bset.b #$3, $29(a6)')
+check('...and TCB+$4C is the slot CMR writes with the driver walker',
+      insn(0xF03FDA) == 'move.l #$f044a2, $4c(a1)')
+check('...so the biggest declared block (56) belongs to the shortest handler',
+      (_t1[0x1B][1] >> 8) == 56)
+check('$3E indexes a BYTE table through directory slot $0C66 -- !VCT',
+      insn(0xF02280) == 'move.b $3(a4), d2' and insn(0xF02284) == 'movea.l $c66.w, a1'
+      and insn(0xF02288) == 'tst.b (a1, d2.w)')
+check('...failing with status $E when the vector has no owner',
+      insn(0xF0228E) == 'move.w #$e, $102(a6)')
+check('$33 is gated on the general privilege flag and translates via T0LOGPHY',
+      insn(0xF03A18) == 'btst.b #$f, $28(a6)' and _t0rev.get(0xF0175C) == 0x08)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
