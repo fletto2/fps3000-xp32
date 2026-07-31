@@ -28457,3 +28457,26 @@ tracing a consumer of `$1F07E` or `$176F0` would settle it.
 Recorded this way deliberately. The mechanics are worth having — a model must reproduce these
 writes, and the sign-extension is easy to get wrong — but the pattern of plausible-looking
 values invites a story, and the ROM does not supply one.
+
+### The table explains the "40 nonzero bytes at `$1F000`-`$1F09F`"
+
+This project records that a stock-boot RAM dump "shows 40 nonzero bytes in `$1F000`-`$1F09F`"
+— the observation that forced the monitor's workspace to be relocated from `$1F000` down to
+`$0F800`, because it collided with live firmware data whose origin was unknown.
+
+**Passes 1 and 2 of the `$F0A4BE` table write `$1F07E`-`$1F08D`, entirely inside that range.**
+Pass 2 overwrites pass 1, so the surviving contents are:
+
+```
+$1F07E <- $00F0   $1F080 <- $0000   $1F082 <- $0000   $1F084 <- $008E
+$1F086 <- $0071   $1F088 <- $0072   $1F08A <- $0073   $1F08C <- $0074
+```
+
+Sixteen of the forty bytes are therefore accounted for, and their writer is named. The
+consecutive `$71 $72 $73 $74` and the `$8E` are the same shape as the vector numbers the
+same routine writes elsewhere, which is suggestive — but as noted above, the *purpose*
+remains unestablished and I am not going to infer one from four consecutive integers.
+
+What this does settle is the practical point behind the monitor relocation: **that region is
+written during boot by identified code**, not by chance or by an uninitialised structure, so
+relocating the workspace was necessary rather than merely cautious.
