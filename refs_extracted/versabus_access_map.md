@@ -17482,3 +17482,16 @@ One asymmetry to flag rather than smooth over: **`IO1I`'s declared segment is on
 bytes**, `$F05D00-$F05EFF`, while its code demonstrably runs to `$F05E86` — inside the
 declared range, so it is consistent, but it leaves TCBIO1I far smaller than any XP task.
 That fits its role (a single ISR plus a short body) and is not a discrepancy.
+
+### Second confirmation of the flags-word size field: `GTSEG` declares 28 = `SGPBL`
+
+`SEG.EQ` defines the Segment Parameter Block: `SGPBTASK`(4) + `SGPBSESS`(4) +
+`SGPBOPT`(2) + `SGPBATTR`(2) + `SGPBNAME`(4) + `SGPBLA`(4) + `SGPBSL`(4) +
+`SGPBBUFF`(4), so **`SGPBL` = 28 bytes** — and 28 is exactly what `GTSEG` (`$01`) carries
+in the high byte of its dispatch-table flags word. `CRTCB` declares 28 as well.
+
+That is now two independent structural confirmations of the "high byte is a
+parameter-block size" reading, from two different Motorola files and two different
+directives: `CRSEM`/`ATSEM` declare **10**, the semaphore descriptor, and `GTSEG`
+declares **28**, `SGPBL`. Neither number was used to derive the decode; both had to come
+out right afterwards, and both did.
