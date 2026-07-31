@@ -7872,6 +7872,11 @@ check('the emulator models the width mux on the READ side at $400002',
 check('...gated on $FF0216 & $30 (bit 4 clear AND bit 5 clear)',
       "& 0x30" in open('/home/fletto/ext/src/claude/fps3000/emulator/fps3k_sbc.c').read())
 
+check('the SCM region is 4096 longwords and the test makes 4 passes',
+      (0x403FFC - 0x400000) // 4 + 1 == 4096
+      and 4096 * 4 * 4 == 65536          # longwords x passes x bytes = measured byte accesses
+      and 4096 * 4 * 2 == 32768)         # verify iterations x 2 = $FF0204 writes
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

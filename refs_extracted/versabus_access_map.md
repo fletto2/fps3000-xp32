@@ -34104,3 +34104,42 @@ matcher scoped too narrowly produced a confident wrong negative. The rule that c
 applies here too: **a negative claim needs a known-positive control**, and I had none for "the model
 does not implement X". The correct control was cheap — `FPS3K_LOGCHASSIS` — and it should have run
 before the claim, not after.
+
+## The SCM test measured: the structural decode confirmed to the byte (2026-07-31)
+
+`FPS3K_LOGCHASSIS` over a full boot (the SCM stage is reached at ~96.8 M cycles / 8.35 M
+instructions — a 40 M-cycle run stops short of it, in the DRAM test):
+
+| PC | op | byte accesses |
+|---|---|---:|
+| `$F09B48` | WR — the fill loop | **65,536** |
+| `$F09B58` | RD — verify pattern `d0` | **65,536** |
+| `$F09B70` | WR — write pattern `d1` | **65,536** |
+| `$F09B72` | RD — verify pattern `d1` | **65,536** |
+| `$F09AF6`/`$F09B00` | WR/RD | 52 |
+| phase `$1900`/`$1700` probes | | 30 |
+
+262,290 accesses over 16,388 distinct addresses, `$400000`-`$404003`.
+
+**Every number falls out of the decode exactly.** The region is `$400000`-`$403FFC` = **4096
+longwords**; the passes are 2 pattern pairs x 2 directions = **4**; so 4096 x 4 = 16,384 longword
+operations = **65,536 byte accesses** per loop. Four loops, four identical counts. The structure —
+region size, pattern-pair count, and the ascending/descending re-entry via `neg.w d2` — is confirmed
+by measurement rather than by reading alone.
+
+**And it corrects my own arithmetic.** I predicted "65,536 writes to `$FF0204`" from this loop. The
+right figure is **32,768**: the phase counter is written twice per *verify iteration*, and there are
+4096 x 4 = 16,384 of those, not 32,768. I had double-counted the pattern pairs — they multiply the
+passes, not the iterations within a pass.
+
+That matters, because **32,768 is essentially the documented "~33k writes per run" for
+`CHANNEL_SELECT`**. So the "hottest register on the board" is this one loop, and the identification
+is now quantitative rather than plausible.
+
+### Correction: an earlier chassis map here was measured on a truncated run
+
+A first pass reported "the firmware touches only 4 bytes of chassis memory, `$400000`-`$400003`".
+That run was capped at 40 M cycles and **ended inside the DRAM test at `$F09A92`**, before the SCM
+stage exists. The true figure is 16,388 addresses. A truncated run is indistinguishable from a
+complete one in the output unless the final PC is checked against the expected idle loop — worth
+doing before any "the firmware never touches X" claim drawn from a trace.
