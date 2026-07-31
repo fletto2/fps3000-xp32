@@ -29078,3 +29078,47 @@ consistent with the observations but not derived from them, unlike the second.
 
 **Fifth equation extracted**, and the first where the extraction changed the *reading* rather
 than just confirming the formula.
+
+## The one chassis equation the suite does NOT specify (2026-07-31)
+
+Five of the six documented board-status equations are stated by the self-test. The sixth —
+**bit 4 of `$F70019` = busy/ready from XLTR MODE1 bit 15** — is not, and it is worth being
+explicit about the difference.
+
+`move.w #$8000,$202(a6)` — MODE1 with bit 15 set — occurs at **exactly three sites in the
+whole image**: `$F087AE`, `$F08836`, `$F088D0`, the three checkpoint handshakes. There is no
+phase that walks MODE1 bit 15 against board bit 4 the way phase `$0800` walks bits 7 and 1
+against board bit 3. Board bit 4 is literal-tested at exactly one place, `$F08926`, the SCM
+inner-loop poll.
+
+So the bit-4 relationship is an **inference from the handshake's shape** — the SBC sets
+MODE1 bit 15 and then waits on bits 4 and 5 — rather than a specified truth table. It is a
+reasonable inference and nothing contradicts it, but it does not have the standing of the
+other five.
+
+### Phase `$0500` does pin board status directly
+
+`BoardStatusPoll_3F11` masks with `$3F31` and requires `$3F11`:
+
+| bit | required |
+|---:|---|
+| 0 | **set** |
+| 4 | **set** |
+| **5** | **clear** |
+| 8-13 | **set** |
+
+So during normal operation **bit 4 is set and bit 5 is clear** — which is exactly the state
+that lets the checkpoint handshake mean something (both set = stop) and the SCM poll proceed
+(both set = abort). Three independent places agree on that resting state, and the emulator's
+`board_status = 0x3F110000` matches it.
+
+**Summary of the equation survey:**
+
+| equation | specified by |
+|---|---|
+| board bit 1 | phase `$1200`, three arms (second term only) |
+| board bit 2 | phase `$1400`, three arms — and its terms are the interrupt request condition |
+| board bit 3 | phase `$0800`, full 2x2 truth table |
+| board bit 5 | phase `$0200`, parameterised mapping test |
+| `$FF0216` gates | phases `$1700`/`$1800`/`$1A00`, nine fault assertions |
+| **board bit 4** | **not specified — inferred from the checkpoint** |

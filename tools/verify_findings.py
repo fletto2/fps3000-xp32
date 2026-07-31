@@ -6343,6 +6343,17 @@ check('...while a cleared level field requires board bit 2 CLEAR',
 check('the walker requests level 1, so the equation\'s "bit 0" is the level LSB',
       insn(0xF094BA) == 'ori.w #$1, (a5)')
 
+check('MODE1 bit 15 is written at exactly the three checkpoints, nowhere else',
+      sorted(x for x, (m, o, _) in _mins.items() if o == '#$8000, $202(a6)')
+      == [0xF087AE, 0xF08836, 0xF088D0])
+check('...and board bit 4 is literal-tested at exactly one site',
+      sorted(x for x, (m, o, _) in _mins.items()
+             if m.startswith('btst') and _mre.match(r'#\$4, \$1\(a\d\)$', o)) == [0xF08926])
+check('phase $0500 requires board bit 4 SET and bit 5 CLEAR',
+      insn(0xF08E04) == 'move.w #$3f31, d2' and insn(0xF08E08) == 'move.w #$3f11, d0'
+      and (0x3F31 >> 4) & 1 and (0x3F11 >> 4) & 1
+      and (0x3F31 >> 5) & 1 and not (0x3F11 >> 5) & 1)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
