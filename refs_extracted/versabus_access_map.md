@@ -20757,3 +20757,74 @@ Several things fall straight out:
 Nothing here contradicts the register table in `CLAUDE.md`; it fills in the bits that table
 left as "manipulated" and supplies the counts an emulator needs to know which bits are sticky
 (MODE1 b12, b6 — set, never cleared) and which are transient.
+
+## Why the AP I/F cannot be swept the way the XLTR can (2026-07-31)
+
+The XLTR sweep above works because every XLTR offset is `$200` or greater: `$202(a5)` cannot be
+anything but the XLTR, whatever `a5` holds, because no stack frame or RTOS structure in this
+firmware reaches that displacement. The AP I/F has no such protection, and running the identical
+sweep over it makes the reason vivid.
+
+Sweeping window 0 by displacement (`$04`, `$08`, `$0A`, `$0E`) returns 87 "reads" and 75
+"writes" with literal values including **`$4EB9`** — a `jsr` opcode — and `$AAAA`, the RAM-test
+pattern. Those are `$4(a7)` stack slots, `$8(a6)` structure fields and `$E(a6)` TCB offsets, not
+registers. **The window-0 row of such a sweep is pure contamination and must be discarded.**
+
+Windows 1-4 look clean at first (`$44`, `$64`, `$84`, `$A4` are distinctive) and give exactly
+one `move.w #$0` arm per channel and one `+$0E` read per channel — but they show **zero**
+accesses to the data ports of channels 2, 3 and 4, which contradicts the ISR behaviour this
+project has measured directly.
+
+**The window-relative explanation offered for that gap was WRONG, and checking it took two
+minutes.** The four ISRs do not use window-relative addressing at all:
+
+```
+$F07EE6  move.l   a5,-(a7)                XP1I           XP2I            XP4I
+$F07EE8  movea.l  #$FF0000,a5
+$F07EEE  move.w   $4E(a5),$1066           $6E -> $106C    $AE -> $1078
+$F07EF6  move.w   $48(a5),$1068           $68 -> $106E    $A8 -> $107A
+$F07EFE  move.w   $4A(a5),$106A           $6A -> $1070    $AA -> $107C
+```
+
+`a5` is the **device base**, `$FF0000`, and the offsets are the distinctive full ones. The
+sweep missed them because its read pattern required a **data-register destination** — these are
+memory-to-memory moves straight into the per-channel record. Fifth matcher-shape false negative
+of the day, and the first one where the wrong explanation had already been written down.
+
+What survives is only the window-0 contamination, which is real and unrelated: `$04`, `$08`,
+`$0A` and `$0E` as displacements are indistinguishable from stack and structure offsets, so no
+static sweep can enumerate the host/bulk window. The absolute forms (`$FF0048` at `$F07E2C`) are
+also real, and the retraction of "`$FF0048` is never read anywhere in the ROM" stands on its own
+evidence.
+
+### And the ISR stores close an open question about op `$A`
+
+The three ISR destinations per channel are `$1066+(ch-1)*6`, stride 6, exactly as documented.
+Laid against the status nibble word at `$1064`, the whole thing is **one contiguous structure**:
+
+```
+$1064            the four 4-bit per-channel status nibbles
+$1066 $1068 $106A  channel 1 {status, data hi, data lo}
+$106C $106E $1070  channel 2
+$1072 $1074 $1076  channel 3
+$1078 $107A $107C  channel 4
+```
+
+**13 words, `$1064` through `$107C`** — which is precisely the `0..12` bound that chassis
+operation `$A` walks, and which had been recorded here as "structurally determined" without
+knowing what determined it. It is the status word plus the four three-word transaction records.
+Op `$A` hands the chassis the complete channel state file in one sweep.
+
+**The operating rule, now stated once for the whole project:**
+
+| device | offsets | authoritative method |
+|---|---|---|
+| XLTR `$FF0200`-`$FF025F` | `>= $200` | **static sweep is reliable** — no other structure reaches those displacements |
+| AP I/F `$FF0000`-`$FF00FF` | `$00`-`$AE` | **static sweep is unreliable**; use the runtime access log with base-register provenance |
+| MC6840, board status, VMOD | small, via dedicated bases | runtime log |
+
+`refs_extracted/device_communications_map.md` was built the right way — from `FPS3K_ACCESSLOG`
+over four driving configurations, which records the *effective* address the CPU put on the bus
+and so is immune to all of this. Nothing in it needs revising. What is new is knowing **why**
+the static route cannot be used to check it, and therefore that any future "register X is never
+touched" claim about the AP I/F is inadmissible unless it comes from the log.

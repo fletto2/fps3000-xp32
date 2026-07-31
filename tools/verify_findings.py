@@ -4643,3 +4643,19 @@ check('$FF020C IS readable: the self-test compares it back',
 check('...while all seven operational writes to $FF020C are $4',
       all(insn(a).startswith('move.w #$4, $20c(')
           for a in (0xF04AC2, 0xF04B2C, 0xF05A2C, 0xF0646C, 0xF06E84, 0xF07884, 0xF08284)))
+
+# ---- the channel ISRs and the 13-word status file (2026-07-31) ----
+for _ch, (_isr, _cmd, _hi, _lo, _rec) in enumerate(
+        [(0xF07EE6, 0x4E, 0x48, 0x4A, 0x1066), (0xF074E6, 0x6E, 0x68, 0x6A, 0x106C),
+         (0xF06AE6, 0x8E, 0x88, 0x8A, 0x1072), (0xF060CE, 0xAE, 0xA8, 0xAA, 0x1078)], 1):
+    check('XP%dI ISR bases a5 on the DEVICE base $FF0000, not a window base' % _ch,
+          insn(_isr + 2) == 'movea.l #$ff0000, a5')
+    check('XP%dI ISR reads cmd/status, hi, lo into its record at $%04X' % (_ch, _rec),
+          insn(_isr + 8) == 'move.w $%x(a5), $%x.l' % (_cmd, _rec)
+          and insn(_isr + 16) == 'move.w $%x(a5), $%x.l' % (_hi, _rec + 2)
+          and insn(_isr + 24) == 'move.w $%x(a5), $%x.l' % (_lo, _rec + 4))
+    check('XP%dI ISR exits through the CCR sentinel, not rte' % _ch,
+          insn(_isr + 32) == 'move.w #$c, ccr' and insn(_isr + 36) == 'trap #$1')
+check('the status file is contiguous: $1064 nibbles + 4 records of 3 words = 13 words',
+      0x107C - 0x1064 == 12 * 2)
+check('...which is exactly the 0..12 bound chassis op $A walks', (0x107C - 0x1064) // 2 == 12)
