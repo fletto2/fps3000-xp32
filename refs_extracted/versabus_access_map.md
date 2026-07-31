@@ -36335,3 +36335,41 @@ without consuming the record.
 
 **Not settled from this sheet alone:** what drives `WCCLK`. That needs sheets 12-14 (`FIFO CONTROL`,
 `DMA HANDSHAKE`, `DMA FIFO`), which the index says hold the FIFO and handshake logic.
+
+## Sheet 14 `DMA FIFO` read — the FIFO is 16 deep, and this reinterprets the board photo
+
+Sheet 14 is titled **`DMA FIFO`** and is built from **eight `27S03` 16-word x 4-bit bipolar RAMs**,
+with:
+
+| signal group | meaning |
+|---|---|
+| **`WRADDR00`-`WRADDR03`** | the **write pointer** — 4 bits, so **16 locations** |
+| **`RADDR00`-`RADDR03`** | the **read pointer** — 4 bits |
+| `IFDB00`-`IFDB15` | data in (the interface data bus, the same bus `WC` drives on sheet 16) |
+| `IFOUT00`-`IFOUT15` | data out, through `74LS242` transceivers |
+| **`RDFIFO#`** | the **read strobe** |
+| `#WRTCLK`, `#WRT1`, `#WRT2`, `#WRTCLKDLA` | write clocks |
+| `CS1#`/`CS2#`, `#WRTE1#`/`#WRTE2#` | per-bank chip select and write enable |
+| `IAPDMAACT#` | DMA active |
+
+Support parts: `74S257` address multiplexers, `74S374` registers, `74LS242` output transceivers.
+
+**So the FIFO is a classic RAM-with-two-pointers design, 16 words deep**, and `RDFIFO#` is what
+advances the read pointer. That confirms the firmware-derived requirement — reads of `$FF0008` pop —
+and supplies the number the inference could not: **depth 16**.
+
+### The reinterpretation
+
+I recorded, from `4448_APIF_F.JPG`, that the eight `AM27LS03PC` are "the storage array", comparable
+to the documented card's eight `Am29705`, and that both give "16 words x 32 bits". Sheet 14 shows
+that eight 16x4 RAMs in this design are **the DMA FIFO**, not a host-address register file.
+
+So on the photographed board those eight parts are most likely **FIFO storage**. That does not
+overturn the recorded 32-bit reading, but it changes what carries it: the width belongs to **the DMA
+data path**, not to a host address register. A 32-bit-wide FIFO still implies 32-bit transfers, so the
+"original host was a 32-bit machine" inference survives — but it now rests on the *transfer* width
+rather than on a register file, and anyone repeating the argument should say so.
+
+**Still open:** what drives `WCCLK` on sheet 16. `RDFIFO#` here is the obvious candidate — a FIFO read
+advancing both the read pointer and the word count — but the two sheets do not show that connection
+directly, and sheets 12-13 (`FIFO CONTROL`, `DMA HANDSHAKE`) are where it would be.
