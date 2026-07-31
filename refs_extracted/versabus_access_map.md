@@ -31696,3 +31696,48 @@ mispredict what happens when a task is resumed.
 the **full-context** area used by the bit-6 dispatch exit. `TCB+$100`-`$13F` is the **normal** one.
 Two areas, two paths, and the state-word bit that chooses between them is bit 6 — "context saved",
 exactly as documented.
+
+## The corrected TCB map: nearly half the "field" traffic is register-frame access (2026-07-31)
+
+Classifying all **52 distinct `a6` offsets / 395 accesses** in the kernel against the two register
+frames:
+
+| class | offsets | accesses |
+|---|---:|---:|
+| slots in the `$100` frame (`d0`-`d7`/`a0`-`a7`) | 9 | **174** |
+| slots in the `$74` frame (`d0`-`d7`/`a0`-`a6`) | 3 | 5 |
+| **genuine fields** | **39** | **189** |
+| bare `(a6)` — passing the TCB pointer, not a field | — | 23 |
+
+**So the single busiest "TCB field" in the kernel is not a field.** `+$102`, with 119 accesses, is
+`saved d0 + 2` — the low word of the register the task resumes with. Likewise `+$120` (23) is saved
+`a0`, `+$13C` (10) is saved `a7`, `+$138` (3) is saved `a6`, and `+$77`/`+$122`/`+$123` are bytes
+inside saved registers. This project already spotted one of these — "`+$77` is not a field: it is
+the low byte of the saved `d0`" — and the same reasoning generalises to eleven more.
+
+### The genuine fields, by traffic
+
+| offset | accesses | what |
+|---|---:|---|
+| `+$36` | 24 | **logical→physical translation base** (identified this session) |
+| `+$14` | 23 | **session** (identified this session) |
+| `+$28` | 23 | flags word — bit 7 privilege; **bits 3, 4 gate the `$F00B74` dispatch** |
+| `+$2D` | 14 | state word low byte — **bits 4, 5, 6, 7 select the dispatch exit** |
+| `+$10` | 12 | task name |
+| `+$2C` | 11 | state word high byte |
+| `+$29` | 10 | flags word low byte, bit 6 |
+| `+$40` | 10 | second ASQ pointer |
+| `+$26` | 6 | priority byte |
+| `+$148` | 6 | **per-task single-step enable, bit 7** (identified this session) |
+| `+$FA`, `+$FB`, `+$FC` | 5, 3, 2 | around the saved resume PC |
+| 28 others | 1-3 each | |
+
+**Why this matters for a model.** A TCB field and a saved-register slot behave differently: writing
+a field changes kernel state, whereas writing `+$102` changes *what the task sees in `d0` when it
+next runs*. An emulator or analysis that treats the `$100`-`$13F` range as independent fields will
+model the directive return convention as a special case instead of as the natural consequence of
+resuming a saved register — and will not predict that clobbering `+$120` hands the task a different
+`a0`.
+
+It also collapses several apparent mysteries. There is no puzzle about why `+$102` is cleared at
+TRAP #1 entry and accumulated into by directives: it is `d0`, the return register, being staged.

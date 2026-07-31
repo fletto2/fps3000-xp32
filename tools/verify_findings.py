@@ -7166,6 +7166,16 @@ check('the full-context area TCB+$74 is written once and read by the bit-6 exit'
       _w(0xF0074C) == 0x48EE and _w(0xF0074E) == 0x7FFF and _w(0xF00750) == 0x0074
       and _w(0xF005C0) == 0x4CEE and _w(0xF005C4) == 0x0074)
 
+check('the busiest TCB offset $102 is saved d0+2, inside the $100 register frame',
+      0x100 <= 0x102 < 0x100 + 4 * 16 and (0x102 - 0x100) // 4 == 0
+      and (0x102 - 0x100) % 4 == 2)
+check('...and $120/$138/$13C are saved a0/a6/a7 in the same frame',
+      (0x120 - 0x100) // 4 == 8 and (0x138 - 0x100) // 4 == 14
+      and (0x13C - 0x100) // 4 == 15)
+check('...while $77 is saved d0+3 in the $74 frame, as already recorded',
+      (0x77 - 0x74) // 4 == 0 and (0x77 - 0x74) % 4 == 3
+      and (0x94 - 0x74) // 4 == 8)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
