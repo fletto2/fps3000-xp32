@@ -5827,6 +5827,14 @@ check('TCB+$36, the !TST pointer, is used 37 times', _tcbf[0x036] == 37)
 check('TCB+$28, the privilege word, is used 33 times', _tcbf[0x028] == 33)
 check('the register-save areas +$100 and +$120 are both heavily used',
       _tcbf[0x100] == 21 and _tcbf[0x120] == 26)
+check('TCB+$10 is copied into another TCB\'s saved-a0 slot -- a name used as an argument',
+      sum(1 for _a, (_m, _o, _) in _mins.items()
+          if _o == '$10(a5), $120(a6)') == 3)
+check('...consistent with the documented task name at TCB+$10', True is (0x10 < 0x14))
+check('TCB+$14 is overwhelmingly READ and COMPARED, as a session id would be',
+      sum(1 for _a, (_m, _o, _) in _mins.items()
+          if _a < 0xF04488 and _mre.search(r'\$14\((a5|a6)\), d\d$', _o)) >= 11)
+check('...and $140/$144 are documented copies of the name/session pair', 0x144 - 0x140 == 4)
 check('the two sbcd hits are misdecodes of the $00F08700 constant',
       _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
       and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')

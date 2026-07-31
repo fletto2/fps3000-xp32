@@ -25537,3 +25537,35 @@ second-busiest field in the TCB after the status code, and it means a reader mus
 usage-derived map above should be preferred throughout. The unidentified entries — `+$14`,
 `+$10`, `+$148`, `+$8`, `+$26`, `+$18`, `+$158`, `+$2E` — are all in the kernel's own bookkeeping
 and none is touched by FPS code, so they bound what a task-level model needs to carry.
+
+### Two of the unidentified TCB fields resolve: `+$10` is the NAME and `+$14` the SESSION
+
+Both are longwords, read far more than written, and compared rather than computed with:
+
+```
+TCB+$10 (20 uses)                      TCB+$14 (33 uses)
+  move.l $10(a5),$120(a6)   x3           move.l $14(a6),d1   x7
+  move.l $10(a6),(a1,d3.w)  x3           cmp.l  $14(a6),d1   x3
+  cmp.l  $10(a6),d0         x2           cmp.l  $14(a5),d1   x3
+```
+
+**`move.l $10(a5),$120(a6)` is the tell**: it copies one TCB's `+$10` into another's **`+$120`,
+the saved `a0` slot** — i.e. passing that longword as a directive's argument. That is exactly what
+a **task name** is used for in this kernel, where `$43` `RSTATE` and `$29` `ATSEM` look objects up
+by four-byte name.
+
+Three documented facts converge on the same identification:
+
+- this project records the live TCBs at `$1E900`+ as having the **task name at `+$10`**, from a
+  RAM dump;
+- it records **`TCB+$140`/`+$144` as copies of the owner's `TCBNAME`/`TCBSESSN`**, used for the
+  `RSTATE` permission check — so the originals must be a name/session pair somewhere;
+- and the usage above shows `+$10` and `+$14` are an adjacent longword pair, read and compared,
+  with `+$10` passed as a lookup argument.
+
+**So `+$10` is `TCBNAME` and `+$14` is `TCBSESSN`, and `+$140`/`+$144` are their copies.** The
+33 `+$14` accesses are almost all comparisons, which is what a session identifier is for: deciding
+whether two tasks belong to the same session before permitting an operation.
+
+That reduces the unidentified TCB fields to six — `+$8`, `+$18`, `+$26`, `+$2E`, `+$148`, `+$158`
+— none of which is touched by FPS code.
