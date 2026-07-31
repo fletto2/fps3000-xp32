@@ -19613,3 +19613,83 @@ validators (`$4`, `$5`, `$D`, `$E`), the two array walkers (`$A` bounded, `$C` n
 peek/poke pair (`$1`+`$6`), the window accessor (`$3`, with its dead branch), the parameter
 setters (`$2`, `$9`), the three trivial ones (`$7`, `$B`, `$F`), the pre-upload handshake
 (`$8`), and this transfer launcher.
+
+# CONSOLIDATED: every communication path this ROM participates in
+
+A single statement of the whole surface, with what is decoded, what is demonstrated running,
+and what is structurally out of reach.
+
+## 1. SBC → chassis (commands out)
+
+**Mechanism** (all eight byte-identical issuers): command word → `$FF000E`; MODE1 bit 14
+clear, **bit 12 set** ("command valid"); MODE0 bit 10 clear; **the same command word again**
+→ `$FF0204`; then `bra .` — the only exit is a chassis interrupt. *Decoded and demonstrated.*
+
+**Vocabulary**: 42 panel codes (`$258`-`$2B2`), every one accounted for — channel ops,
+directive-failure reporters in two blocks, TCBIO1I failures, two host-byte requests, nine
+CPU-exception reporters, one kernel-fatal.
+
+## 2. Chassis → SBC (commands in)
+
+**Three dispatch layers**, selected by bit 7 of the latched MODE0 low byte and by which task
+is listening. A code means different things in each — `$8` is "CH1 reset" in one and `CPRUN`
+in another, `$14` is "command record waiting" in one and `D2_FIN` in another.
+
+| layer | entry | set |
+|---|---|---|
+| ISR, bit 7 clear | `$F04A6E` → `$F05102` | the 16 chassis operations, all structurally decoded |
+| ISR, bit 7 set | `$F0495C` | validator + single handler |
+| RDHC main loop | `$F04740` | `$8` `CPRUN`, `$F` resume-channel, bit7+`$14` command record |
+
+**Bounds**: seven operations validate; the unchecked inputs are `$1`/`$6` (an arbitrary
+address) and `$C` (an unbounded sign-extended index). One address *is* checked — `$E7E`
+against the staging range, by op `$8`.
+
+## 3. SBC → chassis (status out)
+
+XP tasks encode a **4-bit per-channel class + sequence** into `$1064`; the 13-word array
+`$1064`-`$107C` holds that plus the four `{status, data-hi, data-lo}` records; the chassis
+walks it with operation `$A` (bounded `0..12`, bit-4 auto-increment). *Decoded, and
+demonstrated end to end — `$1064` = `$000A` reaching `$E74` = `$000A`, all four
+classification branches, the sweep condition, the 13-step walk and its bounds rejection.*
+
+## 4. SBC ↔ XP-32 channels (the AC interface)
+
+Per channel: `+$04` arm, `+$08`/`+$0A` a 32-bit data register, `+$0E` command on write /
+status on read. **Transaction**: mask the BIM, data-low = operation code, `$8004`
+REQUEST-TRANSFER, poll **bit 14 DONE** 1000× with **bit 13 ERROR**, dispatch the 42-slot
+table on the operation, `$8005` CONTINUE, restore the BIM and clear the channel's `$FF021A`
+bit (`1→5, 2→4, 3→3, 4→2`).
+
+**Operation codes the SBC can emit unaided: `$1B`, `$10`, `$0E`.** The full 29-code
+vocabulary is RDHC's, driven by host command records.
+
+## 5. SBC ↔ host (via the AP I/F counterpart)
+
+Four RDHC commands, all decoded field by field: attach/configure a channel; a bounded window
+onto the 16-longword file at `$101E`; a counted longword array into `$E8A`; and **`CPLOAD`**,
+which sets `$E64` and arms `$FF0216` bit 4 — the 16→32 width conversion — before parsing
+S-records. *`CPLOAD` demonstrated end to end.*
+
+## 6. SBC ↔ the CP program (host-loaded)
+
+`$10AE + (ch-1)*4` is a **callable trampoline** the program installs; `$10BE`/`$10CE` are
+arguments from `RSTATE`, `$10DE` the result, read straight back into the channel data pair.
+The frame is 46 bytes at `[TCB+$13C] - 46` — the task's **saved SP** — and `a7` is not
+switched. *Demonstrated: 1466 complete cycles with a 16-byte handler.* Two firmware hazards
+on this path: a **96-byte stack leak** (4 allocations, 0 releases in the whole ROM) and an
+**unchecked `RSTATE` return**.
+
+## 7. What is structurally out of reach
+
+**The EU and AU.** The SBC cannot address them: the self-test exercises SBC, PTM, VMOD,
+watchdog, XLTR, AP I/F and SCM-via-MEM-CTL, and never touches XP-32 EXEC, XP-32 ARITH or
+UNIV FMT. Everything the SBC says to an AC goes through the channel window above, as an
+operation code and a 32-bit word; what the EU's Am2910-sequenced 80-bit store does with it,
+and what the AU's 128-bit microcode does, are not observable from this ROM by any path.
+
+**The counterpart AP I/F card**, which is not in this chassis.
+
+**The device map is closed at 68 addresses**, re-verified with zero unmapped accesses under
+the deepest configuration reached — the first in which the CP callback, the transaction
+success path and the notify arm all execute.
