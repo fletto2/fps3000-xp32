@@ -20230,3 +20230,40 @@ whose absence produces the observation.
 With this every field of the configuration block has both a destination and a consumer, and
 the two that are never consumed (`$0C72`, and `$0C36`'s continuation) are dormant for reasons
 now traced to specific unexecuted routines rather than assumed.
+
+## The boot *finds* its vector table by scanning ROM for the `!VCT` tag
+
+Why does the ROM carry an `!VCT` marker at `$F0011A` at all, when markers are otherwise a
+RAM-structure convention? Because the boot searches for it.
+
+```
+$F09C96  movea.l $f0a4f6(pc),a2     ; a2 = $F00100, FROM THE CONFIG BLOCK
+$F09C9A  move.l  #$21564354,d0      ; '!VCT'
+$F09CA0  lea     $200(a2),a0        ; scan limit: 512 bytes
+$F09CA4  cmp.l   (a2)+,d0           ; compare, advance 4
+$F09CA6  beq     found
+$F09CA8  subq.l  #$2,a2             ; ...back up 2  -> NET STRIDE 2
+$F09CAA  cmpa.l  a0,a2 / bne loop
+$F09CAE  bsr.w   $F0A306            ; not found -> error
+```
+
+The advance-4-back-2 pair makes it a **2-byte** scan, which is what lets it find a tag at
+`$F0011A` — an address a longword scan from `$F00100` would step straight over. Arithmetic
+and measurement agree exactly:
+
+| | |
+|---|---|
+| scan base (config `$F0A4F6`) | `$F00100` |
+| `$F00100 + 2 × 13` | **`$F0011A`** — the tag |
+| loop iterations measured | **14** |
+| not-found path `$F09CAE` | **0** |
+
+So the firmware **locates its own vector-installation table by content rather than by
+address**, from a configurable base. That is why the tag exists in ROM, and it also explains
+the marker census cleanly: `!VCT` has no tag in RAM because the tagged copy is the **ROM**
+table; the 256-byte RAM table at `$1FA00` is a different structure that never receives one.
+
+Note the config block holds `$F00100` **twice** — at `$F0A4F6` (this scan base) and at
+`$F0A512` (the RTOS entry pointer used by the `rts` handoff). `$F00100` is the base of the
+kernel's low structure area, used once as a search origin and once, via the trampoline
+sitting there, as the entry point.
