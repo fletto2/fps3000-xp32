@@ -19885,3 +19885,35 @@ with `$008C`, `$008D`, `$0093`, `$001C`, `$001F`, `$0074`-`$0071`) are not ident
 established is the structure, the target, and the deliberate exclusion.
 
 **With this, every data structure in the application region is accounted for.**
+
+### Measured: nothing in this ROM reads the top-of-RAM table
+
+Confirmed against a live boot — the RAM matches the predicted writes exactly:
+
+```
+$1FFD0  0000 008e 0071 0072 0073 0074 008e 001f
+$1FFE0  0000 008d 008e 008e 0093 001c 008c 008e
+$1FFF0  0000 008e 008e 008e 008e 008e 008e 008e
+```
+
+The three `$0000` words are the group *bases* (`$1FFD0`, `$1FFE0`, `$1FFF0`), which the
+pre-decrementing loop never writes — and the middle one of those is the VMOD control
+register.
+
+**And nothing reads it.** The writer computes its address by rounding the RAM top down to
+4 KB, and `andi.l #$fffff000` occurs **exactly once in the whole ROM** — at that writer.
+Every other reference to `$1FFDx`-`$1FFFx` in the image is a `lea $1fff0.l` for the VMOD
+control register in the self-test. So the 21 words are initialised at boot and never consumed
+by this firmware.
+
+That makes **two write-only structures** in the image: this table, and `$E8A`, which RDHC
+host command 3 fills and nothing here reads. Both fit the same explanation — a consumer that
+is not this ROM. The candidates differ though: `$E8A` is naturally a parameter area for the
+host-loaded `USER` program, whereas this one sits at the very top of RAM, is written before
+any task exists, and its values (`$71`-`$74`, `$8C`-`$8E`, `$93`, `$1C`, `$1F`) look like
+**exception-vector numbers** — several of which appear in the `$F00114` vector-installation
+table. A board-level monitor or the host's loader are the obvious readers, and neither is in
+this image.
+
+Stated as measured rather than concluded: **written once, never read here, values resemble
+vector numbers, consumer unidentified.**
