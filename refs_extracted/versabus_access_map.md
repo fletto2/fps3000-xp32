@@ -20666,7 +20666,7 @@ divergence: **on a 4-AC machine, XP4I's start-up clobbers XLTR_MODE1 for every o
 On Lovett's 2-AC chassis `$105E` is 2, XP4I gates itself off before reaching it, and the
 instruction never executes — which is why nothing has ever noticed.
 
-## `PanelErrorMaskTable` at `$F05C4C` decoded — operation -> IRQ-mask bit (2026-07-31)
+## `PanelErrorMaskTable` at `$F05C4C` decoded — CHANNEL -> IRQ-mask bit (2026-07-31)
 
 `$FF021A` (`XLTR_IRQMASK`) is the **most read-modify-written register in the machine**: 50 reads,
 50 matching writes. None of them uses an immediate bit number, which is why an immediate-only
@@ -20683,17 +20683,17 @@ $F05720  bclr.b   d5,d0              clear that bit
 ```
 
 `bclr` with the bit number **in a register**. So the table this project has called
-`PanelErrorMaskTable` since the first pass is an **operation-code → interrupt-source-bit map**,
+`PanelErrorMaskTable` since the first pass is a **channel → interrupt-source-bit map** (see the resolution below),
 and reading it out gives:
 
-| operation code | mask bit cleared |
+| index | mask bit cleared |
 |---|---|
-| `$00` | 0 |
+| `$00` | 0 — unused, channels are 1-based |
 | `$01` | **5** |
 | `$02` | **4** |
 | `$03` | **3** |
 | `$04` | **2** |
-| `$05`-`$29` | 0 (zero fill) |
+| `$05`-`$29` | 0 (zero fill — the machine has four channels) |
 
 Raw: `00 05 04 03 02` followed by **37 zero bytes**. It is a five-entry table padded to the
 42-entry width of the dispatch table it abuts (`$F05BA4` + 168 = `$F05C4C` exactly).
