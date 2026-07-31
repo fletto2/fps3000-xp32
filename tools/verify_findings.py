@@ -5527,6 +5527,21 @@ check('most writes ADD rather than SET, because the dispatcher clears the field 
 check('...and the generic failure $1 is written with move at the dispatcher error stub',
       insn(0xF003D0) == 'move.w #$1, $102(a6)')
 check('$3E writes $E for a vector with no owner', insn(0xF0228E) == 'move.w #$e, $102(a6)')
+
+# ---- the bus-watchdog test, decoded exactly (2026-07-31) ----
+check('the watchdog test saves and restores the bus-error vector',
+      insn(0xF08F2A) == 'movea.l $8.w, a2' and insn(0xF08F32) == 'move.l a1, $8.w'
+      and insn(0xF08F66) == 'move.l a2, $8.w')
+check('...probes BYTE reads walking DOWN from $F82001 in steps of two',
+      insn(0xF08F36) == 'lea.l $f82001.l, a0' and insn(0xF08F3C) == 'lea.l -$2(a0), a0'
+      and insn(0xF08F40) == 'move.b (a0), d0')
+check('...so every probed address is ODD', all((0xF82001 - 2 * k) & 1 for k in range(5)))
+check('...with five nops to let a real watchdog time out',
+      all(insn(0xF08F42 + 2 * k) == 'nop' for k in range(5)))
+check('...exiting as soon as ONE probe faults',
+      insn(0xF08F4C) == 'tst.l d1' and insn(0xF08F4E) == 'bne.b $f08f5e')
+check('...and RETRYING the whole sweep on failure -- an infinite re-probe, not a halt',
+      insn(0xF08F58) == 'move.l #$f0f0f0f0, d7' and insn(0xF08F64) == 'bne.b $f08f36')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

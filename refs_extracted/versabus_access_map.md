@@ -24747,3 +24747,48 @@ A task that reports panel `$26E` has had `$2D` CRSEM fail; reading its `TCB+$102
 that was a privilege refusal (`$9`), a bad parameter, or a resource exhaustion. **Neither channel
 carries the other's information**, and a dump should read both — which is now possible, since the
 panel code is preserved at `$0E6E` and the status in every TCB.
+
+## The bus-watchdog test decoded exactly — a precise emulation requirement (2026-07-31)
+
+This project records phase `$600` as "the bus-timeout watchdog test — it *requires* a BERR
+somewhere in `$F80001`-`$F82001`; a model that returns zero for unmapped space hangs here." The
+routine at `$F08F1C` is more specific than that in four ways that matter:
+
+```
+$F08F2A  movea.l $8.w,a2             SAVE the current bus-error vector
+$F08F2E  lea     $F08F06(pc),a1
+$F08F32  move.l  a1,$8.w             install a private handler
+$F08F36  lea     $F82001.l,a0        start at the TOP
+$F08F3C  lea     -$2(a0),a0          step DOWN by two
+$F08F40  move.b  (a0),d0             PROBE -- a BYTE read
+$F08F42  nop / nop / nop / nop / nop  five, to let the watchdog time out
+$F08F4C  tst.l   d1                  did the handler fire?
+$F08F4E  bne.b   $F08F5E             yes -> done
+$F08F50  cmpa.l  #$F80001,a0         bottom reached?
+$F08F56  bne.b   $F08F3C             no -> next address
+$F08F58  move.l  #$F0F0F0F0,d7       FAILURE
+$F08F64  bne.b   $F08F36             ...and RETRY the whole sweep
+$F08F66  move.l  a2,$8.w             restore the vector
+```
+
+**1. The probes are BYTE reads at ODD addresses.** Starting at `$F82001` and stepping down by
+two, every probed address is odd: `$F82001`, `$F81FFF`, `$F81FFD`, … `$F80001`. A model that
+faults only on word accesses, or only on even addresses, never satisfies it.
+
+**2. It walks downward and needs only ONE fault.** The loop exits the moment the handler sets
+`d1`, so the model does not have to fault across the whole range — one address suffices, and the
+firmware will find it wherever it is.
+
+**3. Five `nop`s separate the access from the test.** A synchronous fault works, but the delay is
+there because a real bus watchdog takes time to time out. That is the only place in this firmware
+where the *latency* of a bus error is accommodated.
+
+**4. Failure RETRIES the entire sweep** (`$F08F64 bne $F08F36`), which is the mechanism behind
+"hangs here" — not a halt, an infinite re-probe. On a stalled board `CHANNEL_SELECT` holds the
+phase and the address bus cycles `$F82001` downward forever, which is externally visible on a
+scope without any firmware cooperation.
+
+**And it saves and restores the bus-error vector around itself** (`$F08F2A` / `$F08F66`), which is
+why the kernel-fatal handler's snapshot of `$8.w` at `$084C` distinguishes a fault during this
+test from one anywhere else: during phase `$600` that vector reads `$F08F06`, a value it holds
+nowhere else in the machine's life.
