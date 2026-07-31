@@ -28598,3 +28598,39 @@ problem.
 
 The map is derived mechanically — each `addi.w #$100,d6` followed by the `bsr` it precedes —
 so it can be regenerated rather than trusted.
+
+### Filling the phase map: `$0200` and `$0400`
+
+**Phase `$0200` — `$F08C4A` — the VMOD bit 6 ↔ board bit 3 mapping test.** Same
+parameterised shape as the `$1100` test: `moveq #$6,d0` (the VMOD bit), `moveq #$3,d1` (the
+board-status bit), then `bclr.b d0,$1(a5)` / verify the read-back / `bclr` again and require
+`btst d1,$1(a4)` to be **set**.
+
+Note the polarity: this test *clears* VMOD bit 6 and requires board bit 3 to read **1**,
+where the `$1100` test *sets* VMOD bit 4 and requires board bit 1 to read **1**. So the two
+mappings are inverted relative to each other, which is consistent with the documented
+equations — bit 3's has an outer `NOT`, bit 1's does not.
+
+**This also corrects a phase attribution.** This project records the bit-3 equation as
+"phase 0x800". The bit 6 ↔ bit 3 test is **phase `$0200`** — the very first test in the
+suite. Phase `$0800` is `$F08F70`, a different routine.
+
+**Phase `$0400` — `$F08D5E` — a DRAM address-line test.**
+
+```
+move.l #$8000,$8000.l          ; write $8000 at address $8000
+move.b #$0,$10000.l / move.b #$1,$10001.l / move.w #$2,$10002.l
+movea.l #$10000,a0 / moveq #$4,d1
+loop: lea.l (a0,d1.l),a1
+      move.l a1,(a0,d1.l)      ; write each ADDRESS at that address
+      lsl.w #$1,d1 / bcc loop  ; 4, 8, $10, $20, ... walking the address bits
+```
+
+Structurally identical to the SCM address-line phase found earlier — write each
+power-of-two offset its own address, so a shorted or swapped address line shows up as one
+offset clobbering another. Here it runs over DRAM from `$10000`, there over the chassis
+window.
+
+So the suite tests address-line integrity **twice**, on both memories, using the same
+technique. A model whose RAM aliases (for instance by masking an address too narrowly) fails
+at phase `$0400` rather than somewhere subtle.

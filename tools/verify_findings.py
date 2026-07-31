@@ -6219,6 +6219,15 @@ check('the watchdog test $F08F1C runs at phase $0700, not $0600',
 check('...and the ROM checksum is phase $0300, three steps from the $0200 base',
       insn(0xF08764) == 'move.l #$200, d6' and insn(0xF08772) == 'bsr.w $f08d1a')
 
+check('phase $0200 is the VMOD bit 6 <-> board bit 3 mapping test',
+      insn(0xF08C4A) == 'movem.l d0-d1/a4-a5, -(a7)' and insn(0xF08C5A) == 'moveq #$6, d0'
+      and insn(0xF08C5C) == 'moveq #$3, d1' and insn(0xF08C66) == 'bclr.b d0, $1(a5)')
+check('phase $0400 is a DRAM address-line test: each address written at itself',
+      insn(0xF08D94) == 'lea.l (a0, d1.l), a1' and insn(0xF08D98) == 'move.l a1, (a0, d1.l)'
+      and insn(0xF08D9C) == 'lsl.w #$1, d1')
+check('...the same technique the SCM test uses on the chassis window',
+      insn(0xF09AF6) == 'move.l d1, (a0, d1.l)')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
