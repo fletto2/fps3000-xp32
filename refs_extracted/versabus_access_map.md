@@ -30442,3 +30442,64 @@ Consequences worth having explicitly:
 Taken with the PTM fallback at `$F0A2EC`, the kernel is strikingly defensive about devices: its
 only live device is reached through a replaceable pointer that degrades to scratch RAM, and its
 one chassis interaction is gated on a value that this build never supplies.
+
+## Two corrections and a new global, from the init tail (2026-07-31)
+
+### `$F0A22A`'s `$C0` is a RESTING value, not the exception reporter's
+
+`CLAUDE.md` records: "`$C0` at `$F0A22A` is **the exception reporter** putting the XLTR in a known
+state (window closed, mux off) before announcing a fault — **not a resting value**." That is
+backwards. The site sits in the **init tail**, and it branches *away* from the exception table:
+
+```
+$F0A224  move.w d1,$105e.l         ; the channel-presence count
+$F0A22A  move.w #$c0,$216(a0)      ; $FF0216 <- $C0
+$F0A230  move.w #$8000,$202(a0)    ; MODE1  <- $8000
+$F0A236  bra.w  $F0A282            ; -> PTM init and the RTOS handoff
+$F0A23A  move.w #$29e,d0           ; the exception reporter table STARTS here
+```
+
+So `$C0` is the **last value init writes to `$FF0216` before handing off** — the definition of a
+resting value. This matters beyond bookkeeping: it is the independent confirmation that bit 7 is
+*set* in normal running, which is what forced the qualification of my own bit-7 claim earlier
+today (bit 7 alone cannot disable `$FF000E`, or every panel command would fault).
+
+### MODE1 `<- $8000` has a fourth site, and a check was silently narrow
+
+The same three lines add a fourth `MODE1 <- $8000`. A harness check asserting "at exactly the
+three checkpoints, **nowhere else**" passed anyway, because it matched the operand string
+`'#$8000, $202(a6)'` — **base-register specific**, and `$F0A230` uses `a0`. The check verified a
+weaker claim than its name. Now matched on the register offset and asserting all four.
+
+That is the third instance today of a matcher keyed to a base register rather than an address, and
+the pattern is worth naming: **any census that pattern-matches `$xxx(aN)` is implicitly a census
+of one base register.** The correct forms are either to track what each base holds, or to match
+`$xxx(a` and let the base vary.
+
+### `$10A8` is a host-presence flag — and nothing reads it
+
+Immediately before the channel probe, init pages the chassis window to `$F`, reads the host
+mailbox, and records the result:
+
+```
+$F0A1E0  move.w #$f,$210(a0)       ; page the window to $F
+$F0A1E6  move.l $70001c.l,d1       ; read the HOST MAILBOX
+$F0A1EC  beq.b  $F0A1F8
+$F0A1EE  move.w #$1,$10a8.l        ;   non-zero -> host present
+$F0A1F8  clr.w  $10a8.l            ;   zero     -> not present
+$F0A1FE  clr.w  $210(a0)           ; page back to 0
+```
+
+This is a **host-presence probe**, exactly parallel to the channel-presence probe that follows into
+`$105E` — and it is a second, earlier mailbox reader besides TCBIO1I, running before any task
+exists. It also confirms from a third site that the mailbox is only valid at page `$F`.
+
+**`$10A8` has exactly two references in the ROM, both of them the writes above.** Nothing consumes
+it. Structurally it is slot 5 of the per-channel word array at `$10A0` (stride 2, channels 1-4 at
+`$10A0`-`$10A6`), with the chassis-written `$10AA` at slot 6 — so the array runs four channels,
+then host-presence, then the chassis slot. Like the `$0C14` store, it is a dead store on this
+firmware: written for host-loaded software that never arrives.
+
+**Emulator consequence**: a chassis model that returns a non-zero mailbox at page `$F` during init
+sets `$10A8` and changes nothing else — but it is a cheap, observable hook for confirming that a
+model's paging is correct at the earliest possible moment.

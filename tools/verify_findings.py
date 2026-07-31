@@ -6403,9 +6403,14 @@ check('...while a cleared level field requires board bit 2 CLEAR',
 check('the walker requests level 1, so the equation\'s "bit 0" is the level LSB',
       insn(0xF094BA) == 'ori.w #$1, (a5)')
 
-check('MODE1 bit 15 is written at exactly the three checkpoints, nowhere else',
-      sorted(x for x, (m, o, _) in _mins.items() if o == '#$8000, $202(a6)')
-      == [0xF087AE, 0xF08836, 0xF088D0])
+# CORRECTED 2026-07-31.  This asserted "the three checkpoints, nowhere else"
+# while matching the operand string '#$8000, $202(a6)' -- base-register
+# specific, so the FOURTH site $F0A230 (which uses a0) was invisible to it.
+# The check passed; its name was false.  Match on the register offset instead.
+check('MODE1 <- $8000 at four sites: the three checkpoints AND the init tail $F0A230',
+      sorted(x for x, (m, o, _) in _mins.items()
+             if o.startswith('#$8000, $202(a'))
+      == [0xF087AE, 0xF08836, 0xF088D0, 0xF0A230])
 check('...and board bit 4 is literal-tested at exactly one site',
       sorted(x for x, (m, o, _) in _mins.items()
              if m.startswith('btst') and _mre.match(r'#\$4, \$1\(a\d\)$', o)) == [0xF08926])
@@ -6764,6 +6769,16 @@ check('...and it reads BOARD STATUS through the $0C4E device base, then loops on
 check('the kernel tick ISR acknowledges the PTM via $3(a0) then $D(a0)',
       _w(0xF00EE4) == 0x1028 and _w(0xF00EE6) == 0x0003
       and _w(0xF00EE8) == 0x1028 and _w(0xF00EEA) == 0x000D)
+
+check('init probes the host mailbox at page $F and records presence in $10A8',
+      _w(0xF0A1E0) == 0x317C and _w(0xF0A1E2) == 0x000F and _w(0xF0A1E4) == 0x0210
+      and _w(0xF0A1E6) == 0x2239 and _l(0xF0A1E8) == 0x0070001C
+      and _l(0xF0A1F2) == 0x000010A8 and _l(0xF0A1FA) == 0x000010A8)
+check('...and $10A8 is a DEAD STORE: exactly two references, both writes',
+      _asm21a.count('$10a8') == 2)
+check('$FF0216 <- $C0 at $F0A22A is the init tail, which branches AWAY from $F0A23A',
+      _w(0xF0A22A) == 0x317C and _w(0xF0A22C) == 0x00C0 and _w(0xF0A22E) == 0x0216
+      and _w(0xF0A236) == 0x6000 and 0xF0A238 + _w(0xF0A238) == 0xF0A282)
 
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
