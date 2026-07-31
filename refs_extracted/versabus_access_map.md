@@ -26321,3 +26321,24 @@ milliseconds" must implement this rebase too, or every outstanding timeout silen
 24 hours at the first midnight rollover. A model that keeps relative counts does not — but
 then it is not this firmware's design, and the `$49` set-time directive (which adjusts
 `$0C46`/`$0C4A` rather than the deadlines) tells you which one the RTOS chose.
+
+### `$0C62` is part of the captured machine context
+
+`$F0090A` builds the full context snapshot this project identified earlier as the basis of
+the chassis's remote register interface:
+
+```
+movem.l d0-d7/a0-a6,-(a7)
+move    usp,a1 / move.l a1,-(a7)     ; the USER stack pointer, separately
+move.l  $c62.w,-(a7)                 ; ...and this global, alongside the registers
+```
+
+So `$0C62` is captured **as part of the reported machine state**, not as scratch. It is
+cleared at the head of several directive handlers (`GTSEG` among them, `$F01920`) and has
+five write sites in all. Its *contents* are not established from the ROM alone — nothing
+here consumes the snapshot; the consumer is the chassis, through the remote-access
+primitives. What can be said is that a model reproducing the context frame must include
+it, and in the right position: **after the 15 registers and the USP**.
+
+This also re-confirms the USP requirement in `chassis_model_spec.md` from a second site —
+a model that does not implement `move usp,an` faithfully reports a wrong frame here.
