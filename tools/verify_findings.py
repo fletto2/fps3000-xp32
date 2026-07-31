@@ -3547,6 +3547,22 @@ with tempfile.TemporaryDirectory() as _tdq:
           all(_rq.count(t) == 0
               for t in (b'!CCB', b'!DLY', b'!ASQ', b'!VCT')))
 
+    # --- !GST / !IOV / !IDV: closing the structure inventory ---------------
+    # !GST shares !UST's header shape.  Zero current entries because this
+    # firmware never declares a shareable segment ($07 DCLSHR, $04 ATTSEG).
+    check('!GST is allocated with 13 slots and ZERO current entries',
+          _rq[0x1FD00:0x1FD04] == b'!GST'
+          and struct.unpack('>H', _rq[0x1FD0C:0x1FD0E])[0] == 13
+          and struct.unpack('>H', _rq[0x1FD0E:0x1FD10])[0] == 0
+          and _lw(0x1FD10) == 0x1FD14)
+    check('!IOV is a tagged header with an end pointer and nothing else',
+          _rq[0x1F900:0x1F904] == b'!IOV' and _lw(0x1F904) == 0x1F9FF
+          and sum(1 for x in _rq[0x1F900:0x1FA00] if x) == 7)
+    check('!IDV\'s first record is {vector $45, XP1I TCB, ISR entry $F07EE6}',
+          _rq[0x1F800:0x1F804] == b'!IDV'
+          and struct.unpack('>H', _rq[0x1F808:0x1F80A])[0] == 0x45
+          and _lw(0x1F80A) == 0x1E900 and _lw(0x1F80E) == 0xF07EE6)
+
     # --- !TST: the RTOS's own statement of each task's code extent ---------
     # TSTMMU[0]/[1] at TCB+$160+$0C are the segment's first and last 256-byte
     # page.  These bounds are authoritative, unlike the approximate region

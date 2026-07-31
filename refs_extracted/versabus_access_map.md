@@ -17495,3 +17495,28 @@ parameter-block size" reading, from two different Motorola files and two differe
 directives: `CRSEM`/`ATSEM` declare **10**, the semaphore descriptor, and `GTSEG`
 declares **28**, `SGPBL`. Neither number was used to derive the decode; both had to come
 out right afterwards, and both did.
+
+### Closing the structure inventory: `!GST`, `!IOV`, `!IDV`
+
+`!GST` at `$1FD00` uses the **same header shape as `!UST`** — link, segment count, page
+count, max entries, current entries, first-entry pointer:
+
+```
+!GST  next=0  nseg=1  npage=1  max=$0D (13)  CURRENT=0  first=$1FD14
+```
+
+**Zero current entries**: the Global Segment Table is allocated and empty, because this
+firmware never declares a shareable segment (directive `$07` `DCLSHR` and `$04` `ATTSEG`
+are never issued). `!IOV` at `$1F900` is likewise a tagged header with an end pointer
+`$1F9FF` and nothing else — 7 non-zero bytes in its whole page.
+
+`!IDV` at `$1F800` confirms the documented reading directly: after the tag and end
+pointer come `{vector, TCB, ISR entry, ISR exit}` records, the first being
+`$0045, $0001E900, $00F07EE6, $00F07F08` — vector `$45`, XP1I's TCB, and the ISR entry
+this project already records for `TCBXP1I`.
+
+So of the twelve markers: six `!TCB` and six `!TST` per task, `!UST` with 9 live entries,
+`!IDV` with 6, `!PAT` with 8 free and 0 active, `!GST`/`!IOV` allocated but empty, `!UDR`
+25 slots all empty, `!VCT` live but untagged, and `!CCB`/`!DLY` with no instance at all —
+`!CCB` because directive `$3C` `CMR` is never issued. **Every one is now accounted for,
+by layout and by live contents.**
