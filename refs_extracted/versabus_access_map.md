@@ -22700,3 +22700,58 @@ So the table exists because the window offset is *computable* from the channel a
 is **not** — `$244`, `$246`, `$250`, `$252` has no closed form. A four-entry lookup is the
 cheapest way to express an irregular backplane assignment, and its presence is itself evidence
 that the irregularity is real hardware rather than a documentation slip.
+
+## `PanelSendAndWait` IS the channel transaction primitive — a fifth replicated component (2026-07-31)
+
+RDHC's `PanelSendAndWait` at `$F056BA` and the XP tasks' channel transaction primitive at
+`$F07F12` have been documented as separate routines. They are **the same code**:
+
+```
+$F056BA  move.w  #$4F,(a3)          $F07F12  move.w  #$4F,(a3)
+$F056BE  move.w  d4,-(a7)           $F07F16  move.w  d4,-(a7)
+$F056C0  move.w  #$0,(a1)           $F07F18  move.w  #$0,(a1)
+$F056C4  move.w  d0,d7              $F07F1C  move.w  d0,d7
+$F056C6  move.w  d0,$2(a1)          $F07F1E  move.w  d0,$2(a1)
+$F056CA  move.w  #$8004,(a0)        $F07F22  move.w  #$8004,(a0)
+$F056CE  move.l  #$3E8,d5           $F07F26  move.l  #$3E8,d5
+```
+
+**The first 64 bytes are byte-identical**, and `$F07F12 - $F056BA = $2858` — *exactly* the offset
+this project already measured between RDHC's 42-entry dispatch table (`$F05BA4`) and XP1I's
+(`$F083FC`). Divergence begins around byte 64, where the panel codes differ (RDHC issues `$26C`
+and `$269`; the XP copies issue their own).
+
+**All five copies located**, and the four XP ones are 64/64 identical to each other:
+
+| task | primitive |
+|---|---|
+| RDHC | `$F056BA` |
+| XP4I | **`$F060FA`** |
+| XP3I | `$F06B12` |
+| XP2I | `$F07512` |
+| XP1I | `$F07F12` |
+
+XP1I to XP2I to XP3I steps by exactly `$A00`; XP4I sits at `$F07F12 - $1E18`, i.e. **`$18`
+earlier than the grid** — a **fourth independent confirmation of XP4I's `-$18` tail shift**,
+after the byte-diff alignment, the dispatch-table offset, and the helper-call address.
+
+### What this unifies
+
+The replicated per-task subsystem is now **five components**, not four:
+
+1. the 42-entry dispatch table
+2. its four handlers (`POLL`, `D1_SEND`, `BLK_XFR`, `D2_FIN`)
+3. the channel -> IRQ-bit map at +168
+4. the panel-command issuer
+5. **the channel transaction primitive / `PanelSendAndWait`**
+
+and two statements that read as separate facts turn out to be one. "The 42 slots are the SBC's
+own operation table, entered with `d0` unchanged from `PanelSendAndWait`" and "the XP copies
+dispatch on the operation code they issued" describe **the same mechanism in the same code**,
+compiled once and stamped out five times. RDHC drives it with a host-supplied operation
+descriptor; the XP tasks drive it with `$10` and `$0E`. The vocabulary differs, the machine does
+not.
+
+That also explains why `PanelSendAndWait`'s name has always sat awkwardly: it is not a panel
+routine. It is the **generic chassis transaction primitive**, and "panel" is this project's own
+label, applied before the protocol was understood.

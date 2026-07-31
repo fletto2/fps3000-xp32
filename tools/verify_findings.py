@@ -4873,6 +4873,19 @@ check('...and looks the BIM up in the table rather than computing it',
       insn(0xF04CC8) == 'lea.l $f046e0.l, a3' and insn(0xF04CD0) == 'movea.l (a3), a3'
       and insn(0xF04CD2) == 'adda.l #$ff0000, a3')
 check('...then hands all three to PanelSendAndWait', insn(0xF04CE8) == 'jsr $f056ba.l')
+
+# ---- PanelSendAndWait IS the channel transaction primitive (2026-07-31) ----
+def _blk(a, n=64): return _rom[a - 0xF00000:a - 0xF00000 + n]
+check('PanelSendAndWait and the XP transaction primitive are byte-identical for 64 bytes',
+      _blk(0xF056BA) == _blk(0xF07F12))
+check('...separated by exactly $2858, the RDHC->XP1I subsystem offset',
+      0xF07F12 - 0xF056BA == 0x2858 and 0xF083FC - 0xF05BA4 == 0x2858)
+check('all four XP copies of the primitive are identical',
+      len({_blk(a) for a in (0xF060FA, 0xF06B12, 0xF07512, 0xF07F12)}) == 1)
+check('XP2I and XP3I sit on the $A00 grid',
+      0xF07F12 - 0xA00 == 0xF07512 and 0xF07F12 - 0x1400 == 0xF06B12)
+check("XP4I's copy is $18 earlier than the grid -- a fourth confirmation of the tail shift",
+      0xF07F12 - 0x1E00 - 0x18 == 0xF060FA)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
