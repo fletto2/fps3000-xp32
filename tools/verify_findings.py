@@ -6259,6 +6259,14 @@ check('phase $2500 plants a two-longword signature at the staging-buffer boundar
 check('...and calls $F099F4, whose byte-walk therefore runs on DRAM, not the VMOD block',
       insn(0xF089C2) == 'bsr.w $f099f4' and insn(0xF09A0A) == 'bsr.w $f08958')
 
+check('phase $2100 writes every address at itself and verifies it',
+      insn(0xF098FC) == 'move.l a0, (a0)+' and insn(0xF09912) == 'cmp.l (a0)+, d0')
+check('...skipping exactly four bytes at $1FFF0, in both passes',
+      insn(0xF098FE) == 'cmpa.l #$1fff0, a0' and insn(0xF09906) == 'lea.l $4(a0), a0'
+      and insn(0xF09916) == 'cmpa.l #$1fff0, a0' and insn(0xF0991E) == 'lea.l $4(a0), a0')
+check('...which pins the protected span at $1FFF0-$1FFF3',
+      0x1FFF0 + 4 - 1 == 0x1FFF3)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

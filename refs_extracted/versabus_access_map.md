@@ -28764,3 +28764,37 @@ a purpose. The suite's shape is now fully visible:
   three `$FF0216` gate tests
 - **sequence C** (`$2100`-`$2600`): DRAM boundary and patterns, SCM address lines and
   patterns, DRAM refresh
+
+### Phase `$2100` — full DRAM address-uniqueness, and it pins the VMOD extent
+
+```
+movea.l a0,a2                    ; the start of the range
+fill:   movea.l a2,a0
+        move.l a0,(a0)+          ; write EVERY address at that address
+        cmpa.l #$1fff0,a0 / bne .
+        lea.l  $4(a0),a0         ; ...SKIPPING FOUR BYTES at $1FFF0
+        cmpa.l a0,a1 / bne fill
+verify: movea.l a2,a0
+        move.l a0,d0
+        cmp.l  (a0)+,d0          ; ...then verify every one
+        cmpa.l #$1fff0,a0 / bne .
+        lea.l  $4(a0),a0         ; same skip
+        cmpa.l a0,a1 / bne verify
+```
+
+This is the **exhaustive** address-uniqueness test — every longword in DRAM holds its own
+address and is checked — as distinct from phase `$0400`'s power-of-two address-line walk. A
+model whose RAM aliases anywhere, not merely at a power-of-two offset, fails here.
+
+**And the skip pins the register extent.** The loop steps over exactly **four bytes** at
+`$1FFF0`, in both the fill and the verify pass. This project derives the RAM/register
+partition from "8 independent sites skip `$1FFF0`"; this is two of those eight, and they
+show the protected span is `$1FFF0`-`$1FFF3` precisely — consistent with the four-byte
+longword pattern test at phase `$0600` and with `$1FFF2` being a vector register.
+
+Note what is *not* skipped: `$1FFE2`, `$1FFE4`, `$1FFE6` and `$1FFEA`, the other four
+interrupter vector registers. They are written with their own addresses and read back, which
+is only possible because they behave as plain read/write storage — the point made earlier
+about an exclusion list describing consequences rather than address decoding.
+
+**With this, all 24 phases of the self-test are identified.**
