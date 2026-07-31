@@ -19917,3 +19917,33 @@ this image.
 
 Stated as measured rather than concluded: **written once, never read here, values resemble
 vector numbers, consumer unidentified.**
+
+### Correcting myself: MODE1 bit 7 is *not* a one-bit fix
+
+I described the missing busy bit as "a one-bit fix with a large blast radius". The probe is
+one bit; a **faithful** model is not, and the reason is already recorded in
+`ch_request_transfer()`:
+
+> "A 40-cycle delay never elapsed: `versabus_tick` is called once per batch of interpreted
+> instructions, and the ISR's entire 1000-iteration poll fits inside one batch… The request
+> fired and the acknowledge never did."
+
+So the model acknowledges channel transfers **immediately**, and that is defensible on its own
+terms — any chassis fast enough to answer inside a 1000-iteration budget is indistinguishable
+from one that answers at once.
+
+But immediate acknowledgement and a meaningful busy bit are **in tension**. "Busy" means *a
+transfer is outstanding*, and with zero-width outstanding windows there is no interval in
+which the bit could truthfully be set. That is why `FPS3K_MODE1_BUSY` has to assert it
+**unconditionally** to exercise the path, and why the machine then settles in the scheduler
+rather than the idle loop: it is being told the chassis is permanently busy.
+
+**So modelling bit 7 faithfully requires finer-grained tick scheduling than the emulator
+currently has** — the tick must run inside the SBC's poll loop, not between instruction
+batches. That is a design change, not a bit. Recording it because the earlier framing
+understated the work, and because the same granularity limit will bite anything else that
+tries to model a *duration* rather than an event: the 1000-iteration budget is the firmware's
+own clock, and the model has no hand on it.
+
+The probe remains useful for what it is — it exercised the encoder, the sweep, the mode bits
+and the readback, all of which agreed with the decode. It just is not a chassis.
