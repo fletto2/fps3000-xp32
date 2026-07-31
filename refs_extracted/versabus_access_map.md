@@ -23639,3 +23639,39 @@ atomic there and the spinlock can never be observed to fail. That is fine for ru
 firmware and wrong as a model: **a chassis that DMAs into a semaphore word between the two halves
 of a `tas` would corrupt it on hardware and cannot on the emulator.** Adding it to the
 known-divergences list rather than the bug list, since nothing in this ROM can exercise it.
+
+### The complete `TAS` census: five sites, all in the kernel
+
+`tas.b` is the 68000's only indivisible read-modify-write, so enumerating it enumerates every
+place this firmware requires atomicity:
+
+| site | operand | what it locks |
+|---|---|---|
+| `$F006EE` | `(a0)` | **`T0P`** — the semaphore field |
+| `$F0078E` | `(a0)` | **`T0V`** — the same |
+| **`$F01614`** | **`$C5B.w`** | **the scheduler's reschedule-pending flag** |
+| `$F02EC6` | `(a0)` | inside the `$10` TERMT handler |
+| `$F03B9A` | `$8(a1,d1.w)` | a `+8` field of an indexed entry — the same offset as the semaphore P/V field |
+
+**Five, and not one outside the kernel.** The entire FPS application layer — six tasks, the
+self-test, the chassis protocol — takes no lock at all. That is consistent with what this file
+already establishes about `$1064`: the four XP tasks update one shared word with no
+synchronisation, and it is safe only because each owns a disjoint nibble and the updates are
+whole-word `and.w`/`or.w` instructions.
+
+**`$F01614` is inside `T0QEVNTI`** (TRAP #0 `$18`, handler `$F01602`) — the ASQ-post-from-interrupt
+directive the FPS glue wraps. So the reschedule flag at `$0C5B` is set with `tas` **from interrupt
+context**, which is exactly the race that needs it: an interrupt posting an event while a task is
+in the scheduler.
+
+That corroborates `$0C5B`'s documented role — "bit 7 is the reschedule-pending flag" — from the
+locking side, and `tas.b` sets bit 7 by definition, which is why the flag *is* bit 7 rather than
+any other.
+
+### Emulation consequence
+
+A model needs `tas` to be atomic against **bus masters**, not just against interrupts. On this
+board the chassis is a master, so an implementation that models arbitration must not let a DMA
+land between the two halves. `emulator/` models no arbitration, so `tas` is trivially atomic and
+these five sites can never be observed to fail — correct for running this ROM, wrong as a model
+of the hardware.

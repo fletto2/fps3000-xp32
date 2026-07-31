@@ -5150,6 +5150,16 @@ check("XP4I's constants have bit 15 clear and bit 11 SET in both -- a one-way la
       and (0x1F41 & 0x800) and (0x1F45 & 0x800))
 check('...so they are not semaphore states: counts of 8001 and 8005',
       (0x1F41 & 0x7FFF) == 8001 and (0x1F45 & 0x7FFF) == 8005)
+_tas = [a for a, (m, _, _) in _mins.items() if m.split('.')[0] == 'tas']
+check('the ROM contains exactly five TAS instructions', len(_tas) == 5, len(_tas))
+check('...all of them inside the RMS68K kernel', all(a < 0xF04488 for a in _tas))
+check('...two are T0P and T0V', 0xF006EE in _tas and 0xF0078E in _tas)
+check('...one locks the scheduler reschedule flag at $0C5B',
+      insn(0xF01614) == 'tas.b $c5b.w')
+check('...and it sits inside T0QEVNTI, the post-from-interrupt directive',
+      _t0rev.get(0xF01600) == 0x18 and 0xF01600 < 0xF01614)
+check('the FPS application layer takes NO lock anywhere',
+      not any(a >= 0xF04488 for a in _tas))
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
