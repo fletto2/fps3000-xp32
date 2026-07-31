@@ -4499,8 +4499,7 @@ check('...and the same MODE1 bit computation appears in all four XP tasks',
       all(insn(a) == 'addq.w #$7, d0' and insn(a + 2) == 'bset.b d0, d1'
           for a in (0xF084EA, 0xF07AEA, 0xF070EA, 0xF066D2)))
 
-print(f'\n{checks - len(fails)}/{checks} passed')
-sys.exit(1 if fails else 0)
+
 
 # ---- the boot spine: reset -> self-test -> RTOS init (2026-07-31) ----
 import struct as _bst, capstone as _bcs
@@ -5098,3 +5097,7 @@ check('$F015D8 validates !TCB and then !ASQ through TCB+$40',
       and insn(0xF015E8) == 'cmpi.l #$21415351, (a4)')
 check('...which is a DIFFERENT field from the documented ASQ block pointer at +$138',
       0x40 != 0x138)
+
+
+print(f'\n{checks - len(fails)}/{checks} passed')
+sys.exit(1 if fails else 0)
