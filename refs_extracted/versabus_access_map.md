@@ -22062,10 +22062,27 @@ marker-matching would surface it.
 word), `+$FC` (saved resume PC), `+$102` (directive status), `+$13C` (saved SP) and `+$140`/`+$144`
 (name/session copy).
 
-**Hardware/RAM-dump prediction, checkable in one dump**: any TCB that has passed through
-`$F00824` reads `'EXEC'` (`45 58 45 43`) at `+$B0`. If no TCB shows it, the routine never runs in
-a normal boot — which would put it with `!DLY` and `!CCB` as a facility present in the image and
-unused by this configuration. Either outcome is informative and neither has been measured.
+**The three callers say when it is written.** `$F00824` is reached from `$F00C62`, `$F027EC` and
+`$F03028`, and attributing each to the TRAP #1 handler that contains it:
+
+| caller | handler | directive |
+|---|---|---|
+| `$F03028` | `$F02F64` | **`$0F` = TERM** — task termination |
+| `$F027EC` | `$F027C2` | `$25` |
+| `$F00C62` | `$F003D0` | `$4B` — the handler this project measured as **executing 0 times** |
+
+**So `'EXEC'` is a termination-path tag**, and the routine that writes it also sets bit 15 of the
+word at `TCB+$2A`, sets bit 1 of the byte at `TCB+$29`, and clears `TCB+$5C` — the shape of a
+"this task is finished, here is why" record rather than a structure marker.
+
+**Sharpened RAM-dump prediction**: in this firmware **no TCB should carry `'EXEC'` in a normal
+boot**, because all six tasks block and none terminates — the measured state is six TCBs reporting
+`TSKSBLCK`. `45 58 45 43` at `TCB+$B0` would mean a task had *died*, which makes it a genuinely
+useful post-mortem field: it distinguishes "blocked" from "terminated" in a dump, and the
+adjacent `+$29`/`+$2A` bits carry the reason.
+
+That is a better outcome than the "written and never read" reading it first looked like. It is
+never read *by this firmware*, but it is written exactly where a diagnostic would want it.
 
 **Method note.** The census that missed it scanned for the `!` convention. A scan for *any* four
 printable ASCII bytes used as an immediate finds `!TCB`, `!VCT`, `HXP0` (twice — the computed

@@ -5097,6 +5097,15 @@ check('$F015D8 validates !TCB and then !ASQ through TCB+$40',
       and insn(0xF015E8) == 'cmpi.l #$21415351, (a4)')
 check('...which is a DIFFERENT field from the documented ASQ block pointer at +$138',
       0x40 != 0x138)
+_execcall = [a for a, (m, o, _) in _mins.items()
+             if m.split('.')[0] in ('jsr', 'bsr') and 'f00824' in o]
+check("the EXEC tag is written from exactly three call sites",
+      sorted(_execcall) == [0xF00C62, 0xF027EC, 0xF03028], [hex(x) for x in sorted(_execcall)])
+check('...one of them inside the $0F TERM handler at $F02F64',
+      0xF02F64 < 0xF03028 < 0xF03100)
+check('the tagging routine also stamps TCB+$2A bit 15, TCB+$29 bit 1 and clears TCB+$5C',
+      insn(0xF00826) == 'bset.b #$f, d7' and insn(0xF0082A) == 'move.w d7, $2a(a0)'
+      and insn(0xF0082E) == 'clr.w $5c(a0)' and insn(0xF00832) == 'bset.b #$1, $29(a0)')
 
 
 print(f'\n{checks - len(fails)}/{checks} passed')
