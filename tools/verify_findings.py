@@ -5510,6 +5510,23 @@ check('no task in this firmware issues any of the seven',
       not any(_mre.search(r'#\$%x, d0' % n, o) and 0xF04600 <= a < 0xF08700
               for n in (0x0E, 0x16, 0x18, 0x1C, 0x33, 0x49)
               for a, (_, o, _) in _mins.items()))
+
+# ---- the RTOS status-code vocabulary (2026-07-31) ----
+_st = _mcol.Counter(); _stmove = 0
+for _a, (_m, _o, _) in _mins.items():
+    if '$102(a6)' not in _o: continue
+    _mm = _mre.match(r'#\$([0-9a-f]+), \$102\(a6\)$', _o)
+    if _mm:
+        _st[int(_mm.group(1), 16)] += 1
+        if _m.split('.')[0] == 'move': _stmove += 1
+check('the status code space is 1..16 and fully populated',
+      sorted(_st) == list(range(1, 17)), sorted(hex(v) for v in _st))
+check('...with $9 (privilege refusal) among the most common', _st[9] >= 14, _st[9])
+check('most writes ADD rather than SET, because the dispatcher clears the field first',
+      _stmove <= 16 and sum(_st.values()) - _stmove >= 90, (_stmove, sum(_st.values())))
+check('...and the generic failure $1 is written with move at the dispatcher error stub',
+      insn(0xF003D0) == 'move.w #$1, $102(a6)')
+check('$3E writes $E for a vector with no owner', insn(0xF0228E) == 'move.w #$e, $102(a6)')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

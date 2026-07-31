@@ -24696,3 +24696,54 @@ for host-loaded software, exactly like the `$3B` key and the `$4A` clock read.
 That makes three independent capability mechanisms in this kernel, all unused by the firmware
 that ships with it: the **`TCB+$28` privilege flag** (7 directives), the **`$4BAA7BFB` key** on
 `$3B`, and the **TRAP #0 supervisor-only interface** whose 12 sites all lie outside task code.
+
+## The RTOS status-code vocabulary: 16 codes, 119 write sites (2026-07-31)
+
+`TCB+$102` is the directive status field — the busiest field in the kernel at 119 accesses.
+Censusing every write to it gives the complete error vocabulary:
+
+| code | sites | notes |
+|---:|---:|---|
+| `$1` | 5 | written with `move` — the **generic failure**, including the dispatcher's error stub `$F003D0` |
+| `$2` | 2 | |
+| `$3` | 5 | |
+| `$4` | 6 | |
+| `$5` | 12 | |
+| `$6` | **15** | the most common after `$9` |
+| `$7` | 15 | |
+| `$8` | 2 | |
+| **`$9`** | **15** | **the privilege refusal** — the seven gated directives and internal checks |
+| `$A` | 8 | |
+| `$B` | 5 | |
+| `$C` | 11 | |
+| `$D` | 1 | |
+| `$E` | 2 | includes `$3E`'s "vector has no owner" |
+| `$F` | 5 | |
+| `$10` | 4 | the highest code used |
+
+**The code space is 1-16 and fully populated** — every value from `$1` to `$10` occurs.
+
+### Why most sites ADD rather than SET
+
+Only 16 of the 119 writes use `move`; the rest are `addq` or `addi`. That works because **the
+dispatcher clears `$102(a6)` on TRAP #1 entry**, so `addq #$N` on a zeroed field sets it to N.
+The `move` form appears where the field may already be dirty — notably the dispatcher's own error
+paths at `$F0010A`, `$F003C6` and `$F003D0`, which set `$1` unconditionally.
+
+That also means **a status of, say, `$C` could in principle be `$5 + $7` rather than a single
+`addi #$C`** if two error paths ever ran in sequence. Nothing in the decoded paths does so — each
+errors once and `rte`s — but it is a real hazard for anyone adding an error path to this kernel.
+
+### It is orthogonal to the panel codes
+
+The two diagnostic channels answer different questions:
+
+| channel | question |
+|---|---|
+| panel codes `$26D`-`$271`, `$276`-`$27B`, `$27E`-`$280` | **which directive** failed, and **in which task** |
+| **`TCB+$102`** | **why** it failed |
+
+A task that reports panel `$26E` has had `$2D` CRSEM fail; reading its `TCB+$102` says whether
+that was a privilege refusal (`$9`), a bad parameter, or a resource exhaustion. **Neither channel
+carries the other's information**, and a dump should read both — which is now possible, since the
+panel code is preserved at `$0E6E` and the status in every TCB.
