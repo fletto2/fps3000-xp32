@@ -5170,6 +5170,21 @@ check('the USER-lifecycle codes map to GTSEG/CNCTIRQ/CRTCB/GTSEG/START/TERMT/RES
 check('$27D has a second emitter inside TCBIO1I, not only RDHC',
       insn(0xF04890) == 'move.w #$27d, d0' and insn(0xF05D42) == 'move.w #$27d, d0')
 
+# ---- $26C is TIMEOUT, $269/$26A/$26B are ERROR (2026-07-31) ----
+_ab = {c: sum(1 for _, (m, o, _) in _mins.items()
+              if m.startswith('move') and f'#${c:x}, d0' in o)
+       for c in (0x269, 0x26A, 0x26B, 0x26C)}
+check('$26C has by far the most emitters -- it is the generic timeout',
+      _ab[0x26C] == 45, _ab)
+check('...and it follows the poll-counter test, not the error bit',
+      insn(0xF056EC) == 'cmpi.l #$0, d5' and insn(0xF056F4) == 'move.w #$26c, d0')
+check('$269 follows the ERROR bit test', insn(0xF056FE) == 'btst.b #$d, d4'
+      and insn(0xF05704) == 'move.w #$269, d0')
+check('$26A likewise follows btst #$d -- it is an ERROR code, not a timeout',
+      insn(0xF057E0) == 'btst.b #$d, d4' and insn(0xF057E6) == 'move.w #$26a, d0')
+check('$26B likewise', insn(0xF05776) == 'btst.b #$d, d4'
+      and insn(0xF0577C) == 'move.w #$26b, d0')
+
 
 # ---------------------------------------------------------------------------
 # STOP.  ADD NEW check() CALLS *ABOVE* THIS LINE.

@@ -22281,3 +22281,52 @@ One addition: **`$27D` has a second emitter at `$F05D42`, inside TCBIO1I**, not 
 a code shared across tasks rather than identifying one — which slightly qualifies the
 "(task, directive)" reading established for `$27E`-`$280`: the *newer* TCBIO1I codes are
 task-specific, the older shared ones are not.
+
+## CORRECTION: `$26C` is the TIMEOUT code and `$26A` is an ERROR code (2026-07-31)
+
+Every polling site in the panel/channel subsystem has the same four-part tail, and reading it
+once explains the whole `$269`-`$26C` family:
+
+```
+         ...poll loop, d5 counting down from $3E8, d4 = the status word...
+$F056E6  btst.b  #$d,d4          bit 13 = ERROR
+$F056EA  bne.b   $F056FE         -> the error arm
+$F056EC  cmpi.l  #$0,d5          did the 1000-iteration counter run out?
+$F056F2  bne.b   $F056FE
+$F056F4  move.w  #$26C,d0        <-- TIMEOUT
+$F056F8  jsr     $F05688
+$F056FE  btst.b  #$d,d4
+$F05702  beq.b   $F0572C         no error -> carry on
+$F05704  move.w  #$269,d0        <-- ERROR
+```
+
+Counting emitters across the whole ROM:
+
+| code | sites | emitted when |
+|---|---:|---|
+| **`$26C`** | **45** | the poll counter `d5` reached zero — **TIMEOUT** |
+| `$26A` | 20 | status bit 13 set — **ERROR**, at one family of sites |
+| `$26B` | 10 | status bit 13 set — **ERROR**, at another |
+| `$269` | 5 | status bit 13 set — **ERROR**, at a third |
+
+**Two documented labels are backwards.** `CLAUDE.md` gives `$26A` as `PCMD_TIMEOUT_ABORT` and
+`$26C` as `PCMD_RELEASE`, "the `D2_FIN` finalize code". In fact **`$26C` is the timeout** — it is
+emitted at 45 distinct sites, every one of them immediately after `cmpi.l #$0,d5`, which is the
+poll counter and nothing else — and **`$26A` is an error report**, emitted after
+`btst.b #$d,d4`.
+
+The `D2_FIN` observation is not wrong, merely partial: `D2_FIN` does issue `$26C`, because
+`D2_FIN` also polls and can time out. With 45 emitters it is plainly the generic timeout code
+rather than a finalizer-specific "release".
+
+**Diagnostic consequence.** This changes what a stalled board is telling you. `$26C` at
+`$FF000E`/`$0E6E` means **the chassis never answered within 1000 poll iterations** — a missing or
+dead counterparty. `$269`/`$26A`/`$26B` mean the chassis **did** answer and set the error bit — a
+live counterparty rejecting the request. Those are opposite diagnoses, and the old labels
+inverted them.
+
+**Method note.** All four codes were named in the project's first pass from surrounding context.
+The three families checked today by guard or adjacency — `$258`-`$260`, `$26D`-`$271`,
+`$276`-`$27D` — came out 8 wrong, 1 wrong, 0 wrong respectively. **Context-based naming was
+reliable where the surrounding code was distinctive and unreliable where several sites looked
+alike**, which is precisely the abort family's situation: 45 identical tails.
