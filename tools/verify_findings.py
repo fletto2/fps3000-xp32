@@ -6997,6 +6997,20 @@ check('...all four with the stack at segment base + $114',
 check('...so (a6) is the name word "AX", whose bit 11 is CLEAR, starting the latch',
       _l(0xF05F2C) == 0x41585034 and not (0x4158 & 0x800))
 
+check('each XP task also copies an "HXPn" descriptor to a6+$0A',
+      all(_l(t) == 0x48585030 + _n and _l(t + 4) == 0 and _w(t + 8) == 0x0002
+          for t, _n in ((0xF07D36, 1), (0xF07336, 2), (0xF06936, 3), (0xF05F36, 4))))
+check('...so the segment is two 10-byte descriptors then a stack $114 up',
+      _w(0xF07D6A) == 0x4BEE and _w(0xF07D6C) == 0x000A
+      and _w(0xF07DA0) == 0x4BEE and _w(0xF07DA2) == 0x0014)
+check('XP1I tests bit 11 of the LATCHED CHANNEL STATUS $1066 at the divergence point',
+      _w(0xF07EA6) == 0x41D6 and _w(0xF07EA8) == 0x4E41
+      and _w(0xF07EB6) == 0x0839 and _w(0xF07EB8) == 0x000B
+      and _l(0xF07EBA) == 0x00001066)
+check('...while XP4I tests bit 11 of its own parameter block instead',
+      _w(0xF0609A) == 0x41D6 and _w(0xF0609C) == 0x4E41
+      and _w(0xF060AA) == 0x3010 and _w(0xF060AC) == 0x0800 and _w(0xF060AE) == 0x000B)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

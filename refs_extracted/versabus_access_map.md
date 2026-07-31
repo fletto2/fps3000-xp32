@@ -31111,3 +31111,63 @@ has never run; if `!UST` is also corrupted, the reading here is wrong.
 That is also the cleanest statement of why XP4I is the structural outlier: the other three tasks
 spend this slot on the `$0000001B` channel transaction, and XP4I spends it on a two-state flag
 kept in a field that was never meant to hold one.
+
+## The XP task's private segment, mapped completely (2026-07-31)
+
+All four XP tasks use exactly **three** displacements off `a6` — `+$00`, `+$0A`, `+$14` — and all
+three are `lea`s. Two are template-copy destinations, two are parameter-block addresses:
+
+```
+a6+$00   descriptor 1 : "AXPn" $00000000 $0002   <- copied from $F07D2C (XP1I) etc.
+a6+$0A   descriptor 2 : "HXPn" $00000000 $0002   <- copied from $F07D36 (XP1I) etc.
+a6+$14   end of the descriptors -- no higher a6 displacement exists
+   ...
+a6+$114  the task stack (lea $114(a0),a7 at entry)
+```
+
+Both templates are verified in all four tasks (`"AXP1".."AXP4"`, `"HXP1".."HXP4"`, each with
+longword 0 and **type = 2**). That accounts for the two `CRSEM` calls per XP task this project
+counts, and for eight of the nine `!UST` entries — the ninth being TCBIO1I's `HIO1`.
+
+So the segment's *used* extent is 20 bytes of descriptors plus a stack starting `$100` bytes
+later. Nothing in the tasks touches `a6+$14` … `a6+$113`.
+
+## XP1I and XP4I diverge at the same instruction, and it looks like a hand-patch error
+
+The two tasks reach byte-identical code, issue the same `SGSEM`, report the same failure code —
+and then test **bit 11 of different things**:
+
+```
+XP1I  $F07EA6  lea    (a6),a0
+      $F07EA8  trap   #$1
+      $F07EAC  panel  $271 on failure
+      $F07EB6  btst.b #$b,$1066.l      ; <- the LATCHED CHANNEL STATUS (a global)
+      $F07EC0  movea.l #$ff004e,a0     ; ... then the $0000001B channel transaction
+      $F07ECA  move.w #$1b,$2(a1)
+
+XP4I  $F0609A  lea    (a6),a0
+      $F0609C  trap   #$1
+      $F060A0  panel  $271 on failure
+      $F060AA  move.w (a0),d0          ; <- ITS OWN PARAMETER BLOCK
+      $F060AC  btst   #$b,d0
+      $F060B2  move.w #$1f41,(a0)      ; ... then a flag write, no transaction
+```
+
+Same logical test — "is bit 11 set?" — against **the channel status** in three tasks and against
+**the semaphore descriptor's name word** in the fourth. Given what this firmware is (hand-written
+assembly built from byte-identical template copies with hand-patched constants, XP4I being the one
+copy whose alignment already differs), **the most economical reading is a patch error in XP4I's
+copy: the operand was left pointing at the block `a0` still held rather than repointed at
+`$1066 + (ch-1)*6`.**
+
+Stated as an inference, not a certainty — but it is well supported: four copies, three agreeing,
+and the divergent one reading a structure that has no channel status in it. `"AX"` = `$4158` has
+bit 11 clear, so XP4I's test always takes the same arm on the first pass regardless of what the
+channel is doing.
+
+**Emulator consequence, and it is checkable.** XP4I will **never** issue the `$0000001B`
+transaction that XP1I/2/3 issue, whatever the channel reports, because it never looks at the
+channel. On a four-channel machine, channel 4 therefore behaves differently from 1-3 in a way that
+is *not* a configuration difference and cannot be fixed by driving the chassis harder. Any model
+that reproduces XP4I faithfully will show that asymmetry; a model that "fixes" it has diverged
+from the ROM.
