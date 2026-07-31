@@ -17998,3 +17998,43 @@ the firmware cannot distinguish "4 bytes per burst" (= one 32-bit chassis word, 
 would fit the 16→32 assembly established elsewhere) from "mode 4"**. Both predict exactly
 the observations. Settling it needs a transfer of a different width, which this ROM never
 performs — i.e. a bus trace from a machine running host software, not more reading.
+
+## XP4I diverges structurally from the other three XP tasks (2026-07-30)
+
+This file records XP4I as a template copy aligning at `−$1E` with **265 differing bytes of
+2304**, against 71/72 for the XP2I/XP3I pair. That figure is a measurement of *how much*
+differs; here is *what*.
+
+A search for every `move.w #$1b` immediate in the ROM finds exactly **three**:
+`$F06ACA` (XP3I), `$F074CA` (XP2I), `$F07ECA` (XP1I). **XP4I has none.** At the
+corresponding place the two do different things:
+
+```
+XP1I  $F07EB6  btst.b #$b,$1066        ; the LATCHED status word
+      $F07EC0  movea.l #$ff004e,a0
+      $F07EC6  move.w #$0,(a1)         ; $FF0048  data high
+      $F07ECA  move.w #$1b,$2(a1)      ; $FF004A  data low
+      $F07ED0  move.w #$8000,(a0)      ; $FF004E  command
+
+XP4I  $F06098  moveq #$2b,d0 / lea (a6),a0 / trap #1   ; $2B SGSEM
+      $F060AA  move.w (a0),d0          ; read through whatever the trap left in a0
+      $F060AC  btst.b #$b,d0           ; bit 11 of THAT, not of $1066
+      $F060B2  move.w #$1f41,(a0)      ; bit 11 clear
+      $F060B8  move.w #$1f45,(a0)      ; bit 11 set
+```
+
+So XP4I tests bit 11 of a word it reads **through a pointer the RTOS left in `a0`** after
+the `$2B` `SGSEM` call, and writes `$1F41` or `$1F45` back through the same pointer —
+instead of the `$0000001B` + `$8000` channel transaction the other three perform. It is not
+a constant-patched copy at this point; the transaction itself is different.
+
+**The target of those writes is not statically determined.** `a0` is whatever `SGSEM`
+returns, so it need not be a device register at all.
+
+*Method note, because it nearly produced a wrong finding here:* a sweep that tracks
+`movea.l #$ff00xx,aN` and then attributes every later `#imm,(aN)` to that base will report
+these two writes as going to `$FF00AE`. They do not — `a0` was reloaded by the trap in
+between. Any base-register sweep must invalidate a register at every instruction that can
+write it, `trap` included, or it manufactures device accesses that never happen. The same
+sweep also produced `$FF10A0`, `$FF1080` and `$FF10DE`, which are plainly RAM addresses
+wearing a device prefix.
