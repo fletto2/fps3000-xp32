@@ -6738,6 +6738,11 @@ check('the RTOS programs only T3 and T1 operationally, never T2',
       _w(0xF0A2C6) == 0x0189 and _w(0xF0A2C8) == 0x000D
       and _w(0xF0A2CE) == 0x0189 and _w(0xF0A2D0) == 0x0005)
 
+check('operationally CR1 is $00: T1 externally clocked AND its interrupt disabled',
+      not (0x00 & 0x02) and not (0x00 & 0x40))
+check('...while the self-test writes CR1 = $C2, switching T1 to the internal clock',
+      _w(0xF09112) == 0x10BC and _w(0xF09114) == 0x00C2 and (0xC2 & 0x02))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

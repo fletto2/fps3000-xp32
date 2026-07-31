@@ -30296,3 +30296,31 @@ the window and, per the fault policy, loop forever rather than report.
 **Operational contrast, from the same census.** The RTOS programs only **T3** (`movep.w d0,$d(a1)`
 at `$F0A2C6`) and **T1** (`$5(a1)` at `$F0A2CE`) — never T2. So T2 is programmed exactly once in
 the machine's life, by this test.
+
+### Divergence: the MC6840 clock-source bit is not modelled
+
+Checking the model against the CR values above: `mc6840_tick` decrements **every** timer from E
+cycles unconditionally (with `E = CPU/10`, giving the documented 800 kHz). **CR bit 1 — the clock
+source, 1 = internal E, 0 = external input — is read nowhere.**
+
+The model is therefore right where it matters and wrong where it does not, which is worth stating
+precisely rather than leaving as a latent surprise:
+
+| context | `CR1` | bit 1 | real T1 | modelled T1 |
+|---|---|:-:|---|---|
+| self-test `$F09112` | `$C2` | 1 | internal E — expires | internal E — **correct** |
+| operational | `$00` | 0 | counts an **external input** | free-runs on E — **wrong**, but harmless |
+
+It is harmless today for one reason only: operationally `CR1 = $00` also leaves **bit 6 clear**,
+so T1's interrupt is disabled and its counter is never read — `TRAP #0 $1C` reads **T3**. Nothing
+observable depends on T1.
+
+**It would bite the moment host-loaded software used T1** — enabling its interrupt, or reading its
+counter to measure an external event rate, which is the only reason to wire a timer to an external
+input in the first place. On hardware T1 would advance at whatever that input runs at; in the
+model it advances at 800 kHz regardless. That is a divergence of *kind*, not of calibration, so no
+tick-rate tuning fixes it.
+
+Note this sits beside the already-recorded prescaler correction (bit 1 was once treated as a `/8`
+on all three timers, making the system tick run 8x slow). The bit has now been wrong in two
+different ways; the second is the one still live.
