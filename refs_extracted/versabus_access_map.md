@@ -31937,3 +31937,38 @@ third value in the same block.
 - **`+$44`** is only ever `lea $44(a6),a0` — a structure **base** passed as a pointer, from the
   FPS-boundary region `$F04230`/`$F0434E`.
 - **`+$70`** is a word, read at `$F02906` and `tst.w`-ed at `$F039D4`.
+
+## The kernel globals are nearly complete: 42 referenced, 5 unnamed (2026-07-31)
+
+Applying the same census to `$0Cxx` finds **42 distinct globals across 187 accesses**, of which
+only five are absent from this project's documented list — a much better ratio than the TCB's.
+Each resolves:
+
+| global | accesses | what |
+|---|---:|---|
+| **`$0C40`** | 1 | **not a global** — the low word of the **longword** day counter at `$0C3E` |
+| `$0C35` | 2 | the **high byte of the trace-mask word** at `$0C34`; bit 7 gates a path near `CNCTIRQ` (`$F022C0`/`$F022D0`) |
+| `$0C62` | 6 | a longword: **`clr.l` at five sites**, and one read that **pushes it** (`$F00912`) |
+| **`$0C8E`** | 6 | a **structure base** — every access is `lea $c8e.w,a0`, never a load; used by `CMR` (`$F03D38`/`$F03D3C`) and the FPS boundary (`$F0413C`, `$F0432E`, `$F0436C`, `$F0437E`) |
+| `$0C7C` | 1 | `lea`'d once at init, adjacent to the fatal-path stack pointer `$0C78` |
+
+**`$0C40` is the interesting one, because it is the same mistake as `TCB+$00`.** `$0C3E` is
+accessed exclusively as a longword — `addq.l`, `move.l` ×3, `sub.l` — so the day counter is 32
+bits at `$0C3E`-`$0C41`, and `$F01082`'s `move.w $c40.w,d3` is reading **its low half**, two
+instructions after `$F0107C` read the whole thing. A census keyed on addresses reports a global
+that does not exist.
+
+That is now the third instance of this class in one session: `TCB+$00` (really the bare `(a6)`
+pointer form), the `$100`-`$13F` "fields" (really register slots), and `$0C40`. **An address that
+appears in the code is not automatically a datum** — it may be a part of a wider one, and the
+discriminator is always the *widths* used elsewhere on the same region.
+
+It also confirms and sharpens the clock structure: **a 32-bit day counter at `$0C3E` and a 32-bit
+millisecond counter at `$0C42`**, the latter accessed eight times, all `.l`. This project records
+`$0C42` as "milliseconds since midnight" wrapping at `$5265C00`; the day counter's width was not
+stated.
+
+`$0C8E` is worth a note for anyone modelling the channel layer: six `lea`s and **no loads or
+stores** means it is a structure the kernel hands out by address, in the same neighbourhood as the
+server registry at `$0C9A`/`$0CAA` and used by the one directive (`$3C` `CMR`) this firmware never
+issues — so it is very likely another dormant channel-control structure.

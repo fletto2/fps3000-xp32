@@ -7223,6 +7223,14 @@ check('TCB+$14C is a mask ANDed into the value from TCB+$154',
       _w(0xF00CC0) == 0x282E and _w(0xF00CC2) == 0x0154
       and _w(0xF00CCC) == 0xC8AE and _w(0xF00CCE) == 0x014C)
 
+check('$0C3E is a LONGWORD day counter, so $0C40 is its low half not a global',
+      _w(0xF00F02) == 0x52B8 and _w(0xF00F04) == 0x0C3E
+      and _w(0xF0107C) == 0x2438 and _w(0xF0107E) == 0x0C3E
+      and _w(0xF01082) == 0x3638 and _w(0xF01084) == 0x0C40)
+check('$0C8E is only ever lea\'d, never loaded or stored',
+      _w(0xF03D38) == 0x41F8 and _w(0xF03D3A) == 0x0C8E
+      and _w(0xF0413C) == 0x41F8 and _w(0xF0413E) == 0x0C8E)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
