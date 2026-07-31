@@ -27572,3 +27572,55 @@ quick re-check used the looser rule and got 14 phantom writes.
 This is the sixth distinct mechanism recorded here for a sweep producing a confident wrong
 answer, after absolute-only scanning, literal-versus-computed operands, branch-path
 provenance, the lookahead cap, and crossing control transfers.
+
+## The self-test states the VMOD ↔ board-status bit mapping explicitly (2026-07-31)
+
+The emulator's chassis bit equations were derived empirically — tuned until the self-test
+passed. The self-test actually *states* the relationships, in a parameterised routine:
+
+```
+lea.l  $1fff0.l,a5          ; VMOD control
+lea.l  $f70018.l,a4         ; board status
+moveq  #$4,d0               ; the VMOD bit under test
+moveq  #$1,d1               ; the board-status bit expected to respond
+...
+$F091C6: bset.b d0,$1(a5)   ; set the VMOD bit
+         btst   d0,$1(a5)   ; ...verify it READS BACK
+         bne ok / d7 = $F0F0F0F0 / bsr $F0891C / retry
+$F091E4: bset.b d0,$1(a5)   ; set it again
+         btst   d1,$1(a4)   ; ...and verify the BOARD-STATUS bit responds
+         beq -> fault
+$F091FE: bclr.b d0,$1(a5)   ; clear it
+         btst   d0,$1(a5)   ; ...verify the clear reads back
+```
+
+Two instances are directly readable as `(d0, d1)` pairs:
+
+| VMOD `$1FFF1` bit | `$F70019` bit | site |
+|---:|---:|---|
+| 6 | 3 | `$F08C4E` |
+| 4 | 1 | `$F09190` |
+
+**Those are exactly the variable pairs in the documented equations** — "bit 3 of `$F70019` =
+NOT(bit 6 OR (bit 7 AND bit 1))" and "bit 1 of `$F70019` = NOT(bit 4 of `$1FFF1`) OR (bit 5
+AND NOT bit 0 of `$1FFF0`)". So the empirically-tuned equations were fitting the right
+variables, which is a real consistency check on them.
+
+What the code requires is narrower than the equations describe: only the **set** direction is
+correlated with board status (`bset` then `btst d1` with `beq` → fault), while the `bclr` arm
+checks only that the VMOD bit itself reads back. A model therefore owes "VMOD bit set ⇒ board
+bit set" for these two pairs, plus a VMOD register that reads back what was written.
+
+The other documented relationships (bit 5↔bit 2, bit 6↔bit 5) are not expressed in this
+parameterised form and were not found by the same scan; they use different code shapes.
+
+### Decoder caution: capstone prints memory `btst` as `.l`
+
+`$F091CA` renders as `btst.l d0, $1(a5)`. **On a 68000 there is no long `btst` with a memory
+operand** — the dynamic-bit form against memory is always byte-sized, bit number mod 8. The
+`.l` is a capstone rendering artefact.
+
+This matters because it is the exact inverse of the register-side rule recorded earlier: a
+reader who trusts the printed size would apply mod 32 to a memory operand. The reliable
+discriminator remains the **operand**, not the suffix — and this project's bit census
+classified by operand, so it is unaffected.

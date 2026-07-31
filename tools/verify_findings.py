@@ -5982,6 +5982,15 @@ check('...gated on $10AA == 2 and a class field of 1 in bits 16-17',
 check('...and MODE1 bit 0 marks the command as host-link before issuing',
       insn(0xF05E04) == 'bset.b #$0, d1' and insn(0xF05E08) == 'move.w d1, $202(a5)')
 
+check('the self-test parameterises the VMOD/board-status mapping in d0 and d1',
+      insn(0xF0919C) == 'moveq #$4, d0' and insn(0xF0919E) == 'moveq #$1, d1'
+      and insn(0xF09190) == 'lea.l $1fff0.l, a5' and insn(0xF09196) == 'lea.l $f70018.l, a4')
+check('...verifying the VMOD bit reads back, then that the board bit responds',
+      insn(0xF091C6) == 'bset.b d0, $1(a5)' and insn(0xF091E8).startswith('btst')
+      and '$1(a4)' in insn(0xF091E8) and insn(0xF091EC) == 'beq.b $f091f4')
+check('capstone prints memory btst as .l, but the 68000 form is byte-sized',
+      insn(0xF091CA) == 'btst.l d0, $1(a5)')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
