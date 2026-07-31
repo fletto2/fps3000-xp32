@@ -3951,6 +3951,13 @@ check('cmd 4 (CPLOAD) sets the transfer count $E64 and arms $FF0216 bit 4',
       and insn(0xF0550E) == 'bset.b #$4, d2'
       and insn(0xF05512) == 'move.w d2, $216(a5)')
 
+check('cmd 2 windows the 16-longword file at $101E, bounded on index+count',
+      insn(0xF054AC) == 'lea.l $101e(a2), a1'
+      and insn(0xF054B4) == 'cmpi.l #$10, d3')
+check('...and implements its direction flag with a single exg',
+      insn(0xF054D4) == 'exg.l a1, a0'
+      and insn(0xF054DA) == 'move.l (a0)+, (a1)+')
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.

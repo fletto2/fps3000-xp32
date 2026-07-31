@@ -17926,3 +17926,37 @@ payload really does arrive as 32-bit chassis words assembled from 16-bit halves,
 It also reuses `$E64`, the same transfer-count global that chassis operation `$2` sets —
 so the count reaches the transfer loop by two routes, the chassis command language and the
 host command record.
+
+### Command 2 is a bounds-checked window onto a 16-longword host register file
+
+```
+$F054A2  d1 = (a0)+        ; DIRECTION: 0 = write into the area, non-zero = read out
+$F054A4  d2 = (a0)+        ; INDEX  -> a1 = $101E + index*4
+$F054B0  d2 = (a0)+        ; COUNT
+$F054B4  cmpi.l #$10,d3    ; index + count must be <= 16 longwords, else panel $25B
+$F054D4  exg.l  a1,a0      ; the direction flag, implemented by swapping src and dst
+$F054DA  move.l (a0)+,(a1)+ ; count times
+```
+
+So `$101E` is a **16-longword host-visible register file**, and command 2 gives random
+access to any window of it in either direction, with the bound enforced on
+`index + count` rather than on either alone. The direction is implemented by a single
+`exg` — one copy loop serves both ways.
+
+This is also the area command 1's `$14` sub-mode publishes per channel, storing `$101E`
+into `$1080 + (ch-1)*4`.
+
+### The host↔SBC command interface, complete
+
+| cmd | handler | what it does |
+|---|---|---|
+| 1 | `$F05370` | attach/configure a channel: default it from `$E62` (`XPSEL`), validate against `$105E`, optionally enable host notification (`$10A0` bit 1) and post to `'HXP0'+ch`, publish `$101E` per channel |
+| 2 | `$F054A2` | bidirectional windowed access to the 16-longword file at `$101E`, `index+count <= 16` |
+| 3 | `$F054E8` | copy a counted longword array into `$E8A` |
+| 4 | `$F05502` | **`CPLOAD`** — set `$E64`, arm `$FF0216` bit 4 (16→32 width conversion), parse `S0`/`S1`/`S2`/`S3` |
+
+Four commands, all four now decoded field by field. Together with the three chassis dispatch
+layers and the transmit sequence, **every message this ROM can send or receive over the
+VersaBUS is now described at register-and-field level.** The unmapped remainder is not the
+SBC's protocol but the *content* the counterpart card supplies — and the EU/AU, which the
+SBC cannot reach at all, as the self-test's own board coverage independently shows.
