@@ -32174,3 +32174,43 @@ RDHC — which issues neither — does not.
 Three independent routes now agree on that bit: the setter's neighbourhood (name/session
 registration), the measured per-task values (`$A081` vs `$A001`), and the declaration counts
 (2/2/2/2/1/0).
+
+## Directive `$3E` decoded — a third singleton (2026-07-31)
+
+Reproducing the size analysis independently gives **60 live directives, 16 distinct sizes, and
+exactly the nine singletons** this project records (4, 6, 9, 14, 18, 20, 22, 36, 56) — a clean
+confirmation of that analysis. Of the nine, three carry Motorola names (`RQSTPA`, `SERVER`,
+`AKRQST`), two were decoded above (`$1A`, `$1B`), and four were unnamed. Here is a third:
+
+```
+$F0227E  clr.l   d2
+$F02280  move.b  $3(a4),d2         ; VECTOR NUMBER, parameter block +3
+$F02284  movea.l $c66.w,a1         ; $0C66 = the !VCT slot
+$F02288  tst.b   (a1,d2.w)         ; !VCT[vector] = the owning task number
+$F0228C  bgt.b   $F02296
+$F0228E  move.w  #$e,$102(a6)      ; STATUS $E -- "vector has no owner"
+$F02294  rte
+$F02296  clr.l   d3
+$F02298  move.b  $2(a4),d3         ; TASK NUMBER, parameter block +2
+$F0229E  cmpi.w  #$6,d3 / ble      ; valid range 1..6
+$F022A4  move.w  #$9,$102(a6)      ; STATUS $9 otherwise
+```
+
+**`$3E` is a vector-ownership operation** keyed on `{task number, vector number}`, and its 4-byte
+parameter block accounts for exactly the two bytes it reads (+2 and +3). It is the natural
+counterpart to `$4C` `CNCTIRQ`, whose implementation sits immediately above it — connect at
+`$F0226A`, this at `$F0227E`.
+
+**Three documented facts confirmed in passing**, none used to derive the decode:
+
+1. **Status `$E` means "vector has no owner"** — recorded here from the status-code census, and
+   this is the site that produces it.
+2. **`!VCT` (slot `$0C66`) holds the owning task number per vector** — the code indexes it by
+   vector number and tests the byte.
+3. **Task numbers run 1..6** — the `cmpi.w #$6` bound matches the canonical numbering
+   (`XP1I`=1 … `RDHC`=6) that this project derived from `!VCT` itself.
+
+That leaves three of the nine singletons unnamed: **`$18`** (size 9, privileged with the documented
+two-sided check), **`$1C`** (size 14, privileged), and **`$23`** (size 18). All three have flags
+`$C0`/`$C2`, i.e. a parameter block plus the second translation — so they take structured arguments
+and would repay the same treatment.

@@ -7273,6 +7273,17 @@ check('...declaring 36- and 56-byte parameter blocks, both singleton sizes',
 check('$2D CRSEM and $29 ATSEM sit immediately before the semaphore registration',
       _t1(0x2D)[0] == 0xF0314A and _t1(0x29)[0] == 0xF03150)
 
+check('directive $3E reads a vector number at +3 and indexes !VCT via $0C66',
+      _t1(0x3E)[0] == 0xF0227E and (_t1(0x3E)[1] >> 8) == 4
+      and _w(0xF02280) == 0x142C and _w(0xF02282) == 0x0003
+      and _w(0xF02284) == 0x2278 and _w(0xF02286) == 0x0C66)
+check('...returning status $E when the vector is unowned',
+      _w(0xF0228E) == 0x3D7C and _w(0xF02290) == 0x000E and _w(0xF02292) == 0x0102)
+check('...and validating a task number at +2 against the range 1..6',
+      _w(0xF02298) == 0x162C and _w(0xF0229A) == 0x0002
+      and _w(0xF0229E) == 0x0C43 and _w(0xF022A0) == 0x0006
+      and _w(0xF022A4) == 0x3D7C and _w(0xF022A6) == 0x0009)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
