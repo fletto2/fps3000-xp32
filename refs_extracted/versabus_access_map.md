@@ -34033,3 +34033,35 @@ image**: it is not a general register but a one-way injection port for the low h
 **Provenance of the `d2` values**, since three of the four are computed rather than literal:
 `$F097B2` `move.l #$aaaa5555,d2`; `$F097CA` `move.l d0,d2` (= `$55555555`); `$F097DC`
 `move.l #$5555,d2`; `$F097F4` `move.l d1,d2` (low word `$AAAA`, and only `cmp.w` is used).
+
+## OPEN: the width mux is unmodelled, yet phase `$1900` passes (2026-07-31)
+
+Checking the derived width-mux contract against `emulator/` produced a tension I could not resolve,
+recorded here rather than guessed at.
+
+**What the model does.** `$FF0216` is stored as `xltr.data_hi` and **only bit 7 is ever consulted**
+(`versabus_apif_dma_busy()`); **bit 4 is read nowhere**. `$FF0214` writes land in `xltr.data_lo` and
+are never applied to anything. `$400000` is backed by a plain 1 MB array in `fps3k_sbc.c`. So the
+two complementary injection routes are simply absent.
+
+**What the firmware requires** (verified by reading, with `PollBoardStatus` confirmed to preserve
+`d0`, so `move.l d0,d2` really does load `$55555555`): sub-stage 2 writes `$55555555` then the word
+`$AAAA` to `$400000` with bit 4 **clear**, and requires the longword to read back `$55555555` — i.e.
+the word write must have had **no effect**. On plain memory it would read `$AAAA5555` and fail.
+
+**What actually happens.** A traced boot executes `$F09776`, `$F097B8`, `$F097CC`, `$F097E2`,
+`$F097F6` **exactly once each** and the two probes twice each. Failure would set `d7` and re-enter
+the sub-stage (`bne.b`), so the counts say every sub-stage **passed**.
+
+Those three statements cannot all be right. Either the window write path does something not visible
+in the reading above, or one of the four expected values is mis-assigned. A `-bus` log shows **zero**
+accesses to `$400000`-`$400003`, which is itself unexplained given `$F09806` demonstrably ran — most
+likely chassis-memory accesses simply do not go through the VersaBUS logger, but that is an
+assumption, not a check.
+
+**The decisive test** is to log the actual value read back at `$F0980A` on each of the four
+sub-stages — four values, which distinguish the cases immediately. Until that is done, **the derived
+contract above should not be used to "fix" the emulator**: the model currently passes the phase, and
+a change made on the strength of a reading that disagrees with a passing run is as likely to break it
+as to improve it. The unmodelled mux is real and worth implementing; the polarity table needs that
+one measurement before it is acted on.
