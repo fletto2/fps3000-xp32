@@ -5923,10 +5923,9 @@ check('$FF0218 takes only $0400 and $0000, in equal numbers',
       set(_st218) == {0x400, 0x0} and _st218[0x400] == _st218[0x0], dict(_st218))
 
 check('no 32-bit operation touches $FF0214 or $FF0216 anywhere',
-      not [x for x in range(0xF00000, 0xF10000, 2)
-           if ((insn(x) or ' ').split() or [''])[0].endswith('.l')
-           and not (insn(x) or '').startswith(('lea', 'pea'))
-           and _mre.search(r'(?<!-)\$21[46]\(a\d\)', (insn(x) or '').lower())])
+      not [x for x, (m, o, _) in _mins.items()
+           if m.endswith('.l') and not m.startswith(('lea', 'pea'))
+           and _mre.search(r'(?<!-)\$21[46]\(a\d\)', o)])
 check('...$FF0214 has exactly one site, a word write in the self-test',
       [x for x in range(0xF00000, 0xF10000, 2)
        if _mre.search(r'(?<!-)\$214\(a\d\)', (insn(x) or '').lower())] == [0xF0981C]
@@ -5938,10 +5937,9 @@ check('the $240/$25E hits are misaligned decodes, not instruction boundaries',
       insn(0xF03652) == 'movep.l $240(a0), d0' and insn(0xF0426E) == 'ori.b #$0, -$25e(a0)')
 
 check('$FF0210 has no 32-bit access either -- 18 sites, all word',
-      not [x for x in range(0xF00000, 0xF10000, 2)
-           if ((insn(x) or ' ').split() or [''])[0].endswith('.l')
-           and not (insn(x) or '').startswith(('lea', 'pea'))
-           and _mre.search(r'(?<!-)\$210\(a\d\)', (insn(x) or '').lower())])
+      not [x for x, (m, o, _) in _mins.items()
+           if m.endswith('.l') and not m.startswith(('lea', 'pea'))
+           and _mre.search(r'(?<!-)\$210\(a\d\)', o)])
 check('small displacements are NOT distinctive: $4(aN) occurs all over the firmware',
       len([x for x in range(0xF00000, 0xF10000, 2)
            if _mre.search(r'(?<!-)\$4\(a\d\)', (insn(x) or '').lower())]) > 100)
@@ -5963,10 +5961,9 @@ check('btst/tst/cmp put their memory operand last but do NOT write',
       insn(0xF08926) == 'btst.b #$4, $1(a2)' and insn(0xF0892E) == 'btst.b #$5, $1(a2)')
 
 check('no 32-bit operation touches ANY XLTR register',
-      not [x for x in range(0xF00000, 0xF10000, 2)
-           if ((insn(x) or ' ').split() or [''])[0].endswith('.l')
-           and not (insn(x) or '').startswith(('lea', 'pea'))
-           and _mre.search(r'(?<!-)\$2[0-5][0-9a-f]\(a\d\)', (insn(x) or '').lower())])
+      not [x for x, (m, o, _) in _mins.items()
+           if m.endswith('.l') and not m.startswith(('lea', 'pea'))
+           and _mre.search(r'(?<!-)\$2[0-5][0-9a-f]\(a\d\)', o)])
 
 check("op $3's window arithmetic reaches $7FFFFC -- 4 MB, not 1",
       0x400000 + (0xFFFFF << 2) == 0x7FFFFC)
