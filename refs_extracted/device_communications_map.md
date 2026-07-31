@@ -833,3 +833,44 @@ Two caveats, stated because negatives invite over-reading:
   any address, and a CP program can do what the ROM does not. These negatives bound *this
   firmware's* behaviour, which is what a model must reproduce to boot — not the machine's
   full capability.
+
+## The host mailbox: complete, and a case where the bit convention decides the meaning
+
+`$F05DD6`-`$F05E4C` is TCBIO1I's whole ISR, and every documented claim about the mailbox
+checks out against it:
+
+```
+movea.l #$ff0000,a5 / movea.l #$700000,a4    ; XLTR base, MAILBOX base
+move.w  $210(a5),d7 / move.w #$f,$210(a5)    ; save MODE2, select page $F
+move.l  $1c(a4),d1                           ; READ the mailbox longword at +$1C
+btst.b  #$1d,d1                              ; bit 29 -- see below
+beq     other_arm
+  move.l #$281,d0                            ; PCMD_HOST_REQUEST
+  move.w $202(a5),d1 / bset.b #$0,d1 / move.w d1,$202(a5)   ; MODE1 bit 0 = host-link cmd
+  jsr    $f05e56                              ; ...an issuer that ends in bra .
+other_arm:
+  move.l $10aa,d2 / beq -> $282               ; PCMD_HOST_NULL
+  cmpi.l #$2,d2 / bne exit                    ; the $10AA gate must read exactly 2
+  move.l d1,d2 / swap d2 / andi.l #$3,d2      ; class field = mailbox bits 16-17
+  cmpi.b #$1,d2 / bne exit                    ; ...must be 1
+  bset.b #$1,d1 / move.l d1,$20(a4)           ; REPLY at +$20 with bit 1 set
+exit:
+  move.w d7,$210(a5)                          ; restore MODE2
+  move.w #$c,ccr                              ; the ISR-exit sentinel
+```
+
+**`btst.b #$1d,d1` is the case that makes the bit convention load-bearing.** The operand is
+a **data register**, so the bit number is mod 32 and this really is **bit 29**. Read with
+the memory rule (mod 8) it would be bit 5 of a byte — a completely different flag, and the
+"host needs attention" mechanism would be unrecoverable. `bset.b #$1,d1` and
+`bset.b #$0,d1` on MODE1 are the same convention.
+
+Everything else confirms: the mailbox occupies **`+$1C` read / `+$20` write**, the page is
+saved and restored around the access, MODE1 bit 0 marks the command as host-link, `$10AA`
+must read exactly 2, and the class field is bits 16-17 of the mailbox word.
+
+**The two arms behave differently, which is worth knowing before debugging a stall**: the
+bit-29 arm issues `$281` through an issuer that ends in `bra .` and never returns, while the
+`$10AA` arm writes its reply and exits cleanly through the `$0C` sentinel. A model in which
+the mailbox always sets bit 29 will therefore hang the task on its first interrupt — the
+documented deadlock — whereas one that leaves bit 29 clear and sets `$10AA = 2` completes.

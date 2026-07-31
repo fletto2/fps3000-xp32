@@ -5972,6 +5972,16 @@ check('...and MODE2 = $F disagrees with the aperture offset page bits (3)',
 check('the firmware names five absolute addresses in the window extent',
       insn(0xF09BA0) == 'lea.l $403ffc.l, a2' and insn(0xF09B36) == 'lea.l $404000.l, a1')
 
+check('the mailbox test is bit 29 on a REGISTER -- mod 32, not mod 8',
+      insn(0xF05DF4) == 'btst.b #$1d, d1' and 0x1D == 29)
+check('...the mailbox is read at +$1C and replied to at +$20',
+      insn(0xF05DF0) == 'move.l $1c(a4), d1' and insn(0xF05E40) == 'move.l d1, $20(a4)')
+check('...gated on $10AA == 2 and a class field of 1 in bits 16-17',
+      insn(0xF05E22) == 'cmpi.l #$2, d2' and insn(0xF05E2E) == 'swap d2'
+      and insn(0xF05E30) == 'andi.l #$3, d2' and insn(0xF05E36) == 'cmpi.b #$1, d2')
+check('...and MODE1 bit 0 marks the command as host-link before issuing',
+      insn(0xF05E04) == 'bset.b #$0, d1' and insn(0xF05E08) == 'move.w d1, $202(a5)')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
