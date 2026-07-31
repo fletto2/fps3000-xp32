@@ -8362,6 +8362,12 @@ check('...after filling every vector $10-$3FF with a catch-all rte handler',
 check('...and bit 6 of the $1FFF1 byte is clear in all eight patterns',
       all(((_l(0xF08E8C + 4*_i) >> 16) & 0x40) == 0 for _i in range(8)))
 
+check('windows 1, 6 and 7 are never referenced while 0 and 2-5 are',
+      all(len(_re21a.findall(r'\$ff%04x' % (0x20*_w + _o), _asm21a)) == 0
+          for _w in (1, 6, 7) for _o in (0, 4, 8, 0xA, 0xE))
+      and len(_re21a.findall(r'\$ff004e', _asm21a)) > 0
+      and len(_re21a.findall(r'\$ff00ae', _asm21a)) > 0)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

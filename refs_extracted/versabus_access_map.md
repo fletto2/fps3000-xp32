@@ -36707,3 +36707,33 @@ which **window 1 is never accessed** and is "architecturally reserved rather tha
 for is unestablished". A register the SBC has no business touching — HMA being the obvious candidate —
 would present exactly that way. Offered as a hypothesis, not a finding: nothing here ties window 1 to
 HMA specifically.
+
+## Window census, verified with controls (2026-07-31)
+
+Counting references to each 32-byte AP I/F window and its four register offsets, absolute and
+displacement forms together:
+
+| window | base | absolute | displacement | |
+|---:|---|---:|---:|---|
+| 0 | `$FF0000` | 66 | 119 | the host/bulk link — **control** |
+| **1** | `$FF0020` | **0** | **0** | never accessed |
+| 2 | `$FF0040` | 3 | 5 | XP channel 1 — **control** |
+| 3 | `$FF0060` | 3 | 5 | XP channel 2 |
+| 4 | `$FF0080` | 3 | 5 | XP channel 3 |
+| 5 | `$FF00A0` | **2** | 5 | XP channel 4 |
+| 6 | `$FF00C0` | 0 | 0 | never accessed |
+| 7 | `$FF00E0` | 0 | 0 | never accessed |
+
+**Five controls fire** (windows 0 and 2-5), so the three zero rows are a real absence rather than a
+dead detector — the discipline this session has repeatedly needed. The recorded claim that window 1
+is skipped and windows 6-7 are unpopulated is confirmed.
+
+**And window 5 shows 2 absolute references where windows 2-4 show 3** — which is exactly the XP4I
+asymmetry found earlier from the other direction: XP4I lacks the `move.w #$1b,$2(a1)` transaction and
+therefore one `+$0E` pointer load. Two independent censuses, one over task code and one over window
+addresses, landing on the same missing reference.
+
+**The window-1-is-HMA hypothesis remains untested.** The *absence* is now solid, but nothing connects
+it to the host memory address register specifically. What can be said is that the absence is
+structural rather than incidental: the firmware's own `(ch+1)<<5` arithmetic steps over window 1 by
+construction, so no code path could reach it even by accident.
