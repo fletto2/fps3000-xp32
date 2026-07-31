@@ -34664,3 +34664,36 @@ the boot *up to* the scheduler, while the tick fires once the machine is idling.
 statement is that **no RTOS tick occurs during the entire self-test and RTOS init** — which follows
 from the PTM being programmed late, and which is worth knowing before assuming timer interrupts can
 perturb any self-test stage. They cannot; the suite runs tick-free.
+
+## The largest executed kernel routine is task creation — and its dual entry is not the usual one
+
+`$F02894`-`$F02A32`, 416 bytes and the biggest kernel region that runs in a clean boot, is
+**`CRTCB`** — create-TCB. That is the expected answer once stated: TDTI creates six tasks at boot,
+`T0CRTCB` is measured running exactly 6 times, and building a TCB is the most substantial thing the
+kernel does before the scheduler takes over. Nearly half the executed kernel is one routine.
+
+**Its two entries are 10 bytes apart, not 2:**
+
+```
+TRAP0_T0CRTCB:  f02894  lea.l  -$2(a3),a4
+                f02898  move.w #$8001,d3        ; <-- a MODE FLAG
+                f0289c  bra.b  $f028b2
+TRAP1_CRTCB:    f0289e  movea.l a4,a3
+                f028a0  movem.l $12(a4),d4-d6
+                ...                              ; converges at $f028b2
+```
+
+This project records the convention as "29 of 33 directive handlers have two entry points **two
+bytes apart** — the earlier one is `move.w sr,-(a7)` for internal `bsr` callers; the TRAP path enters
+past it". That holds for the handlers it was derived from, but **`CRTCB` is a different shape**: the
+two entries are ten bytes apart, they differ by *argument marshalling* rather than by SR handling,
+and the supervisor entry announces itself with `d3 = $8001` before joining the common body at
+`$F028B2`. The TRAP #1 entry instead loads its parameters from the caller's block
+(`movem.l $12(a4),d4-d6`).
+
+So "two bytes apart" is the *common* form, not the universal one, and a tool that locates routine
+starts by subtracting 2 from every table pointer will mis-locate this one. Worth knowing before
+using that rule to seed a disassembler — which this project's kernel listing does.
+
+The remaining executed kernel regions (`$F0123E`, `$F0170E`) share the `move.w sr,-(a7)` /
+`movem.l` opening and are the conventional shape, so the convention is right about them.

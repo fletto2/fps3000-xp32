@@ -7974,6 +7974,14 @@ check('this firmware issues only 14 of the kernel\'s 60 live TRAP #1 directives'
       len({0x01, 0x0B, 0x0D, 0x0F, 0x10, 0x11, 0x12, 0x13,
            0x29, 0x2A, 0x2B, 0x2D, 0x43, 0x4C}) == 14)
 
+check('CRTCB has two entries ten bytes apart, the TRAP #0 one flagged with $8001',
+      _w(0xF02894) == 0x49EB and _w(0xF02896) == 0xFFFE
+      and _w(0xF02898) == 0x363C and _w(0xF0289A) == 0x8001
+      and _w(0xF0289C) >> 8 == 0x60
+      and 0xF0289E + (_w(0xF0289C) & 0xFF) == 0xF028B2
+      and _w(0xF0289E) == 0x264C
+      and 0xF0289E - 0xF02894 == 10)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
