@@ -4302,6 +4302,19 @@ check('$E7E is written only by the two S-record paths, after adda.l #$10000',
 check('...and read only by op $8, bounding it to the staging range',
       insn(0xF04F7C) == 'cmpi.l #$1ffff, $e7e.l')
 
+# Op $3: the offset is masked to 20 bits then shifted left 2, so its maximum is
+# $3FFFFC -- four bytes below the $400000 comparison.  Both arms' bge targets
+# are therefore unreachable by construction.
+check('op $3 masks the offset to 20 bits and scales it to bytes, both arms',
+      insn(0xF04D7E) == 'andi.l #$fffff, d1' and insn(0xF04D84) == 'lsl.l #$2, d1'
+      and insn(0xF04DF2) == 'andi.l #$fffff, d1' and insn(0xF04DF8) == 'lsl.l #$2, d1')
+check('...so max offset $3FFFFC is below the $400000 test and both bge are dead',
+      0xFFFFF * 4 == 0x3FFFFC and 0x3FFFFC < 0x400000
+      and insn(0xF04D88) == 'cmpa.l #$400000, a1'
+      and insn(0xF04DFC) == 'cmpa.l #$400000, a1')
+check('...and the reachable window range $400000-$7FFFFC contains the mailbox',
+      0x400000 <= 0x70001C <= 0x400000 + 0x3FFFFC)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.

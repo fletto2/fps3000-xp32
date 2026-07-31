@@ -19560,3 +19560,23 @@ as 1 MB at `$400000` (an unforced choice, as this file notes) and the mailbox se
 `$700000`. A model must decide whether a windowed access at offset `$300000`+ aliases the
 mailbox, is decoded elsewhere by the hardware, or faults — and nothing in the firmware
 answers it, because the firmware never issues an index that large.
+
+### Both arms of op `$3` carry the same dead branch
+
+The write path `$F04DC0` mirrors the read path exactly:
+
+```
+read  $F04D7E andi.l #$fffff / $F04D84 lsl.l #$2 / $F04D88 cmpa.l #$400000
+      $F04D8E bge -> $F04DA0  move.l (a1),$e70        UNREACHABLE
+write $F04DF2 andi.l #$fffff / $F04DF8 lsl.l #$2 / $F04DFC cmpa.l #$400000
+      $F04E02 bge -> $F04E14  move.l $e70,(a1)        UNREACHABLE
+```
+
+Same mask, same shift, same comparison, same unreachable absolute access — **two dead
+instructions, one per direction**. That symmetry is itself informative: the guard was
+written once and copied to both arms, so it is a deliberate idiom whose precondition the
+surrounding arithmetic happens to make impossible, not a stray branch.
+
+The write path also confirms the documented assembly of the 32-bit word: bit 6 of the
+command selects which half of `$E70`/`$E72` receives the CHANNEL_SELECT value, and the
+completed longword is stored through the window in one `move.l`.
