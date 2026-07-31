@@ -6582,10 +6582,12 @@ check('...and bit 5 uses the SAME two access routines as the bit-6 test',
       _w(0xF0962C) == 0x617E and _w(0xF0964C) == 0x615E      # -> $F096AC read
       and _w(0xF0966E) == 0x6148 and _w(0xF0968E) == 0x6128)  # -> $F096B8 write
 
-check('$FF0218 is only ever written $400 or $0, across all 44 write sites',
-      _w(0xF0954C) == 0x3D7C and _w(0xF0954E) == 0x0400
-      and _w(0xF04AE2) == 0x3D7C and _w(0xF04AE4) == 0x0400
-      and _w(0xF04AF2) == 0x3D7C and _w(0xF04AF4) == 0x0000)
+_w218 = _re21a.findall(r'move\.w\s+#\$([0-9a-f]+),\s*\$218\(a\d\)', _asm21a)
+_c218 = _re21a.findall(r'clr\.w\s+\$218\(a\d\)', _asm21a)
+check('$FF0218 is only ever written $400 or $0, across every write site in the ROM',
+      set(_w218) == {'400', '0'} and _w218.count('400') == 22
+      and _w218.count('0') == 20 and len(_c218) == 2)
+
 check('phase $1600 samples $FF0218 bit 4 to choose a 16- or 24-register BIM walk',
       _w(0xF09522) == 0x302E and _w(0xF09524) == 0x0218
       and _w(0xF09526) == 0x0800 and _w(0xF09528) == 0x0004)
