@@ -33566,3 +33566,42 @@ hazard — "`lea`/`pea` compute and access nothing" — applied to `movea.l`, an
 the conclusion drawn there ("the port belongs to the XP-32 channel-1 task and is an output") rests
 on the *pointer loads* at `$F07E26`/`$F07E2C`, which do establish it. The conclusion survives; the
 instruction attribution does not.
+
+## The board status register is READ-ONLY, and its bit map is hidden in registers (2026-07-31)
+
+**`$F70018`/`$F70019` is never written anywhere in the image.** All nine absolute `$F70018`
+references are `lea`; access is through `(a4)`/`$1(a4)`. A sweep for `bset`/`bclr` on `$1(aN)`
+returns 19 hits, but **every one is `$1FFF1`** — the two that looked like the board register
+(`$F09084`, `$F090DE`, via `a2`) are preceded by `$F09064: lea $1fff0.l,a2`. So the board register
+is pure status: the SBC reads chassis state there and drives the chassis through `$1FFF0`/`$1FFF1`.
+That is a clean simplification of the model's contract.
+
+**But its bit numbers are held in registers, not immediates.** `$F08C54` opens:
+
+```
+lea $f70018.l,a4
+moveq #$6,d0        ; the $1FFF1 bit to drive
+moveq #$3,d1        ; the $F70019 bit that must track it
+```
+
+and the body is a correspondence test, each step gated by `PollBoardStatus` and **retried forever**
+on mismatch (`d7 = $F0F0F0F0`, `bne` back to the top):
+
+| step | action | requirement |
+|---|---|---|
+| `bclr d0,$1(a5)` / `btst d0,$1(a5)` | clear `$1FFF1` bit 6 | reads back 0 |
+| `bclr d0,$1(a5)` / **`btst d1,$1(a4)`** | still clear | **`$F70019` bit 3 reads 1** |
+| `bset d0,$1(a5)` / `btst d0,$1(a5)` | set `$1FFF1` bit 6 | reads back 1 |
+| `bset d0,$1(a5)` / **`btst d1,$1(a4)`** | still set | **`$F70019` bit 3 reads 0** |
+
+**That is the emulator's `bit 3 of $F70019 = NOT(bit 6 OR (bit 7 AND bit 1))` equation derived at
+instruction level**, rather than fitted to observed behaviour — the firmware states the inversion
+itself, and the `bit 7 AND bit 1` term must come from the other stages in the same family.
+
+**The census hazard, in a new place.** A literal-bit sweep of `$F70019` (`btst.b #$N`) finds bits
+1, 2, 3, 4 and 5 and looks complete. It **misses all five `btst d1,$1(a4)` sites** — and those are
+precisely the ones implementing the documented chassis bit equations. This project already records
+this failure mode for `$1FFF0` ("10 sites use a computed bit number... invisible to any literal-bit
+census"); it applies to the board register too, and there the *interesting* accesses are the hidden
+ones. Note also these are **constants in registers**, not walking bits — the sites are fixed tests,
+so "computed" overstates them; what matters is only that the operand is not an immediate.

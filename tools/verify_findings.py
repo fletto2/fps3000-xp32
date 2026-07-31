@@ -7689,6 +7689,19 @@ check('...matching the +$0E pointer-load asymmetry: 2 for ch1-3, 1 for ch4',
       [len(_re21a.findall(r'\$ff00' + _p, _asm21a)) for _p in ('4e', '6e', '8e', 'ae')]
       == [2, 2, 2, 1])
 
+check('$F70018/$F70019 is never written: all absolute refs are lea, no bset/bclr',
+      len(_re21a.findall(r'lea\.l\s+\$f70018', _asm21a)) == 9
+      and len(_re21a.findall(r'(?:bset|bclr|move|clr)\.\w\s+\S*,?\s*\$f7001[89a]', _asm21a)) == 0)
+check('...and the two bit-7 writes via a2 target $1FFF1, not the board register',
+      _w(0xF09064) == 0x45F9 and _l(0xF09066) == 0x0001FFF0)
+check('the bit-3 correspondence test holds its bit numbers in d0=6 and d1=3',
+      _w(0xF08C54) == 0x49F9 and _l(0xF08C56) == 0x00F70018
+      and _w(0xF08C5A) == 0x7006 and _w(0xF08C5C) == 0x7203
+      and _w(0xF08C66) == 0x01AD and _w(0xF08C68) == 0x0001
+      and _w(0xF08C88) == 0x032C and _w(0xF08C8A) == 0x0001)
+check('...and there are five such register-held tests on $1(a4), invisible to a literal sweep',
+      len(_re21a.findall(r'btst\.\w\s+d[0-7],\s*\$1\(a4\)', _asm21a)) == 5)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
