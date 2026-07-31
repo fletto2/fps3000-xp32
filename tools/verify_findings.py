@@ -5211,6 +5211,18 @@ check('...all branching to the same issuer, $F0A57E',
       all((0xF0A23A + n * 8 + 6 + _exc[n][3]) & 0xFFFFFF == 0xF0A57E for n in range(9)))
 check('the catch-all $F0A27A is simply the ninth stub', 0xF0A23A + 8 * 8 == 0xF0A27A)
 
+# ---- the eight panel-command issuers are byte-identical (2026-07-31) ----
+_iss = [0xF04500, 0xF05688, 0xF05E56, 0xF068A8, 0xF072C0, 0xF07CC0, 0xF086C0, 0xF0A57E]
+check('all eight panel-command issuers are byte-identical over 48 bytes',
+      len({_rom[a - 0xF00000:a - 0xF00000 + 48] for a in _iss}) == 1)
+check("...and each one's `bra .` sits at exactly +48",
+      all(_rom[a - 0xF00000 + 48:a - 0xF00000 + 50] == b'\x60\xfe' for a in _iss))
+_brados = [0xF00000 + o for o in range(len(_rom) - 1)
+           if _rom[o] == 0x60 and _rom[o + 1] == 0xFE]
+check('the ROM contains exactly 9 `bra .` sites', len(_brados) == 9, len(_brados))
+check('...eight of them the issuers, the ninth $F001AA in the kernel',
+      sorted(_brados) == sorted([a + 48 for a in _iss] + [0xF001AA]))
+
 
 # ---------------------------------------------------------------------------
 # STOP.  ADD NEW check() CALLS *ABOVE* THIS LINE.
