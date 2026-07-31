@@ -5757,7 +5757,8 @@ check('CMR ($3C) at $F03D0C is the LAST dispatch handler in the image',
       and not [v for v in (_t1[n][0] for n in _t1)
                if 0xF03D0C < v < 0xF04487])
 check('...so the unreachable candidate lies inside CMR, a directive never issued',
-      0xF03D0C < 0xF04230 < 0xF04487)
+      _t1[0x3C][0] < 0xF04230 and bool(insn(0xF04230))
+      and insn(0xF04230) == 'lea.l $44(a6), a0')
 
 check('the SCM test selects page 0 and covers $400000-$403FFF',
       insn(0xF09B24) == 'clr.w $210(a6)' and insn(0xF09B30) == 'lea.l $400000.l, a2'
@@ -5870,8 +5871,14 @@ check('XLTR_COUNTER takes $04 at exactly SIX sites, not seven',
 check('...five of which are the POLL copies at the documented $2858 / $A00 offsets',
       0xF08284 - 0xF05A2C == 0x2858 and 0xF08284 - 0xF07884 == 0xA00
       and 0xF06E84 - 0xF0646C == 0xA18)
+_st218 = _mcol.Counter()
+for _x in range(0xF00000, 0xF10000, 2):
+    _i = (insn(_x) or '').lower()
+    if '218(' in _i and _i.startswith(('move.w #$', 'clr.w')):
+        _mv = _mre.match(r'move\.w #\$([0-9a-f]+),', _i)
+        _st218[int(_mv.group(1), 16) if _mv else 0] += 1
 check('$FF0218 takes only $0400 and $0000, in equal numbers',
-      True)
+      set(_st218) == {0x400, 0x0} and _st218[0x400] == _st218[0x0], dict(_st218))
 
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
