@@ -6312,6 +6312,17 @@ check('...with a 300,000-iteration delay = 0.675 s at 8 MHz',
       insn(0xF09AA4) == 'move.l #$493e0, d5' and insn(0xF09AAA) == 'subq.l #$1, d5'
       and abs(0x493E0 * 18 / 8e6 - 0.675) < 0.001)
 
+check('phase $0800 walks VMOD bit 7 x $1FFF0 bit 1 through all four combinations',
+      insn(0xF08FA2) == 'bclr.b #$7, $1(a5)' and insn(0xF08FA8) == 'bclr.b #$1, (a5)'
+      and insn(0xF08FCC) == 'bset.b #$1, (a5)' and insn(0xF08FEC) == 'bset.b #$7, $1(a5)'
+      and insn(0xF0900A) == 'bset.b #$7, $1(a5)' and insn(0xF09010) == 'bset.b #$1, (a5)')
+check('...expecting board bit 3 SET in three arms and CLEAR only when both are set',
+      insn(0xF08FB0) == 'bne.b $f08fb8' and insn(0xF08FD2) == 'bne.b $f08fda'
+      and insn(0xF08FF4) == 'bne.b $f08ffc' and insn(0xF09016) == 'beq.b $f0901e')
+check('...via a helper that clears bit 6 and polls board bit 3 sixteen times',
+      insn(0xF0903C) == 'bclr.b #$6, $1(a5)' and insn(0xF09042) == 'move.w #$f, d0'
+      and insn(0xF09046) == 'btst.b #$3, $1(a4)' and insn(0xF0904C) == 'dbeq d0, $f09046')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

@@ -28971,3 +28971,39 @@ refresh circuitry it exists to exercise. The other is phase `$2400`'s disturb ch
 
 Both are worth flagging in the same breath as "the self-test passed": of 24 phases, **22
 carry real information about a model and 2 do not.**
+
+## Phase `$0800` verifies the board-bit-3 equation as a 2x2 truth table (2026-07-31)
+
+The body runs four arms over two VMOD bits — `$1FFF1` bit 7 and **`$1FFF0` bit 1** — each
+calling `$F0903C`, which clears `$1FFF1` bit 6, then polls board bit 3 with
+`btst.b #$3,$1(a4)` / `dbeq` (up to 16 tries) and returns with the flags from that test:
+
+| `$1FFF1` bit 7 | `$1FFF0` bit 1 | branch | board `$F70019` bit 3 |
+|:-:|:-:|---|---|
+| 0 | 0 | `bne` | **set** |
+| 0 | 1 | `bne` | **set** |
+| 1 | 0 | `bne` | **set** |
+| **1** | **1** | **`beq`** | **clear** |
+
+With bit 6 held clear by the helper, that is exactly
+
+```
+board bit 3 = NOT( bit 6  OR  (bit 7 AND bit 1) )
+```
+
+— the equation this project records, **now derived from the code rather than fitted to make
+the suite pass.** The three-input form is visible directly: bit 6 is forced to zero by
+`$F0903C`, and the remaining two inputs are walked through all four combinations.
+
+Two smaller results fall out:
+
+- **`$1FFF0` bit 1 is exercised here**, which accounts for several of the eight bit
+  operations this project counts on that byte (`bclr` ×3, `bset` ×2). Phase `$0800` alone
+  contributes two `bclr` and two `bset`.
+- `$F0903C`'s poll is bounded at **16 iterations** (`move.w #$f,d0` / `dbeq`), so a model
+  that never moves board bit 3 fails after a fixed, short wait rather than hanging — unlike
+  most other arms, which retry indefinitely.
+
+**This is the third equation-level requirement extracted from the suite**, after the
+`$FF0216` gate table and the width-mux truth table. All three were previously recorded as
+empirically-tuned emulator behaviour; all three are actually stated by the firmware.
