@@ -574,10 +574,14 @@ IACK-driven clear.
 no read side effects (address-line test `$F09AD6`, march test `$F09B20`).
 **C2.** The page comes from `$FF0210`; `page = addr >> 20`, `offset = (addr & $FFFFF) << 2`, so
 the window is **longword-granular** — the chassis names longwords, not bytes.
-**C3.** `$FF0216` **bit 5 set ⇒ accesses to the window BUS-ERROR**; clear ⇒ they complete
-(`$F09626` requires the fault, `$F09648` forbids it).
-**C4.** `$FF0216` **bit 6 must have no effect on faulting**, in either state, for both a read and
-a `clr.w` — all four arms of `$F096C4` require no fault.
+**C3.** `$FF0216` **bit 5 set ⇒ accesses to the window BUS-ERROR**, clear ⇒ they complete, and
+this holds for **both directions**. The test is four arms — read/set `$F09626`, read/clear
+`$F09648`, write/set `$F09668`, write/clear `$F0968A` — the two "set" arms requiring the fault
+(`bne`) and the two "clear" arms forbidding it (`beq`).
+**C4.** `$FF0216` **bit 6 must have no effect on faulting** — and this is the *same four-arm
+harness* (`$F096C4`, same two access routines, same order) with **`beq` required in all four**.
+The contrast is the point: bits 5 and 6 are tested identically and demanded to behave oppositely,
+so bit 6's orthogonality is an asserted property, not an untested one.
 **C5.** The width mux, `$FF0216` bit 4, is a full 2x2 (phase `$1900`):
 
 | bit 4 | 16-bit write to the window | write to `$FF0214` |

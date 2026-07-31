@@ -6518,6 +6518,18 @@ check('...and bit 4 of $E87 auto-increments the address by 2',
       _w(0xF04ECC) == 0x0839 and _w(0xF04ECE) == 0x0004
       and _w(0xF04ED6) == 0x54B9 and _l(0xF04ED8) == 0x00000E58)
 
+check('the $FF0216 bit-5 test is FOUR arms: set/read, clear/read, set/write, clear/write',
+      _w(0xF09626) == 0x3D7C and _w(0xF09628) == 0x0020
+      and _w(0xF09648) == 0x426E and _w(0xF0964A) == 0x0216
+      and _w(0xF09668) == 0x3D7C and _w(0xF0966A) == 0x0020
+      and _w(0xF0968A) == 0x426E and _w(0xF0968C) == 0x0216)
+check('...with both SET arms requiring a fault and both CLEAR arms forbidding it',
+      (insn(0xF09630) or '').startswith('bne') and (insn(0xF09650) or '').startswith('beq')
+      and (insn(0xF09672) or '').startswith('bne') and (insn(0xF09692) or '').startswith('beq'))
+check('...and bit 5 uses the SAME two access routines as the bit-6 test',
+      _w(0xF0962C) == 0x617E and _w(0xF0964C) == 0x615E      # -> $F096AC read
+      and _w(0xF0966E) == 0x6148 and _w(0xF0968E) == 0x6128)  # -> $F096B8 write
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

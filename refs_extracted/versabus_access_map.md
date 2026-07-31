@@ -29756,3 +29756,23 @@ is transparent to every other bit of `$FF0216` — including the width mux, whic
 progress may be relying on. And the read arm stores to `$E74` while the write arm **zeroes**
 `$E74`, so the chassis can distinguish "here is the value you asked for" from "your write is
 done" by reading the same result register.
+
+
+## Bits 5 and 6 of `$FF0216` share one test harness and are required to differ (2026-07-31)
+
+The two probes are structurally identical — same two access routines (`$F096AC` read,
+`$F096B8` `clr.w` write), same four-arm order (set/read, clear/read, set/write, clear/write),
+same fault flag in `d1` — and they demand opposite outcomes:
+
+| arm | access | bit 5 test | bit 6 test |
+|---|---|---|---|
+| bit **set** | read | `bne` — **fault required** | `beq` — no fault |
+| bit clear | read | `beq` — no fault | `beq` — no fault |
+| bit **set** | write | `bne` — **fault required** | `beq` — no fault |
+| bit clear | write | `beq` — no fault | `beq` — no fault |
+
+So bit 5 gates the `$400000` window symmetrically in both directions, and bit 6 is required to
+leave it alone in both. **Bit 6's inertness is therefore an assertion the firmware makes, not a
+gap in coverage** — the same harness was pointed at it and the expected result inverted. A model
+that implements "bits 5 or 6 gate the window" passes two of bit 6's four arms and hangs on the
+first arm that sets it.
