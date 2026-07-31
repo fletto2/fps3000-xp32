@@ -17124,3 +17124,18 @@ instruction boundaries, zero misses**, and both dispatch tables are clean. The 5
 remaining `DC.W` bytes are 448 of dispatch table, 106 of this vector table, 6 of reset
 vector, and ~20 of small offset tables and padding — i.e. the kernel is now essentially
 fully accounted for.
+
+### The one-device kernel claim survives the coverage increase
+
+"`$F70030` is the RMS68K kernel's ONE device access" was established when 27% of the
+image had no disassembly at all, and was therefore an argument from a region that had
+not been read. Re-sweeping the kernel at **96.7%** decoded — 800 more instructions than
+before — finds exactly the same thing: `$F00A3A` reads `$F70030`, `$F00A44` writes it
+back, and the only other hits in device-address ranges are the immediates in
+`andi.l #$ffffff,d6` and `andi.l #$ffff00,d6`, which are masks and not addresses at all.
+No `lea`/`movea.l` of any device base appears anywhere in the kernel.
+
+The caveat that remains is the one this file already documents: a base register loaded
+from RAM would evade a static sweep. That is covered from the other side by
+`FPS3K_ACCESSLOG`, which measures accesses at the CPU rather than in the listing, and
+which closes the device map at 68 addresses with no static-only residue.

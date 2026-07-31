@@ -285,6 +285,9 @@ def decode(rom, seeds):
     return code, visited
 
 
+MAX_RUN = 512
+
+
 def recover_gaps(rom, code, visited, rounds=4):
     """Linear-sweep recovery for code the recursive descent cannot reach.
 
@@ -315,8 +318,14 @@ def recover_gaps(rom, code, visited, rounds=4):
         starts = [a for a in range(START, END, 2)
                   if not visited[a - START] and not is_data(a)]
         for g in starts:
+            # Cap the run length.  Trying every even address in a gap is
+            # quadratic in the gap size, and an unbounded failed run rescans
+            # the whole tail; over the 47 KB application region that does not
+            # finish.  Real basic blocks between reconnection points are
+            # short, so a cap costs nothing and bounds the sweep.
             run, a, ok = [], g, False
-            while valid(a) and not visited[a - START]:
+            while (valid(a) and not visited[a - START]
+                   and a - g < MAX_RUN):
                 if is_data(a):
                     break            # ran into a known table: reject the run
                 try:
