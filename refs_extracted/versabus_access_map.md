@@ -22481,3 +22481,43 @@ That the two independent confirmations came out **byte-exact** is worth stating 
 error was isolated to one sweep with one bad break condition, not a systematic problem with the
 technique. But it was found by a regression check failing, not by inspection — which is the
 argument for the harness that had, until today, been silently not running.
+
+## The SLC stream port is `$FF0008` — and a near-miss worth recording (2026-07-31)
+
+This file has repeatedly called the SLC path's source "the FIFO port `(a0)`" without an address.
+Tracing `a0` on the path that actually reaches the S-record dispatcher gives it:
+
+```
+$F04B08  cmpi.l  #$0,$E5C          CHANSEL readback == 0  -> this branch
+$F04B22  move.w  $4(a0),d0         reads $FF0004 -- so a0 = $FF0000 here
+$F04B26  btst    #$0,d0 / beq      the ready-flag poll
+$F04B2C  move.w  #$4,$20C(a0)      writes $FF020C, the burst counter
+$F04B48  lea     $8(a0),a0         -> a0 = $FF0008
+$F04B64  move.w  (a0),d1           the S-record stream
+```
+
+**`a0` = `$FF0008`** — the same bulk data port the raw transfer path uses. So the SLC and bulk
+transports **share one data port** and differ only in framing (S-records vs raw words) and in
+handshake (`$FF0218` arm/poll per word in both, but SLC also polls `$FF0004` bit 0 first and
+declares `$FF020C = 4`).
+
+That completes the transport table: all three upload paths are now addressed —
+SLC and bulk through **`$FF0008`**, CPLOAD through the **`$400000`** window.
+
+### The near-miss
+
+The first attempt at this traced `a0` from `$F04AD6` (`lea $8(a5),a0` with `a5 = $FF0000`) and
+then applied `$F04B48`'s `lea $8(a0),a0`, arriving at **`$FF0010`** — the address this project
+documents as "never accessed, a register the emulator invents". That would have been a striking
+result, and it is **wrong**: `$F04AD6` lies on the `$E5C == $28` branch, which `$F04AD2 bne.w`
+skips entirely on the path that reaches `$F04B48`. Two `lea`s on mutually exclusive branches,
+chained as if sequential.
+
+Decoding the whole stretch from a clean boundary before claiming it is what caught this, and it
+is the register-provenance rule this file already states — *find the most recent write to the
+register* — with one addition that had not been written down: **the most recent write on the
+path actually taken, not the most recent write by address.** A branch that skips an assignment
+is not a write.
+
+So **`$FF0010` remains unaccessed**, and the documented conclusion stands unchanged: it is a
+register the emulator models and the firmware never touches.

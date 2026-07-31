@@ -4805,6 +4805,18 @@ check('$1FFF1 bit 6 is cleared 6x and set once', _vbits[(1, 6)]['bclr'] == 6
       and _vbits[(1, 6)]['bset'] == 1, dict(_vbits[(1, 6)]))
 check('$1FFF0 bit 1 is cleared 3x and set 2x', _vbits[(0, 1)]['bclr'] == 3
       and _vbits[(0, 1)]['bset'] == 2, dict(_vbits[(0, 1)]))
+
+# ---- the SLC stream port is $FF0008, not $FF0010 (2026-07-31) ----
+check('the SLC path polls $FF0004 bit 0 with a0 = $FF0000',
+      insn(0xF04B22) == 'move.w $4(a0), d0' and insn(0xF04B26) == 'btst.b #$0, d0')
+check('...declares the burst counter through the same base',
+      insn(0xF04B2C) == 'move.w #$4, $20c(a0)')
+check('...then advances a0 by 8 to reach $FF0008, the shared data port',
+      insn(0xF04B48) == 'lea.l $8(a0), a0' and insn(0xF04B64) == 'move.w (a0), d1')
+check('the $8(a5) load at $F04AD6 is on the OTHER branch, skipped by $F04AD2',
+      insn(0xF04AD2) == 'bne.w $f04b08' and insn(0xF04AD6) == 'lea.l $8(a5), a0')
+check('$FF0010 is still never referenced anywhere in the ROM',
+      not any('ff0010' in o for _, (_, o, _) in _mins.items()))
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
