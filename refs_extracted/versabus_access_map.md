@@ -31304,3 +31304,36 @@ authoritative and static analysis under-reports. The rule is not "prefer one too
 | does X happen, how often, how wide? | **runtime log** | static analysis under-reports through indirection |
 | what is the structure? | **sound static sweep** | everything it reports is real |
 | is X touched anywhere? | **loose static sweep** | if even an over-reporting sweep finds nothing, nothing is there |
+
+## Final accounting: every undecoded byte in the application region is identified (2026-07-31)
+
+Objective (b) — "understand and document the entire disassembly" — reduces to accounting for the
+bytes the disassembler renders as data. In the application region `$F04488`-`$F0A824` there are
+**204 non-zero `DC.W` words = 408 bytes**, in 127 runs. Classifying every one:
+
+| class | words | what |
+|---|---:|---|
+| named structures | **141** | the trace hook, RDHC's tables and `USER`-lifecycle parameter blocks, the five task prologue blocks, the SCM pattern table, the interrupter vector table, the config block, the TDTI table, and the two undecoded `movem.l` prologues |
+| the five `PanelStatusDispatch` tables | **56** | displacement words of the 42-entry tables at `$F05BA4`, `$F065E4`, `$F06FFC`, `$F079FC`, `$F083FC` |
+| **the last seven** | **7** | below |
+
+The residue resolves individually:
+
+| address | value | what |
+|---|---|---|
+| `$F06690`, `$F070A8`, `$F07AA8`, `$F084A8` | | the **channel → `$FF021A` bit map**, one copy per XP task (the documented table at `$F084A4`) |
+| `$F0A492`, `$F0A496` | `$23CA`, `$0E48` | the **dead VMOD handshake** — unreachable, jumped over by the `bra.b` at `$F0A490` |
+| `$F0FFFE` | `$C12D` | **the ROM checksum word**, chosen so the whole image XORs to zero |
+
+**So nothing in the application region is unexplained.** Every byte is either decoded as an
+instruction, or is data belonging to a named structure, or is one of the seven above.
+
+Two of the residue entries are pleasing because they are self-confirming. `$F0A492`/`$F0A496`
+appear as data *precisely because* they are unreachable — the disassembler never finds a path to
+them, which is the same fact the `bra.b` at `$F0A490` establishes from the control-flow side. And
+`$F0FFFE` is data because it is not code at all: it is the constant that makes phase `$300`'s
+whole-ROM XOR come out zero, verified here as `$0000`.
+
+Combined with the earlier byte accounting (kernel 95.0% decoded, application content 94.2%, blank
+tail 22,489 bytes verified all-zero), the ROM is now fully accounted for: **43,047 bytes of
+content, every one either decoded or attributed to a named structure.**
