@@ -33324,3 +33324,43 @@ So the picture is consistent across everything examined:
 stock ROM, so a model may implement them lazily — but each is a real, complete mechanism that
 host-loaded software could reach, and several have hazards recorded above (the malformed `CMR`
 thunk, the null-pointer dispatch if tracing is enabled, the unbounded chassis primitives).
+
+## Kernel globals measured (2026-07-31)
+
+| global | live value | reading |
+|---|---|---|
+| **`$0C34`** (word) | **`$0000`** | **the trace mask, confirmed zero at runtime** |
+| `$0C62` | `$00000000` | consistent with "cleared at five sites, never set" |
+| `$0C78` | `$00000000` | the fatal-path stack pointer — the routine never ran |
+| `$0C9A` | `$0101…` | the server slot array, **slots 0 and 1 reserved**, as documented |
+| `$0CAA` | `$00000000` | no server records |
+| `$0C04` | `$00000000` | **the `$3B` target — no writer, confirmed zero live** |
+
+**The trace mask reading zero is the single most load-bearing measurement here.** It is the switch
+that keeps *all* of the following dark simultaneously: the nine kernel trace hooks, the FPS trace
+hook at `$F044A2`, the `$F00B74` `EXPVCT`/`TRPVCT` dispatch, and the two inline descriptors that
+feed it. This session traced each of those to the same guard from a different direction; the dump
+confirms the guard's value.
+
+Likewise `$0C04` reading zero closes the `$3B` supervisor-call question from the data side: this
+project established that the global has **no writer anywhere in the image**, and the live value
+agrees, so the second gate really is shut and not merely un-analysed.
+
+### An unidentified 12-byte repeating record
+
+`$0C7C`-`$0C97` holds a pattern repeating at a **12-byte stride**:
+
+```
+$0C7C:  00010000  00000001  00000000
+$0C88:  00010000  00000001  00000000
+$0C94:  00010000  ...
+```
+
+three records of `{$00010000, $00000001, $00000000}`, immediately before the server slot array at
+`$0C9A`. `$00010000` is the staging-buffer / `UPGM` base that appears in the config block and in
+RDHC's `GTSEG` parameters.
+
+`$0C8E` — which a census flagged as a structure base because six sites `lea` it and none loads it —
+falls **inside** the second record rather than at a record boundary. So either the stride is not 12,
+or the code addresses a field within a record as a base. Recorded as unresolved rather than forced;
+it is one `lea` target and a RAM watchpoint would settle it.

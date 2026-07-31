@@ -7614,6 +7614,12 @@ check('the ASQ directives would fail with status 4: the null check is $F0267A/$F
       and _w(0xF02682) == 0x586E and _w(0xF02684) == 0x0102
       and _w(0xF02430) == 0x286D and _w(0xF02432) == 0x0040)
 
+check('the trace mask comes from config $F0A52A, which is zero',
+      _w(0xF0A52A) == 0x0000)
+check('...and $0C04, the $3B target, has no writer anywhere in either listing',
+      not _re21a.search(r'move\.\w+\s+\S+,\s*\$c04\.w', _k36)
+      and not _re21a.search(r'move\.\w+\s+\S+,\s*\$c04\.w', _asm21a))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
