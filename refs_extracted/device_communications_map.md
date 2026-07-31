@@ -397,11 +397,19 @@ group-1 exception frame — or it will corrupt the resumed program.
 
 The three upload transports are now all addressed:
 
-| transport | port | framing | encoding |
-|---|---|---|---|
-| SLC S-records (chassis op `$0`, `$E5C = 0`) | **`$FF0008`** | S-records | **ASCII hex, 2 chars per 16-bit word** |
-| raw bulk (chassis op `$0`, `$E5C = $28`) | **`$FF0008`** | none | raw binary words |
-| CPLOAD (RDHC command 4) | **`$400000`** page 0 | S-records | binary words |
+| transport | direction | port | framing | handshake |
+|---|---|---|---|---|
+| SLC S-records (op `$0`, `$E5C = 0`, bit 5 clear) | chassis -> SBC | **`$FF0008`** | S-records, **ASCII hex 2 chars/word** | per word |
+| raw bulk (op `$0`, `$E5C = $28`) | chassis -> SBC | **`$FF0008`** | none | per word |
+| **readback (op `$0`, `$E87` bit 5 SET)** | **SBC -> chassis** | **`$FF0008`** | none | **NONE** |
+| CPLOAD (RDHC command 4) | chassis -> SBC | **`$400000`** page 0 | S-records, binary | none (memory window) |
+
+**The two raw directions are asymmetric**: inbound wraps every word in a full `$FF0218`
+arm/poll-bit-15/clear cycle, outbound is a bare `move.w (a1)+,(a0)` loop at bus speed. That fits
+`$FF0008` being a hardware FIFO the chassis drains on its own schedule — the SBC must wait for
+data but need not wait to push. **A model that expects a handshake on the outbound direction
+never sees the data, and one that models `$FF0008` as a register rather than a queue sees only
+the last word.**
 
 SLC and raw bulk **share `$FF0008`** and differ in framing and preamble: SLC polls `$FF0004`
 bit 0 and declares `$FF020C = 4` before entering the parser, then performs one `$FF0218`
