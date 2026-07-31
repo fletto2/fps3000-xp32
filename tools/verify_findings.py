@@ -4154,6 +4154,16 @@ check('...and the slots with no handler are 4E75 4E71 (rts/nop), 13 of them',
 check('slots 14 and 16 both dispatch to D1_SEND ($F0810A)',
       all('f0810a' in insn(0xF083FC + 4 * n) for n in (14, 16)))
 
+# The four handlers, RDHC's copy vs XP1I's at offset $2858: POLL and BLK_XFR
+# byte-identical, D2_FIN and D1_SEND differing in exactly 2 of 64 bytes.
+check('POLL and BLK_XFR are byte-identical between the RDHC and XP1I copies',
+      all(_rom[r - _B:r - _B + 64] == _rom[r + 0x2858 - _B:r + 0x2858 - _B + 64]
+          for r in (0xF05A12, 0xF05B0E)))
+check('...and D2_FIN and D1_SEND differ in exactly 2 of their first 64 bytes',
+      all(sum(1 for k in range(64)
+              if _rom[r - _B + k] != _rom[r + 0x2858 - _B + k]) == 2
+          for r in (0xF05738, 0xF058B2)))
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
