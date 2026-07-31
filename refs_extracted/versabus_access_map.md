@@ -36517,3 +36517,34 @@ hardware-side account of where DONE and ERROR could come from.
 
 Also on this sheet: `I+H09`, `I+H10`, `I+H13`, `I+H14` driven out to connector pins **B-44, B-46,
 B-80, B-82** — four more host-cable signals, bringing the mapped total to nine.
+
+## Sheet 7 `DA, US, PNLXX, OUT` — the register select decoder (2026-07-31)
+
+Two **`74S138` 3-to-8 decoders**, `A18` and `A19`, generate the per-register strobes:
+
+| decoder | outputs | role |
+|---|---|---|
+| **`A18`** | `HMAHCLKE#`, `HMALCLKE#`, `APMACLKE#`, **`CTLCLKE#`**, … | **write** clock enables |
+| **`A19`** | `HMAHOUT#`, `HMALOUT#`, `APMAOUT#`, **`WCOUT#`**, `OUT`, `OUT#A`, `CTL2I0M` | **read** output enables |
+
+**Two of these tie sheets together directly**: `CTLCLKE#` is exactly the clock input on sheet 15's
+control register, and `WCOUT#` is exactly the output enable on sheet 16's word counter. So the
+register file is `{HMA-high, HMA-low, APMA, WC, CTL}`, each with a decoded write strobe and a decoded
+read strobe — the hardware analogue of the AP I/F window's `+$00`/`+$04`/`+$08`/`+$0A`/`+$0E` offsets.
+
+Also on this sheet: `H1`/`H5` `25S08` registers latching **`SP+DP08`-`SP+DP15`** from connector pins
+A-19..A-22 and A-31..A-34, buffered by `74S240`s out to `PNL08#`-`PNL15#` (pins A-11..A-29) and
+`DA08#`-`DA15#` (A-12..A-30).
+
+### The bus names identify whose AP I/F this is
+
+**`SP+DP<08:15>`** is S-Pad + Data Pad — the AP-120B/FPS-100 internal bus naming, which this project
+documents at length from `SIM100.FTN` and the APAL manuals. A signal literally named **`FPS100`**
+also appears. So `512-3448-010` is an AP I/F for an **FPS-100-class** processor, not for the XP-32.
+
+That sharpens the caveat that has been attached to every reading of these sheets. The drawing is a
+**generational relative** of this chassis's `612-4448`: same function, same design idiom, same FPS
+drawing office — but the AP side speaks S-Pad/Data-Pad rather than the XP-32's 32-bit IEEE path. The
+DMA/FIFO/word-count machinery should transfer well, because it faces the *host*, which did not change
+as much; anything facing the AP should be treated as a different generation's answer to the same
+problem.
