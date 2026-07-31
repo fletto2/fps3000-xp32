@@ -24156,3 +24156,64 @@ ticks makes this routine return the same time for the whole 10 ms slice — and,
 whose counter is *not* readable mid-period makes `movep.w $D(a0),d1` return garbage that the
 subtraction turns into a wildly wrong millisecond offset. The counter must be a real running
 value, not a reload latch.
+
+## The RTOS keeps a real time of day — and directive `$49` sets it (2026-07-31)
+
+### The tick ISR
+
+```
+$F00ED6  movea.l $C4E.w,a0        the PTM base
+$F00EDA  bset.b  #$7,$C5A.w       SET the tick flag -- the clock read's race guard
+$F00EE4  move.b  $3(a0),d0        read PTM status
+$F00EE8  move.b  $D(a0),d0        read T3 -- clears the interrupt
+$F00EEE  move.w  $C56.w,d1        10, the period in ms
+$F00EF2  add.l   d1,$C42.w        ADVANCE the millisecond counter
+$F00EF6  move.l  $C42.w,d0
+$F00EFA  subi.l  #$5265C00,d0     - 86,400,000
+$F00F00  bmi.b   $F00F3C          not a whole day yet
+$F00F02  addq.l  #$1,$C3E.w       else bump the DAY counter
+$F00F06  move.l  d0,$C42.w        and wrap the milliseconds
+```
+
+**`$5265C00` = 86,400,000 = the number of milliseconds in a day.** So `$0C42` is not a free-running
+counter as described earlier in this file — it is **milliseconds since midnight**, wrapping daily,
+with **`$0C3E` counting days**. The RTOS keeps a real time of day.
+
+### Directive `$49` sets it, and preserves elapsed time across the change
+
+`$F037D8`, inside the handler at `$F037B4` = **TRAP #1 directive `$49`**:
+
+```
+$F037E0  sub.l  $C42.w,d3        delta = new_ms  - old_ms
+$F037E4  sub.l  $C3E.w,d4        delta = new_day - old_day
+$F037E8  move.l d0,$C3E.w        install the new day
+$F037EC  move.l d1,$C42.w        install the new milliseconds
+$F037F0  add.l  d3,$C46.w        ACCUMULATE the millisecond adjustment
+$F037F4  add.l  d4,$C4A.w        ACCUMULATE the day adjustment
+```
+
+It records the **cumulative adjustment** in `$0C46`/`$0C4A`, so elapsed-time measurements taken
+across a clock set can still be corrected — the difference between wall-clock and monotonic time
+is kept explicitly rather than lost.
+
+**Directive `$49` declares an 8-byte parameter block**, which is exactly `{day longword,
+millisecond longword}` — the two values it installs. That is a name derived from behaviour and
+corroborated by the declared size, so `$49` comes off the unnamed list.
+
+### The complete timing subsystem
+
+| global | contents |
+|---|---|
+| **`$0C3E`** | **days** |
+| **`$0C42`** | **milliseconds since midnight**, wraps at 86,400,000 |
+| **`$0C46`** | cumulative millisecond adjustment from clock sets |
+| **`$0C4A`** | cumulative day adjustment |
+| `$0C4E` | the MC6840 base pointer |
+| `$0C52` / `$0C54` | the scheduler quantum countdown / reload (2 ticks = 20 ms) |
+| `$0C56` / `$0C58` | tick period in ms (10) / MSB reload (39) |
+| `$0C5A` | the tick-fired flag |
+
+**Emulation consequence.** The trace table's `{time_ms, time_us}` fields now have a source, and a
+model must let the day rollover happen: a run long enough to cross 86,400,000 ms — 24 hours of
+simulated time — takes the `$F00F02` branch, which is the only place `$0C3E` is incremented. That
+is unreachable in any run this project has made, so the rollover path has never executed.

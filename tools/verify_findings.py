@@ -5332,6 +5332,25 @@ check('...and retries if a tick fired during the read -- a lock-free clock',
 check('$F00FC2 computes now + period + 1, a deadline',
       insn(0xF00FC2) == 'moveq #$1, d1' and insn(0xF00FC4) == 'add.w $c56.w, d1'
       and insn(0xF00FC8) == 'add.l $c42.w, d1')
+
+# ---- the RTOS keeps a real time of day (2026-07-31) ----
+check('the tick ISR sets the race flag the clock read watches',
+      insn(0xF00EDA) == 'bset.b #$7, $c5a.w')
+check('...reads PTM status and T3 to clear the interrupt',
+      insn(0xF00EE4) == 'move.b $3(a0), d0' and insn(0xF00EE8) == 'move.b $d(a0), d0')
+check('...advances $0C42 by the period and wraps at 86,400,000 ms = one day',
+      insn(0xF00EF2) == 'add.l d1, $c42.w' and insn(0xF00EFA) == 'subi.l #$5265c00, d0'
+      and 0x5265C00 == 86400000)
+check('...incrementing the DAY counter at $0C3E on rollover',
+      insn(0xF00F02) == 'addq.l #$1, $c3e.w')
+check('directive $49 installs a new day and millisecond value',
+      _t1[0x49][0] == 0xF037B4 and insn(0xF037E8) == 'move.l d0, $c3e.w'
+      and insn(0xF037EC) == 'move.l d1, $c42.w')
+check('...and accumulates the adjustment so elapsed time survives a clock set',
+      insn(0xF037E0) == 'sub.l $c42.w, d3' and insn(0xF037F0) == 'add.l d3, $c46.w'
+      and insn(0xF037F4) == 'add.l d4, $c4a.w')
+check("...with an 8-byte block = {day longword, millisecond longword}",
+      (_t1[0x49][1] >> 8) == 8)
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)
