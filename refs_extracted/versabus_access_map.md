@@ -17385,3 +17385,30 @@ that the FPS kernel hook tests bit 14 of.
 **Every structure the page allocator hands out is now identified**: six TCBs, six TSTs,
 six per-task ASQ/stack blocks, `!GST`, `!IDV`, `!IOV`, `!PAT`, `!UDR`, `!UST`, `!VCT`, the
 `$0C00` region list, and this trace table.
+
+### `UDR.EQ` confirms the extension-table decode, and cross-confirms `TCBSESSN`
+
+The `$0C28` structure was decoded here purely from the dispatcher at `$F00378`, before
+`UDR.EQ` was consulted. It matches:
+
+| decoded from `$F00378` | `UDR.EQ` |
+|---|---|
+| count word at `+$04` of the header (read 25) | `UDRCNT` — "NUMBER OF ENTRIES IN TABLE" |
+| records start at `+$06` | `UDRENTRY EQU *` |
+| 10-byte records (`mulu.w #$a,d0`) | `UDRSESS`(4) + 2 bytes + `UDRADDR`(4) = 10 |
+| owner longword at entry `+$00` | `UDRSESS` — "SESSION OF TASK THAT CREATED ENTRY" |
+| handler longword at entry `+$06`, zero = unused | `UDRADDR` — "DIRECTIVE ENTRY ADDRESS" |
+| flag bit 4; if clear, compare owner against `$14(a6)` | `UDROGLBL EQU 4` — **"IF SET - ENTRY IS GLOBAL"** |
+
+The owner check is a **cross-confirmation between two independent Motorola files**:
+`UDR.EQ` calls the entry field a *session*, and `TCB.EQ` independently puts `TCBSESSN`,
+"SESSION CODE", at `TCB+$14` — which is exactly the `cmp.l $14(a6),d1` the dispatcher
+performs. Neither file was used to derive the other.
+
+One precise discrepancy: this ROM tests the global flag as `btst.b #$4,$5(a2)`, i.e. in
+the byte at entry `+$05`, whereas `UDR.EQ` places `UDROPT` (which defines `UDROGLBL`) at
+`+$04` and `UDREXIT` at `+$05`. The `+$05` position is otherwise confirmed as the exit
+number — `$F003A8` pushes the word at `+$04` and `$F003B2` masks it `#$f` to index the
+jump table at `$F00650`, which is precisely an "EXIT NUMBER" use. So either the two option
+bytes are swapped in this build or the global bit lives in `UDREXIT` here; this is the
+same revision skew that gives this kernel a directive 76 that `TR1.EQ` does not name.
