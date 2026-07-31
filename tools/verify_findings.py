@@ -5615,6 +5615,13 @@ check('the self-test addresses it as $F70001 + EVEN displacements, incl. T2 at +
 check('the tick ISR uses the cached pointer at $0C4E, a third path',
       insn(0xF00ED6) == 'movea.l $c4e.w, a0')
 
+check('the self-test saves the bus-error vector at FIVE sites, not one',
+      [insn(x) for x in (0xF08EBA, 0xF08F2A)] == ['movea.l $8.w, a2', 'movea.l $8.w, a2']
+      and [insn(x) for x in (0xF09606, 0xF096C8, 0xF09836)]
+          == ['movea.l $8.w, a0'] * 3)
+check('...and one site reloads the supervisor stack from the reset vector',
+      insn(0xF08AE8) == 'movea.l $0.w, a7')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

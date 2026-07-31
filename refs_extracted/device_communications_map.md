@@ -520,3 +520,35 @@ only* and would support the conclusion "the RTOS never touches the PTM" — whic
 backwards. The operational paths reach it through a configuration constant and a cached
 pointer. This is the third time in this project that a base-register indirection has
 produced a confident false negative, after `$FF0204` and the `$FF0048` read.
+
+## There are exactly three cached device pointers (2026-07-31)
+
+Since the PTM turned out to be reached through a cached pointer that no literal sweep sees,
+the obvious question is whether any *other* device hides the same way. Enumerating every
+global that is dereferenced as a pointer (`movea.l $g,aN`) answers it — 19 globals, and
+only three hold device addresses:
+
+| global | device |
+|---|---|
+| `$0C4E` | the **MC6840 PTM** base, cached at init |
+| `$0C3A` | the **display device**, or scratch `$800` when unfitted |
+| `$0E48` | the **VERSAmodule control register**, whose address is *computed* from RAM top |
+
+Every other pointer global is an RTOS structure (`$0C20`/`$0C24`/`$0C28`/`$0C2C`/`$0C30`/
+`$0C66`/`$0C6A`/`$0C6E`), a scheduler field (`$0C08`/`$0C0C`/`$0C10`/`$0C00`/`$0C78`), the
+exception-monitor vector `$0C36`, or FPS transfer state (`$0E58`).
+
+The two entries that look like devices are not: **`$0000` and `$0008` are vector-table
+slots**. `$F08AE8` does `movea.l $0.w,a7`, reloading the supervisor stack from the reset
+vector, and five sites do `movea.l $8.w,aN` to **save the bus-error vector** before
+installing a temporary handler — all six inside the self-test.
+
+Worth noting: this project documented the save/restore of the bus-error vector for the
+phase-`$600` watchdog test. There are **five** such sites (`$F08EBA`, `$F08F2A`, `$F09606`,
+`$F096C8`, `$F09836`), so temporarily replacing vector 2 is a routine technique in the
+diagnostics rather than a one-off — a model must expect `$8.w` to change repeatedly during
+the self-test and be restored each time.
+
+**So the device-communication map is closed against the indirection that produced its last
+three false negatives**: absolute references, base registers holding literals, base
+registers from configuration, and cached pointers have all now been swept.
