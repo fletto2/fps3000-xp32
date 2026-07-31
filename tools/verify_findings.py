@@ -5515,6 +5515,14 @@ _st_nop = sum(1 for _a in range(0xF08700, 0xF09C00, 2)
 check('the self-test region holds 24 nops = six four-nop landing zones',
       _st_nop == 24 and _st_nop % 4 == 0, _st_nop)
 
+check('the five wrongly-rendered inline words really do decode as instructions',
+      [insn(x) for x in (0xF006E4, 0xF008A2, 0xF00908, 0xF022CC, 0xF022DC)]
+      == ['addx.b -(a0), -(a6)', 'roxr.b #$7, d4', 'lsr.b #$7, d1',
+          'asr.b #$7, d7', 'addx.b d7, d6'])
+check('...and each is two bytes, so a listing resyncs after one bogus line',
+      all(_w(x) in (0xDD08, 0xEE14, 0xEE09, 0xEE07, 0xDD07)
+          for x in (0xF006E4, 0xF008A2, 0xF00908, 0xF022CC, 0xF022DC)))
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

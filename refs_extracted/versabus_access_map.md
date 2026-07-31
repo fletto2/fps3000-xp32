@@ -25978,13 +25978,27 @@ Two corrections come out of this:
    whose bytes gate hooks — which is consistent with the single config word at `$F0A52A`
    being `$0000` and switching all eleven off at once.
 
-2. **Five of the eleven inline words decode as plausible instructions** — `$DD08` as
-   `addx.b -(a0),-(a6)`, `$EE14` as `roxr.b #$7,d4`, `$EE09` as `lsr.b #$7,d1`, `$EE07` as
-   `asr.b #$7,d7`, `$DD07` as `addx.b d7,d6`. A linear or recursive-descent disassembler
-   follows the `bsr`, returns, and decodes the code word as an instruction. They are all
-   two bytes, so the listing happens to resync immediately and the damage is one bogus
-   line per site rather than a cascade — but the lines are wrong, and `fps3k.asm` carries
-   them.
+2. **Six of the eleven code words decode as plausible instructions, and the listings
+   actually render five of them that way.** Checked against the listing text rather than
+   predicted: `fps3k_kernel.asm` emits
+
+   | address | listing line | should be |
+   |---|---|---|
+   | `$F006E4` | `addx.b -(a0), -(a6)` | `dc.w $dd08` |
+   | `$F008A2` | `roxr.b #$7, d4` | `dc.w $ee14` |
+   | `$F00908` | `lsr.b #$7, d1` | `dc.w $ee09` |
+   | `$F022CC` | `asr.b #$7, d7` | `dc.w $ee07` |
+   | `$F022DC` | `addx.b d7, d6` | `dc.w $dd07` |
+
+   The other six are correctly `dc.w`, including `$F044B0` in `fps3k.asm` — which is the
+   *second* occurrence of `$EE14`, so the decodable-code count is six while the
+   wrongly-rendered count is five. Every one is two bytes, so the listing resyncs
+   immediately and the damage is one bogus line per site rather than a cascade.
+
+   **This is a concrete, addressable defect list**: five lines in `fps3k_kernel.asm` that
+   should be data. It is also the first time this project has checked a predicted
+   disassembly defect against the emitted text instead of reasoning about what the
+   disassembler would do.
 
 The event code is also structured: `cmpi.w #$efff,(a5)` / `bhi` skips capturing a fourth
 datum for codes above `$EFFF`. So the top nibble selects the record shape — `$FF`/`$FD`
