@@ -441,3 +441,45 @@ concurrently — RDHC's chassis-memory operations do exactly that.
 **Model requirement**: `$FF0210` must gate the mailbox as it gates the rest of the window. A model
 that answers `$70001C` unconditionally works by accident in a boot where nothing else pages, and
 diverges the moment RDHC issues a chassis-memory operation.
+
+## Independent re-derivation of the complete device set (2026-07-31)
+
+Re-derived from scratch — decoding only at boundaries the listings validate, taking
+absolute-long operands, and following every base register loaded with a non-RAM non-ROM
+address through its displacement accesses until it is reloaded. **74 distinct addresses**,
+and they partition entirely into blocks already in this document:
+
+| block | addresses |
+|---:|---|
+| XLTR `$FF0200-$FF025F` | 29 |
+| AP I/F `$FF0000-$FF00FF` | 20 |
+| board `$F70000-$F7003F` | 8 |
+| chassis window `$400000` | 4 |
+| VMOD `$1FFF0` | 3 |
+| mailbox `$70001C`/`$700020` | 2 |
+| bus-watchdog target `$F82001` | 1 |
+
+**No device block appears that this document does not already describe**, which is the
+result worth having: the map is complete against a method that did not assume it.
+
+Two honest caveats on the seven remaining addresses the sweep produced:
+
+- **`$1FFE2`, `$1FFE4`, `$1FFE6`, `$1FFEA` are RAM, not registers.** They arise from
+  *negative* displacements off the `$1FFF0` base. That they are ordinary RAM is exactly
+  what the firmware's own exclusion pattern says — eight independent sites skip `$1FFF0`
+  and none skips these — so the sweep re-derives the documented RAM/register partition
+  rather than contradicting it.
+- **`$201F4`, `$3FFFFC` and `$FF4342` are provenance artefacts.** Each is a base plus a
+  displacement where the base was last written on a *different* branch than the one
+  reaching the access. This is the known limitation recorded with the sweep method — the
+  correct base is the most recent write **on the path actually taken**, which a linear
+  walk cannot always determine. They are listed here rather than filtered out, because a
+  sweep that silently drops what it cannot explain is how a map comes to look complete
+  before it is.
+
+**One methodological note, because it cost a full pass.** The first run of this census
+returned **7** addresses instead of 74, having excluded everything at or above `$F00000`
+as "ROM". ROM is `$F00000-$F0FFFF` only; the board registers at `$F7xxxx` and the whole
+AP I/F and XLTR at `$FFxxxx` sit above it. The filter deleted three of the seven device
+blocks and the run looked plausible — a clean instance of the failure mode this project
+has recorded before, where a too-narrow matcher produces a confident "never accessed".
