@@ -5108,5 +5108,23 @@ check('the tagging routine also stamps TCB+$2A bit 15, TCB+$29 bit 1 and clears 
       and insn(0xF0082E) == 'clr.w $5c(a0)' and insn(0xF00832) == 'bset.b #$1, $29(a0)')
 
 
+# ---------------------------------------------------------------------------
+# STOP.  ADD NEW check() CALLS *ABOVE* THIS LINE.
+#
+# On 2026-07-31 roughly 193 check() calls were found sitting BELOW the
+# sys.exit() below -- appended to the end of the file over several sessions and
+# therefore never executed.  Three consecutive runs reported an identical
+# "962/962 passed" while new checks were supposedly being added; the count was
+# identical precisely BECAUSE nothing new was running.
+#
+# Guard against a recurrence: this self-test refuses to report success if any
+# check() call appears after the exit.
+# ---------------------------------------------------------------------------
+_self = open(__file__).read()
+_below = _self[_self.index('sys.exit(1 if fails else 0)'):].count('check(')
+if _below:
+    print(f'  FATAL: {_below} check() calls are below sys.exit() and never ran')
+    sys.exit(2)
+
 print(f'\n{checks - len(fails)}/{checks} passed')
 sys.exit(1 if fails else 0)
