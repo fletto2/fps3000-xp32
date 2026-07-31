@@ -34755,3 +34755,51 @@ this is *how the handlers are shaped*, and the two agree.
 Incidental: most TRAP #1 handlers show `$4E73` at `[-2]`, i.e. they are packed consecutively with
 each preceded by the previous handler's `rte`. Slot `$00` points at `$F003D0`, the error stub this
 project measures as executing zero times — consistent, since a valid directive never reaches it.
+
+## CORRECTION: `-breakpc` on the idle loop is NOT "boot complete" (2026-07-31)
+
+I measured coverage with `-breakpc 0xF00FC2`, reasoning that the idle loop is where a clean boot
+ends. **It is not where a boot ends — it is a place the scheduler passes through repeatedly.** The
+first arrival happens after only **one** of the six tasks has started:
+
+| task entry | at first `$F00FC2` | full run |
+|---|---|---|
+| `XP1I $F07D4A` | REACHED | REACHED |
+| `RDHC $F046F0`, `IO1I $F05D36`, `XP4I $F05F4A`, `XP3I $F0694A`, `XP2I $F0734A` | **not reached** | REACHED |
+
+Re-measured with a plain cycle cap past completion, the PC set is **2756**, not 2175 — and 2756 is
+exactly the figure this project already records from the MC6840 validation ("reached-PC set
+byte-identical (2756, none gained or lost)"), and splits 620/2136, exactly the numbers recorded for
+the executed-PC boundary property. Three independent agreements that 2756 is right.
+
+### Numbers to replace
+
+| measure | I reported | correct |
+|---|---|---|
+| kernel coverage | 5.2% | **12.2%** (620/5069) |
+| application coverage | 28.2% | **31.5%** (2136/6780) |
+| ROM-wide | 18.4% | **23.3%** (2756/11849) |
+| executed kernel regions | 14 | **28** |
+| documented-executing TRAP #0 handlers seen | 5 of 9 | **9 of 9** |
+
+`T0FNDSEG`, `T0LOGPHY`, `T0FNDSEM` and `T0LOGPHO` all execute; their apparent absence was the
+truncation, and the recorded nine-handler profile was right all along.
+
+### What survives unchanged
+
+- **Self-test coverage 88.5%** (1390/1571) — identical in both sets, because the suite runs entirely
+  before the RTOS. Every self-test finding in this session, including the failure-path taxonomy and
+  the three fault injections, is unaffected.
+- **`$F00186` is still never reached** — so the register-snapshot prediction stands: on a healthy
+  board `$0800`-`$084F` is untouched.
+- The ISR-exit chain (`$F00280`/`$F0029A`/`$F002B2`) is still never reached.
+- **None of the nine `bra .` sites is reached**, as reported.
+- The tick ISR `$F00ED6` **is** reached in a full run. My published statement already carried the
+  right caveat — "no tick occurs during the self-test and RTOS init" — but the bare "unreached" line
+  above it was scope-limited and should not be read alone.
+
+**The methodological point is the same one that bit the 40 M-cycle run, in a new disguise.** There I
+used too small a cycle budget; here I used a *semantically wrong* stopping condition that looked
+principled. Both produce a truncated trace that is indistinguishable from a complete one unless
+something independent is checked — and the cheap independent check is the same in both cases: **are
+all six task entry points present?** That is now the test to run before quoting any coverage figure.

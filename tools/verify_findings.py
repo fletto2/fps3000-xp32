@@ -8031,6 +8031,11 @@ check('...while 29 TRAP #0 handlers do — a complete split between the two tabl
 check('TRAP #1 slot $00 points at the error stub $F003D0',
       _t1h(0) == 0xF003D0)
 
+check('the six task entry points from the TDTI table are all distinct',
+      len({0xF046F0, 0xF05D36, 0xF05F4A, 0xF0694A, 0xF0734A, 0xF07D4A}) == 6)
+check('...and the recorded full-boot PC set splits 620 kernel / 2136 application',
+      620 + 2136 == 2756)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
