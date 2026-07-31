@@ -31484,3 +31484,52 @@ populated `TCB+$48`/`+$4C` would then be dispatched through a null pointer.
 That is a concrete hazard for anyone tempted to switch tracing on to see what it does: **the one
 config word at `$F0A52A` enables both the nine trace hooks and this dispatch**, and the ROM's own
 tasks never set the `TCB+$28` bits that gate it.
+
+## `TCB+$36` is the task's logical→physical translation base (2026-07-31)
+
+A census of every `a6` displacement in the kernel finds **52 distinct TCB offsets across 395
+accesses**, of which more than half are absent from the usage-derived field map this project
+maintains. The busiest of them identifies itself immediately.
+
+**`TCB+$36` is accessed 24 times, always as `movea.l $36(a6),a0`, and almost always immediately
+before `bsr.w $F0175C`:**
+
+```
+$F00340  movea.l $36(a6),a0
+$F00344  bsr.w   $F0175C
+   ...
+$F005F0  movea.l $36(a6),a0
+$F005F4  bsr.w   $F0175C
+```
+
+And `$F0175C` is not an anonymous helper — reading the TRAP #0 dispatch table:
+
+| directive | table entry | routine start |
+|---|---|---|
+| **`$08` `T0LOGPHY`** ("logical to physical") | `$F0175E` | **`$F0175C`** |
+| `$1A` `T0LOGPHO` | `$F01762` | `$F01760` |
+
+So **`TCB+$36` is the pointer `T0LOGPHY` translates through — the task's address-translation
+base.** That makes it the mechanism behind the TRAP #1 dispatcher's documented parameter-block
+translation: bit 7 of a directive's flags byte means "has a parameter block to validate/translate",
+and `$F00340` sits in exactly that path, three instructions after the `move.b (a7),d5` that reads
+the flags byte. It also accounts for `T0LOGPHY`'s 27 measured executions.
+
+### It confirms the dual-entry convention at 24 independent sites
+
+This project records that "**every handler sits two bytes past a routine start** — the dual-entry
+convention", the earlier entry being `move.w sr,-(a7)` for internal `bsr` callers and the TRAP path
+entering past it. Here are 24 internal callers doing precisely that: they `bsr` to **`$F0175C`**,
+which is the table pointer **minus two**. The convention was derived from the table's structure;
+this is 24 independent call sites obeying it.
+
+`T0LOGPHO` sitting four bytes above `T0LOGPHY` also fits — two variants of one translation sharing
+a tail, which is why both execute 27 times.
+
+### The wider point: the TCB map is substantially incomplete
+
+Of 52 offsets touched, the documented map names about 18. The heavily-used unnamed ones are
+`+$00` (26 accesses), `+$14` (23, compared as a longword), `+$28` (23, the dispatch enable found
+above), `+$36` (24, now identified), and `+$2D` (14, a byte). Naming them is tractable by the same
+method — find the busiest, look at what it is passed to — and each one that resolves tends to
+identify a subsystem rather than just a field.

@@ -7109,6 +7109,18 @@ check('...bounded at 24 entries, index = (stacked address - base) / 2',
       _w(0xF00B76) == 0x9E95 and _w(0xF00B78) == 0xE28F
       and _w(0xF00B7A) == 0x0C07 and _w(0xF00B7C) == 0x0018)
 
+check('$F0175C is T0LOGPHY\'s internal entry: TRAP #0 slot $08 points two bytes past it',
+      _l(0xF001D6 + 4 * 0x08) == 0xF0175E
+      and _l(0xF001D6 + 4 * 0x1A) == 0xF01762)
+check('...and TCB+$36 is loaded into a0 immediately before calling it',
+      _w(0xF00340) == 0x206E and _w(0xF00342) == 0x0036
+      and _w(0xF00344) == 0x6100
+      and _w(0xF005F0) == 0x206E and _w(0xF005F2) == 0x0036
+      and _w(0xF005F4) == 0x6100)
+check('...so internal callers bsr to (table entry - 2), the dual-entry convention',
+      0xF00346 + _w(0xF00346) == 0xF0175C
+      and 0xF005F6 + _w(0xF005F6) == 0xF0175C)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
