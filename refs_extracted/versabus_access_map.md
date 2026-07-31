@@ -36737,3 +36737,37 @@ addresses, landing on the same missing reference.
 it to the host memory address register specifically. What can be said is that the absence is
 structural rather than incidental: the firmware's own `(ch+1)<<5` arithmetic steps over window 1 by
 construction, so no code path could reach it even by accident.
+
+## Sheet 17 `HMA REG` — one register bus, decoded selects (2026-07-31)
+
+**Four `74LS374` octal registers** at F7, F8, F25, F26, tagged in pairs `(HMAH)` and `(HMAL)` — so
+two `{high, low}` pairs, 32 bits of host memory address in total (or two independent 16-bit HMAs).
+1K pull-up packs on the inputs.
+
+| line | role |
+|---|---|
+| **`RGBS00`-`RGBS15`** | the **write** bus — the register file's common input |
+| **`IFDB00`-`IFDB15`** | the **read** bus — the register file's common output |
+| `LDHMAH` / `LDHMAL` | load strobes, from sheet 7's `A18` decoder |
+| `HMAHOUT#` / `HMALOUT#` | output enables, from sheet 7's `A19` decoder |
+
+**The finding is the shared bus.** `RGBS` feeds HMA here, the control register on sheet 15, and WC and
+APMA on sheet 16; `IFDB` carries all of them back out. So the AP I/F is **one register file on one
+write bus and one read bus, with per-register strobes from two `74S138`s** — the canonical design, and
+exactly what the SBC's "four registers per 32-byte window" looks like from the silicon side.
+
+### This corrects my earlier synthesis
+
+Two entries ago I wrote that HMA "is loaded **from the host side**, through `REGSEL` on J23, by the
+counterpart adapter — not by the SBC", and treated that as a physically separate path. Sheet 17 shows
+there is **no separate path**: HMA is loaded from the same `RGBS` bus as every other register, and the
+only thing distinguishing it is which decoder output fires.
+
+So the accurate statement is narrower: **the firmware never asserts the select that reaches
+`LDHMAH`/`LDHMAL`**. Whether that is because the SBC's window does not decode to those strobes, or
+because the firmware simply never uses an address that does, is not settled by these sheets — and on
+the 3448 (an FPS-100-class card with no VersaBus SBC in the middle) the question may not even
+transfer to the 4448.
+
+What survives unchanged is the *consequence*: nothing in this firmware programs a host address, and a
+chassis model need not invent one. What does not survive is my account of *why*.
