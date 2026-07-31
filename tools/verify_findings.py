@@ -8182,6 +8182,17 @@ check('...and DONE/ERROR are polled as bits 14 and 13 of the status word',
       _w(0xF07F30) == 0x0804 and _w(0xF07F32) == 0x000E
       and _w(0xF07F3E) == 0x0804 and _w(0xF07F40) == 0x000D)
 
+check('BLK_XFR opens with swap d0 and special-cases the $FF0008 bulk port',
+      _w(0xF08366) == 0x4840
+      and _w(0xF0836E) == 0x4BEC and _w(0xF08370) == 0x0008
+      and _w(0xF08376) == 0x382C and _w(0xF08378) == 0x0004
+      and _w(0xF0837A) == 0x0804 and _w(0xF0837C) == 0x0000)
+check('...splits same-address vs consecutive on the swapped mode word, then issues $8004',
+      _w(0xF08388) == 0x0C40 and _w(0xF0838A) == 0x0000
+      and _w(0xF0839A) == 0x3546 and _w(0xF0839C) == 0x0002
+      and _w(0xF0839E) == 0x588A
+      and _w(0xF083A0) == 0x30BC and _w(0xF083A2) == 0x8004)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

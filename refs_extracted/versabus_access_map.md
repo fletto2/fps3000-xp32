@@ -35409,3 +35409,36 @@ returns.
 That distinction matters for this whole file: **write values are firmware behaviour and are evidence;
 read values are model behaviour and are not.** A real AC could answer differently on every read here
 and the firmware would still be doing exactly what is shown.
+
+## CORRECTION: the extra `+$0A` values are DATA, not operation codes (2026-07-31)
+
+I wrote that "the operation codes on the wire are `$00`, `$01`, `$0E`, `$10`" and that `$01`/`$00`
+"are not in the recorded vocabulary". Reading `BLK_XFR` shows that is wrong.
+
+```
+$F08366  swap   d0                     ; low word becomes the mode selector
+$F08368  movea.l #$ff0000,a4
+$F0836E  lea    $8(a4),a5              ; $FF0008, the bulk port
+$F08372  cmpa.l a2,a5 / bne $F08380    ; is the SOURCE the bulk port?
+$F08376  move.w $4(a4),d4 / btst #$0,d4 / beq   ; then poll $FF0004 bit 0 READY
+$F08380  moveq  #$1,d1                 ; a LOOP COUNTER, not an opcode
+$F08384  move.w (a1),d6 / move.w d6,(a2)        ; copy a word to the destination
+$F08388  cmpi.w #$0,d0 / bne                     ; same-address vs consecutive
+$F0838E  move.w $2(a1),d6 / move.w d6,(a2)       ; ...same address
+$F08396  move.w $2(a1),d6 / move.w d6,$2(a2) / addq.l #$4,a2   ; ...consecutive
+$F083A0  move.w #$8004,(a0)            ; REQUEST-TRANSFER
+```
+
+`BLK_XFR` writes through **`(a2)`, a destination pointer**. When that pointer is the channel window,
+`(a2)` and `$2(a2)` land on `+$08` and `+$0A` — so the `$0000` and `$0001` seen at `+$0A` are
+**payload being moved**, not operations. Only the primitive's `move.w d0,$2(a1)` at `$F07F1E` writes
+an operation code there.
+
+**So the recorded AC vocabulary — `$1B`, `$10`, `$0E` — stands unchanged**, and my extension of it is
+withdrawn. The lesson is that the same register carries two different kinds of traffic depending on
+which routine is driving it, so a value census on a port is not a vocabulary census.
+
+The reading does confirm four recorded facts about `BLK_XFR` in one routine: the **`swap d0` mode
+selector**, the **`$FF0008` bulk-port special case with its `$FF0004` bit-0 ready poll**, the
+**one-address-versus-consecutive split**, and that it ends in **`$8004`** rather than a distinct
+command.
