@@ -35082,3 +35082,38 @@ the primitive can mask its own channel.
 `move.w #$c,ccr` / `trap #1` exit. Everything else is the task body. A model expecting the ISR to
 clear a chassis flag will wait forever; the clearing happens later, in the transaction primitive's
 teardown.
+
+## The absent channel's wake path ends in a panel `$263` reject — predicted and confirmed
+
+`$F070AA` is XP3I's bit-15-clear handler, and it opens with a channel-number validation:
+
+```
+$F070AA  cmpi.w #$1,d0 / blt $F070B8
+$F070B0  cmp.w  $105e.l,d0 / ble $F070C2
+$F070B8  move.w #$263,d0 / jsr $F072C0      ; the reject
+$F070C2  moveq #$18,d2 / lsr.l d2,d1        ; d1 >>= 24: the HIGH BYTE of the 32-bit data
+$F070C6  cmpi.b #$0,d1 / beq $F07100        ; zero -> normal request; non-zero -> abort
+```
+
+Two recorded facts, with their instructions: **`$263` is the channel-number reject** for
+`1 <= ch <= $105E`, and **the class selector is the high byte of the 32-bit data**, extracted by a
+24-bit right shift.
+
+**So `$105E` gates twice, in different ways.** At startup it skips the port initialisation (measured
+above); here it *rejects the request at runtime*. For channel 3 with `$105E = 2` the second gate
+must fail — and it does: `$F070B8` is **reached**, `$F070C2` and `$F07100` are **not**. The forced
+interrupt therefore runs ISR → latch → bit-15-clear arm → validate → reject, and stops in the panel
+issuer's `bra .`.
+
+### Caution: `$0E6E` is shared and cannot attribute a command to a task
+
+The RAM dump from that same run reads **`$0E6E = $025C`**, not `$0263` — which would suggest the
+reject never happened. It did. `$0E6E` is the **shared** global that all eight byte-identical panel
+issuers stash `d0` into, so it holds the *last* command written by *any* of them, and `$25C` (also a
+channel-range reject, from a different site) came from another task.
+
+This project lists `$0E6E` among the fields a single RAM dump yields ("the last panel command").
+That is right, but **it identifies the command, not the issuer** — and with eight issuers sharing
+one word, attributing it to a particular task needs corroboration. Here the breakpoint supplied it;
+on hardware, the panel code itself is the only discriminator, which is precisely why the per-task
+code families (`$265`-`$268`, `$26D`-`$271`) exist.

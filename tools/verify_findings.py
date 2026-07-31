@@ -8116,6 +8116,14 @@ check('...and the wake path tests MODE1 bit 7 before testing latched status bit 
       and _w(0xF06A4C) == 0x0839 and _w(0xF06A4E) == 0x000F
       and _l(0xF06A50) == 0x00001072)
 
+check('$F070AA validates 1 <= ch <= $105E and rejects with panel $263',
+      _w(0xF070AA) == 0x0C40 and _w(0xF070AC) == 0x0001
+      and _w(0xF070B0) == 0xB079 and _l(0xF070B2) == 0x0000105E
+      and _w(0xF070B8) == 0x303C and _w(0xF070BA) == 0x0263)
+check('...then extracts the class selector as the high byte via a 24-bit shift',
+      _w(0xF070C2) == 0x7418 and _w(0xF070C4) == 0xE4A9
+      and _w(0xF070C6) == 0x0C01 and _w(0xF070C8) == 0x0000)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
