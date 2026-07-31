@@ -5601,6 +5601,19 @@ check('...and retrying the whole sweep on failure',
       insn(0xF08EEE) == 'move.l #$f0f0f0f0, d7' and insn(0xF08EFA) == 'bne.b $f08ec8')
 check('...running BEFORE the bus-watchdog test', 0xF08EB6 < 0xF08F1C)
 check('7616 probes if nothing faults', (0xF00000 - 0x20000) // 0x800 == 7616)
+
+# ---- the instruction-set profile: two significant absences (2026-07-31) ----
+_mn = _mcol.Counter(m.split('.')[0] for m, _, _ in _mins.values())
+check('the firmware NEVER halts the CPU -- no stop instruction anywhere',
+      _mn['stop'] == 0)
+check('...and never asserts RESET', _mn['reset'] == 0)
+check('...nor uses link/unlk, chk, illegal, trapv or rtr',
+      all(_mn[k] == 0 for k in ('link', 'unlk', 'chk', 'illegal', 'trapv', 'rtr')))
+check('tas appears exactly 5 times -- the kernel locks', _mn['tas'] == 5)
+check('movep appears 10 times -- the PTM interface', _mn['movep'] == 10)
+check('the two sbcd hits are misdecodes of the $00F08700 constant',
+      _rom[0xF09C04 - 0xF00000:0xF09C06 - 0xF00000] == b'\x87\x00'
+      and _rom[0xF0A4F4 - 0xF00000:0xF0A4F6 - 0xF00000] == b'\x87\x00')
 check('the $D0 checkpoint marker is written three times', _vd0 == 3, _vd0)
 check('...and $D0 = bits 7,6,4 -- which is how $1FFF1 bit 4 is driven with no bit op',
       0xD0 == (1 << 7) | (1 << 6) | (1 << 4) and (1, 4) not in _vbits)

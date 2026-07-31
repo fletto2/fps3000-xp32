@@ -24937,3 +24937,45 @@ probe.
 the VMOD control register's address — the same computed address the init code derives from the
 config RAM top. So this test, too, adapts to a differently-sized machine rather than hard-coding
 the boundary.
+
+## The instruction-set profile: what this firmware never does (2026-07-31)
+
+Censusing the rare and structurally significant 68000 instructions across the whole image:
+
+| present | count | where |
+|---|---:|---|
+| `movep` | 10 | the MC6840 PTM interface (odd-byte access) |
+| `exg` | 8 | including the direction swap in RDHC command 2 |
+| `dbra` | 8 | |
+| **`tas`** | **5** | the five kernel locks, documented above |
+| `sbcd` | 2 | **both misdecodes** — `$F09C04` and `$F0A4F4` are each the `8700` half of the constant `$00F08700`, in the reset `jmp` and the config block |
+
+| absent | significance |
+|---|---|
+| **`stop`** | **the firmware NEVER halts the CPU** |
+| **`reset`** | **the RESET line is never asserted by software** |
+| `link` / `unlk` | already recorded — hand-written assembly, no stack frames |
+| `chk` | already recorded for the application; true of the kernel too |
+| `illegal`, `trapv`, `rtr`, `abcd`, `nbcd`, `pack`, `unpk` | never used |
+
+### The two absences that matter for emulation
+
+**`stop` never appears.** Every failure path in this firmware is a **spin** — `bra .` at the nine
+documented sites, or a retry loop at the self-test's fault sweeps — never a halt. So:
+
+- a model may assume the CPU is **always executing**; there is no halted or low-power state to
+  implement;
+- a hung machine is **spinning, not stopped**, which is externally distinguishable — bus activity
+  continues, and in the unmapped-space and watchdog sweeps the address bus cycles visibly;
+- `monitor/monitor.s`'s `stop #$2700` in `mon_dead` is therefore a **behaviour this firmware never
+  exhibits**, which is exactly why that project note observes it presents as "FAIL on, HALTED off,
+  silent, CPU stopped" — quieter than anything the stock ROM can produce.
+
+**`reset` never appears.** Peripherals are never hardware-reset by software. The MC6840 is reset
+through its control registers (`$F09176`, `move.b #$1,$2(a0)` then `move.b #$1,(a0)`), and nothing
+else is reset at all. A model need not implement the RESET instruction's peripheral-reset
+semantics, and — more usefully — **a model's peripherals will never be reset except by explicit
+register writes**, so device state persists across everything except power-on.
+
+Both are the kind of negative that is only convincing when swept for exhaustively, and both
+simplify a faithful model rather than complicating it.
