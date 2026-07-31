@@ -34179,3 +34179,33 @@ the second is a read whose value gates every retry loop in the suite.
 carry a PC rather than an address (`$F09B6C`, `$F08B32`, …) appear as phantom "addresses" in the raw
 output. They are excluded above. Any similar sweep needs the same filter, or it will report ROM
 addresses as devices.
+
+## How long a boot actually is, and why capped runs mislead (2026-07-31)
+
+Measured with `-breakpc`:
+
+| milestone | cycles | instructions | % of boot |
+|---|---:|---:|---:|
+| inside the DRAM test (`$F09A92`) | 40,000,000 | — | **38%** |
+| SCM test entry (`$F09B20`) | 96,836,974 | 8,354,387 | **91%** |
+| **RTOS idle loop (`$F00FC2`) — boot complete** | **106,143,590** | **9,135,864** | 100% |
+
+**The last 10% of the boot contains the SCM test**, which is 262,290 of the machine's chassis
+accesses and 32,768 of its 32,967 `$FF0204` writes. So a run capped anywhere below ~100 M cycles
+omits the single largest source of device traffic in the whole boot, and a run capped at 40 M —
+a figure that appears in earlier measurement here — sees **38%** of it.
+
+That is the mechanism behind the truncation error corrected above: "the firmware touches only 4 bytes
+of chassis memory" was true of the first 38% of a boot and false of the boot.
+
+**Two rules follow, both cheap:**
+
+1. **Verify completion by final PC, not by cycle budget.** A complete boot ends at `$F00FC2`
+   (or `$F00FD6`/`$F00FD0` depending on configuration); anything else means the run was cut short or
+   derailed, and the two are indistinguishable from the access totals alone.
+2. **`-breakpc` is the right tool for "does X ever run"**, not a long trace — it answers reachability
+   directly and costs one run, where a trace of a full boot is tens of millions of lines.
+
+A useful side effect: the phase counter in `CHANNEL_SELECT` now converts to progress. `$2xxx` means
+the machine is in sequence C, i.e. past 80% of the boot; a board stalled showing `$0300` failed the
+ROM checksum in the first few percent.
