@@ -7620,6 +7620,14 @@ check('...and $0C04, the $3B target, has no writer anywhere in either listing',
       not _re21a.search(r'move\.\w+\s+\S+,\s*\$c04\.w', _k36)
       and not _re21a.search(r'move\.\w+\s+\S+,\s*\$c04\.w', _asm21a))
 
+check('$0C7C-$0C99 is five 6-byte records, initialised {word 1, longword 0}',
+      _w(0xF09E54) == 0x43F8 and _w(0xF09E56) == 0x0C7C
+      and _w(0xF09E58) == 0x32BC and _w(0xF09E5A) == 0x0001
+      and _w(0xF09E5C) == 0x42A9 and _w(0xF09E5E) == 0x0002
+      and _w(0xF09E60) == 0x5C89
+      and _w(0xF09E62) == 0xB3FC and _l(0xF09E64) == 0x00000C9A
+      and (0x0C9A - 0x0C7C) // 6 == 5)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

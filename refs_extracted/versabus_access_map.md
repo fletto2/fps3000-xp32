@@ -33364,3 +33364,31 @@ RDHC's `GTSEG` parameters.
 falls **inside** the second record rather than at a record boundary. So either the stride is not 12,
 or the code addresses a field within a record as a base. Recorded as unresolved rather than forced;
 it is one `lea` target and a RAM watchpoint would settle it.
+
+### CORRECTION: the records are 6 bytes, and `$00010000` was a reading artefact
+
+The init code settles it:
+
+```
+$F09E54  lea    $c7c.w,a1
+$F09E58  move.w #$1,(a1)      ; +$0 = 1
+$F09E5C  clr.l  $2(a1)        ; +$2..+$5 = 0
+$F09E60  addq.l #$6,a1        ; stride SIX
+$F09E62  cmpa.l #$c9a,a1 / blt
+```
+
+So the region is **five 6-byte records** at `$0C7C`, `$0C82`, `$0C88`, **`$0C8E`**, `$0C94`, each
+initialised `{word 1, longword 0}`, ending exactly where the server slot array begins at `$0C9A`.
+
+**`$0C8E` is a record base after all** — the fourth — which is exactly what the six `lea` sites
+implied and what my 12-byte reading contradicted.
+
+**And `$00010000` was an artefact of my own longword reads.** A 4-byte read at `$0C7C` spans the
+`$0001` word and the first half of the zero longword, producing `$00010000` — which I then
+connected to the staging-buffer / `UPGM` base at `$00010000`. That connection was pure coincidence
+of alignment. There is no address in this region at all; it is five counters or flags initialised
+to 1.
+
+This is the same class of error as `$0C40` and `TCB+$00` earlier today — **reading a structure at
+the wrong width invents data that is not there** — and it is the third instance, which is why the
+discriminator has to be the code that writes the region, not the pattern the bytes make.
