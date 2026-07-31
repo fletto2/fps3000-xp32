@@ -18038,3 +18038,30 @@ between. Any base-register sweep must invalidate a register at every instruction
 write it, `trap` included, or it manufactures device accesses that never happen. The same
 sweep also produced `$FF10A0`, `$FF1080` and `$FF10DE`, which are plainly RAM addresses
 wearing a device prefix.
+
+### Completeness check: every panel code this ROM emits is accounted for
+
+Sweeping the whole FPS region for `move #$2xx,d0` immediates in `$258`-`$2B2` finds
+**41 distinct codes**, and every one now has a documented meaning:
+
+- `$258`-`$260` channel reset/init/ack/flush and the four per-channel configs
+- `$262`-`$268` the XP-task set — `$262` the bit-14-clear report, `$263`/`$264` channel
+  rejects, `$265`-`$268` the per-channel abort notifications
+- `$269`-`$26C` error/timeout/channel abort and release
+- `$26D`-`$271` XP-task **directive**-failure reporters (`$26F` never occurs)
+- `$276`-`$27B`, `$27D` RDHC/IO1I **directive**-failure reporters, four of them the `USER`
+  lifecycle
+- `$27E`-`$280` TCBIO1I failures, `$281`/`$282` the host-byte requests
+- `$29E`-`$2A6` the nine CPU-exception reporters, one site each, from the table at
+  `$F0A23A`
+
+Plus `$2B2`, the kernel-fatal stub at `$F001A0`, which lies outside the FPS region — 42
+codes in total. The gaps (`$261`, `$272`-`$275`, `$27C`, `$283`-`$29D`, `$2A7`-`$2B1`) are
+emitted by nothing in this image.
+
+Two structural points fall out of the completed table. **The `$26D`-`$271` and
+`$276`-`$27D` blocks are the same idea applied twice** — one RTOS directive-failure
+reporter per call site, in the XP tasks and in RDHC/IO1I respectively — which is why
+neither block is per-channel despite the `PCMD_CH*`/`PCMD_INIT_STEP*` names once given to
+them. And the only codes that are *not* either a channel operation or a failure report are
+`$281`/`$282`, the two host-byte requests.
