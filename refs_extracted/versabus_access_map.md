@@ -20107,3 +20107,49 @@ the case where no contention is available, and is still labelled as what it is.
 
 **And it retires my own "needs finer tick scheduling" conclusion**, which was too pessimistic
 and rested on the same wrong premise as the comment that prompted it.
+
+## The FPS→RTOS handoff goes through a config pointer and the `rts` indirect-jump idiom
+
+Only **two** instances of `move.l <ea>,-(a7)` / `rts` — the return-stack indirect jump —
+exist in the whole ROM, and **both jump through config-block pointers**:
+
+| site | through | target | executes |
+|---|---|---|---|
+| `$F0A300` | `$F0A512` = **`$F00100`** | the scheduler | **once per boot** |
+| `$F00D52` | `$0C36` ← config `$F0A542` = `$F000BC` | zero-filled ROM | **never** |
+
+The first is the most important control transfer in the boot, and it is invisible to linear
+disassembly at every step:
+
+```
+$F0A2F4  movea.l $c08.w,a7          ; supervisor stack <- the scheduler block's base
+$F0A2FC  bsr.w   $F0A344
+$F0A300  move.l  $f0a512(pc),-(a7)  ; push $F00100 -- from the CONFIG BLOCK
+$F0A304  rts                        ; ...and "return" to it
+$F00100  jmp     $f0050c.l          ; a one-instruction trampoline
+$F0050C  movea.l $c08.w,a7          ; the RMS68K scheduler
+```
+
+**Three levels of indirection for one edge**: a configurable pointer, a stack-based jump, and
+a trampoline. That is exactly the pattern the disassembly of this ROM has had to be built
+around, and it is why the kernel carries a bare `jmp` at `$F00100` that nothing appears to
+call.
+
+It also ties two structures together that were mapped separately: `$0C08` — the scheduler
+control block whose first field this file identifies as "base/stack, loaded into `a7` at
+`$F0050C`" — is loaded into `a7` **here too**, one instruction before the handoff. The FPS
+layer sets up the scheduler's stack and then jumps into the scheduler with it already in
+place.
+
+### And the second one is dormant
+
+`$F00D52` is the exit of the **exception-monitor** path (`$F00D14` tests the current task
+pointer `$0C0C`, the stacked SR, `TCB+$29` bit 6 and `TCB+$148` masked `$38`). Its
+continuation pointer `$0C36` is initialised from the config block to **`$F000BC`, which is
+zero-filled ROM**, and nothing else ever writes it. Measured: `$F00D14`, `$F00D52`, `$F000BC`
+and `$F00114` all execute **zero** times in a clean boot.
+
+So the exception-monitor exit is a configured-but-unused vector pointing at a NOP slide.
+Consistent with everything else known about that subsystem — `EXMON`, `DEMON` and `EXMMSK`
+are named directives this firmware never issues, and `TCBEMMSK` and friends sit unused in
+every TCB.
