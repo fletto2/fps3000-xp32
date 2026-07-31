@@ -32871,3 +32871,43 @@ So **bit 10 means "this task has been attached to an owner"**, set by the same r
 who the owner is, and required by `$44`/`$45` with status `$A` when clear. That completes the state
 word: every bit the kernel touches now has an owner, and the three ownership-related mechanisms —
 state bit 10, flags bit 6, and the identity pair — are one subsystem rather than three findings.
+
+## `$4A` is READ-time-of-day, the counterpart to `$49` `SETTOD` (2026-07-31)
+
+```
+$F03862  bsr.w   $F00F96          ; TRAP #0 $1C -- the lock-free sub-tick clock read
+$F03866  move.l  $c3e.w,d0        ; the 32-bit DAY counter
+$F0386A  cmpi.l  #$5265c00,d1     ; milliseconds in a day
+$F03870  bcs.b   $F0387A
+$F03872  subi.l  #$5265c00,d1     ; normalise ms ...
+$F03878  addq.l  #$1,d0           ; ... carrying into days
+$F0387A  movem.l d0-d1,(a4)       ; return {days, milliseconds}
+```
+
+It calls the high-resolution clock routine this project identifies as TRAP #0 `$1C`, combines the
+result with the day counter, **normalises a millisecond value that has passed midnight by carrying
+into days**, and writes the pair to the caller's block. Its declared parameter block is **8 bytes**
+— exactly `{day, ms}`, the same shape `$49` `SETTOD` accepts.
+
+So `$49` (73) and **`$4A` (74)** are **set** and **read** time-of-day. That also explains why the
+read path needs the carry: the sub-tick interpolation can push the millisecond count past
+`$5265C00` between the ISR's own wrap checks, so the reader normalises rather than trusting the
+counter to be in range.
+
+## `$2C` is a semaphore lookup
+
+```
+$F03366  movea.l (a5),a0          ; the NAME, first longword of the parameter block
+$F03368  bsr.w   $F01876          ; T0FNDSEM -- TRAP #0 $0C
+$F0336E  addq.w  #$7,$102(a6)     ; status 7 on failure
+```
+
+`$F01876` is the routine this project identifies as `T0FNDSEM`, "find entry in the User Semaphore
+Table". `$2C` passes it a name and reports **status 7** when the lookup fails — the same failure
+code `$40` uses for its lookup, which is consistent.
+
+Its **10-byte parameter block is the semaphore descriptor**, placing it in the semaphore family by
+argument shape as well as by number. And by number it fills a gap: Motorola's semaphore directives
+are `ATSEM` 41, `WTSEM` 42, `SGSEM` 43, `CRSEM` 45 — **44 is absent from the list available here**,
+and `$2C` is 44. So it is the unnamed semaphore operation between `SGSEM` and `CRSEM`; a detach or
+delete would fit the position, but the ROM does not say so and I have not assumed it.

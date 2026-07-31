@@ -7516,6 +7516,19 @@ check('state bit 10 is set at $F03544, immediately before the owner stamp',
       _w(0xF03544) == 0x08EA and _w(0xF03546) == 0x000A and _w(0xF03548) == 0x002C
       and _w(0xF0354A) == 0x256D and _w(0xF0354E) == 0x0140)
 
+check('$4A reads the time of day: clock routine, day counter, carry, {days, ms}',
+      _t1slot(0x4A)[0] == 0xF03862 and (_t1slot(0x4A)[1] >> 8) == 8
+      and _bsrw(0xF03862) == 0xF00F96
+      and _w(0xF03866) == 0x2038 and _w(0xF03868) == 0x0C3E
+      and _l(0xF0386C) == 0x05265C00 and _l(0xF03874) == 0x05265C00
+      and _w(0xF03878) == 0x5280 and _w(0xF0387A) == 0x48D4)
+check('...matching $49 SETTOD\'s 8-byte {day, ms} block',
+      (_t1slot(0x49)[1] >> 8) == 8)
+check('$2C looks up a semaphore by name through T0FNDSEM, status 7 on failure',
+      _t1slot(0x2C)[0] == 0xF03362 and (_t1slot(0x2C)[1] >> 8) == 10
+      and _w(0xF03366) == 0x2055 and _bsrw(0xF03368) == 0xF01876
+      and _w(0xF0336E) == 0x5E6E and _w(0xF03370) == 0x0102)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
