@@ -5607,6 +5607,14 @@ check('...and that frame is abandoned, not popped: a7 is replaced outright',
 check('a zero PTM base degrades to scratch RAM $800',
       insn(0xF0A28E) == 'beq.b $f0a2ec' and insn(0xF0A2EC) == 'move.l #$800, $c4e.w')
 
+check('the RTOS init addresses the PTM as $F70000 + ODD displacements',
+      insn(0xF0A2C6) == 'movep.w d0, $d(a1)' and insn(0xF0A2CE) == 'movep.w d0, $5(a1)')
+check('the self-test addresses it as $F70001 + EVEN displacements, incl. T2 at +$08',
+      insn(0xF090F8) == 'movep.w d0, $8(a0)' and insn(0xF090FC) == 'movep.w d0, $c(a0)'
+      and insn(0xF090F4) == 'movep.w d0, $4(a0)')
+check('the tick ISR uses the cached pointer at $0C4E, a third path',
+      insn(0xF00ED6) == 'movea.l $c4e.w, a0')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

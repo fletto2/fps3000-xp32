@@ -483,3 +483,40 @@ as "ROM". ROM is `$F00000-$F0FFFF` only; the board registers at `$F7xxxx` and th
 AP I/F and XLTR at `$FFxxxx` sit above it. The filter deleted three of the seven device
 blocks and the run looked plausible — a clean instance of the failure mode this project
 has recorded before, where a too-narrow matcher produces a confident "never accessed".
+
+## The MC6840 PTM: complete register map and three addressing paths (2026-07-31)
+
+All five PTM registers are used, but no single sweep finds them all, because the firmware
+addresses the chip **three different ways**:
+
+| path | base | displacements | used by |
+|---|---|---|---|
+| 1 | literal `$F70001` | **even** (`$2`, `$4`, `$8`, `$C`) | the **self-test** only |
+| 2 | config `$F0A52C` = `$F70000` | **odd** (`$1`, `$3`, `$5`, `$D`) | the RTOS initialisation |
+| 3 | cached pointer `$0C4E` | odd | the **tick ISR** and the sub-tick clock read |
+
+Both base conventions land on the same odd byte addresses, which is what the chip requires;
+they differ only in whether the odd bit lives in the base or the displacement.
+
+| address | register | init | self-test | tick |
+|---|---|:-:|:-:|:-:|
+| `$F70001` | CR1 / CR3 (PTM address 0, selected by CR2 bit 0) | yes | yes | — |
+| `$F70003` | CR2 | yes | yes | — |
+| `$F70005` | T1 latch/counter — **loaded with `$0100`** | yes | yes | — |
+| `$F70009` | T2 latch/counter | **no** | yes | — |
+| `$F7000D` | T3 latch/counter — `$27C7`, the system tick | yes | yes | **read live** |
+
+**T2 is exercised only by the self-test.** This document's earlier statement that "T2 is
+never programmed operationally" is correct and now has its complement: it *is* programmed,
+by the diagnostics, so a model that omits T2 entirely fails the self-test rather than the
+RTOS.
+
+**T3's counter must be readable while running**, because path 3 reads it mid-period for the
+lock-free high-resolution clock (`movep.w $D(a0),d1`). A model whose read returns the reload
+latch rather than the live count makes `TRAP #0 $1C` return garbage.
+
+**Methodological note.** A sweep keyed on the `$F70001` literal returns *self-test sites
+only* and would support the conclusion "the RTOS never touches the PTM" — which is exactly
+backwards. The operational paths reach it through a configuration constant and a cached
+pointer. This is the third time in this project that a base-register indirection has
+produced a confident false negative, after `$FF0204` and the `$FF0048` read.
