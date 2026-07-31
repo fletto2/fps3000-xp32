@@ -603,8 +603,10 @@ else:
     # The vendor header is from a DIFFERENT RMS68K revision: it puts TCBENTRY at
     # +$5A, which reads 0 in every live TCB, while the real entry points are at
     # +$6C.  Field names taken from it are tentative.  Assert what is measured.
-    check('live TCBs hold their entry points at +$6C, not the vendor +$5A',
-          True)  # measured in post-boot RAM; see the access map for the values
+    check('the TDTI records supply entry points that the vendor TCB.EQ\n       would place elsewhere -- the usage-derived map is preferred',
+      all(_bst.unpack('>I', _rom[0xF0A600 - 0xF00000 + n * 96 + 0x1C:][:4])[0]
+          in (0xF046F0, 0xF05D36, 0xF05F4A, 0xF0694A, 0xF0734A, 0xF07D4A)
+          for n in range(6)))  # measured in post-boot RAM; see the access map for the values
     check('+$100/$102/$138/$160 are BEYOND the 252-byte vendor TCB',
           all(o >= 0xFC for o in (0x100, 0x102, 0x138, 0x160)))
     check('...and inside the $200 allocation stride, so they are FPS extension',
@@ -620,10 +622,8 @@ else:
           'FPS3K_BIMS' in _vb)
 
     # --- card identifications from the photographs ----------------------------
-    check('the AP I/F card part number in the card list is 612-4448-401',
-          True)   # photographed: "2-4448-401" visible on 04_APIF.JPG
-    check('the XLTR card list entry is 612-4803-400-G, matching the photograph',
-          True)   # photographed: "PN 612-4803-400  REV G" on 02_VBUS_XLTR.JPG
+    # (not a check: the AP I/F card part number in the card list is 612-4448-401 -- a physical card fact, unverifiable from the ROM)   # photographed: "2-4448-401" visible on 04_APIF.JPG
+    # (not a check: the XLTR card list entry is 612-4803-400-G, matching the photograph -- a physical card fact, unverifiable from the ROM)   # photographed: "PN 612-4803-400  REV G" on 02_VBUS_XLTR.JPG
     check('$FF0218 bit 4 selects 16 or 24 BIM registers -- 2 or 3 MC68153s',
           (0xD0 - 0xC0) // 8 == 2 and (0xD8 - 0xC0) // 8 == 3)
 
@@ -724,7 +724,7 @@ else:
     check('$0C sets Z (bit 2) and N (bit 3) -- arithmetically impossible together',
           (0x0C >> 2) & 1 and (0x0C >> 3) & 1 and not (0x0C & 0x13))
     check('...so it is a sentinel, not a directive: 12 = GTTASKNM in the reference',
-          0x0C == 12)
+          _t1[0x0C][0] == 0xF003D0)
 
     # --- the issuer is linear: no branch between entry and the spin -----------
     check('$F05688-$F056B8 contains no branch instruction',
@@ -6151,7 +6151,7 @@ check('$F015D8 validates !TCB and then !ASQ through TCB+$40',
       insn(0xF015DA) == 'cmpi.l #$21544342, (a0)' and insn(0xF015E4) == 'movea.l $40(a5), a4'
       and insn(0xF015E8) == 'cmpi.l #$21415351, (a4)')
 check('...which is a DIFFERENT field from the documented ASQ block pointer at +$138',
-      0x40 != 0x138)
+      _tcbf[0x040] >= 15 and _tcbf.get(0x138, 0) >= 1)
 _execcall = [a for a, (m, o, _) in _mins.items()
              if m.split('.')[0] in ('jsr', 'bsr') and 'f00824' in o]
 check("the EXEC tag is written from exactly three call sites",
