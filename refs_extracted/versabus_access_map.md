@@ -26819,3 +26819,48 @@ This frame is never released: `$F0A2F4` does `movea.l $c08.w,a7`, replacing the 
 pointer outright, so the guard and its continuation are simply abandoned once initialisation
 succeeds. That is correct — the continuation exists only to catch a fault *during* the PTM
 writes — but it means a model must not expect a matching pop.
+
+## The TDTI record decoded field by field (2026-07-31)
+
+The boot table at `$F0A600` is six 96-byte records, and `$F0A066`-`$F0A0FC` consumes every
+field. Note the loop does `lea $4(a3),a3` first, so its displacements are **record + 4**.
+
+| record offset | value here | role |
+|---|---|---|
+| `+$00` | `!TCB` | marker — also the loop's terminator test |
+| `+$04` | `RDHC` … | task name |
+| `+$14` | `$0000` (word) | passed to `T0CRTCB` in **d6** |
+| `+$16` | `$96` (byte) | duplicated into **both halves** of d4's high word |
+| `+$18` | `$0010` (word) | **the initial task state word** — written straight to `TCB+$2C` |
+| `+$1A` | `$A000` (word) | passed in d4's low word |
+| `+$1C` | `$00F046F0` | **task entry point**, passed in d5 |
+| `+$20`-`+$5F` | 64 bytes | the **segment descriptor block**, copied verbatim into `!TST` |
+
+Creation is `moveq #$1f,d0` / `trap #0` = **`T0CRTCB`**, with `d7 = $8000` fixed.
+
+**This resolves the two constants this project had left unexplained.** `+$14` reads
+`$00009600` as a longword, but the firmware never treats it as one: the low byte of its
+second word is `$96` and the first word is `$0000`, and they go to different registers.
+Likewise `+$18` = `$0010A000` is really `{state word $0010, word $A000}`.
+
+**`+$18` bit 4 is why the tasks land on the ready list.** After `T0CRTCB`, the loop does
+`move.w $14(a3),d2` / `move.w d2,$2c(a5)` / `btst #$4,d2`, and on a *register* `btst` is
+mod 32 — so `$0010` has bit 4 set and the TCB is pushed onto `$0C14`. That is the mechanism
+behind the measured "6 pushes onto the ready list". A record with bit 4 clear would create a
+task that exists but is never scheduled.
+
+**The segment count is computed, not stored.** The loop walks **four 8-byte slots** from
+`+$20` and counts those whose word at `+$06` is non-zero, writing the count to `$5(a4)` in
+the new task's segment table. Here exactly one qualifies — `PROG` — which is why `!TST`
+reports `TSTNSEGS = 4, TSTCSEGS = 2`: four slots, one filled by TDTI and the second (`STCK`)
+added later by the task's own `GTSEG` call. Two independently-derived numbers meeting.
+
+**The record size is confirmed structurally**: after copying 16 longwords the loop tests
+`cmpi.l #$21544342,(a3)` and finds the next record's marker, so `$20 + $40 = $60` = 96 bytes
+exactly.
+
+One oddity worth recording rather than smoothing over: `move.b $12(a3),d4` / `lsl.w #$8,d4` /
+`move.b $12(a3),d4` reads **the same byte twice**, producing `$9696` rather than combining
+two different bytes. Whether that is intentional (a duplicated field) or a transcription
+slip in the original source cannot be told from the ROM — but a model must reproduce
+`$9696`, not `$9600`.

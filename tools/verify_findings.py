@@ -5622,6 +5622,25 @@ check('the self-test saves the bus-error vector at FIVE sites, not one',
 check('...and one site reloads the supervisor stack from the reset vector',
       insn(0xF08AE8) == 'movea.l $0.w, a7')
 
+check('TDTI creates tasks with T0CRTCB and a fixed d7 = $8000',
+      insn(0xF0A0A0) == 'move.w #$8000, d7' and insn(0xF0A0A4) == 'moveq #$1f, d0')
+check('...takes the entry point from record+$1C and the state word from record+$18',
+      insn(0xF0A096) == 'move.l $18(a3), d5' and insn(0xF0A0AE) == 'move.w $14(a3), d2'
+      and insn(0xF0A0B2) == 'move.w d2, $2c(a5)')
+check('...and state-word bit 4 is what puts the task on the ready list',
+      insn(0xF0A0B6) == 'btst.b #$4, d2' and insn(0xF0A0C2) == 'move.l a5, $c14.w'
+      and (_w(0xF0A600 + 0x18) & 0x10) != 0)
+check('the segment count is COMPUTED from four 8-byte slots, not stored',
+      insn(0xF0A0CA) == 'moveq #$3, d0' and insn(0xF0A0CE) == 'tst.w $6(a2)'
+      and insn(0xF0A0D6) == 'lea.l $8(a2), a2')
+check('...exactly one slot qualifies per record, and it is PROG',
+      _rom[0xF0A600 - 0xF00000 + 0x40:][:4] == b'PROG' and _w(0xF0A600 + 0x26) != 0)
+check('16 longwords are copied, so the record is $20 + $40 = 96 bytes',
+      insn(0xF0A0EE) == 'moveq #$f, d0' and 0x20 + 16 * 4 == 96)
+check('the same byte at record+$16 is read TWICE, giving $9696 not $9600',
+      insn(0xF0A086) == 'move.b $12(a3), d4' and insn(0xF0A08C) == 'move.b $12(a3), d4'
+      and _rom[0xF0A600 - 0xF00000 + 0x16] == 0x96)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
