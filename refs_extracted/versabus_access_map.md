@@ -18589,3 +18589,20 @@ the `movem` — and the firmware offers no help.
 It is also a reminder that a path never executed is a path never debugged. This code is
 hand-written assembly on a branch that requires host software to reach; a 96-byte leak
 there is exactly the kind of defect that survives to the ROM mask.
+
+### The leak is systematic: 4 allocations, 0 releases in the whole ROM
+
+Searching the entire 64 KB for the two encodings settles it in one line:
+
+| instruction | bytes | sites |
+|---|---|---|
+| `lea -$60(a7),a7` | `4FEF FFA0` | **4** — `$F06762`, `$F0717A`, `$F07B7A`, `$F0857A` |
+| `lea $60(a7),a7` | `4FEF 0060` | **0** |
+
+One allocation per XP task, in the shared template, and **nothing anywhere in the image ever
+releases a 96-byte frame**. So this is not a one-off slip on one path: every XP task carries
+it, and the firmware contains no code that could balance it.
+
+(Note XP4I's site is `$F06762`, which is `−$18` from the `$A00` grid position `$F0677A` —
+the same local shift found at its abort routine, and different from the `−$1E` global
+best-fit for that task. The non-uniformity is now visible at three separate sites.)

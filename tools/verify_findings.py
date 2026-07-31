@@ -4096,6 +4096,13 @@ check('without a trampoline the CP callback never runs',
 check('...and a 4-byte rts stub at $10AE makes RSTATE and the jsr both execute',
       _cb['stub']['F0858C'] >= 1 and _cb['stub']['F085F8'] >= 1)
 
+# --- the callback path's 96-byte stack leak ------------------------------
+# One allocation per XP task and NO release anywhere in the 64 KB image.
+check('lea -$60(a7),a7 occurs 4 times, once per XP task',
+      _rom.count(b'\x4f\xef\xff\xa0') == 4)
+check('...and lea +$60(a7),a7 occurs ZERO times, so it is never released',
+      _rom.count(b'\x4f\xef\x00\x60') == 0)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
