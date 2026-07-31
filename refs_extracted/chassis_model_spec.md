@@ -854,3 +854,78 @@ Self-test `$F09B20` fills and verifies that region with `$00000000`, `$FFFFFFFF`
 
 Failure is reported with `d7 = $F0F0F0F0` and, per this suite's fault policy, **retried forever** —
 so an unmodelled SCM presents as a hang showing `$2xxx` in `CHANNEL_SELECT`, never as an error.
+
+## Consolidated XLTR / window / AP I/F contract (derived 2026-07-31)
+
+Everything below is read off the self-test's own requirements, not fitted to observed behaviour.
+Unless noted, failure is **retry-forever**, so a wrong answer presents as a stalled phase counter in
+`CHANNEL_SELECT`, never as a diagnostic.
+
+### `$FF0216` — a four-bit control register
+
+| bit | contract |
+|---:|---|
+| **7** | **bus-error gate.** A read of `$FF000E` must BERR **iff** bit 7 is set **and** `$FF0218` holds `$400`. With bit 7 set but `$FF0218` cleared, `$FF000E` is an ordinary R/W latch. Chassis op `$6` clears bit 7 because its peek/poke touches arbitrary addresses. Scope beyond `$FF000E` is untested. |
+| **6** | **not** a `$400000` gate — all four combinations of {set,clear} x {read,write} must **not** fault. |
+| **5** | gates `$400000` **in both directions**: set ⇒ read and write both BERR; clear ⇒ both succeed. |
+| **4** | width mux, polarity below. |
+
+### The 16->32 width conversion, on the `$400000` window
+
+| bit 4 | 16-bit write to the window | 16-bit write to `$FF0214` |
+|---|---|---|
+| **set** | lands in the **HIGH** half | **inert** |
+| **clear** | **absorbed**, no effect | writes the **LOW** half |
+
+Two mutually exclusive routes. Enabling the latch on bit 4 *set* is the natural guess and is wrong.
+
+### `$FF0218` — bit 4 means two different things at two different times
+
+| when read | requirement |
+|---|---|
+| **unarmed** | bit 4 may be set; it sizes phase `$1600`'s BIM walk (clear ⇒ 16 registers, set ⇒ 24) |
+| after `$FF0218 <- $400` | `($FF0218 & $610) == $400` — bit 10 set, bits 9 and **4 clear** |
+
+A sticky-strap model satisfies the first and fails the second. Three BIMs and bit 4 reading clear
+once armed are not in tension.
+
+### Register-file read-back (phase `$1600`)
+
+| register | requirement |
+|---|---|
+| `$FF0200` | `& $00FF` must be **zero**; the high byte is unconstrained (chassis-owned) |
+| `$FF0202` | full 16-bit R/W latch (`$2000` in, `$2000` out) |
+| `$FF0204` | must still hold the phase counter — a readable latch |
+| `$FF020C` | full R/W latch |
+| `$FF021A` | 12-bit R/W latch (`$FFF`) |
+| `$FF0210`/`$0212`/`$0214`/`$0216` | four **independent** word registers (`$10`/`$20`/`$40`/`$80`) |
+| `$FF0230`+ | 16 or 24 independent readable latches (`$C0`,`$C1`,…) |
+
+**No aliasing anywhere in that list** — the verify pass re-walks both runs and fails at the first
+aliased pair.
+
+### SCM
+
+`$400000`-`$403FFF` must be 16 KB of faithful memory at page 0, holding `$00000000`, `$FFFFFFFF`,
+`$55555555`, `$AAAAAAAA` through an ascending and a descending pass at longword stride.
+
+### Interrupts
+
+Installed handlers **write `$1FFF0`/`$1FFF1`** (six of the twelve self-test handlers do), so an
+interrupt handler and the main line must be able to interleave on that register. Delivery must occur
+within a **16-iteration `btst`/`dbeq` budget**. These particular waits **fall through** on timeout
+rather than retrying, so a non-delivering model fails later and elsewhere.
+
+### Board status `$F70018`/`$F70019`
+
+**Never written** — read-only. Confirmed correspondences, with polarity:
+
+| drive | response |
+|---|---|
+| `$1FFF1` bit 6 = 0 / 1 | `$F70019` bit 3 = 1 / 0 |
+| `$1FFF1` bit 4 = 1 / 0 | `$F70019` bit 1 = 0 / 1 |
+| `$1FFF1` bit 5 = 1 / 0 | `$F70019` bit 1 = 1 / 0 |
+| `$1FFF0` bit 0 = 0 with `$1FFF1` bit 5 set | `$F70019` bit 1 = 1 |
+| `$1FFF1` bits 0-2 non-zero (bit 7 enabling) | `$F70019` bit 2 = 1 |
+
+Bit 3's test repeats its first condition after toggling, so the response must **follow**, not latch.
