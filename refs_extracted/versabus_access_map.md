@@ -20312,3 +20312,47 @@ meant to relocate into RAM whose size is not known in advance.
 For emulation: **one longword at `$F0A546` turns this on**, and a model that supports it must
 also expect the kernel to run from somewhere other than `$F00000` — including the `!VCT` scan
 finding its table at a relocated address.
+
+## An optional boot-progress display, with two-level graceful degradation
+
+`$F09C38`-`$F09C5A` probes for a display device and falls back cleanly if it is absent:
+
+```
+$F09C38  a1 = [$F0A506]              ; the display address, FROM THE CONFIG BLOCK
+$F09C3C  $0C3A = a1                  ; (move.l sets flags from the value)
+$F09C40  beq $F09C5A                 ; ...zero -> no display configured
+$F09C42  a0 = $F09C5A ; $8.w = a0    ; install a BUS-ERROR handler -> the fallback
+$F09C4A  $4(a1) = $80                ; TOUCH the device
+$F09C50  d1 = $BF ; bsr $F0A34A      ; write a progress code
+$F09C58  bra $F09C66
+$F09C5A  $0C3A = $800                ; FALLBACK: point at scratch RAM
+```
+
+**Two levels of degradation**: the config can say "none" (`$F0A506 = 0`), and if it names an
+address that does not respond, the bus-error handler lands on the same fallback. On this
+machine the first applies — `$F0A506` is `$00000000`, so the branch is taken immediately and
+no fault occurs.
+
+### The display driver itself
+
+`$F0A344`/`$F0A34A` are two entries to one routine (`d0` seeded `$10` or `$90`), which writes
+**four words** to `$4([$0C3A])`:
+
+```
+not.b d1 / ror.l #$4,d1 / or.b d1,d0      ; build the code byte
+write $20 ; write $30 ; write d0 ; write d0|$30
+```
+
+Value-then-value-with-`$30` twice is a **two-digit write with a strobe**. Confirmed
+numerically: with `$0C3A = $800` the sequence `$0020, $0030, $0013, $0033` is written to
+`$804`, and a RAM dump reads **`$804 = $0033`** — the last of the four, exactly as predicted.
+
+So the progress codes land harmlessly in scratch RAM. Callers: `$F0A2FC` with `#$C0` (the
+RTOS handoff, executes), `$F09C54` with `#$BF` and `$F0A32E` (both skipped on this path).
+
+**This is a second diagnostic channel for a headless board.** This project records
+`CHANNEL_SELECT` as "the ONLY diagnostic a stalled board offers"; that is true of *this*
+machine, but the firmware also supports a front-panel display driven by these progress codes,
+and it is unfitted here rather than absent from the design. On a board that has one, `$BF`
+and `$C0` would be visible boot milestones — and `$0C3A` is also read by the **level-4
+autovector handler** (`$F00ECC`), so the device is used beyond boot.
