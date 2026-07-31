@@ -951,3 +951,56 @@ sit 32 bytes apart in the same routine.
 **Operation code `$04` is a special case**: `D1_SEND` issues the transfer and returns *without*
 polling for DONE, going straight to teardown. A model that expects every `$8004` to be followed by a
 DONE poll will see one that never comes.
+
+## AP I/F hardware structure, from the `512-3448-010` schematics (2026-07-31)
+
+Read from an FPS-100-class AP I/F drawing whose connector assignment matches the 4448 board in this
+chassis on **fifteen independently-checked signals**, several to the exact pin. Structure should
+transfer; AP-facing detail should not be assumed to.
+
+### The register file
+
+**One write bus (`RGBS00`-`RGBS15`), one read bus (`IFDB00`-`IFDB15`), per-register decoded strobes.**
+Registers: `HMA-high`, `HMA-low`, `APMA`, `WC`, `CTL`, `TEMP`.
+
+Selection is **six lines, `REGSEL00`-`REGSEL05`**, into **five `74S138` decoders** (two WRITE, three
+READ) on sheet 5, producing `CTLCLK#`, `HMACLK#`, `HMALCLK#`, `RDCTL#`, `RDFIF#`, `RDHMAH`, `RDHMAL`,
+`RDAPMA#` and about twenty more.
+
+### The counters
+
+| counter | parts | width | notes |
+|---|---|---:|---|
+| **APMA** | 4 x `74S169` | 16 | drives `DMA00*`-`DMA15*` to the connector |
+| **WC** | 4 x `25LS2569` | 16 | **`WC = 0` generates `DMADONE`** — the transfer terminator |
+
+The `AM25LS2569PC` visible on the 4448 board photograph is the same part in the same role.
+
+### The FIFO
+
+**16 words deep**, eight `27S03` 16x4 RAMs, with independent `74S161` read and write pointers
+(`RADDR00`-`03`, `WADDR00`-`03`) and two banks (`CS1#`/`CS2#`, `WRTE1#`/`WRTE2#`).
+
+- **write side is host-driven**: `DMASTB` arrives differentially, is synchronised, and generates
+  `WRTCLK`/`FIFOWRT`
+- **read side is SBC-driven**: `RDFIFO#`/`RDCLK` advances the read pointer
+
+### The host link is RS-422 throughout
+
+`3487` drivers and `3486` receivers with termination networks. Differential pairs identified:
+`DMASTB`/`DMASTBR` (B22/23), `SAPX`/`SAPXR` (B25/27), `SHSTX`/`SHSTXR` (B29/31), `CTLACK`/`CTLACKR`
+(B5/6), `APDMAACT`/`APDMAACTR` (B7/8), `HDMAACT`/`HDMAACTR` (B19/21), `DAVAL`/`DAVALR` (A71/73),
+`DACK`/`DACKR` (A75/77), `CTLOUT`/`CTLOUTR` (A94/95).
+
+### Where DONE and ERROR could come from
+
+The control register takes **`WC-0`**, **`OVFL*`** (A70) and **`UNFL*`** (A72) as inputs — a
+transfer-complete condition and two FIFO error conditions, feeding a register the processor reads
+back through `RDCTL#`. That is the first hardware-side account of the **bit 14 = DONE** and
+**bit 13 = ERROR** the firmware polls at `+$0E`.
+
+### Bus inventory
+
+Five 16-bit buses (`DMA`=APMA address, `HST`=host link, `HD`, `DPMBS`, `IO`) plus `PNL`, `DA`,
+`SP+DP` at 8 bits each and `REGSEL` at 6. **200 pins across two connectors** — which is why the
+counterpart host adapter cannot be improvised.
