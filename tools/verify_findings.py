@@ -6206,6 +6206,13 @@ check('pass 3 targets $176F0, below the heap and above the staging bound',
 check('...and pass 0 targets the VMOD block, above the heap top',
       0x1FFF0 > 0x1FE00)
 
+check('the $03FC breadcrumb is vector $FF, outside the FPS override range',
+      0x3FC // 4 == 0xFF and not (0x124 <= 0x3FC <= 0x3F0))
+check('$0400 survives the boot clear, which starts at $800',
+      insn(0xF09C10) == 'lea.l $800.l, a0' and 0x400 < 0x800)
+check('$1F800 does NOT survive: it is !IDV\'s base, tagged at init',
+      insn(0xF09F80) == 'move.l a0, $c6e.w')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

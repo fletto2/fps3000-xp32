@@ -28524,3 +28524,31 @@ The individual words `$4600`, `$00F0`, `$0100`, `$0C00` are recognisable **fragm
 block base). But they do not assemble into those longwords at the alignment they are written
 — `$176F8` would give `$460000F0`, not `$00F04600` — so the resemblance is suggestive and no
 more. Noted as a lead rather than a reading.
+
+## Which boot-time diagnostics survive to a post-boot dump (2026-07-31)
+
+The ordering check generalises into something a RAM-dump reader needs: **of the values the
+boot leaves behind, which are still there at the end?**
+
+| location | written by | survives? |
+|---|---|---|
+| `$03FC` | `$F09C0C`, the `d0` breadcrumb at self-test exit | **yes** — it is vector `$FF`, outside the FPS override range (vectors 73-252) |
+| `$0400` | the self-test fault counter, low-stack arm | **yes** — the boot clears `$800`-`$10FF` only |
+| `$1F800` | the self-test fault counter, high-stack arm | **no** — RTOS init allocates **`!IDV`** at `$1F800` and writes its tag over it |
+| `$1FFF0`+ | the `$F0A4BE` table, pass 0 | yes — a register, above the heap |
+| `$176F0`+ | the `$F0A4BE` table, pass 3 | yes — nothing writes there afterwards |
+| `$1F07E`+ | the `$F0A4BE` table, passes 1-2 | no — inside a TCB's `!TST`, filled by TDTI |
+
+**This corrects the post-mortem guidance.** This project records "`$0400`/`$1F800` the
+self-test fault counts" as a pair to read from a dump. Only `$0400` is readable after a
+completed boot — `$1F800` is `!IDV`'s base and holds its marker by then. A dump showing
+`!IDV` there is not evidence that the high-stack arm never fired; it is evidence that boot
+got as far as allocating `!IDV`.
+
+The distinction matters because the two arms are selected by stack depth
+(`cmpa.l #$10000,a7`), so the high-stack arm is the one that counts faults during the
+*later* phases — exactly the ones a debugger would care about. To capture it, a dump has to
+be taken before RTOS initialisation, or the counter read some other way.
+
+`$03FC` surviving is the useful half: it is a single longword, outside every clear and every
+override, holding whatever `d0` contained when the self-test finished.
