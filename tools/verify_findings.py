@@ -3509,6 +3509,13 @@ def _l(a):
     return struct.unpack('>I', _rom[a - _B:a - _B + 4])[0]
 
 
+def _bsrw(_at):
+    """Target of a bsr.w/bra.w whose opcode word is at _at."""
+    _d = _w(_at + 2)
+    return _at + 2 + (_d - 0x10000 if _d >= 0x8000 else _d)
+
+
+
 # --- TRAP #0: 35 slots, and the user-mode silent ignore --------------------
 check('TRAP #0 jump table is $F001D6-$F00262 = 35 longword slots',
       (0xF00262 - 0xF001D6) // 4 == 35)
@@ -7467,12 +7474,6 @@ check('...both paths target $4A then $4C; only the width differs',
 
 # bsr.w displacements are SIGNED.  $D22E is negative; adding it unsigned gave
 # $F10186 instead of $F00186.  Helper so this cannot recur.
-def _bsrw(_at):
-    """Target of a bsr.w/bra.w whose opcode word is at _at."""
-    _d = _w(_at + 2)
-    return _at + 2 + (_d - 0x10000 if _d >= 0x8000 else _d)
-
-
 check('directive $0E snapshots via $F00186 when privileged AND flags bit 13 is set',
       _w(0xF02F46) == 0x082E and _w(0xF02F48) == 0x000F and _w(0xF02F4A) == 0x0028
       and _w(0xF02F4E) == 0x082E and _w(0xF02F50) == 0x000D and _w(0xF02F52) == 0x0028
