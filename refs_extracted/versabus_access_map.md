@@ -17342,3 +17342,46 @@ Note the two hooks are not redundant and cannot simply be merged: `FPS3K_SEQ` ca
 `FPS3K_RESPSEQ` carries codes only but is delivered by repeated BIM raises rather than by
 waiting for the SBC to arm. A hook that paired arguments with interrupt-driven delivery is
 the obvious missing combination, and is the concrete next step on this path.
+
+## The last two unexplained RTOS allocations are identified (2026-07-30)
+
+### `$1F700` `!PAT` is the Periodic Activation Table
+
+`PAT.EQ` gives the layout: tag, `PATFHDR` (free-list head), `PATHDR` (active-list head),
+`PATTSIZ`, a scheduling BAB, then 30-byte entries. Live:
+
+```
++$00 "!PAT"
++$04 PATFHDR = $0001F714     head of the FREE list
++$08 PATHDR  = $00000000     head of the ACTIVE list -- EMPTY
++$0C PATTSIZ = $00000000
+free list: 8 nodes, $1F714..$1F7E6, stride $1E (30 bytes), zero-terminated
+```
+
+So the machine is configured with **8 periodic-activation slots and uses none of them** —
+directive `$1D` `RQSTPA`, "REQUEST PERIODIC ACTIVATION", is never issued by this firmware.
+
+### `$1F500` is the RMS68K trace table — the last unexplained allocation
+
+This file has carried `$1F500` (directory slot `$0C30`) as "a pool of **9 records of `$1A`
+bytes** behind an 8-byte first/last header (`$1F508`/`$1F5F2`), untouched in every
+configuration reached so far". `TRACE.EQ` matches it exactly:
+
+| | |
+|---|---|
+| header | `TRCPTR` (entry pointer), `TRCLNG` (table end) — **8 bytes**, as observed |
+| entry | `{code w, SR w, PC l, A0 l, A6 l, D0 l, time_ms l, time_us w}` = **26 bytes = `$1A`** |
+
+The entry size is the confirmation: 2+2+4+4+4+4+4+2 = 26, and `$1F508 + 9 × $1A = $1F5F2`
+is exactly the observed end. (`TRACE.EQ`'s own comment says "20 BYTES FOR EACH ENTRY",
+which its own `DS` directives contradict — 26 decimal is `$1A` hex, the same
+decimal/hex confusion that kept the directive numbers unmatched for so long.)
+
+Live values confirm it is armed but unused: `TRCPTR = $1F508` (still at the first entry),
+`TRCLNG = $1F5F2`, and **0 of 9 entries non-zero**. The readout path is directive `$08`
+`SNPTRC`, "MOVE TRACE TABLE TO USER BUFFER", and the enable is the flag word at `$0C34`
+that the FPS kernel hook tests bit 14 of.
+
+**Every structure the page allocator hands out is now identified**: six TCBs, six TSTs,
+six per-task ASQ/stack blocks, `!GST`, `!IDV`, `!IOV`, `!PAT`, `!UDR`, `!UST`, `!VCT`, the
+`$0C00` region list, and this trace table.

@@ -3547,6 +3547,25 @@ with tempfile.TemporaryDirectory() as _tdq:
           all(_rq.count(t) == 0
               for t in (b'!CCB', b'!DLY', b'!ASQ', b'!VCT')))
 
+    # --- !PAT and the trace table: the last two unexplained allocations ---
+    check('$1F700 !PAT has 8 free periodic-activation slots and an EMPTY active list',
+          _rq[0x1F700:0x1F704] == b'!PAT'
+          and _lw(0x1F704) == 0x1F714 and _lw(0x1F708) == 0)
+    _pat, _n = _lw(0x1F704), 0
+    while 0x1F700 <= _pat < 0x1F800 and _n < 20:
+        _pat = _lw(_pat)
+        _n += 1
+    check('...and that free list is 8 nodes of $1E bytes, zero-terminated',
+          _n == 8 and _pat == 0)
+    # $1F500 matches TRACE.EQ: 8-byte header, then 26-byte ($1A) entries.
+    check('$0C30 -> $1F500 is the RMS68K trace table, 8-byte header + 9 x $1A',
+          _lw(0x0C30) == 0x1F500
+          and _lw(0x1F500) == 0x1F508 and _lw(0x1F504) == 0x1F5F2
+          and 0x1F508 + 9 * 0x1A == 0x1F5F2)
+    check('...armed but never written: 0 of its 9 entries is non-zero',
+          not any(any(_rq[0x1F508 + k * 0x1A:0x1F508 + (k + 1) * 0x1A])
+                  for k in range(9)))
+
     # --- the extension-directive table ------------------------------------
     _udr = _lw(0x0C28)
     check('$0C28 heads the !UDR user-directive table at $1F600',
