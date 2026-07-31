@@ -7657,6 +7657,20 @@ check('...and broadcasts the phase counter to $FF0204 twice per longword',
       _w(0xF09B54) == 0x3D46 and _w(0xF09B56) == 0x0204
       and _w(0xF09B6C) == 0x3D46 and _w(0xF09B6E) == 0x0204)
 
+check('the channel primitive $F07F12 has exactly TWO callers',
+      len(_re21a.findall(r'(?:jsr|bsr\.\w)\s+loc_F07F12', _asm21a)) == 2)
+check('...issuing operation $10 then $0E, both as immediates, mode half $FFFF',
+      _w(0xF08502) == 0x303C and _w(0xF08504) == 0xFFFF and _w(0xF08506) == 0x4840
+      and _w(0xF08508) == 0x303C and _w(0xF0850A) == 0x0010
+      and _w(0xF08522) == 0x303C and _w(0xF08524) == 0xFFFF and _w(0xF08526) == 0x4840
+      and _w(0xF08528) == 0x303C and _w(0xF0852A) == 0x000E)
+check('...the second taking its operand pre-decremented from the $101E file pointer',
+      _w(0xF0852C) == 0x2222 and _l(0xF08516) == 0x246A1080)
+check('...and the primitive addresses the ports through a0/a1/$2(a1), not displacements',
+      _w(0xF07F18) == 0x32BC and _w(0xF07F1E) == 0x3340 and _w(0xF07F20) == 0x0002
+      and _w(0xF07F22) == 0x30BC and _w(0xF07F24) == 0x8004
+      and len(_re21a.findall(r'move\.\w\s+\S+,\s*\$(?:4a|6a|8a|aa)\(a[0-7]\)', _asm21a)) == 0)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

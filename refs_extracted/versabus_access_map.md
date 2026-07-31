@@ -33475,3 +33475,52 @@ counter **twice per longword**: 4096 longwords x 2 patterns per pair x 2 pairs x
 register at that scale, so the "~33k writes per run" figure recorded for `CHANNEL_SELECT` is
 this loop, throttled by however far the modelled window lets it get — which makes that count a
 *measure of how much SCM the model presents*, not a property of the firmware.
+
+## The complete SBC->AC vocabulary, bounded rather than sampled (2026-07-31)
+
+This project's "observed SBC->AC operation codes: `$1B`, `$10`, `$0E`" was an observation. It can
+now be stated as a **bound**, because the transaction primitive has exactly two callers and they
+are both literal.
+
+**How the ports are actually addressed.** `$F07F12` uses **dedicated pointer registers**, not
+displacements off a chassis base:
+
+| register | port |
+|---|---|
+| `(a0)` | `+$0E` command/status |
+| `(a1)` | `+$08` data high |
+| `$2(a1)` | `+$0A` data low = **the operation code** |
+| `(a3)` | the channel's BIM control register |
+
+So a sweep for `$4A(aN)`/`$6A(aN)`/`$8A(aN)`/`$AA(aN)` writes returns **zero hits** and is a total
+false negative — the third instance of this failure mode today, and the reason the known-positive
+control is mandatory. The per-channel constants are loaded into a0/a1/a3 by the caller.
+
+**The two call sites, verbatim:**
+
+```
+$F08500  d0 = $FFFF0010   ; mode $FFFF, operation $10
+         d1 = $10, d2 = 1, a2 = $1080+(ch-1)*4      -> jsr $F07F12
+$F08522  d0 = $FFFF000E   ; mode $FFFF, operation $0E
+         d1 = move.l -(a2)  ; the PRE-DECREMENTED longword out of the $101E file
+         d2 = $10                                    -> jsr $F07F12
+$F0853C  move.l #$0,$1080(a2)   ; release the per-channel pointer
+```
+
+That is the documented "normal channel request is two back-to-back transactions" seen from the
+issuing side, and it also explains the `$FFFF` in the mode half, which previously had no account:
+**both calls set it**, so `$FFFF` is simply this path's mode selector.
+
+**Therefore the entire vocabulary the SBC can emit to an AC unaided is three operations, by two
+routes:**
+
+| op | route | issued as |
+|---|---|---|
+| `$10` | transaction primitive, `$8004` REQUEST-TRANSFER | literal at `$F08508` |
+| `$0E` | transaction primitive, `$8004` REQUEST-TRANSFER | literal at `$F08528` |
+| `$1B` | written straight to the data pair, then `$8000` | the bit-11 sub-mode path, `$F07E2C` |
+
+**No fourth operation is reachable.** The primitive is entered only from those two sites, both
+load `d0` from an immediate, and the `$1B` path writes its constant inline. Anything else an AC
+ever sees must come from the host-loaded CP program — which is consistent with the CP callback
+being the only route by which host code reaches a channel at all.
