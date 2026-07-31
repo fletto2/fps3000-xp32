@@ -18736,3 +18736,35 @@ follows from that.
 the control flow but not the data. A model that wants the arguments to be meaningful must
 also create a task named `USER` — which the ROM itself can do, via the `CPRUN` path
 (chassis operation `$8`) documented above.
+
+### Auditing unchecked directive returns — and why it resists automation
+
+Trying to find other places where a `trap #1` status is ignored produced **two classifier
+bugs in two attempts**, which is worth recording because both are easy to repeat:
+
+1. Testing `mnemonic in ('beq','bne',…)` misses every real check, because capstone renders
+   the branches as `beq.b`/`bne.b`. That run reported 55 of 71 sites "unchecked" when the
+   overwhelming majority are the ordinary `beq` / `move.w #$27x,d0` report pattern.
+2. Testing `'d0' in operands` counts a **store** of `d0` as a check. That is exactly what
+   hides the RSTATE sites: `$F0859A` is `move.l d0,$10be(a2)`, which uses the status as an
+   *argument* and never tests it.
+
+After both corrections the residue is small and each item is explicable:
+
+| site | directive | why the status is not tested |
+|---|---|---|
+| `$F060F8`, `$F06B10`, `$F07510`, `$F07F10` | `$0F` `TERM` | terminate-self does not return |
+| `$F0490C` | `$12` `RESUME` (of `USER`) | genuinely ignored |
+| `$F0566E` | `$2A` `WTSEM` | genuinely ignored |
+| `$F05100` | — | **not a trap site**: an artifact of decoding the jump table at `$F05102` |
+| `$F06778`, `$F07190`, `$F07B90`, `$F08590` | `$43` `RSTATE` | **genuinely ignored, and consequential** — the status becomes argument 1 and `a3` is taken regardless |
+
+So the only *consequential* unchecked return in the firmware is the `RSTATE` one already
+documented. The rest are either directives that cannot fail meaningfully or cannot return
+at all.
+
+Two of those `$0F` `TERM` sites are worth a note in their own right: `$F07F0E`
+(`moveq #$f,d0` / `trap #1`) sits immediately after the ISR exit stub and immediately before
+the channel transaction primitive at `$F07F12`. It is a **terminate-self stub**, not a
+continuation of either neighbour — the bytes that follow belong to the next routine, which
+is precisely what made a naive "look at the next two instructions" audit misread it.
