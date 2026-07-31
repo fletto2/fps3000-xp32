@@ -3423,8 +3423,15 @@ for _hk, _hv in (('FPS3K_DATAIN', '1'), ('FPS3K_RESP', '0x94'),
                  ('FPS3K_DMA10AA', '2'), ('FPS3K_POKE', '10AA=0002'),
                  ('FPS3K_MBOX', '00010000')):
     check(f'{_hk} still lets the machine boot', _boots({_hk: _hv}))
-check('FPS3K_CHSEL_RD does NOT -- ungated, hangs in the self-test (known)',
-      not _boots({'FPS3K_CHSEL_RD': '28'}))
+# FIXED 2026-07-30: CHSEL_RD is now gated on boot completion, like DMA10AA and
+# POKE before it.  $FF0204 is the phase-broadcast register and the diagnostics
+# read it back, so a constant readback from reset fails them.  Both arms are
+# asserted so the fix cannot silently regress in either direction.
+check('FPS3K_CHSEL_RD now boots, because it is gated on boot completion',
+      _boots({'FPS3K_CHSEL_RD': '28'}))
+check('...and FROM_RESET still reproduces the old self-test hang',
+      not _boots({'FPS3K_CHSEL_RD': '28',
+                  'FPS3K_CHSEL_RD_FROM_RESET': '1'}))
 
 # --- the self-test phase table, measured 2026-07-30 -----------------------
 # CHANNEL_SELECT carries the phase number and is the ONLY diagnostic a stalled
@@ -3691,7 +3698,7 @@ with tempfile.TemporaryDirectory() as _tdv:
 # Records are {1-byte vector, 3-byte handler}; reading them handler-first is
 # off by one byte and pairs every handler with the wrong vector.
 check('$F00114 is a jsr followed by the !VCT tag',
-      insn(0xF00114) == 'jsr $f00186' and _rom[0xF0011A - _B:0xF0011E - _B] == b'!VCT')
+      insn(0xF00114) == 'jsr $f00186.l' and _rom[0xF0011A - _B:0xF0011E - _B] == b'!VCT')
 
 
 def _vtab():
@@ -3836,6 +3843,63 @@ check('the ready-queue insert guards with bset #$4,$2d(a0)',
       insn(0xF007C2) == 'bset.b #$4, $2d(a0)')
 check('...and the dequeue clears it with bclr #$4,$2d(a6)',
       insn(0xF0053C) == 'bclr.b #$4, $2d(a6)')
+
+# --- RDHC's USER-task lifecycle, and the UPGM segment (2026-07-30) --------
+# The project records "this ROM never creates USER".  The BEHAVIOUR is right --
+# it executes 0 times in every configuration -- but the CODE is all there.
+check('RDHC creates USER with $0B CRTCB on the $F04614 block',
+      insn(0xF04774) == 'moveq #$b, d0'
+      and _rom[0xF04614 - _B:0xF04618 - _B] == b'USER')
+# $F046C8 is a SEG.EQ SGPB: task, session, opt, attr, name, LA, length, buff.
+_sgpb = _rom[0xF046C8 - _B:0xF046C8 - _B + 28]
+check('...and allocates segment UPGM at $00010000, length $D000 (53,248 bytes)',
+      _sgpb[0:4] == b'USER' and _sgpb[12:16] == b'UPGM'
+      and struct.unpack('>I', _sgpb[16:20])[0] == 0x00010000
+      and struct.unpack('>I', _sgpb[20:24])[0] == 0x0000D000)
+check('...pre-fills the program entry with NOP ($4E71) before starting it',
+      insn(0xF047B2) == 'move.w #$4e71, (a0)+' and insn(0xF047C0) == 'moveq #$d, d0')
+check('...and the four USER blocks in the XP tasks are used with $10 TERMT',
+      all(_rom[b - _B:b - _B + 4] == b'USER'
+          for b in (0xF05F40, 0xF06940, 0xF07340, 0xF07D40))
+      and insn(0xF084CE) == 'moveq #$10, d0')
+# The gate: chassis op $8 with CHANNEL_SELECT == 0.  This is CPRUN.
+check('the lifecycle is gated on chassis operation $8',
+      insn(0xF04756) == 'cmpi.w #$8, d0')
+check('...and on CHANNEL_SELECT == 0 (non-zero terminates instead)',
+      insn(0xF0476A) == 'cmpi.w #$0, $204(a5)')
+check('operation $B returns the staging base $10000+$10 = $10010',
+      insn(0xF05002) == 'move.l #$10000, d0' and insn(0xF05008) == 'addi.l #$10, d0')
+# ...and it is still behaviourally absent, in both drivable configurations.
+_uk = {}
+for _nm, _env in (('default', {}), ('driven', {'FPS3K_RESPSEQ': '0x0B,0x08',
+                                               'FPS3K_XPIRQ': '6'})):
+    with tempfile.TemporaryDirectory() as _tdu:
+        subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000',
+                        '-trace', f'{_tdu}/t'], capture_output=True, timeout=400,
+                       env={**os.environ, **_env})
+        _uk[_nm] = collections.Counter(
+            re.findall(r'[0-9A-F]{6}', open(f'{_tdu}/t').read()))
+check('the USER lifecycle executes ZERO times in a default boot',
+      _uk['default']['F04774'] == 0 and _uk['default']['F04740'] == 0)
+check('...and driving op $8 reaches the operation decode but still rejects',
+      _uk['driven']['F04740'] == 1 and _uk['driven']['F04756'] == 1
+      and _uk['driven']['F04774'] == 0)
+
+# --- the XP-32 channel status protocol -----------------------------------
+# $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
+# so #$f/#$e/#$b are word bits 15/14/11.
+check('the channel status word is tested for bits 15, 14 and 11',
+      insn(0xF07E4C) == 'btst.b #$f, $1066.l'
+      and insn(0xF07E86) == 'btst.b #$e, $1066.l'
+      and insn(0xF07E90) == 'btst.b #$b, $1066.l')
+check('the abort path sets MODE1 bit (channel + 7), i.e. bits 8-11',
+      insn(0xF084EA) == 'addq.w #$7, d0' and insn(0xF084EC) == 'bset.b d0, d1')
+# Present in all four task copies.  Note XP4I's site sits at -$18 from the
+# $A00 grid, NOT the -$1E global best-fit alignment recorded for the task as a
+# whole -- the template shift is not uniform across the whole 2560 bytes.
+check('...and the same MODE1 bit computation appears in all four XP tasks',
+      all(insn(a) == 'addq.w #$7, d0' and insn(a + 2) == 'bset.b d0, d1'
+          for a in (0xF084EA, 0xF07AEA, 0xF070EA, 0xF066D2)))
 
 print(f'\n{checks - len(fails)}/{checks} passed')
 sys.exit(1 if fails else 0)

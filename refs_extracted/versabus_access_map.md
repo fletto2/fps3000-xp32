@@ -17628,3 +17628,123 @@ usable staging bound derived from a nonzero-byte scan came out 512 bytes too gen
 
 Three structures written by different parts of the RTOS — the page allocator's tiling,
 `TCB+$138`, and `!TST` segment 1 — now agree on the same six blocks.
+
+## RDHC contains the whole `USER`-task lifecycle, and declares where the CP program lives (2026-07-30)
+
+This project records: "There is a seventh task, `USER`, and this ROM never creates it."
+**The behavioural half is right and the code half is wrong.** RDHC contains the complete
+lifecycle, in one contiguous stretch at `$F04774`-`$F047FC`, and each step has its own
+failure reporter:
+
+| step | directive | parameter block | panel code on failure |
+|---|---|---|---|
+| create the task | `$0B` `CRTCB` | `$F04614` `'USER'` | `$278` |
+| allocate its segment | `$01` `GTSEG` | `$F046C8` | `$279` |
+| pre-fill the program area | — | — | — |
+| start it | `$0D` `START` | `$F04630` `'USER'` | `$27A` |
+| terminate it | `$10` `TERMT` | `$F046A6` `'USER'` | `$27B` |
+| resume it | `$12` `RESUME` | `$F0469E` `'USER'` | `$27D` |
+
+### The `GTSEG` block states where a host-loaded CP program lives
+
+`$F046C8` decoded against `SEG.EQ`'s `SGPB`:
+
+```
+SGPBTASK = 'USER'        SGPBSESS = 0
+SGPBOPT  = $0100         SGPBATTR = $0000
+SGPBNAME = 'UPGM'        <- User ProGraM
+SGPBLA   = $00010000     <- logical address
+SGPBSL   = $0000D000     <- 53,248 bytes
+SGPBBUFF = $00000244
+```
+
+**The user program segment is `$10000-$1CFFF`, named `UPGM`.** That is the firmware's own
+statement of where the host-loaded control-processor program goes, and it is *the same
+region as the microcode staging buffer*. The two share by design, and `$D000` is 3,328
+bytes smaller than the `$10000-$1DCFF` staging bound derived elsewhere here — so a full
+`UPGM` segment leaves the top of the staging area free rather than colliding with the heap.
+
+And immediately before `START`, RDHC does:
+
+```
+$F047A8  movea.l #$10000, a0
+$F047B2  move.w  #$4e71, (a0)+     ; $4E71 = NOP, eight times
+```
+
+It **pre-fills the program entry with NOPs**, so starting `USER` with nothing loaded
+executes NOPs rather than whatever was in DRAM. That is a deliberate safety property, and
+it is a concrete prediction for a real machine: `$10000` holds `4E71` x8 after a CPRUN
+with no program loaded.
+
+### The gate is chassis operation `$8` — this is `CPRUN`
+
+```
+$F04740  btst #7,$E87        ; bit 7 set -> the command-arm path instead
+$F0474C  d0 = $E86 & $F      ; the chassis operation
+$F04756  cmpi #$8,d0 / bne   ; ONLY operation $8 reaches the lifecycle
+$F0475E  cmpi #$25A,$E74 / beq
+$F0476A  cmpi #$0,$FF0204 / bne $F047EA   ; CHANNEL_SELECT
+$F04774  CRTCB 'USER' ...
+```
+
+So **operation `$8` with `CHANNEL_SELECT == 0` starts the CP program and with
+`CHANNEL_SELECT != 0` terminates it** — which is exactly the published `CPRUN` primitive,
+and the first time an API call has been tied to a specific chassis opcode by its code
+rather than by inference from the name.
+
+`$E74` is written by **operation `$B`**, whose handler `$F05002` computes `$10000 + $10` =
+**`$10010`, the staging base**, stores one half into `$E74` (bit 6 selects which) and
+branches to the ISR exit stub. That is why `$E74` reads `$0010` after a `$0B`.
+
+### Measured: the path is reachable but stops at the known wall
+
+With `FPS3K_RESPSEQ=0x0B,0x08 FPS3K_XPIRQ=6`, RDHC leaves its wait and reaches the
+operation decode — `$F04740` x1, `$F04756` x1 — with `$E86` latching `$08` and `$E74`
+holding `$0010`, neither of which had been achieved before. It still rejects, because
+**RDHC reads the code that woke it**, and the code that woke it was the `$0B`. Delivering
+`$08` as the waking code fails at a different point: op `$8`'s own ISR handler `$F04F52`
+reaches the exit stub only *after* `jsr $F05688`, and `$F05688` is one of the eight
+byte-identical panel-command issuers that **end in `bra .`**.
+
+So the `USER`/CPRUN path sits behind the same self-programmed spin already documented for
+TCBIO1I and RDHC, one level further in. The lifecycle executes **0 times in every
+configuration tried**, which is why the behavioural claim stands. What is new is that the
+code exists, what it does, and precisely which gate to open.
+
+## The XP-32 channel status protocol, decoded (2026-07-30)
+
+The channel ISR is minimal — it latches three registers and exits:
+
+```
+$F07EE6  move.w $4e(a5),$1066   ; status/command  (+$0E)
+$F07EF6  move.w $48(a5),$1068   ; data high       (+$08)
+$F07EFE  move.w $4a(a5),$106a   ; data low        (+$0A)
+$F07F08  move.w #$c,ccr / trap #1
+```
+
+All interpretation happens in the task body, which tests the latched status. **Note the
+`btst.b` width rule**: `$1066` holds the *high* byte of the status word, and `btst` on
+memory is byte-sized with the bit number mod 8, so `#$f`/`#$e`/`#$b` are word bits
+**15 / 14 / 11**.
+
+| bit 15 | bit 14 | bit 11 | what the task does |
+|:---:|:---:|:---:|---|
+| 0 | — | — | `$F084AA`: validate channel (`$263` on reject), then take the **high byte of the 32-bit data word** as an opcode. Non-zero ⇒ **`$10` `TERMT` on `'USER'`** — kill the CP program — then panel `$264+ch` (i.e. `$265`-`$268`), set MODE1 bit `7+ch`, clear MODE0 bit 10 |
+| 1 | 0 | — | panel **`$262`** — report a transaction with no valid bit; no data consumed |
+| 1 | 1 | 0 | `$F08550`: validate channel (`$264` on reject), then test **`$10AE + (ch-1)*4`**, the `USER` task handle. Non-zero ⇒ notify it; zero ⇒ `bset #0,$10A1+(ch-1)*2`, i.e. flag a pending completion in the `$10A0` array |
+| 1 | 1 | 1 | write `$0000` to `+$08`, `$001B` to `+$0A`, then `$8000` to `+$0E` — the documented `$0000001B` command |
+
+Three things this settles.
+
+**`$262` is not "an ISR prologue code".** It is the **bit-14-clear report**: the chassis
+raised the channel interrupt without a valid transaction.
+
+**`$265`-`$268` are per-channel abort notifications**, emitted on the same path that
+terminates `USER`, which is why `addi.w #$264,d1` with `d1` = the channel produces them.
+
+**`XLTR_MODE1` (`$FF0202`) bits 8-11 are per-channel flags.** The code is
+`addq.w #$7,d0 / bset d0,d1` with `d0` = the channel number, so channels 1-4 set bits
+8-11. This is byte-identical in all four task copies — only the parameter-block address is
+patched — so the `+7` is universal and not a per-task constant. The same routine also
+clears MODE1 bit 14 and MODE0 bit 10, giving those two long-noted bits a concrete role:
+they are cleared when a channel aborts.
