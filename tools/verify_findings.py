@@ -7019,6 +7019,20 @@ check('XP1I and XP4I share a 14-byte prefix then diverge in INSTRUCTIONS, not op
       and _w(0xF060AA) == 0x3010          # XP4I: move.w (a0),d0    -- 2 bytes
       and _w(0xF060AC) == 0x0800)         #       btst.b #$b,d0     -- 4 bytes
 
+_x1t = _rom_bytes[0xF07D00 - 0xF00000:0xF07D00 - 0xF00000 + 0xA00]
+def _xseg(base, sh, off, n):
+    _o = base - 0xF00000 + sh + off
+    return _rom_bytes[_o:_o + n]
+check('XP2I and XP3I align with XP1I at shift 0, differing only in constants',
+      sum(1 for _i in range(0xA00) if _x1t[_i] != _xseg(0xF07300, 0, 0, 0xA00)[_i]) < 100
+      and sum(1 for _i in range(0xA00) if _x1t[_i] != _xseg(0xF06900, 0, 0, 0xA00)[_i]) < 100)
+check('...while XP4I needs no single shift: -$18 beats 0 but still leaves ~500 diffs',
+      sum(1 for _i in range(0xA00) if _x1t[_i] != _xseg(0xF05F00, -0x18, 0, 0xA00)[_i]) < 600
+      and sum(1 for _i in range(0xA00) if _x1t[_i] != _xseg(0xF05F00, 0, 0, 0xA00)[_i]) > 1500)
+check('...and its TAIL matches at -$18 with only constant patches',
+      sum(1 for _i in range(0x1C0, 0xA00)
+          if _x1t[_i] != _xseg(0xF05F00, -0x18, 0, 0xA00)[_i]) < 120)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

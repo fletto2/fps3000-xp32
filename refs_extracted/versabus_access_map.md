@@ -31182,3 +31182,41 @@ channel. On a four-channel machine, channel 4 therefore behaves differently from
 is *not* a configuration difference and cannot be fixed by driving the chassis harder. Any model
 that reproduces XP4I faithfully will show that asymmetry; a model that "fixes" it has diverged
 from the ROM.
+
+## XP4I's divergence is bounded to ~192 bytes, and the shift drifts within it (2026-07-31)
+
+A windowed best-shift scan (64-byte windows of XP1I, searching XP4I for the alignment that
+minimises differences) profiles the divergence precisely:
+
+| XP1I window | best shift | diffs at that shift |
+|---|---:|---:|
+| `$000`-`$0FF` | **0** | 9 — ordinary constant patches |
+| `$100`-`$13F` | **+$06** | 10 |
+| `$140`-`$17F` | **+$02** | 35 |
+| `$180`-`$1BF` | **−$0C** | 42 |
+| `$1C0` onward | **−$18** | ≤8 per window — ordinary constant patches |
+
+So XP4I is **the same task with a rewritten head**. Instructions are inserted and removed across
+XP1I offsets `$100`-`$1C0` — the shift drifting 0 → +6 → +2 → −$C → −$18 — after which it settles
+and the remaining ~2100 bytes match at a constant −$18 with only per-task constants differing.
+
+**The authored divergence is therefore confined to about 192 bytes**, XP1I `$F07E00`-`$F07EC0`
+against XP4I `$F06000`-`$F060A8`. That is exactly where the `$1F41`/`$1F45` latch and the
+`$0000001B` channel transaction live, and the −$0C local shift the scan reports for that window is
+the same −$0C computed directly from the two divergence addresses.
+
+For contrast, **XP2I and XP3I need no shift at all**: 76 and 77 differing bytes in 55 small runs,
+every window aligning at shift 0. They are pure constant patches — channel digit, BIM register,
+port addresses, per-task routine addresses.
+
+### Why the single-shift figures disagree
+
+This project records XP4I as "aligning at −$1E with 265 differing bytes"; a global scan here finds
+**−$18 with 493**. Both are artefacts of forcing one shift on a task that has two regimes: −$1E
+aligns the head and misaligns the tail, −$18 does the reverse. The piecewise profile supersedes
+both — **there is no single correct shift**, which is the quantitative form of the note already in
+`CLAUDE.md` that "the template shift is not uniform across all 2560 bytes".
+
+The practical consequence for reading the disassembly: **an address computed by applying any fixed
+XP4I offset is unreliable across the `$100`-`$1C0` band** and reliable outside it. Anything derived
+that way in that band should be re-derived from the `!TST` segment bounds or from the code itself.
