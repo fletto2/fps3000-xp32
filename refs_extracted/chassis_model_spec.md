@@ -831,3 +831,26 @@ microcode reaches the WCS once it leaves `$FF0008`, and anything about UNIV FMT'
 AC-initiated traffic. Those need a schematic, an EU PROM dump, or a bus trace — and the machine's
 own diagnostics draw the same boundary, which is the strongest evidence that the boundary is real
 rather than an artefact of what has been read so far.
+
+## Two contract items added 2026-07-31
+
+### Input #12 — the mailbox must answer at BOOT, not just to TCBIO1I
+
+`$F0A1E0` selects window page `$F` and reads `$70001C` **during init**, before the RTOS starts,
+recording the result as a host-present flag at `$10A8`. A model that only services the mailbox once
+TCBIO1I is running reports "no host" and is never asked again — there is no second probe. Page `$F`
+is now the mailbox's address on two independent selectors, not an ISR convention.
+
+### SCM: `$400000`-`$403FFF` must be 16 KB of faithful read/write memory
+
+Self-test `$F09B20` fills and verifies that region with `$00000000`, `$FFFFFFFF`, `$55555555` and
+`$AAAAAAAA`, ascending and then descending, at longword stride, at window page 0. Requirements:
+
+| requirement | why |
+|---|---|
+| all four patterns must read back exactly | zero-returning stubs fail at pattern 2 |
+| the bulk-filled pattern must survive 4096 intervening writes | it is an aliasing test |
+| both directions must work | it is an address-decode test |
+
+Failure is reported with `d7 = $F0F0F0F0` and, per this suite's fault policy, **retried forever** —
+so an unmodelled SCM presents as a hang showing `$2xxx` in `CHANNEL_SELECT`, never as an error.
