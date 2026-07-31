@@ -36452,3 +36452,34 @@ and terminations.
 from the DMA control logic — sheets 8, 9, 10 (`AP DMA CTL`, `FMT & DMA CONTROL`) are where to look
 next. The read-pointer chain is now complete without it, so the remaining question is narrowly
 "what decrements WC", not "how does the FIFO work".
+
+## Sheet 10 `MDCA1, MDCR1, APDMAACT, DMADONE` — word-count zero terminates the transfer
+
+The signal names on this sheet include **`WC-0+HST#`** — word-count-zero, qualified by a host
+condition — feeding an `A4 74LS74` flop whose output is **`DMADONE`**.
+
+So the hardware completion path is:
+
+```
+WC counts down  ->  WC = 0  ->  (with host qualifier)  ->  DMADONE
+```
+
+and `DMADONE` is exactly the signal sheet 16 shows arriving at the APMA counter block. The word
+counter is not merely a status register the SBC polls — **it is the transfer terminator**, and the
+firmware's `while ($FF0000 > 0)` drain loop is shadowing in software a condition the hardware already
+acts on.
+
+Other names participating in the DMA request/active logic: `WCSUBRCK`, `WCGENEQ`, `LODDNE`, `ENREQ`,
+`PREREGEN#`, `AP190FS#`/`AP190PS`, `ENPAUSE`, gated through `74S64`/`74LS51` AND-OR arrays into `REQ`
+and `IHDMAACT`. Outputs include `IAPDMAACT`/`IAPDMAACT#` — the DMA-active signal sheet 14 uses to
+gate the FIFO.
+
+**Honest limit on this reading.** These are signal *names* read at sheet-overview resolution; I have
+not traced the gate-by-gate logic, and `WCSUBRCK` in particular ("WC subtract clock"?) is suggestive
+of the decrement path without being proof of it. **`WCCLK` itself still does not appear on sheets
+10, 12, 13 or 16.** What is now established is the *zero-detect* half — that WC reaching zero ends
+the transfer — rather than the decrement half.
+
+For modelling purposes that is arguably the more important half: a model must make `$FF0000` reach
+zero to terminate a transfer, and the recorded requirement ("a constant non-zero value hangs the
+firmware") is now explained by hardware rather than only by the firmware's loop.
