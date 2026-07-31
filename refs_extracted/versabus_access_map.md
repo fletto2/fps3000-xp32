@@ -26769,3 +26769,53 @@ divergence breaks a kernel invariant — a mis-set condition code, a wrong `move
 structure walked with the wrong stride — announces itself as `$2B2` with the faulting PC at
 `$0800` and all sixteen registers behind it, rather than drifting silently. It is worth
 treating any `$2B2` from a model as an emulator bug first and a firmware finding second.
+
+## The MC6840 initialisation, in full (2026-07-31)
+
+`$F0A28A`-`$F0A2EA` is the entire timer setup, and it specifies the PTM model completely:
+
+```
+move.l a1,$c4e.w              ; cache the PTM base; ZERO -> fallback at $F0A2EC
+pea.l  $f0a2ec(pc)            ; a continuation address...
+move.w #$4245,-(a7)           ; ...and the 'BE' sentinel, pushed as a guard
+move.b #$1,$3(a1)             ; CR2 bit 0 = 1  -> address 0 selects CR1
+move.b #$1,$1(a1)             ; CR1 = $01      -> INTERNAL RESET held
+  <compose $27C7 from $F0A530 = 10>
+movep.w d0,$d(a1)             ; T3 latch = $27C7
+move.w #$100,d0
+movep.w d0,$5(a1)             ; T1 latch = $0100
+move.b #$0,$3(a1)             ; CR2 = $00      -> address 0 selects CR3
+move.b #$c6,$1(a1)            ; CR3 = $C6      -> T3 dual 8-bit, interrupt enabled
+move.b #$1,$3(a1)             ; CR2 = $01      -> select CR1 again
+move.b #$0,$1(a1)             ; CR1 = $00      -> RELEASE the reset; timers run
+```
+
+New facts beyond what this project already had:
+
+- **T1's latch is `$0100`.** T1 was recorded only as "an external-input counter (CR1 =
+  `$00`)"; it is also *loaded*, with 256. T2 is still never programmed at all.
+- **The reset is held across the whole sequence** — `CR1 = $01` before any latch is
+  written, `CR1 = $00` after. A model whose reset does not actually hold the counters will
+  see T3 start counting mid-programming, which is the defect this project already fixed
+  once from the other direction.
+- **The CR2 address-select is toggled three times**, `1 → 0 → 1`, because CR1 and CR3 share
+  address 0. Any model that treats `$F70001` as a single register misses two of the four
+  control writes.
+- **The base is defensive**: a zero pointer branches to `$F0A2EC`, which sets `$0C4E` to
+  scratch RAM `$800` — the same degrade-to-a-harmless-address pattern as the display probe,
+  the kernel relocator and the `!PAT` allocation.
+
+Immediately afterwards, `$F0A2F4` installs the scheduler stack, `$F0A2F8` writes progress
+code **`$C0`** to the display, and `$F0A300`/`$F0A304` perform the documented `rts`-indirect
+handoff into the RTOS.
+
+### A second use of the `'BE'` sentinel — and the two frames are not the same
+
+`$4245` is pushed here as a 6-byte guard (`pea` + word) around the PTM access. The check at
+`$F00D00` tests `$12(a7)` and releases **20** bytes, so it belongs to a different, larger
+frame. The sentinel is a convention used at both sites rather than one frame spanning them.
+
+This frame is never released: `$F0A2F4` does `movea.l $c08.w,a7`, replacing the stack
+pointer outright, so the guard and its continuation are simply abandoned once initialisation
+succeeds. That is correct — the continuation exists only to catch a fault *during* the PTM
+writes — but it means a model must not expect a matching pop.

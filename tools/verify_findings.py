@@ -5591,6 +5591,22 @@ check('...one of which is the BE canary release',
 check('the fatal reporter ends by hanging, after issuing $2B2',
       insn(0xF001A0) == 'move.w #$2b2, d0' and insn(0xF001AA) == 'bra.b $f001aa')
 
+check('the PTM reset is HELD across the whole programming sequence',
+      insn(0xF0A29E) == 'move.b #$1, $1(a1)' and insn(0xF0A2E4) == 'move.b #$0, $1(a1)')
+check('...with CR2 toggled 1 -> 0 -> 1 because CR1 and CR3 share address 0',
+      insn(0xF0A298) == 'move.b #$1, $3(a1)' and insn(0xF0A2D2) == 'move.b #$0, $3(a1)'
+      and insn(0xF0A2DE) == 'move.b #$1, $3(a1)')
+check('CR3 = $C6 selects T3 dual 8-bit with the interrupt enabled',
+      insn(0xF0A2D8) == 'move.b #$c6, $1(a1)')
+check('T1 IS loaded, with $0100 -- not merely an external-input counter',
+      insn(0xF0A2CA) == 'move.w #$100, d0' and insn(0xF0A2CE) == 'movep.w d0, $5(a1)')
+check("the 'BE' sentinel guards the PTM writes with a continuation beneath it",
+      insn(0xF0A290) == 'pea.l $f0a2ec(pc)' and insn(0xF0A294) == 'move.w #$4245, -(a7)')
+check('...and that frame is abandoned, not popped: a7 is replaced outright',
+      insn(0xF0A2F4) == 'movea.l $c08.w, a7')
+check('a zero PTM base degrades to scratch RAM $800',
+      insn(0xF0A28E) == 'beq.b $f0a2ec' and insn(0xF0A2EC) == 'move.l #$800, $c4e.w')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
