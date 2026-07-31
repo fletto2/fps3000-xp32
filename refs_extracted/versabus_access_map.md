@@ -18768,3 +18768,31 @@ Two of those `$0F` `TERM` sites are worth a note in their own right: `$F07F0E`
 the channel transaction primitive at `$F07F12`. It is a **terminate-self stub**, not a
 continuation of either neighbour — the bytes that follow belong to the next routine, which
 is precisely what made a naive "look at the next two instructions" audit misread it.
+
+## A newly-identifiable gap: the model never asserts MODE1 bit 7, so `$1064` is never written
+
+Decoding MODE1 bit 7 as **busy** and `$F08616` as the status encoder makes a gap in the
+chassis model visible that could not be named before. Measured across every configuration:
+
+| | busy test `$F07E36` | status encoder `$F08616` |
+|---|---:|---:|
+| default boot | 0 | **0** |
+| `FPS3K_XPIRQ=1 FPS3K_CHCMD=C000` | 1467 | **0** |
+| …plus the working CP handler | 1466 | **0** |
+
+The XP tasks test the bit 1,467 times and it is never set. In `emulator/versabus.c` the only
+assignment to `xltr.mode1` is `xltr.mode1 = val` from a CPU write — **bit 7 is a
+chassis-side indication the model has no way to raise.**
+
+The consequence is that an entire subsystem has never executed: the status encoder, the
+packed per-channel nibbles in `$1064`, the rolling sequence counter `$107E`, the
+all-channels-idle sweep that sets MODE1 bit 6 and MODE0 bit 11, and therefore the *payload*
+of chassis operation `$A`. Operation `$A` has been driven — it reads `$1064` and returns it —
+but it has only ever returned zeros, because nothing has ever written them.
+
+**This is a one-bit fix with a large blast radius**, and it is the clearest remaining item
+for the chassis model: assert MODE1 bit 7 while a transfer is outstanding, and the whole
+SBC→chassis status-readback path comes alive for the first time. Everything needed to check
+it afterwards is already known — `$1064` should acquire a non-zero nibble in the channel's
+position, `$107E` should increment, and the idle sweep should set MODE1 bit 6 / MODE0 bit 11
+once no channel has bit 15 set with bit 14 clear.
