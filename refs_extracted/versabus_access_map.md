@@ -21488,3 +21488,50 @@ visible error classes rather than as internal assertions.
 `$258`-`$25B` as a four-code per-channel group because `$258` genuinely concerns channel 1. The
 run is not per-channel at all; it is per-error-class, and only its first member mentions a
 channel.
+
+## The panel-code table is now completely verified, family by family (2026-07-31)
+
+The last unchecked family, `$27E`-`$282`, traced to its guards:
+
+| code | guard | meaning |
+|---|---|---|
+| `$27E` | `moveq #$2D,d0 / trap #1` at `$F05D6E`, then `cmpi.w #$0,d0 / beq` | **directive `$2D` CRSEM failed** |
+| `$27F` | `moveq #$4C,d0 / trap #1` at `$F05D8C` | **directive `$4C` CNCTIRQ failed** |
+| `$280` | `moveq #$2B,d0 / trap #1` at `$F05DC2` | **directive `$2B` SGSEM failed** |
+| `$281` | `btst #$1D,$1C(a4)` — mailbox bit 29 set | host-request (label confirmed) |
+| `$282` | `$10AA == 0` | host-null / re-sync (label confirmed) |
+
+### And this sharpens what a directive-failure code actually encodes
+
+The XP tasks map `$2D` CRSEM to **`$26E`**; TCBIO1I maps the same directive to **`$27E`**. So the
+code is not an index on the directive alone — it identifies the **(task, directive)** pair. The
+same holds for `$4C`, which is `$270` in an XP task and `$27F` in TCBIO1I.
+
+That makes these codes a considerably better diagnostic than "the code indexes the RTOS
+directive" implied: a single value read from `$FF000E` or `$0E6E` on a dead board names **both
+which task failed and which directive it failed on**, with no further instrumentation.
+
+### The complete verified map
+
+Every family in the panel-code space now has its semantics traced to the guard immediately above
+each emitter, rather than inferred from surrounding context:
+
+| range | family | status |
+|---|---|---|
+| `$258` | CH1 reset, chassis op `$8` | the only action in its run |
+| `$259`-`$260` | **input-validation failures**, 8 classes | corrected today |
+| `$262`-`$268` | per-channel status events | 2026-07-30 |
+| `$269`-`$26C` | aborts and release | |
+| `$26D`-`$271` | XP-task directive failures | multiplicities confirmed 4x |
+| `$276`-`$27B` | `USER`-lifecycle directive failures | corrected from "init step" |
+| `$27E`-`$280` | **TCBIO1I directive failures** — `$2D`, `$4C`, `$2B` | today |
+| `$281`-`$282` | host-link protocol | confirmed |
+| `$29E`-`$2A6` | CPU exception reporters | |
+
+**Unused: `$261`, `$27C`, `$27D` is `$12` RESUME, and `$272`-`$275`.** The gaps sit exactly
+between families, which is what allocation-by-class predicts and what the old
+per-channel reading could not explain.
+
+The two labels that survive from the first pass unchanged are `$258` and the `$281`/`$282` pair —
+three of roughly thirty. **The rest were guesses that reading the guard has now either confirmed
+by mechanism or replaced.**

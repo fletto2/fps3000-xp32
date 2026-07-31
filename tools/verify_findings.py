@@ -4913,3 +4913,19 @@ check('$25B guards RDHC cmd 2 index+count <= 16 longwords',
 check('$258 is the only ACTION in $258-$260: the CH1 reset arm of op $8',
       insn(0xF04F56) == 'btst.b #$e, d0' and insn(0xF04F5C) == 'cmpi.w #$0, $204(a0)'
       and insn(0xF04F64) == 'move.w #$258, d0')
+
+# ---- $27E-$280 are TCBIO1I directive failures; the code is (task,directive) ----
+check('$27E reports directive $2D CRSEM failing in TCBIO1I',
+      insn(0xF05D6E) == 'moveq #$2d, d0' and insn(0xF05D78) == 'cmpi.w #$0, d0'
+      and insn(0xF05D7E) == 'move.w #$27e, d0')
+check('$27F reports directive $4C CNCTIRQ failing in TCBIO1I',
+      insn(0xF05D8C) == 'moveq #$4c, d0' and insn(0xF05D98) == 'move.w #$27f, d0')
+check('$280 reports directive $2B SGSEM failing in TCBIO1I',
+      insn(0xF05DC2) == 'moveq #$2b, d0' and insn(0xF05DCA) == 'move.w #$280, d0')
+check('$281 is gated on mailbox bit 29', insn(0xF05DF4) == 'btst.b #$1d, d1'
+      and insn(0xF05DFA) == 'move.l #$281, d0')
+check('$282 is gated on $10AA being zero', insn(0xF05E12) == 'move.l $10aa.l, d2'
+      and insn(0xF05E1A) == 'move.l #$282, d0')
+check('the same directive gets different codes in different tasks: $2D is $26E in XP, $27E in IO1I',
+      any('#$26e, d0' in o for _, (_, o, _) in _mins.items())
+      and any('#$27e, d0' in o for _, (_, o, _) in _mins.items()))
