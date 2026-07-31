@@ -7504,6 +7504,18 @@ check('$42 updates TCB+$148 keeping caller bits 0-2 and kernel bits 3-5',
       and _w(0xF035D0) == 0x0200 and _w(0xF035D2) == 0x0038
       and _w(0xF035D4) == 0x0228 and _w(0xF035D6) == 0x0007)
 
+check('$44 and $45 gate on state-word bit 10 and share the ownership body $F035E0',
+      _t1slot(0x44)[0] == 0xF0366C and _t1slot(0x45)[0] == 0xF036C2
+      and _w(0xF0366E) == 0x082D and _w(0xF03670) == 0x000A and _w(0xF03672) == 0x002C
+      and _w(0xF036C4) == 0x082D and _w(0xF036C6) == 0x000A and _w(0xF036C8) == 0x002C
+      and _bsrw(0xF03680) == 0xF035E0 and _bsrw(0xF036D6) == 0xF035E0)
+check('...refusing with status $A, and differing only by a d5 selector',
+      _w(0xF03676) == 0x066E and _w(0xF03678) == 0x000A
+      and _w(0xF0367E) == 0x7A4E and _w(0xF036D4) == 0x7A12)
+check('state bit 10 is set at $F03544, immediately before the owner stamp',
+      _w(0xF03544) == 0x08EA and _w(0xF03546) == 0x000A and _w(0xF03548) == 0x002C
+      and _w(0xF0354A) == 0x256D and _w(0xF0354E) == 0x0140)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

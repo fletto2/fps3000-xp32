@@ -32835,3 +32835,39 @@ the single-step finding earlier today, `TCB+$148`'s low byte partitions cleanly:
 That is a well-behaved permission split — a directive that lets a task configure part of a byte
 while the kernel keeps the rest, which is exactly what one wants when a debug enable shares a word
 with task-settable options.
+
+## `TCB+$2C` bit 10 identified — the last unnamed bit of the state word (2026-07-31)
+
+Directives `$44` and `$45` are the same routine twice, differing only in a selector:
+
+```
+$F0366E  btst.b #$a,$2c(a5)     ; -> bit 2 of the byte at $2C = STATE WORD BIT 10
+$F03674  bne.b  $F0367E
+$F03676  addi.w #$a,$102(a5)    ; status $A -- refused
+$F0367E  moveq  #$4e,d5         ; $44's selector
+$F03680  bsr.w  $F035E0         ; the shared, ownership-checked body
+
+$F036C4  btst.b #$a,$2c(a5)     ; identical gate
+$F036D4  moveq  #$12,d5         ; $45's selector
+$F036D6  bsr.w  $F035E0         ; same body
+```
+
+`$F035E0` is the routine decoded earlier today — it tests `TCB+$29` bit 6 and compares the stored
+owner `{name, session}` at `+$140`/`+$144` against the caller's. So **`$43` `RSTATE`, `$44` and
+`$45` are one family sharing an ownership-checked body**, distinguished by a `d5` selector (`$4E`
+and `$12` for the two decoded here).
+
+**And the gate names the last unidentified bit of the state word.** This project's `TCB+$2C` map
+records bits 2, 6, 9, 11-14 with meanings and says "**bit 10 remains kernel-internal**". Bit 10 is
+set at **`$F03544`** — `bset.b #$a,$2c(a2)` — **immediately before the owner stamp at `$F0354A`**:
+
+```
+$F03544  bset.b #$a,$2c(a2)         ; set bit 10 on the TARGET
+$F0354A  move.l $10(a5),$140(a2)    ; ... then stamp the owner's name
+$F03550  move.l $14(a5),$144(a2)    ; ... and session
+```
+
+So **bit 10 means "this task has been attached to an owner"**, set by the same routine that records
+who the owner is, and required by `$44`/`$45` with status `$A` when clear. That completes the state
+word: every bit the kernel touches now has an owner, and the three ownership-related mechanisms —
+state bit 10, flags bit 6, and the identity pair — are one subsystem rather than three findings.
