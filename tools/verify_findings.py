@@ -4293,6 +4293,15 @@ check('...with bit 5 selecting read vs write and bit 4 auto-incrementing by 2',
 check('op $8 bounds $E7E to the staging range $10000-$1FFFF',
       insn(0xF04F70) == 'cmpi.l #$10000, $e7e.l')
 
+# $E7E has exactly four references: two S-record writers, two op-$8 readers.
+check('$E7E is written only by the two S-record paths, after adda.l #$10000',
+      insn(0xF052D0) == 'adda.l #$10000, a1'
+      and insn(0xF052D6) == 'move.l a1, $e7e.l'
+      and insn(0xF05640) == 'adda.l #$10000, a1'
+      and insn(0xF05646) == 'move.l a1, $e7e.l')
+check('...and read only by op $8, bounding it to the staging range',
+      insn(0xF04F7C) == 'cmpi.l #$1ffff, $e7e.l')
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.
