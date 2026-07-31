@@ -6246,6 +6246,13 @@ check('phase $1200 uses vector $53 at CPU mask 2',
 check('...and the PTM phase uses mask 4, so three distinct mask levels are tested',
       insn(0xF0908A) == 'move.w #$2400, sr' and (0x2400 >> 8) & 7 == 4)
 
+check('phase $1500 requires CHANNEL_SELECT to read back the written value 0..5',
+      insn(0xF094F2) == 'cmpi.b #$5, d6' and insn(0xF094FA) == 'move.w d6, $204(a6)'
+      and insn(0xF094FE) == 'cmp.w $204(a6), d6' and insn(0xF09502) == 'beq.b $f0950a')
+check('phase $2200 is the SCM address-line test, bounded at $4000',
+      insn(0xF09AE6) == 'movea.l #$400000, a0' and insn(0xF09AEC) == 'move.l #$4000, d0'
+      and insn(0xF09AF6) == 'move.l d1, (a0, d1.l)')
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

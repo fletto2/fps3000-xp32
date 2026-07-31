@@ -28689,3 +28689,35 @@ every one of them and fails the suite on any mismatch.
 
 For a model that means the BIM block cannot be write-only or partially decoded — a common
 shortcut, since operationally the firmware only ever *programs* 21 of the 24.
+
+### Phases `$1500`, `$2100`, `$2200`
+
+**Phase `$1500` — `$F094F0` — CHANNEL_SELECT write/read-back.**
+
+```
+clr.b d6
+loop:  cmpi.b #$5,d6 / bgt done
+       move.w d6,$204(a6)      ; write 0..5
+       cmp.w  $204(a6),d6      ; ...and require it to read back EQUAL
+       beq ok / d7 = $F0F0F0F0
+       addq.w #$1,d6 / bra loop
+```
+
+**`$FF0204` must read back exactly what the SBC wrote**, for the values 0 through 5.
+
+That is worth flagging because CHANNEL_SELECT is otherwise the register the *chassis* drives
+— this project documents a "CHANNEL_SELECT readback of `$28`" as how the chassis signals a
+pending bulk transfer, and the emulator presents chassis-supplied values on read. **During
+phase `$1500` it must behave as a plain latch instead.** A model that always returns a
+chassis value fails here, at the last phase of sequence B before the register-file walk.
+
+**Phase `$2200` — `$F09AD6` — the SCM address-line test**, with the bound `d0 = $4000`: it
+writes each power-of-two offset its own value from 4 up to 16 KB, then checks offset 4 was
+not clobbered. So the SCM is tested twice — `$2200` for address lines, `$2300` for data
+patterns — mirroring the DRAM pair at `$0400` and `$2400`.
+
+**Phase `$2100` — `$F08992`** builds structures at `$EFF8` downward using the constants
+`$FF000102` and `$01796AF3`, with a bound test against `$1FFF0`. Not further identified.
+
+With these, the phase map has one unidentified entry left (`$2500`, which has no `bsr`
+immediately after its step) and one partly identified (`$2100`).
