@@ -4250,6 +4250,21 @@ check('...and a plain status as seq+1+4',
 check('the idle sweep resets $107E only when no channel has b15 set with b14 clear',
       _nib('C000')[1] == 0 and _nib('8000')[1] == 1)
 
+# Op $A with bit 4 walks the whole 13-word array and then hits its bound.
+with tempfile.TemporaryDirectory() as _tw:
+    subprocess.run([EMU, '-rom', ROM, '-cycles', '400000000',
+                    '-dump-ram', f'{_tw}/r', '-trace', f'{_tw}/t'],
+                   capture_output=True, timeout=400,
+                   env={**os.environ, 'FPS3K_XPIRQ': '1,6', 'FPS3K_CHCMD': 'C000',
+                        'FPS3K_RESP': '0x1A', 'FPS3K_MODE1_BUSY': '1'})
+    _wr = open(f'{_tw}/r', 'rb').read()
+    _wt = collections.Counter(re.findall(r'[0-9A-F]{6}', open(f'{_tw}/t').read()))
+check('op $A auto-increment walks 13 words and stops at index 13',
+      _wt['F04FF8'] == 13
+      and struct.unpack('>I', _wr[0xE7A:0xE7E])[0] == 13)
+check('...and the fourteenth read is rejected on the 0..12 bound',
+      _wt['F04FD2'] == 1)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.

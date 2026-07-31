@@ -19338,3 +19338,30 @@ clear, the same class as `$C000`, so both encode `seq+1+9 = 10`.
 sweep condition, the counter reset semantics, the two mode bits, and the readback through
 operation `$A` — every one against a prediction made by reading the code before it had ever
 executed.
+
+### The array walk, driven: 13 reads then a bounds rejection
+
+Operation `$A` with **bit 4 set** (`FPS3K_RESP=0x1A`) auto-increments the index, which is
+how a chassis reads the whole status array in one conversation. Driven against the populated
+array:
+
+| | `RESP=0x0A` (no auto-inc) | `RESP=0x1A` (auto-inc) |
+|---|---|---|
+| auto-increment site `$F04FF8` | 0 | **13** |
+| index `$E7A` after | `$00000000` | **`$0000000D`** = 13 |
+| bounds reject `$F04FD2` (panel `$25D`) | 0 | **1** |
+| `$E74` (last value read) | `$000A` | `$0000` |
+
+So the chassis walked **indices 0 through 12 — all 13 words — and the fourteenth attempt was
+rejected**. The `0..12` bound is not merely structural arithmetic; it is enforced and
+observable, and the array size derived from the per-channel record layout is confirmed from
+the *other* end.
+
+The last value is `$0000` because index 12 is `$107C`, channel 4's data-low, which is zero
+on a machine with one channel driven. The channel-1 record reads `c000 0000 0000` — the
+forced status `$C000` with both data halves zero — exactly the `{status, data-hi, data-lo}`
+triple the ISR latches.
+
+**Operation `$A` is therefore fully demonstrated**: populate via the encoder, read index 0
+for the packed nibbles, auto-increment through the four per-channel triples, and hit a
+defined error at the end. That is the complete SBC→chassis status interface, running.
