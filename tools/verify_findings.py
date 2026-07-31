@@ -3547,6 +3547,33 @@ with tempfile.TemporaryDirectory() as _tdq:
           all(_rq.count(t) == 0
               for t in (b'!CCB', b'!DLY', b'!ASQ', b'!VCT')))
 
+    # --- !TST: the RTOS's own statement of each task's code extent ---------
+    # TSTMMU[0]/[1] at TCB+$160+$0C are the segment's first and last 256-byte
+    # page.  These bounds are authoritative, unlike the approximate region
+    # splits in build_clean_disasm.py.
+    _tst = [(_rq[b + 0x10:b + 0x14].decode('latin1'),
+             struct.unpack('>H', _rq[b + 0x16C:b + 0x16E])[0] << 8,
+             (struct.unpack('>H', _rq[b + 0x16E:b + 0x170])[0] << 8) + 0xFF,
+             _lw(b + 0x6C))
+            for b in _tcbs]
+    check('every !TST is tagged, declares 4 segments with 2 live, and names PROG',
+          all(_rq[b + 0x160:b + 0x164] == b'!TST' and _rq[b + 0x164] == 4
+              and _rq[b + 0x165] == 2
+              and _rq[b + 0x18C:b + 0x190] == b'PROG' for b in _tcbs))
+    check('the six task code extents tile $F04600-$F086FF with no gaps',
+          [(n, lo, hi) for n, lo, hi, _ in sorted(_tst, key=lambda r: r[1])]
+          == [('RDHC', 0xF04600, 0xF05CFF), ('IO1I', 0xF05D00, 0xF05EFF),
+              ('XP4I', 0xF05F00, 0xF068FF), ('XP3I', 0xF06900, 0xF072FF),
+              ('XP2I', 0xF07300, 0xF07CFF), ('XP1I', 0xF07D00, 0xF086FF)])
+    check('...and the four XP tasks are exactly $A00 = 2560 bytes each',
+          all(hi - lo + 1 == 0xA00 for n, lo, hi, _ in _tst if n.startswith('XP')))
+    # These five entry points are exactly the PCs the padding artefact hid.
+    check('each task entry (TCB+$6C) lies inside its own declared segment',
+          all(lo <= e <= hi for _, lo, hi, e in _tst))
+    check('the XP entries are $F05F4A/$F0694A/$F0734A/$F07D4A and IO1I $F05D36',
+          sorted(e for n, _, _, e in _tst if n != 'RDHC')
+          == [0xF05D36, 0xF05F4A, 0xF0694A, 0xF0734A, 0xF07D4A])
+
     # --- !UST: the semaphore registry, per Motorola UST.EQ -----------------
     # 20-byte header, 22-byte entries {task name, session, sem name, users,
     # xcnt, type, semaphore}.  USTCENT is a fourth independent route to the

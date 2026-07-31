@@ -17442,3 +17442,43 @@ is visible directly, with the owning task named beside each.
 Note the entries carry `USTSESSN = 0` for all nine — the same session field the `!UDR`
 owner check compares against `TCB+$14`, and it is zero throughout because this firmware
 never establishes distinct sessions.
+
+## The RTOS states every task's code extent itself — `!TST` decoded (2026-07-30)
+
+`TST.EQ` gives the Task Segment Table: `!TST` tag, `TSTNSEGS`/`TSTCSEGS`, index fields,
+`TSTMMU` (4 words per segment, MMU load information), `TSTATTR` (4 words per segment,
+attributes), `TSTWTSK`; `TSTLEN` = **80 bytes**, which is the `!TST` at `TCB+$160`.
+
+Every task reads `TSTNSEGS=4, TSTCSEGS=2`, and `TSTATTR[0..1]` spells **`PROG`** — the
+segment name. `TSTMMU[0]` and `TSTMMU[1]` are the segment's **first and last 256-byte
+page**, high address word. Read out for all six tasks:
+
+| task | code extent | size | entry (`TCB+$6C`) |
+|---|---|---:|---|
+| `RDHC` | `$F04600-$F05CFF` | 5888 | `$F046F0` |
+| `IO1I` | `$F05D00-$F05EFF` | 512 | `$F05D36` |
+| `XP4I` | `$F05F00-$F068FF` | 2560 | `$F05F4A` |
+| `XP3I` | `$F06900-$F072FF` | 2560 | `$F0694A` |
+| `XP2I` | `$F07300-$F07CFF` | 2560 | `$F0734A` |
+| `XP1I` | `$F07D00-$F086FF` | 2560 | `$F07D4A` |
+
+**They tile `$F04600-$F086FF` contiguously, with no gaps**, and the four XP tasks are
+**exactly `$A00` = 2560 bytes each** — which is the `$A00` spacing this file derives
+independently from the task bodies, and consistent with the 2304-byte template diff
+(2304 of 2560 bytes compared, the remainder being the tail).
+
+This matters for reading the disassembly: `build_clean_disasm.py`'s region bounds are
+documented here as **approximate**, and this file records a case where a panel code was
+attributed to the wrong task because of it. These bounds are not approximate — they are
+what the RTOS loaded into the task's own segment table, and they are the ones to use.
+
+**A convergence worth noting.** Five of the six entry points above —
+`$F05D36`, `$F05F4A`, `$F0694A`, `$F0734A`, `$F07D4A` — are precisely five of the six
+executed PCs that the `$0000`-padding artifact was swallowing (see above). The bug was
+hiding the entry point of five of the six tasks, and the RTOS's own segment table names
+exactly those addresses.
+
+One asymmetry to flag rather than smooth over: **`IO1I`'s declared segment is only 512
+bytes**, `$F05D00-$F05EFF`, while its code demonstrably runs to `$F05E86` — inside the
+declared range, so it is consistent, but it leaves TCBIO1I far smaller than any XP task.
+That fits its role (a single ISR plus a short body) and is not a discrepancy.
