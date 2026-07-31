@@ -21298,3 +21298,27 @@ latch model will accumulate a different word than the hardware does, and the div
 across the 28 sites. This is the same class of split-register requirement already established for
 `$FF0202` and `$FF0204` — three registers on this board now, and it is starting to look like the
 house style rather than three coincidences.
+
+### All five copies of the channel map located (2026-07-31)
+
+The table is replicated once per dispatch table, always at **+168** — the byte immediately after
+the 42-entry table it belongs to:
+
+| task | dispatch table | channel map | bytes |
+|---|---|---|---|
+| RDHC | `$F05BA4` | `$F05C4C` | `00 05 04 03 02` |
+| XP4I | `$F065E4` | `$F0668C` | identical |
+| XP3I | `$F06FFC` | `$F070A4` | identical |
+| XP2I | `$F079FC` | `$F07AA4` | identical |
+| XP1I | `$F083FC` | `$F084A4` | identical |
+
+Five for five, byte-identical. This extends the known replication — the 42-entry dispatch table,
+the four handlers, the panel-command issuer — to a sixth structure, and makes the
+"`PanelStatusDispatch` subsystem is replicated once per task" statement literally complete: the
+dispatch table, its four handlers **and its channel map** all travel together.
+
+Worth noting where XP3I's lands: `$F070A4`, six bytes before `$F070AA`, the per-channel helper
+XP3I calls and XP4I's copy of which sits at `$F06692`. So each replica is `{42-entry dispatch
+table, 5-byte channel map, padding, code}` — the tables are embedded in the code stream rather
+than pooled, which is what one expects from hand-assembled template copies and is another small
+piece of evidence against a compiler.

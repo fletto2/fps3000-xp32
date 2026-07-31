@@ -4838,3 +4838,12 @@ check('...and all eight sites are inside the self-test region',
 _v0sites = [a for a, (m, o, _) in _mins.items() if m.startswith('lea') and '$1fff0' in o]
 check('every $1FFF0 base-load is in the self-test or its immediate init; none in a task',
       all(a >= 0xF08700 for a in _v0sites), [hex(a) for a in sorted(_v0sites) if a < 0xF08700])
+
+# ---- the channel map is replicated five times, at +168 from each dispatch table ----
+_maps = {'RDHC': 0xF05BA4, 'XP4I': 0xF065E4, 'XP3I': 0xF06FFC,
+         'XP2I': 0xF079FC, 'XP1I': 0xF083FC}
+check('all five dispatch tables carry a channel map at +168, byte-identical',
+      len({_rom[t + 168 - 0xF00000:][:5] for t in _maps.values()}) == 1
+      and _rom[0xF05BA4 + 168 - 0xF00000:][:5] == b'\x00\x05\x04\x03\x02')
+check("...and XP3I's sits six bytes before its per-channel helper $F070AA",
+      0xF06FFC + 168 == 0xF070A4 and 0xF070AA - 0xF070A4 == 6)
