@@ -31423,3 +31423,64 @@ the tables must sit adjacent to their call sites and cannot be pooled.
 With those two idioms plus the `$F00A1C` code block, **the kernel's 566 bytes of non-zero data are
 fully accounted for**: 488 bytes of dispatch/vector tables, 34 bytes of unreachable code, and 44
 bytes of inline tables and trace-block words.
+
+## `$F00B74`: a caller-site-indexed dispatch through a TCB-held table (2026-07-31)
+
+Chasing the kernel's last data runs turned up a mechanism this project has not described. Two call
+sites, each with its own inline 10-byte descriptor, share one consumer.
+
+**Descriptor format** (the "inline tables" at `$F00ACE` and `$F00B6A`):
+
+| offset | field | site 1 | site 2 |
+|---|---|---|---|
+| `+$00` | longword — a **base address** in ROM | `$00F00A76` | `$00F00ABA` |
+| `+$04` | word — a **bit number** | `$0003` | `$0004` |
+| `+$06` | word — a **TCB offset** | `$004C` | `$0048` |
+| `+$08` | word — an index **bias** | `$0002` | `$0010` |
+
+**Consumer:**
+
+```
+$F00B74  move.l (a7)+,d7        ; a stacked address -- WHERE THE CALLER CAME FROM
+$F00B76  sub.l  (a5),d7         ; minus the descriptor's base
+$F00B78  lsr.l  #$1,d7          ; /2  -> a word-granular index
+$F00B7A  cmpi.b #$18,d7 / bgt   ; bounded at 24
+$F00B82  move.w $4(a5),d1       ; the bit number
+$F00B86  move.w $28(a6),d2      ; <- TCB+$28
+$F00B8A  btst.l d1,d2 / beq     ; gate: the task must have that bit set
+$F00B8E  move.w $6(a5),d1       ; the TCB offset
+$F00B92  move.l (a6,d1.w),d6    ; <- TCB+$48 or TCB+$4C, fetched as a POINTER
+$F00B98  sub.w  $8(a5),d1       ; index -= bias
+$F00B9C  lsl.l  #$2,d1
+$F00B9E  add.l  d1,d6           ; d6 = pointer + (index - bias) * 4
+```
+
+So: **derive an index from the call site, check a per-task enable bit, then index a table the task
+itself supplied via its TCB.** That is a registered-handler dispatch keyed on *which kernel site
+raised the event* — which is why the descriptors must sit adjacent to their call sites and cannot
+be pooled.
+
+### Three TCB fields not in the documented map
+
+`a6` is the TCB pointer throughout the kernel, so this exposes:
+
+| offset | role |
+|---|---|
+| **`TCB+$28`** | a **flag word**, bit-tested per dispatch — the per-task enable |
+| **`TCB+$48`** | a **pointer** to a task-supplied handler table |
+| **`TCB+$4C`** | a second such pointer |
+
+None appears in the usage-derived TCB field map this project maintains (`+$20`, `+$26`, `+$2C`,
+`+$6C`, `+$74`, `+$B0`, `+$FC`, `+$102`, `+$138`, `+$13C`, `+$140`, `+$144`, `+$158`, `+$160`).
+`+$28` is notable for sitting four bytes below `TCB+$2C`, the documented task state word — so the
+two are adjacent and easy to conflate.
+
+**Both call sites are inside trace-mask-guarded blocks** (`$F00AB4`, `$F00B52`) with the mask at
+`$0C34` loaded from config `$F0A52A` = `$0000`, so **the whole mechanism is dormant in this
+build** — which is why it has stayed invisible: no execution trace reaches it, and recursive
+descent stops at the guard. Enabling the trace mask would activate it, and a task that had never
+populated `TCB+$48`/`+$4C` would then be dispatched through a null pointer.
+
+That is a concrete hazard for anyone tempted to switch tracing on to see what it does: **the one
+config word at `$F0A52A` enables both the nine trace hooks and this dispatch**, and the ROM's own
+tasks never set the `TCB+$28` bits that gate it.

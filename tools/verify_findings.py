@@ -7095,6 +7095,20 @@ check('$F00B74 derives an index by subtracting the table base from a stacked add
       _w(0xF00B74) == 0x2E1F and _w(0xF00B76) == 0x9E95
       and _w(0xF00B78) == 0xE28F and _w(0xF00B7A) == 0x0C07 and _w(0xF00B7C) == 0x0018)
 
+check('the $F00B74 descriptors are {base, bit, TCB offset, bias}',
+      _l(0xF00ACE) == 0x00F00A76 and _w(0xF00AD2) == 3
+      and _w(0xF00AD4) == 0x004C and _w(0xF00AD6) == 2
+      and _l(0xF00B6A) == 0x00F00ABA and _w(0xF00B6E) == 4
+      and _w(0xF00B70) == 0x0048 and _w(0xF00B72) == 0x0010)
+check('...and the consumer gates on TCB+$28 then indexes a pointer from TCB+$48/$4C',
+      _w(0xF00B86) == 0x342E and _w(0xF00B88) == 0x0028
+      and _w(0xF00B8A) == 0x0302
+      and _w(0xF00B8E) == 0x322D and _w(0xF00B90) == 0x0006
+      and _w(0xF00B92) == 0x2C36 and _w(0xF00B94) == 0x1000)
+check('...bounded at 24 entries, index = (stacked address - base) / 2',
+      _w(0xF00B76) == 0x9E95 and _w(0xF00B78) == 0xE28F
+      and _w(0xF00B7A) == 0x0C07 and _w(0xF00B7C) == 0x0018)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
