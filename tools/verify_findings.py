@@ -4020,6 +4020,26 @@ check('chassis op $A reads $1064+index*2 with a 0..12 bound and bit-4 auto-inc',
 check('an all-idle scan sets MODE1 bit 6 and MODE0 bit 11',
       insn(0xF086AA) == 'bset.b #$6, d4' and insn(0xF086B6) == 'bset.b #$b, d4')
 
+# --- the XP channel transaction primitive --------------------------------
+check('a transaction masks the BIM ($4F), issues $8004, and polls 1000 times',
+      insn(0xF07F12) == 'move.w #$4f, (a3)'
+      and insn(0xF07F22) == 'move.w #$8004, (a0)'
+      and insn(0xF07F26) == 'move.l #$3e8, d5')
+check('...polling +$0E bit 14 for DONE and bit 13 for ERROR',
+      insn(0xF07F30) == 'btst.b #$e, d4' and insn(0xF07F3E) == 'btst.b #$d, d4')
+check('...then dispatches the response through the 42-entry table at $F083FC',
+      insn(0xF07F84) == 'lsl.w #$2, d0')
+check('the continue phase issues $8005 and restores the BIM to $5F',
+      insn(0xF07F9A) == 'move.w #$8005, (a0)'
+      and insn(0xF07F7E) == 'move.w #$5f, (a3)')
+# $F084A4 maps channel -> $FF021A bit, and is NOT a patched per-task constant.
+check('the channel->IRQ-mask-bit table is 1:5, 2:4, 3:3, 4:2',
+      list(_rom[0xF084A4 - _B:0xF084A4 - _B + 5]) == [0, 5, 4, 3, 2]
+      and insn(0xF07F78) == 'bclr.b d5, d0')
+check('...and it is byte-identical in all four XP tasks',
+      len({_rom[a - _B:a - _B + 5]
+           for a in (0xF084A4, 0xF07AA4, 0xF070A4, 0xF0668C)}) == 1)
+
 # --- the XP-32 channel status protocol -----------------------------------
 # $1066 holds the HIGH byte of the latched word and btst on memory is mod 8,
 # so #$f/#$e/#$b are word bits 15/14/11.

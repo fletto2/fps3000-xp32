@@ -18202,3 +18202,78 @@ With this, every bit of MODE0 and MODE1 that the firmware touches has a mechanis
 MODE0 bit 10 (command issue / RDHC acknowledge) and bit 11 (channels idle); MODE1 bit 6
 (channels idle), bit 7 (busy, tested), bit 12 (command valid, set by the issuer), bit 14
 (cleared by the issuer and on channel abort), and bits 8-11 (per-channel abort flags).
+
+## The XP-32 channel transaction protocol, end to end (2026-07-30)
+
+`$F07F12` (XP1I's copy; one per task) is the primitive that performs a transaction with an
+XP-32 channel. It is the closest this ROM gets to the AC, and it decodes completely.
+
+### Request phase
+
+```
+$F07F12  (a3)     <- $4F        ; MASK this channel's BIM (IRE clear) for the transfer
+$F07F18  (a1)     <- $0000      ; +$08 data HIGH
+$F07F1E  $2(a1)   <- d0         ; +$0A data LOW  = the OPERATION CODE
+$F07F22  (a0)     <- $8004      ; +$0E  REQUEST-TRANSFER
+$F07F26  d5 = $3E8              ; 1000-iteration timeout
+$F07F2E  poll (a0) for bit 14   ; DONE
+$F07F3E  bit 13 -> error
+```
+
+### Completion, errors, and the response dispatch
+
+| condition | firmware action |
+|---|---|
+| bit 14 set within 1000 polls | proceed |
+| timeout, bit 13 clear | panel **`$26C`** |
+| bit 13 set | panel **`$269`** (error abort) |
+| success | `$F07F84`: `lsl.w #$2,d0` / `jmp ($F083FC,d0.w)` — **the 42-entry `PanelStatusDispatch` table**, XP1I's copy |
+
+So the 42-slot table this project decoded long ago is entered *here*, with `d0` a response
+code the **channel** supplies — which is what the note "the XP copies are reached from
+`$F07F84` once a channel transfer completes" says, now with the whole transaction around it.
+
+### Continue phase
+
+`$F07F90` (the `D2_FIN` handler) writes `d2` across the data pair as `{high, low}`, issues
+**`$8005` CONTINUE-TRANSFER**, and runs the same 1000-poll/bit-14/bit-13 cycle, reporting
+panel **`$26B`** on error.
+
+### So the channel status word `+$0E` has four identified bits
+
+| bit | meaning | where |
+|---|---|---|
+| 15 | transaction class — clear selects the opcode/abort path | task body |
+| 14 | **DONE** — polled here, tested in the status decode | both |
+| 13 | **ERROR** | polled here |
+| 11 | sub-mode | task body |
+
+Bit 13 is new; bit 14 is the bit this project already identified as the one the chassis must
+assert to unblock the tasks, now confirmed as the completion flag of an explicit handshake.
+
+### Teardown names the XLTR IRQ-mask bits
+
+```
+$F07F6C  lea $F084A4,a5 ; d5 = (a5,d4.w) ; bclr d5,d0 ; $FF021A <- d0 ; (a3) <- $5F
+```
+
+`$F084A4` is a **channel→bit table**, byte-identical in all four tasks (it is not a patched
+constant), reading `00 05 04 03 02 …`:
+
+| channel | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|
+| `$FF021A` bit | **5** | **4** | **3** | **2** |
+
+So the XLTR IRQ mask has one bit per channel, in *descending* order. The routine clears the
+channel's bit and restores its BIM control register to `$5F`. **Polarity is not
+established** — `$FF021A` is written `$FFF` at init, so "clear = enable" and "clear =
+disable" both remain possible from this evidence alone; what is certain is the bit
+*assignment*.
+
+### The observed SBC→AC operation codes
+
+The data-low word is the operation the AC is asked to perform. Literals seen: **`$1B`**
+(the bit-11 arm, written directly), and via `d0` at `$F08500`, **`$10`** and **`$0E`** —
+with `a2` pointing at the per-channel `$101E` window that RDHC command 1 publishes, and
+`d1` carrying a payload pre-decremented out of it. Three codes is the whole vocabulary this
+firmware can emit unaided; the rest would come from the host-loaded CP program.
