@@ -37252,3 +37252,38 @@ width-dependent shift stepping down by 8, `adda.l #$10000`, store to `$E7E`) and
 record passed through it, and the implied puzzle about why `$E7E` held the first record's address
 rather than the last. There was no puzzle — it holds the *session's* address, and only one was ever
 parsed.
+
+## CORRECTION: the witnessed drain loop is `$F04C22`, not `$F0527A` — and it explains the `$25F`
+
+I wrote that `$FF0000` got its first witness "in the drain loop", meaning `$F0527A`-`$F0528A`. Wrong
+location. Execution counts show `$F05280` and `$F05288` run **zero** times; `FPS3K_BUSPC` puts every
+read of `$FF0000` at **`$F04C28`**:
+
+```
+loc_F04C22:  movea.l #$ff0000,a1
+loc_F04C28:  cmpi.w #$0,$0(a1)      ; while the word count > 0
+             ble.b  $F04C34
+             move.w (a0),d0         ; read the FIFO
+             bra.b  $F04C28
+loc_F04C34:  move.w #$25f,d0        ; "S-record type not recognised"
+```
+
+**This project records "both S-record error paths" as having such a loop.** There are indeed two —
+`$F04C22` and `$F0527A` — and the one I witnessed is the first, not the second. The finding that
+`$FF0000` has a runtime witness stands; my attribution of *which* loop did not.
+
+### And it explains the `$25F` in every SLC run
+
+`$25F` appeared in all three SLC runs, including the ones that loaded data correctly, and I recorded
+it as unexplained. The cause is the **`S9` terminator**: the SLC dispatcher branches on `S0` and `S1`
+only, so `S9` falls through to `$F04C22`, which drains whatever remains and reports "type not
+recognised".
+
+So `$25F` in those runs was **the terminator record being rejected**, not a fault in the data — and
+the loads that produced correct bytes at `$10010` were entirely successful. A host feeding this port
+should expect a `$25F` at end-of-stream, or omit the terminator.
+
+**Three claims corrected in one measurement**: the drain loop's identity, the meaning of the trailing
+`$25F`, and by implication my earlier reading of `$25F` in the *malformed*-record test — which was a
+real type rejection there, but arrived at the same code by a different route, so that run did not
+distinguish the two causes.

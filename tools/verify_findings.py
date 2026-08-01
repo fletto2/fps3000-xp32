@@ -8394,6 +8394,14 @@ check('$E7E is written by the SLC path at $F052D6 and by CPLOAD at $F05646',
       _w(0xF052D6) == 0x23C9 and _l(0xF052D8) == 0x00000E7E
       and _w(0xF05646) == 0x23C9 and _l(0xF05648) == 0x00000E7E)
 
+check('there are two $FF0000 drain loops, at $F04C22 and $F0527A',
+      _w(0xF04C22) == 0x227C and _l(0xF04C24) == 0x00FF0000
+      and _w(0xF04C28) == 0x0C69 and _w(0xF04C30) == 0x3010
+      and _w(0xF0527A) == 0x227C and _l(0xF0527C) == 0x00FF0000
+      and _w(0xF05280) == 0x0C69 and _w(0xF05288) == 0x3010)
+check('...and the $F04C22 loop reports $25F on exit',
+      _w(0xF04C34) == 0x303C and _w(0xF04C36) == 0x025F)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
