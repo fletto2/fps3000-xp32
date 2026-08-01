@@ -37848,3 +37848,33 @@ silently in three distinct ways, none of which produces an error code, and two o
 monitor's `L` command is "a *safer* loader than the ROM" now rests on three demonstrated failures
 rather than one reading — and host-side validation should cover the count and the framing, not just
 the checksum.
+
+## Neither loader verifies checksums — the CPLOAD path checked too (2026-07-31)
+
+Applying the same control-validated sweep to the **binary** loader (`$F055A2`-`$F05700`), the one
+`CPLOAD` uses:
+
+| arithmetic present | role |
+|---|---|
+| `addq.l #$1,d0` x5 | running word counters |
+| `subq.w #$1,d4` x2 | record byte counters |
+| `adda.l d2,a1` x2 | address accumulation |
+| **`adda.l #$10000,a1` x2** | the staging offset |
+| `subq.l #$1,d5` | a poll counter |
+| **`eor` / `addx`** | **zero** |
+
+**No accumulation of data values anywhere**, exactly as in the SLC handler — and the detector is the
+one already validated against the ROM-checksum routine's `eor.w d1,d0`.
+
+**So both loaders trust the checksum.** This project records the finding for the S-record path; it
+holds for the binary path as well, and the two are 94% different code, so this is not one omission
+inherited by a copy. Both were written to consume the checksum word and ignore it.
+
+The structural echo is close: two `adda.l #$10000,a1` sites in each loader (SLC at `$F051DC`/`$F052D0`,
+CPLOAD at `$F055C4`/`$F05640`), the same `subq.w #$1,d4` count-trusting loop, the same
+address-accumulate-then-offset shape. Two independent implementations of the same design decisions —
+including the decision not to validate.
+
+**Consequence for the hardware effort, restated with both paths covered**: there is no route through
+this ROM that checks a microcode image's integrity. Whichever loader a host uses, corruption is
+accepted silently, and the first symptom is an AC executing wrong microcode.

@@ -8467,6 +8467,13 @@ check('the S0 handler takes its loop count from the dispatcher without validatin
       and _w(0xF05198) == 0x5344      # subq.w #$1,d4
       and _w(0xF0519A) == 0x0C44)     # cmpi.w #$0,d4
 
+check('neither S-record loader contains accumulating arithmetic',
+      not _re21a.search(r'^F05[12][0-9A-F]{2}.*\s(eor|addx)', _asm21a, _re21a.M)
+      and not _re21a.search(r'^F05[56][0-9A-F]{2}.*\s(eor|addx)', _asm21a, _re21a.M))
+check('...while both add $10000 to the record address, twice each',
+      _w(0xF051DC) == 0xD3FC and _w(0xF052D0) == 0xD3FC
+      and _w(0xF055C4) == 0xD3FC and _w(0xF05640) == 0xD3FC)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
