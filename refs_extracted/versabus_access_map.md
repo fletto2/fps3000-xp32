@@ -37521,3 +37521,44 @@ the next code only once `srec_exhausted` is set. That is a small, well-defined c
 specific thing standing between this project and a demonstrated `CPRUN`, since every *data* condition
 of the gate is already known satisfiable (previous entry) and the accept arm is only one comparison
 away.
+
+## CORRECTION: op `$8` DOES wake RDHC — the catch-22 was wrong (2026-07-31)
+
+Op `$8`'s accept arm is two instructions:
+
+```
+$F04F94  move.w #$0,$e74.l          ; clear the result
+loc_F04F9C:
+$F04F9C  bra.w  ChannelConfigDispatch
+```
+
+and `ChannelConfigDispatch` is **`$F050F8` — the ISR exit stub**, which this project identifies as
+such ("`ChannelConfigDispatch` at `$F050F8` is the **ISR exit stub**, the same address as op `$F`").
+The exit stub is what performs `move.w #$c,ccr` / `trap #1` and reaches `T0WAKEUP`.
+
+**So op `$8`, taking its accept arm, wakes RDHC — and leaves `$08` in `$E86` while doing so.**
+
+I wrote last entry that "the wake mechanism and the operation latch are the same register, so `$8` can
+occupy it or trigger the wake, never both". **That is wrong.** It generalised from the arms I had
+observed — the CH1-reset arm (which ends in a panel-issuer spin) and the `$25A` reject arm — to the
+operation as a whole. The accept arm does both jobs at once.
+
+### The complete `CPRUN` chain, and its single precondition
+
+```
+$E7E in $10000-$1FFFF  ->  op $8 accept arm  ->  $E74 = 0  ->  ISR exit stub
+   ->  trap #1 (CCR sentinel)  ->  T0WAKEUP  ->  RDHC leaves WAIT
+   ->  $E87 bit 7 clear ✓   ($E86 & $F) == 8 ✓   $E74 != $25A ✓ (it is 0)
+       CHANNEL_SELECT == 0 ✓
+   ->  $F04774  $0B CRTCB 'USER'
+```
+
+Every condition after the first is already satisfied or set by the accept arm itself — note that the
+arm **writes `$E74 = 0`**, which is exactly what the gate's `$E74 != $25A` test wants.
+
+**So `CPRUN` has one precondition: `$E7E` must hold a valid staging destination when op `$8` arrives**
+— which the `S9` terminator supplies. The chain is not structurally blocked, as I claimed; it needs
+the record stream to complete before the operation, which the time-driven `FPS3K_RESPSEQ` currently
+prevents.
+
+That makes the sequencer gate identified in the previous entry the whole of what is missing.

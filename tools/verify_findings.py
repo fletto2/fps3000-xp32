@@ -8426,6 +8426,11 @@ check('the CPRUN gate tests bit 7 of $E87, then op $8, then $E74, then CHANNEL_S
       and _w(0xF0476A) == 0x0C6D and _w(0xF0476C) == 0x0000
       and _w(0xF0476E) == 0x0204)
 
+check('op $8 accept arm clears $E74 and branches to the ISR exit stub',
+      _w(0xF04F94) == 0x33FC and _w(0xF04F96) == 0x0000
+      and _l(0xF04F98) == 0x00000E74
+      and _w(0xF04F9C) == 0x6000 and _bsrw(0xF04F9C) == 0xF050F8)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
