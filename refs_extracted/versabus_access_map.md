@@ -37949,3 +37949,27 @@ table, bounds `index + count` at 16 longwords and rejects with `$25B`. Command 3
 same mechanism from the same record, bounds nothing. So the firmware's validation is *selective* rather
 than absent — which makes the unchecked cases easier to overlook, since a reader who checks one
 command may reasonably assume the others are alike.
+
+## The four RDHC commands audited for validation (2026-07-31)
+
+| cmd | handler | what it validates | reject code | unbounded? |
+|---:|---|---|---|---|
+| 1 | `$F05370` | channel in `1..$105E`; **defaults from `$E62`** when the field is zero | `$25C` | no |
+| 2 | `$F054A2` | `index + count <= 16` longwords, on the **sum** | `$25B` | no |
+| **3** | `$F054E8` | **nothing** | — | **YES** |
+| 4 | `$F05502` | record type; destination address range | `$25F`, `$25A` | (trusts checksum, framing, S0 count) |
+
+Command 1's decode confirms the record exactly: `cmpi.l #$0,d4` / `bne` falls back to **`$E62`** — the
+channel `XPSEL` (op `$5`) stored — and then `cmpi.w #$1,d4` / `cmp.w $105e.l,d4` bounds it, rejecting
+with **`$25C`**. So a host may omit the channel and inherit the one most recently selected, which is a
+small convenience worth knowing when driving this interface.
+
+**Three of the four validate; command 3 is the outlier.** That is the shape of the risk: not a
+uniformly trusting firmware, but a mostly-careful one with a single unchecked primitive sitting beside
+carefully-checked neighbours. The same pattern appears one level down in command 4, where the record
+*type* and *address* are checked while the checksum, framing and header count are not.
+
+**For a chassis model this is now fully specified**: commands 1, 2 and 4 have defined rejection
+behaviour that a model must be able to provoke and observe, and command 3 has none — a model that
+implements a bound there would be *more* restrictive than the hardware and would mask a real failure
+mode.
