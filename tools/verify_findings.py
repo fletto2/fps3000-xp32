@@ -8474,6 +8474,14 @@ check('...while both add $10000 to the record address, twice each',
       _w(0xF051DC) == 0xD3FC and _w(0xF052D0) == 0xD3FC
       and _w(0xF055C4) == 0xD3FC and _w(0xF05640) == 0xD3FC)
 
+check('RDHC command 2 bounds index+count at 16 longwords and rejects with $25B',
+      _w(0xF054A6) == 0x2602 and _w(0xF054A8) == 0xE58A
+      and _w(0xF054AC) == 0x43EA and _w(0xF054AE) == 0x101E
+      and _w(0xF054B2) == 0xD682
+      and _w(0xF054B4) == 0x0C83 and _l(0xF054B6) == 0x00000010
+      and _w(0xF054BC) == 0x203C and _l(0xF054BE) == 0x0000025B
+      and _w(0xF054D4) == 0xC348)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

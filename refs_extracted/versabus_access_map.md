@@ -37878,3 +37878,36 @@ including the decision not to validate.
 **Consequence for the hardware effort, restated with both paths covered**: there is no route through
 this ROM that checks a microcode image's integrity. Whichever loader a host uses, corruption is
 accepted silently, and the first symptom is an AC executing wrong microcode.
+
+## RDHC command 2's bound demonstrated (2026-07-31)
+
+The register-file access command decodes as recorded — `{direction, index, count}`, `a1 = $101E +
+index*4`, bound on the **sum**, direction by a single `exg.l a1,a0`:
+
+```
+$F054A2  move.l (a0)+,d1          ; direction
+$F054A4  move.l (a0)+,d2 / move.l d2,d3
+$F054A8  lsl.l  #$2,d2 / movea.l d2,a2
+$F054AC  lea    $101e(a2),a1      ; the slot
+$F054B0  move.l (a0)+,d2          ; count
+$F054B2  add.l  d2,d3             ; index + count
+$F054B4  cmpi.l #$10,d3 / ble     ; <= 16 longwords?
+$F054BC  move.l #$25b,d0 / jsr    ; reject
+$F054D4  exg.l  a1,a0             ; one loop serves both directions
+```
+
+Tested with a paired stimulus:
+
+| command | index + count | bound test | `$25B` | accept |
+|---|---:|---:|---:|---:|
+| `2,0,4,4` | 8 ≤ 16 | 1468 | **0** | **1468** |
+| `2,0,E,4` | **18 > 16** | 1 | **1** | 0 |
+
+**The in-bounds case is the control** — it exercises the same test 1468 times without ever rejecting,
+so the single rejection in the over-bound case is the bound firing, not an unrelated failure. And the
+counts show the reject *terminates* the command loop (1 pass versus 1468), because the reject path
+issues a panel command and spins.
+
+Every element of the recorded decode is now confirmed: the bound is on the **sum** rather than either
+field, the code is **`$25B`**, and the direction really is one `exg`. This project derived all three
+statically; they now have a demonstration with a control.
