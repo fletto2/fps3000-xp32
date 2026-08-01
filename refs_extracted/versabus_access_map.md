@@ -37287,3 +37287,32 @@ should expect a `$25F` at end-of-stream, or omit the terminator.
 `$25F`, and by implication my earlier reading of `$25F` in the *malformed*-record test — which was a
 real type rejection there, but arrived at the same code by a different route, so that run did not
 distinguish the two causes.
+
+## The terminator hypothesis TESTED AND REFUTED (2026-07-31)
+
+Last entry I explained the persistent `$25F` as the `S9` terminator falling through the dispatcher's
+`S0`/`S1` branches. Tested by removing the terminator:
+
+| stream | data loaded | `$0E6E` | `$0E7E` |
+|---|---|---|---|
+| `…S9030000FC` | `DE AD BE EF CA FE BA BE` | **`$025F`** | `$00010000` |
+| **no terminator** | `DE AD BE EF CA FE BA BE` | **`$025F`** | `$00000000` |
+
+**`$25F` appears either way, so the terminator is not the cause.** The hypothesis is withdrawn.
+
+**The likelier cause is end-of-stream.** The loader keeps requesting records until it gets one it
+cannot parse; once the file is exhausted the model hands back zeros (`srec_exhausted`), which parse as
+an unrecognised type. So `$25F` here is a **joint artefact of firmware behaviour and the model's
+end-of-stream handling** — the firmware never stops asking, and the model always answers.
+
+On hardware the chassis would presumably stop supplying words, and the loader would block on the
+`$FF0218` handshake rather than parse zeros. **So `$25F` at end of stream is probably not what a real
+transfer produces**, and my advice to "expect it, or omit the terminator" was wrong on both halves.
+
+**One real difference the test did expose**: `$E7E` reads `$00010000` with the terminator and
+`$00000000` without it. So the `S9` record *is* what drives the once-per-session address parse at
+`$F05298` to completion — which fits `$E7E` being the pre-upload destination that chassis op `$8`
+validates, established at the *end* of the record stream rather than the start.
+
+That is a better-supported reading than the one I withdrew, and it came from an experiment designed
+to test something else.
