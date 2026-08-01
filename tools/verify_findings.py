@@ -8402,6 +8402,10 @@ check('there are two $FF0000 drain loops, at $F04C22 and $F0527A',
 check('...and the $F04C22 loop reports $25F on exit',
       _w(0xF04C34) == 0x303C and _w(0xF04C36) == 0x025F)
 
+check('the SLC dispatcher tests for S0 and S1 by ASCII value',
+      _w(0xF04B8A) == 0x0C41 and _w(0xF04B8C) == 0x5330
+      and _w(0xF04B9A) == 0x0C41 and _w(0xF04B9C) == 0x5331)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

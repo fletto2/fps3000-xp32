@@ -37316,3 +37316,26 @@ validates, established at the *end* of the record stream rather than the start.
 
 That is a better-supported reading than the one I withdrew, and it came from an experiment designed
 to test something else.
+
+## The `S9` terminator's role, confirmed by measurement (2026-07-31)
+
+| stream | `$F05298` parser | `$E7E` write | drain `$F04C28` |
+|---|---:|---:|---:|
+| `S1…S1…S9030000FC` | **1** | **1** | 1 |
+| `S1…S1…` (no terminator) | **0** | **0** | 1 |
+
+**The `S9` record drives the once-per-session address parse and the `$E7E` write.** Without it,
+neither happens. So `S9` is *handled* by the SLC dispatcher, not rejected by it — which also settles
+the previous entry's remaining doubt.
+
+So the SLC record vocabulary is **`S0`, `S1`, `S9`**, with `S9` doing two jobs: ending the record
+stream and establishing **`$E7E`**, the session destination that chassis operation `$8` range-checks
+before an upload proceeds. That is a coherent protocol — the loader learns where the data was meant to
+go from the terminator, and op `$8` validates it before anything is committed.
+
+**And the `$25F` is independent of all this**: the `$F04C28` drain runs **once in both cases**, so it
+is the end-of-stream artefact described in the previous entry, not a reaction to any record.
+
+Two hypotheses were tested here in succession. The first — "`S9` falls through and causes the
+`$25F`" — was refuted. The second — "`S9` drives the `$E7E` parse" — is confirmed. Both came from the
+same measurement discipline, and the useful one was the replacement rather than the original.
