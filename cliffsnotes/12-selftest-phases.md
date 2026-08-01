@@ -108,3 +108,29 @@ Three practical consequences:
 | trailing `nop` padding | absorbs the 68000's imprecise bus-error PC; the handler blindly does `addq.w #$4,$4(a7)` and lands in the padding |
 | `[$8]` saved and restored | a temporary bus-error handler is installed for the duration of a guarded probe |
 | `addi.w #$100,d6` / `addq.b #$1,d6` | step the major / minor phase, then broadcast `d6` to `CHANNEL_SELECT` |
+
+## Sequence B phase map, consolidated (2026-07-31)
+
+Sequence B runs from base `$1000`, stepping the major byte with `addi.w #$100,d6`. Stages decoded
+individually over this session, with the routine that implements each:
+
+| phase | routine | what it tests |
+|---|---|---|
+| `$1100`/`$1200` | `$F0919C` | **`$1FFF1` bit 4 ↔ `$F70019` bit 1** correspondence, `d0`/`d1` holding the bit pair |
+| `$1300` | `$F093F0`+ | **`$1FFF1` bits 0-2 as an interrupt-level field**, walked with delivery mandatory; installs handlers at vectors `$50`/`$52` and lowers the CPU mask |
+| `$1400` | `$F0924A` | **`$F70019` bit 1 vs `$1FFF1` bit 5**, plus the `$1FFF0` bit-0 term; installs vector `$53` |
+| **`$1500`** | `$F094F0` | **`CHANNEL_SELECT` readback** — six write/read-back cycles on `$FF0204` |
+| `$1600` | `$F09518` | **the XLTR register file** — distinct values into every register, read back with explicit masks; `$FF0218` bit 4 sizes the BIM walk |
+| `$1700`/`$1800` | `$F09612`, `$F096C8` | **`$FF0216` bit 5** gates the `$400000` window, both directions; **bit 6** proven not to gate it |
+| `$1900` | `$F09776` | **the 16→32 width mux** — `$FF0216` bit 4, with `$FF0214` as the complementary low-half route |
+| `$1A00` | `$F09832` | **`$FF0216` bit 7** as a bus-error gate on `$FF000E`, with the instruction-skipping handler at `$F098E0` |
+
+**The ordering is deliberate.** `$1500` verifies the phase counter itself before the later stages rely
+on it to report progress — the counter is the only diagnostic a board without a console offers. The
+register-file walk (`$1600`) then comes before the window and mux tests that depend on those registers
+behaving.
+
+**Every stage in this sequence follows the same fault policy**: on mismatch, `d7 = $F0F0F0F0`, a
+`PollBoardStatus` call, and a branch back to the top of the stage — retry forever, no error report.
+Four independent fault injections (suppressed BERR, aliased register, corrupted SCM, overridden
+readback) all produce the same signature: a stalled phase counter in `CHANNEL_SELECT` and nothing else.
