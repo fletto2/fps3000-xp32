@@ -37489,3 +37489,35 @@ That is a sharper statement of the recorded blocker: not "the CPRUN path sits be
 **"the wake mechanism and the operation latch are the same register, so `$8` can occupy it or trigger
 the wake, never both"**. Breaking it needs either a chassis model that raises BIM0 ch0 without
 re-latching MODE0, or the `USER` task created some other way.
+
+## Sequencing a load then op `$8`: blocked by the stimulus, not the firmware (2026-07-31)
+
+Op `$8`'s **accept** arm (`$F04F94`) requires `$E7E` in `$10000`-`$1FFFF`, and the SLC load supplies
+that value at the `S9`. Attempting to sequence the two with
+`FPS3K_SREC=… FPS3K_RESPSEQ=0x00,0x08`:
+
+| | measured |
+|---|---|
+| staging data | **`DE AD BE EF` only** — the first record, not the second |
+| `$0E7E` | **`$00000000`** — the `S9` parse never ran |
+| `$0E86` | `$0008` — op `$8` was latched |
+| `$F04F94` accept | **0** |
+| `$25A` reject | 1 |
+
+Raising `FPS3K_SEQGAP` from 20 M to 120 M cycles changes nothing, because the gap is counted from the
+previous panel command while the SLC loader spins on `$FF0218` handshakes — the sequencer fires on
+schedule regardless of how far the record stream has got.
+
+**So the second response code interrupts the record stream before the terminator**, `$E7E` is never
+written, and op `$8` necessarily takes its reject arm.
+
+**This is a limitation of the stimulus plumbing, not a property of the machine.** A real host would
+send the records, wait for the loader to consume them, and only then issue op `$8` — the ordering is
+natural over a physical link and artificial here because `FPS3K_RESPSEQ` is time-driven rather than
+progress-driven.
+
+**What would unblock it**: a response-sequencer gate on the S-record source being exhausted — deliver
+the next code only once `srec_exhausted` is set. That is a small, well-defined change and it is the
+specific thing standing between this project and a demonstrated `CPRUN`, since every *data* condition
+of the gate is already known satisfiable (previous entry) and the accept arm is only one comparison
+away.
