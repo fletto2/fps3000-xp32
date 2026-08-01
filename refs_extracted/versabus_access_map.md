@@ -37684,3 +37684,44 @@ op $8 accept arm wakes RDHC ✓ (static)
 
 Every other precondition has been measured true. The remaining change is to the *model's* end-of-stream
 behaviour, not to the firmware understanding.
+
+## `CPRUN`: what is actually required, and why I am stopping here (2026-07-31)
+
+Tracing the last obstacle further shows the requirement is stricter than "stop feeding garbage".
+
+**RDHC must be back in its `WAIT` when op `$8` arrives.** The gate at `$F04740` is only reached after
+the blocking directive returns. After a record load RDHC is instead:
+
+- **spinning in the panel issuer** at `$F056B8` (current model — end-of-stream garbage provokes
+  `$25F`), or
+- **spinning in the `$FF0218` poll** (if the model simply stopped completing the handshake, which was
+  my next candidate fix)
+
+Neither returns to `WAIT`, so op `$8` cannot be processed at task level in either case. The ISR would
+still run and its accept arm would still reach the exit stub — but `T0WAKEUP` on a task that is
+spinning rather than blocked achieves nothing.
+
+**So the real requirement is that the SLC operation terminates cleanly**, returning through
+`$F04BAA`'s `cmpi.w #$0,$E74 / beq` continue-path to the main loop and back into `WAIT`. That needs a
+chassis model that ends a record session the way the firmware expects, which is not something I can
+derive from the firmware alone — the firmware only shows what it *does* with what it is given.
+
+**Where this leaves `CPRUN`:**
+
+| precondition | status |
+|---|---|
+| records load correctly, both of them | ✅ measured |
+| `$E7E` valid and in range | ✅ measured (`$00010000`) |
+| all four gate conditions satisfiable | ✅ measured |
+| op `$8` accept arm reaches the exit stub | ✅ static, verified |
+| **RDHC back in `WAIT` when op `$8` arrives** | ❌ **not achieved** |
+
+Everything except the last is established. The last needs a model of how a real chassis closes an
+S-record session — and inventing one would be modelling my way to a result rather than discovering
+how the machine behaves.
+
+**I am stopping this line here** rather than continuing to iterate on emulator internals. The two
+hooks added along the way (`FPS3K_WC`, `FPS3K_SEQ_AFTER_SREC`) are opt-in, verified not to disturb the
+default boot, and both do what they say; the gate in particular now correctly holds a response
+sequence until the record source is exhausted, which is a genuinely useful stimulus primitive whatever
+happens with `CPRUN`.
