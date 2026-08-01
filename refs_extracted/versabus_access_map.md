@@ -38007,3 +38007,26 @@ before the command.
 That last point matters because `$FF0210` is the page register for the whole `$400000` window: a
 mis-restored page silently redirects every subsequent chassis-memory access, and nothing would report
 it.
+
+## The MODE2 bracket observed on every command execution (2026-07-31)
+
+Bus log with PCs, filtered to the command interface's own accesses:
+
+```
+RD $FF0210 = 0000  @F05312     <- save
+WR $FF0210 = 0000  @F05316     <- page 0
+WR $FF0210 = 0000  @F0567E     <- restore
+   ...repeated...
+```
+
+**4404 bracket accesses = 1468 commands x 3**, the same 1468 repetition count seen in the command-2
+bound test — so the save/page/restore triple executes on **every** command, not once per session.
+
+The value is zero throughout here because the page was already zero, so this confirms the *pattern*
+rather than the restore's fidelity. A test that set a non-zero page first would confirm the value is
+carried through; the read at `$F05312` and the write-back at `$F0567E` are both present, which is what
+the decode predicted.
+
+**Three accesses per command is also a small cost worth knowing**: the interface pays a read and two
+writes of the page register on every command, which is why `$FF0210` shows up in access censuses more
+often than the handful of self-test writes would suggest.
