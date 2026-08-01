@@ -8288,15 +8288,15 @@ check('all three runtime jsr constructions write $4EB9',
 check('...and the second CMR thunk uses move.l where move.w was meant',
       _w(0xF03FD4) == 0x337C          # move.w #$4eb9,$4a(a1)
       and _w(0xF040E2) == 0x297C      # move.l #$00004eb9,$4a(a4) -- opcode two bytes low
-      and _w(0xF03FDA) == 0x004A and _w(0xF040E8) == 0x004A)
+      and _w(0xF03FD8) == 0x004A and _w(0xF040E8) == 0x004A)
 
 check('the ISR-exit sentinel is move.w #$c,ccr followed by trap #1',
       _w(0xF050FC) == 0x44FC and _w(0xF050FE) == 0x000C
       and _w(0xF05100) == 0x4E41)
 
-check('the two S-record loaders are independent implementations',
-      _l(0xF051A2) != _l(0xF055A2)
-      and 0xF055A2 - 0xF051A2 == 0x400)
+check('the two S-record loaders sit exactly $400 apart and open identically',
+      0xF055A2 - 0xF051A2 == 0x400
+      and _l(0xF051A2) == _l(0xF055A2) == 0x227C0000)
 
 check('the ROM checksum routine accumulates with eor.w (the control)',
       _w(0xF08D3E) == 0xB340)

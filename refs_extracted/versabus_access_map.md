@@ -37339,3 +37339,31 @@ is the end-of-stream artefact described in the previous entry, not a reaction to
 Two hypotheses were tested here in succession. The first — "`S9` falls through and causes the
 `$25F`" — was refuted. The second — "`S9` drives the `$E7E` parse" — is confirmed. Both came from the
 same measurement discipline, and the useful one was the replacement rather than the original.
+
+## The two S-record loaders really are independent — my check was wrong (2026-07-31)
+
+A harness failure sent me to compare them properly. Over 512 bytes from each start, `$F051A2` (SLC
+ASCII) and `$F055A2` (CPLOAD binary) share **31 bytes and differ in 481 — 94% different**, across 24
+separate differing runs.
+
+**So this project's "two independent implementations of that arithmetic and bound" is right.** My
+check asserted that their opening *longwords* differ; they do not — both begin `$227C0000`
+(`movea.l #$0,…`), which is coincidence of instruction form, not evidence of copying. The check has
+been rewritten to assert what is true and meaningful: the two sit exactly `$400` apart and open with
+the same instruction while their bodies diverge.
+
+That matters for the strength of the cross-check this project draws from them. Two routines 94%
+different, arriving at the same `$10 + addr + $10000` and the same `$1FFFF` bound, and now
+**demonstrated to produce identical output** (`DE AD BE EF` at `$10010` from both), is a genuinely
+independent confirmation of that arithmetic — not two copies of one mistake.
+
+## Chassis operation `$8` executes after a record load
+
+`FPS3K_RESPSEQ=0x00,0x08` with the S-record stream reaches **`$F04F52`, `$F04F56` and `$F04F70`** —
+the pre-upload handshake, its `CHANNEL_SELECT == 0` test, and the **`$25A` reject site**.
+
+So op `$8` runs and takes its rejecting arm. That is consistent with `$E7E` not yet holding a valid
+destination when the operation fires — the response sequence delivers `$08` without waiting for the
+record stream to finish, and `$E7E` is only written at the `S9`. **Not a firmware fault; a stimulus
+ordering problem**, and one that a real host would avoid by sending op `$8` after the records rather
+than interleaved.
