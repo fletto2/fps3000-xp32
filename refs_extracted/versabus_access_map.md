@@ -37562,3 +37562,33 @@ the record stream to complete before the operation, which the time-driven `FPS3K
 prevents.
 
 That makes the sequencer gate identified in the previous entry the whole of what is missing.
+
+## The `USER` lifecycle verified statically, block by block (2026-07-31)
+
+Every directive in RDHC's `CPRUN` sequence, with its parameter block and failure code:
+
+| step | directive | block | names | failure code |
+|---|---|---|---|---|
+| 1 | **`$0B` CRTCB** | `$F04614` | **`'USER'`** | `$278` |
+| 2 | **`$01` GTSEG** | `$F046C8` | **`'USER'`** | `$279` |
+| 3 | NOP fill | — | eight `$4E71` at `$10000` | — |
+| 4 | **`$0D` START** | `$F04630` | **`'USER'`** | **`$27A`** |
+| — | **`$10` TERMT** (the `CHANNEL_SELECT != 0` arm) | `$F046A6` | **`'USER'`** | **`$27B`** |
+
+**All four blocks carry the literal `'USER'`**, so the whole sequence targets one named task — which is
+what makes the recorded panel-code mapping (`$278` ← CRTCB, `$279` ← GTSEG, `$27A` ← START, `$27B` ←
+TERMT) a lifecycle rather than four unrelated failures.
+
+The two arms are visible in the same stretch: with `CHANNEL_SELECT == 0` the code runs
+CRTCB → GTSEG → NOP-fill → START; with it non-zero, `$F0476A`'s `bne` diverts to `$F047EA` and issues
+**`$10` TERMT** on the same task. So op `$8` **starts or stops the CP program depending on
+`CHANNEL_SELECT`**, exactly as recorded.
+
+Everything here is static confirmation of what this project already documents — the value is that the
+parameter blocks were read rather than inferred from the panel codes, so the `'USER'` identification
+no longer rests on the codes alone.
+
+**And it sets up the experiment.** A successful `CPRUN` should produce, in order: a seventh TCB named
+`USER`, a segment `UPGM` at `$00010000`, eight `$4E71` words at `$10000`, and a started task — each
+independently checkable in a RAM dump. That is a much sharper success criterion than "did `$F04774`
+execute".

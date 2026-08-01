@@ -8431,6 +8431,13 @@ check('op $8 accept arm clears $E74 and branches to the ISR exit stub',
       and _l(0xF04F98) == 0x00000E74
       and _w(0xF04F9C) == 0x6000 and _bsrw(0xF04F9C) == 0xF050F8)
 
+check("all four CPRUN lifecycle blocks name 'USER'",
+      all(_l(_a) == 0x55534552
+          for _a in (0xF04614, 0xF046C8, 0xF04630, 0xF046A6)))
+check('...and the lifecycle issues CRTCB, GTSEG, START, with TERMT on the other arm',
+      _w(0xF04774) == 0x700B and _w(0xF0478E) == 0x7001
+      and _w(0xF047C0) == 0x700D and _w(0xF047EA) == 0x7010)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
