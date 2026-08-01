@@ -37592,3 +37592,28 @@ no longer rests on the codes alone.
 `USER`, a segment `UPGM` at `$00010000`, eight `$4E71` words at `$10000`, and a started task — each
 independently checkable in a RAM dump. That is a much sharper success criterion than "did `$F04774`
 execute".
+
+## The `GTSEG` block decoded field for field against `SEG.EQ` (2026-07-31)
+
+```
+$F046C8  +$00 SGPBTASK  'USER'
+         +$04 SGPBSESS  $00000000
+         +$08 SGPBOPT   $01000000
+         +$0C SGPBNAME  'UPGM'
+         +$10 SGPBLA    $00010000     <- the staging buffer base
+         +$14 SGPBSL    $0000D000     <- 53,248 bytes
+         +$18 SGPBBUFF  $00000244
+```
+
+**Every field this project records is confirmed**: task `'USER'`, segment name **`UPGM`**, logical
+address **`$00010000`**, length **`$0000D000`**. The block is 28 bytes, matching the size `GTSEG`
+declares in the TRAP #1 table — which is itself one of the two independent structural confirmations
+of the flags-byte decode recorded elsewhere in this file.
+
+**One field gains a value**: `SGPBBUFF = $00000244`, not previously noted.
+
+This is the last piece of the `CPRUN` static picture. The sequence would create task `'USER'`, give it
+a segment named `UPGM` covering `$10000`-`$1CFFF`, NOP-fill the first eight words, and start it — and
+**the segment length `$D000` confirms from the firmware's own parameter block that the CP program's
+region stops well short of the RTOS structures at `$1DD00`**, which this project derives separately
+from the allocator. Two unrelated sources agreeing on where host-loaded code may live.
