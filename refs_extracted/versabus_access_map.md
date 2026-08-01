@@ -37725,3 +37725,36 @@ hooks added along the way (`FPS3K_WC`, `FPS3K_SEQ_AFTER_SREC`) are opt-in, verif
 default boot, and both do what they say; the gate in particular now correctly holds a response
 sequence until the record source is exhausted, which is a genuinely useful stimulus primitive whatever
 happens with `CPRUN`.
+
+## The SLC loader decoded in full (2026-07-31)
+
+The dispatcher at `$F04B68` tests six record types by ASCII value and routes each:
+
+| record | test | handler | address shift `d5` |
+|---|---|---|---|
+| `S0` | `$5330` | `$F0517E` | — |
+| `S1` | `$5331` | `SRecordDataHandler` `$F051A2` | **`$08`** (2-byte address) |
+| `S2` | `$5332` | `SRecordDataHandler` | **`$10`** (3-byte) |
+| `S3` | `$5333` | `SRecordDataHandler` | **`$18`** (4-byte) |
+| `S8` | `$5338` | **`SRecordFinalize` `$F05256`** | — |
+| `S9` | `$5339` | **`SRecordFinalize`** | — |
+| anything else | — | `$F04C22`: **drain, then `$25F`** | — |
+
+Every arm tests `$E74` afterwards and continues at `$F04C42` on zero, or exits to
+`ChannelConfigDispatch` on error — so the record loop is `dispatch → handle → check → next`.
+
+**Three things this settles.**
+
+1. **The full S-record vocabulary is `S0 S1 S2 S3 S8 S9`** — not the `S0, S1, S9` I stated earlier
+   from partial reading. This project's record that "`$F04C00` requires `S8`/`S9`" is exactly right,
+   and the data types extend to `S3`.
+2. **`d5` is the address shift, set at dispatch by record type** — 8, 16, 24 for S1/S2/S3, matching
+   the S-record standard's 2/3/4-byte addresses. This project derives the same mapping from
+   `$F05256`'s selector; here is where the value originates.
+3. **The once-per-session address parse at `$F05298` lives inside `SRecordFinalize`** — which is
+   called only on `S8`/`S9`. That is *why* it runs once and why `$E7E` is written at the terminator,
+   confirming the measurement from the code structure rather than from execution counts alone.
+
+So the loader is three routines: a dispatcher, a per-record data handler, and a terminator handler
+that establishes the session destination. The earlier measurement (2 dispatches, 2 data-handler
+entries, 1 finalize) is exactly what this structure predicts.

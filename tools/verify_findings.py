@@ -8438,6 +8438,18 @@ check('...and the lifecycle issues CRTCB, GTSEG, START, with TERMT on the other 
       _w(0xF04774) == 0x700B and _w(0xF0478E) == 0x7001
       and _w(0xF047C0) == 0x700D and _w(0xF047EA) == 0x7010)
 
+check('the SLC dispatcher routes S0 S1 S2 S3 S8 S9 by ASCII value',
+      all(_w(_a) == 0x0C41 and _w(_a + 2) == _v
+          for _a, _v in ((0xF04B8A, 0x5330), (0xF04B9A, 0x5331),
+                         (0xF04BBC, 0x5332), (0xF04BDE, 0x5333),
+                         (0xF04C00, 0x5338), (0xF04C06, 0x5339))))
+check('...with d5 = $08/$10/$18 as the address shift for S1/S2/S3',
+      _w(0xF04BA0) == 0x3A3C and _w(0xF04BA2) == 0x0008
+      and _w(0xF04BC2) == 0x3A3C and _w(0xF04BC4) == 0x0010
+      and _w(0xF04BE4) == 0x3A3C and _w(0xF04BE6) == 0x0018)
+check('...and S8/S9 call SRecordFinalize at $F05256',
+      _w(0xF04C0C) == 0x4EB9 and _l(0xF04C0E) == 0x00F05256)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
