@@ -37406,3 +37406,27 @@ What the record gets right: `$258` is the action, and the reset does require **M
 `$F04F70` and then `$25A`: the reset arm's conditions were not met, so control fell to the range
 check, where `$E7E` was still zero because the `S9` had not yet been processed. Two separate facts,
 not one failure.
+
+## The "conjunctions are really branches" pattern does NOT generalise (2026-07-31)
+
+Having found that chassis op `$8`'s recorded "`CHANNEL_SELECT == 0` **and** `$E7E` in range" is
+actually two arms, I suggested this might be a systematic feature of the prose descriptions. Tested
+against the next documented conjunction — RDHC's `CPRUN` gate — and it is not.
+
+```
+$F0475E  cmpi.w #$25a,$e74.l / beq.w $F04824      ; $E74 == $25A -> skip
+$F0476A  cmpi.w #$0,$204(a5) / bne.w $F047EA      ; CHANNEL_SELECT != 0 -> the TERMT arm
+$F04774  moveq #$b,d0 / trap #1                   ; $0B CRTCB 'USER' — the lifecycle
+```
+
+**That is a genuine guard chain**, each test branching away on failure, exactly as recorded: "RDHC's
+main loop gates the lifecycle on `(($E86 & $F) == 8) && ($E74 != $25A) && (CHANNEL_SELECT == 0)`; a
+non-zero CHANNEL_SELECT takes the `TERMT` arm instead". The `bne.w $F047EA` *is* the TERMT arm, named
+correctly.
+
+**So the op-`$8` error was isolated, not systematic**, and my generalisation from a single instance is
+withdrawn. Two documented conjunctions checked: one wrong, one right.
+
+Worth stating because the generalisation was the kind that would have justified a broad re-audit of
+this file's prose on a sample of one. The correction cost two commands and the claim did not survive
+them.
