@@ -37911,3 +37911,41 @@ issues a panel command and spins.
 Every element of the recorded decode is now confirmed: the bound is on the **sum** rather than either
 field, the code is **`$25B`**, and the direction really is one `exg`. This project derived all three
 statically; they now have a demonstration with a control.
+
+## RDHC command 3 is UNBOUNDED — a fourth chassis-controlled memory write (2026-07-31)
+
+```
+$F054E8  move.l (a0)+,d2          ; the COUNT, straight from the chassis record
+$F054EA  lea    $e8a.l,a2
+$F054F0  moveq  #$1,d1
+loc_F054F4:
+$F054F4  move.l (a0)+,(a2)+       ; copy
+$F054F6  addq.l #$1,d1
+loc_F054F8:
+$F054F8  cmp.l  d2,d1 / ble.b $F054F4
+```
+
+**No bound check of any kind.** Demonstrated with `FPS3K_CHASSIS_CMD=3,100,…`:
+
+| count | bytes written | span |
+|---|---:|---|
+| `$2` | 8 | `$0E8A`-`$0E91` |
+| **`$100`** | **1020** | **`$0E8E`-`$01289`** |
+
+A count of 256 longwords writes past `$1000` and into the FPS global area — the region holding the
+**`$101E` register file**, **`$105E`** channel-present count, the **`$1064`** status array,
+**`$1080`** per-channel pointers, **`$10A0`** flags and the **`$10AE`** CP-callback trampolines. A
+larger count reaches further still; nothing stops it.
+
+**So the chassis has four unbounded write primitives, not three.** This project documents op `$6`
+("UNBOUNDED 16-bit peek/poke at any 32-bit address"), op `$C` ("bidirectional half-selected access to
+the `$101E` file — and UNBOUNDED") and op `$0`'s reverse transfer ("a fourth unbounded chassis
+primitive since `$E58` is never range-checked"). **RDHC command 3 belongs on that list** and is
+described in the record only as "copies `count` longwords into `$E8A`", with no note that the count is
+unchecked.
+
+**The contrast with command 2 is the point.** Command 2, immediately adjacent in the same dispatch
+table, bounds `index + count` at 16 longwords and rejects with `$25B`. Command 3, reached through the
+same mechanism from the same record, bounds nothing. So the firmware's validation is *selective* rather
+than absent — which makes the unchecked cases easier to overlook, since a reader who checks one
+command may reasonably assume the others are alike.

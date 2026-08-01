@@ -8482,6 +8482,14 @@ check('RDHC command 2 bounds index+count at 16 longwords and rejects with $25B',
       and _w(0xF054BC) == 0x203C and _l(0xF054BE) == 0x0000025B
       and _w(0xF054D4) == 0xC348)
 
+check('RDHC command 3 copies count longwords to $E8A with NO bound check',
+      _w(0xF054E8) == 0x2418
+      and _w(0xF054EA) == 0x45F9 and _l(0xF054EC) == 0x00000E8A
+      and _w(0xF054F4) == 0x24D8
+      and _w(0xF054F8) == 0xB282 and _w(0xF054FA) >> 8 == 0x6F
+      # ...unlike command 2, which does bound its sum
+      and _w(0xF054B4) == 0x0C83)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
