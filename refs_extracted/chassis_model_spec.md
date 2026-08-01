@@ -1004,3 +1004,44 @@ back through `RDCTL#`. That is the first hardware-side account of the **bit 14 =
 Five 16-bit buses (`DMA`=APMA address, `HST`=host link, `HD`, `DPMBS`, `IO`) plus `PNL`, `DA`,
 `SP+DP` at 8 bits each and `REGSEL` at 6. **200 pins across two connectors** — which is why the
 counterpart host adapter cannot be improvised.
+
+## RDHC command interface and the S-record loaders (measured 2026-07-31)
+
+### The four commands
+
+| cmd | validates | reject | model must |
+|---:|---|---|---|
+| 1 | channel `1..$105E`, defaulting from `$E62` | `$25C` | be able to supply an out-of-range channel |
+| 2 | `index + count <= 16` longwords (on the **sum**) | `$25B` | be able to violate the sum with either field in range |
+| **3** | **nothing** | — | **not add a bound** — the hardware has none |
+| 4 | record type; destination address range | `$25F`, `$25A` | supply bad types and out-of-range addresses |
+
+### The SLC ASCII loader
+
+**Record set `S0 S1 S2 S3 S8 S9`**, dispatched by ASCII value at `$F04B68`; anything else drains and
+reports `$25F`.
+
+| record | handler | address shift |
+|---|---|---|
+| `S0` | skip `d4` words, contents ignored | — |
+| `S1`/`S2`/`S3` | `SRecordDataHandler` | `$08`/`$10`/`$18` |
+| `S8`/`S9` | `SRecordFinalize` — writes **`$E7E`** | — |
+
+- **Stream is unframed**: two ASCII characters per 16-bit word, records back to back, **no delimiters**.
+  Anything between records desynchronises permanently.
+- **Every word costs a full `$FF0218` arm / poll-bit-15 / clear handshake**, including the address field.
+- Destination is `$10 + addr + $10000`, **demonstrated for all three data widths**.
+- The bound is enforced **per byte** and truncates exactly at `$1FFFF`, reporting `$25A`.
+
+### What neither loader validates
+
+**Checksums are consumed and ignored by both** the ASCII and binary paths — verified by a
+control-validated sweep for accumulating arithmetic in each, and demonstrated by loading records with
+deliberately wrong checksums to identical results.
+
+Three silent failure modes, each demonstrated: **wrong checksum** (loads anyway), **framing**
+(desynchronises), **S0 byte count** (discards the whole transfer). None produces an error code.
+
+**Model consequence**: do not compute or check checksums; do not resynchronise the stream on a record
+start; do not validate the S0 count. All three would be more forgiving than the hardware and would
+hide real failure modes.
