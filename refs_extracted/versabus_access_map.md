@@ -37457,3 +37457,35 @@ first, ahead of the `CPRUN` gate.
 So the `CPRUN` description is accurate and the sample now stands at **one documented conjunction wrong
 (op `$8`), one right in every particular (`CPRUN`)** — which is the appropriate basis for treating the
 op-`$8` error as isolated.
+
+## The `CPRUN` blocker localised: the data conditions ARE satisfiable (2026-07-31)
+
+With `FPS3K_RESP=0x08 FPS3K_CHSEL_RD=0 FPS3K_XPIRQ=6`, a RAM dump shows **every data condition of the
+`CPRUN` gate satisfied**:
+
+| condition | required | measured |
+|---|---|---|
+| `($E86 & $F) == 8` | 8 | **`$0E86 = $0008`** ✓ |
+| `$E87` bit 7 clear | clear | **`$0E87 = $08`** ✓ |
+| `$E74 != $25A` | not `$25A` | **`$0E74 = $0000`** ✓ |
+| `CHANNEL_SELECT == 0` | 0 | forced by `FPS3K_CHSEL_RD=0` ✓ |
+
+**And `$F04740` executes zero times.** RDHC never leaves its `WAIT`, so none of those conditions is
+ever tested.
+
+**So the blocker is the wake, not the gate.** This project records that "delivering `$08` as the
+waking code fails elsewhere: op `$8`'s ISR handler reaches the exit stub only after `jsr $F05688`, one
+of the eight panel-command issuers that end in `bra .`". This measurement localises it precisely —
+the ISR handles op `$8` entirely at interrupt level and spins, so the task-level gate is never
+reached, even though its inputs are all correct in memory.
+
+**And the catch-22 is structural.** RDHC wakes only when a chassis operation's ISR reaches the exit
+stub (`$F050FC` → `trap #1` with the CCR sentinel → `T0WAKEUP`). But the ISR latches MODE0 into `$E86`
+on **every** entry, so whichever operation wakes the task also overwrites the operation code the gate
+tests. An operation that wakes RDHC cannot leave `$08` in `$E86`, and an operation that leaves `$08`
+there does not wake RDHC.
+
+That is a sharper statement of the recorded blocker: not "the CPRUN path sits behind a spin" but
+**"the wake mechanism and the operation latch are the same register, so `$8` can occupy it or trigger
+the wake, never both"**. Breaking it needs either a chassis model that raises BIM0 ch0 without
+re-latching MODE0, or the `USER` task created some other way.
