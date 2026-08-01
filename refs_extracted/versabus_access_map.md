@@ -37973,3 +37973,37 @@ carefully-checked neighbours. The same pattern appears one level down in command
 behaviour that a model must be able to provoke and observe, and command 3 has none — a model that
 implements a bound there would be *more* restrictive than the hardware and would mask a real failure
 mode.
+
+## Every RDHC command is bracketed by a window-page save/restore (2026-07-31)
+
+```
+$F05304  move.w #$0,$e74.l          ; clear the result
+$F0530C  movea.l #$ff0000,a5
+$F05312  move.w  $210(a5),-(a7)     ; SAVE XLTR_MODE2 on the stack
+$F05316  move.w  #$0,$210(a5)       ; page 0
+$F0531C  movea.l #$400000,a0        ; the command record, at page 0
+$F05322  move.l  (a0)+,d1           ; the command number
+$F05324  cmpi.l  #$0,d1 / ble       ; reject <= 0
+$F0532C  cmpi.l  #$4,d1             ; reject > 4
+   ...
+$F05678  movea.l #$ff0000,a0
+$F0567E  move.w  (a7)+,$210(a0)     ; RESTORE MODE2
+$F05682  rts
+```
+
+**Seven exit sites** — `$F0533E`, `$F0539C`, `$F05498`, `$F054C8`, `$F054E2`, `$F054FC`, `$F0558E` —
+all `jmp $F05678`, so every path out of the command interface, success or rejection, funnels through
+the single restore. Saving on the **stack** rather than in a global makes that exact regardless of
+which path was taken.
+
+Two recorded facts confirmed in the same stretch: RDHC reads its record from **chassis memory at
+`$400000`, page 0** (`$F0531C`), and the command number is validated **1..4** (`$F05324`/`$F0532C`).
+
+**Emulation consequence**: a model must tolerate `$FF0210` being driven to 0 and restored around
+every RDHC command, and must return from `$FF0210` whatever was last written — the restore reads the
+saved value back, so a model that returns a constant would corrupt the window page for whatever ran
+before the command.
+
+That last point matters because `$FF0210` is the page register for the whole `$400000` window: a
+mis-restored page silently redirects every subsequent chassis-memory access, and nothing would report
+it.

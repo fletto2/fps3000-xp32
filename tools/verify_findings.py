@@ -8497,6 +8497,13 @@ check('RDHC command 1 defaults its channel from $E62 and bounds it by $105E',
       and _w(0xF0538A) == 0xB879 and _l(0xF0538C) == 0x0000105E
       and _w(0xF05392) == 0x303C and _w(0xF05394) == 0x025C)
 
+check('the RDHC command interface saves MODE2, pages to 0, and restores on every exit',
+      _w(0xF05312) == 0x3F2D and _w(0xF05314) == 0x0210
+      and _w(0xF05316) == 0x3B7C and _w(0xF05318) == 0x0000
+      and _w(0xF0531C) == 0x207C and _l(0xF0531E) == 0x00400000
+      and _w(0xF0567E) == 0x315F and _w(0xF05680) == 0x0210
+      and len(_re21a.findall(r'jmp\s+loc_F05678', _asm21a)) == 7)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
