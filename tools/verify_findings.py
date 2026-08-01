@@ -8455,6 +8455,13 @@ check('the staging arithmetic is $10 + addr + $10000 for all three data types',
       and 0x10 + 0x08 + 0x10000 == 0x10018
       and 0x10 + 0x0C + 0x10000 == 0x1001C)
 
+check('the S0 handler reads d4 words and discards them',
+      _w(0xF0517E) == 0x3B7C and _w(0xF05180) == 0x0400
+      and _w(0xF05194) == 0x3210
+      and _w(0xF05198) == 0x5344
+      and _w(0xF0519A) == 0x0C44 and _w(0xF0519C) == 0x0000
+      and _w(0xF051A0) == 0x4E75)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

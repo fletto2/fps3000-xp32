@@ -37786,3 +37786,34 @@ this project had exercised the wider forms before.
 count, address and data bytes — which also means the checksums were *correct* here, unlike the earlier
 deliberate-corruption test. Both cases now have a demonstration: correct checksums load, and wrong
 checksums load identically.
+
+## The `S0` header handler discards the record (2026-07-31)
+
+`$F0517E`, the last SLC handler to be read:
+
+```
+$F0517E  move.w #$400,$218(a5)        ; arm
+$F05184  move.w $218(a5),d7 / btst #$f / beq   ; poll
+$F0518E  move.w #$0,$218(a5)          ; clear
+$F05194  move.w (a0),d1               ; read a word — and never use d1 again
+$F05196  addq.l #$1,d0                ; running word count
+$F05198  subq.w #$1,d4                ; the record's byte count, from the dispatcher
+$F0519A  cmpi.w #$0,d4 / bne.b $F0517E
+$F051A0  rts
+```
+
+**It consumes `d4` words through the full per-word handshake and discards every one.** `d1` is loaded
+and never read; the loop exists only to step the stream past the header.
+
+So the firmware **ignores the S0 record's contents entirely** — no module name, no header metadata is
+parsed. That is worth knowing for anyone generating S-records for this loader: the header may contain
+anything, or (as demonstrated earlier) be omitted altogether, with no effect beyond the words it costs
+to skip.
+
+`d4` is the byte count the dispatcher extracts at `$F04B88` (`move.b d2,d4`), so a malformed S0 length
+would desynchronise the stream in exactly the way a stray newline does — the loader trusts the count
+without validating it.
+
+That completes the SLC handler set: **dispatcher (`$F04B68`), header-skipper (`$F0517E`), data handler
+(`$F051A2`), terminator/finalizer (`$F05256`), and the reject drain (`$F04C22`)** — five routines, all
+now read.
