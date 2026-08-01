@@ -37430,3 +37430,30 @@ withdrawn. Two documented conjunctions checked: one wrong, one right.
 Worth stating because the generalisation was the kind that would have justified a broad re-audit of
 this file's prose on a sample of one. The correction cost two commands and the claim did not survive
 them.
+
+## RDHC's `CPRUN` gate verified in full (2026-07-31)
+
+```
+loc_F0473C:
+$F0473C  moveq  #$13,d0 / trap #1              ; WAIT — the task blocks here
+$F04740  btst.b #$7,$e87.l / bne TCBRDHC_ErrorPath   ; bit 7 -> the command arm
+$F0474C  move.w $e86.l,d0 / andi.w #$f,d0
+$F04756  cmpi.w #$8,d0 / bne $F04824           ; operation must be $8
+$F0475E  cmpi.w #$25a,$e74.l / beq $F04824     ; $E74 must not be $25A
+$F0476A  cmpi.w #$0,$204(a5) / bne $F047EA     ; CHANNEL_SELECT must be 0, else TERMT
+$F04774  moveq  #$b,d0 / trap #1               ; $0B CRTCB 'USER'
+```
+
+**All three recorded conjuncts confirmed** — `($E86 & $F) == 8`, `$E74 != $25A`,
+`CHANNEL_SELECT == 0` — in that order, each branching away on failure, with the `TERMT` arm at
+`$F047EA` named correctly. The recorded main-loop shape `moveq #$13,d0 / trap #1 / btst #7,$E87 /
+bne` matches instruction for instruction.
+
+**A fourth test precedes them**: `btst.b #$7,$e87.l`, which diverts to the bit-7 command arm before
+the operation nibble is even examined. The record describes that dispatcher separately (as
+"`TCBRDHC_ErrorPath` at `$F048D8` is the **bit-7 command arm**") without noting that it is tested
+first, ahead of the `CPRUN` gate.
+
+So the `CPRUN` description is accurate and the sample now stands at **one documented conjunction wrong
+(op `$8`), one right in every particular (`CPRUN`)** — which is the appropriate basis for treating the
+op-`$8` error as isolated.

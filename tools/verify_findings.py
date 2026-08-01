@@ -8416,6 +8416,16 @@ check('chassis op $8 has two arms: CH1 reset, or an $E7E range check',
       and _w(0xF04F7C) == 0x0CB9 and _l(0xF04F7E) == 0x0001FFFF
       and _w(0xF04F88) == 0x303C and _w(0xF04F8A) == 0x025A)
 
+check('the CPRUN gate tests bit 7 of $E87, then op $8, then $E74, then CHANNEL_SELECT',
+      _w(0xF04740) == 0x0839 and _w(0xF04742) == 0x0007
+      and _l(0xF04744) == 0x00000E87
+      and _w(0xF0474C) == 0x3039 and _l(0xF0474E) == 0x00000E86
+      and _w(0xF04752) == 0x0240 and _w(0xF04754) == 0x000F
+      and _w(0xF04756) == 0x0C40 and _w(0xF04758) == 0x0008
+      and _w(0xF0475E) == 0x0C79 and _w(0xF04760) == 0x025A
+      and _w(0xF0476A) == 0x0C6D and _w(0xF0476C) == 0x0000
+      and _w(0xF0476E) == 0x0204)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
