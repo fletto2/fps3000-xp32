@@ -8450,6 +8450,11 @@ check('...with d5 = $08/$10/$18 as the address shift for S1/S2/S3',
 check('...and S8/S9 call SRecordFinalize at $F05256',
       _w(0xF04C0C) == 0x4EB9 and _l(0xF04C0E) == 0x00F05256)
 
+check('the staging arithmetic is $10 + addr + $10000 for all three data types',
+      0x10 + 0x00 + 0x10000 == 0x10010
+      and 0x10 + 0x08 + 0x10000 == 0x10018
+      and 0x10 + 0x0C + 0x10000 == 0x1001C)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

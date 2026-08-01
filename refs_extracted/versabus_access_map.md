@@ -37758,3 +37758,31 @@ Every arm tests `$E74` afterwards and continues at `$F04C42` on zero, or exits t
 So the loader is three routines: a dispatcher, a per-record data handler, and a terminator handler
 that establishes the session destination. The earlier measurement (2 dispatches, 2 data-handler
 entries, 1 finalize) is exactly what this structure predicts.
+
+## `S2` and `S3` records demonstrated (2026-07-31)
+
+Feeding one of each through the SLC loader, alongside the `S1` records used until now:
+
+```
+S2080000081122334445  S3090000000C5566778830  S9030000FC
+```
+
+| record | address bytes | declared address | landed at | `$10 + addr + $10000` |
+|---|---:|---|---|---|
+| `S2` | 3 | `$000008` | **`$10018`** | ✓ |
+| `S3` | 4 | `$0000000C` | **`$1001C`** | ✓ |
+
+**All three data record types now demonstrated**, each through the width-specific shift the dispatcher
+selects (`d5` = `$08`/`$10`/`$18`) and all landing through the same `$10 + addr + $10000` arithmetic.
+The bytes read back contiguously — `11 22 33 44 55 66 77 88` across `$10018`-`$1001F` — so the two
+records placed correctly relative to each other as well as absolutely.
+
+That is a stronger test of the address handling than repeated `S1` records could give: `S1`, `S2` and
+`S3` differ in how many address bytes they carry and therefore in how far `d5` shifts, and a mistake
+in that mapping would put `S2` or `S3` data at a wrong offset while leaving `S1` correct. Nothing in
+this project had exercised the wider forms before.
+
+**Method note.** The records were generated programmatically with the checksum computed from the
+count, address and data bytes — which also means the checksums were *correct* here, unlike the earlier
+deliberate-corruption test. Both cases now have a demonstration: correct checksums load, and wrong
+checksums load identically.
