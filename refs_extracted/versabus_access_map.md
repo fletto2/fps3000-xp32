@@ -37617,3 +37617,35 @@ a segment named `UPGM` covering `$10000`-`$1CFFF`, NOP-fill the first eight word
 **the segment length `$D000` confirms from the firmware's own parameter block that the CP program's
 region stops well short of the RTOS structures at `$1DD00`**, which this project derives separately
 from the allocator. Two unrelated sources agreeing on where host-loaded code may live.
+
+## `CPRUN` attempt: the sequencer gate does not fix the ordering (2026-07-31)
+
+I added `FPS3K_SEQ_AFTER_SREC=1` — hold the next scripted response until `srec_exhausted` — as the
+change identified to unblock load-then-op-`$8`. **It does not work.** The gated run still loads only
+the first record and leaves `$E7E` zero, so op `$8` still takes its reject arm and `CRTCB` is never
+reached.
+
+| configuration | `$E7E` | data loaded |
+|---|---|---|
+| `FPS3K_RESP=0x00` | `$00010000` | both records |
+| `FPS3K_RESPSEQ=0x00` | `$00010000` | both records |
+| **`FPS3K_RESPSEQ=0x00,0x08` + gate** | **`$00000000`** | **first record only** |
+
+So a *two-code* sequence still truncates the stream even with the gate. The likely cause is that the
+gate's `seq_next > 0` test does not hold at the moment the second code would fire, so the hold never
+applies — but I have not confirmed that, and I am not going to iterate blindly on emulator internals.
+
+**The hook is left in place, opt-in and verified not to disturb the default boot** (`chsel=2903`
+unchanged), but it should be treated as **not yet achieving its purpose**.
+
+### A measurement artefact of my own, corrected
+
+While diagnosing this I reported `$E7E = $00001000` from two runs, contradicting the `$00010000` I had
+measured earlier and casting doubt on the `adda.l #$10000` decode. **The `$00001000` readings were
+wrong** — an artefact of nested `python3 -c` inside `$( )` in a shell loop, where the quoting mangled
+the byte slice. A direct dump shows `$0E7C`-`$0E83` = `00 00 00 01 00 00 00 00`, so `$0E7E` is
+`$00010000`, and the older dump agrees byte for byte.
+
+**The decode was never in doubt; my measurement harness was.** Worth recording because the wrong value
+was self-consistent across two runs, which is exactly the pattern that makes an artefact convincing —
+the same shell construction produced the same error twice.
