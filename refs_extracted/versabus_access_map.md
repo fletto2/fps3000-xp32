@@ -37649,3 +37649,38 @@ the byte slice. A direct dump shows `$0E7C`-`$0E83` = `00 00 00 01 00 00 00 00`,
 **The decode was never in doubt; my measurement harness was.** Worth recording because the wrong value
 was self-consistent across two runs, which is exactly the pattern that makes an artefact convincing —
 the same shell construction produced the same error twice.
+
+## The gate works; the end-of-stream panel command is the real blocker (2026-07-31)
+
+Relocating `FPS3K_SEQ_AFTER_SREC` to the place `FPS3K_RESPSEQ` actually advances — the `step++` in the
+`XPIRQ` raise path, not the `FPS3K_SEQ` panel-response path I first patched — makes it work:
+
+| | before | after |
+|---|---|---|
+| records loaded | first only | **both** |
+| `$E7E` | `$00000000` | **`$00010000`** — valid, in range |
+| op `$8` | rejected (`$25A`) | **never fires** |
+
+**So the ordering problem is solved and a new one is exposed.** The run ends spinning at **`$F056B8`**
+— RDHC's panel-command issuer `bra .`, one of the nine recorded hang sites.
+
+**The cause is the end-of-stream `$25F`.** Once the record source is exhausted the model keeps
+answering with zeros, the loader reads them as an unrecognised record type, drains, and issues a panel
+command — which spins. RDHC is then in a task-level spin with no route back, so the second response
+code can never be acted on however it is delivered.
+
+**This is a model artefact with a specific fix.** A real chassis would stop supplying words at
+end-of-stream, leaving the loader blocked in its `$FF0218` handshake — recoverable — rather than
+feeding it garbage that provokes a fatal panel command. **`$FF0004` bit 0 should read 0 and `$FF0008`
+should stop producing data once `srec_exhausted` is set**, instead of the current behaviour.
+
+That is now the single identified obstacle between this project and a demonstrated `CPRUN`:
+
+```
+records load ✓   $E7E valid ✓   all four gate conditions satisfiable ✓
+op $8 accept arm wakes RDHC ✓ (static)
+   ^-- blocked only by the loader spinning on end-of-stream garbage
+```
+
+Every other precondition has been measured true. The remaining change is to the *model's* end-of-stream
+behaviour, not to the firmware understanding.

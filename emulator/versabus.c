@@ -1742,14 +1742,6 @@ static void panel_resp_tick(uint32_t cycles) {
         if (seq_next < seq_len) seq_gap_left = seq_gap_cycles();
     }
     if (!panel_resp_armed) return;
-    /* FPS3K_SEQ_AFTER_SREC=1: hold the NEXT scripted response until the
-     * S-record source is exhausted.  FPS3K_RESPSEQ is otherwise time-driven,
-     * so a second code arrives mid-stream and aborts the record load before
-     * the S9 terminator writes $E7E -- which is exactly what blocks the
-     * load-then-op-$8 sequence needed for CPRUN.  Opt-in; default unchanged. */
-    if (getenv("FPS3K_SEQ_AFTER_SREC") && getenv("FPS3K_SREC")
-        && seq_next > 0 && !srec_exhausted)
-        return;
     if (panel_resp_delay > cycles) { panel_resp_delay -= cycles; return; }
 
     {   /* A scripted sequence overrides the fixed response code -- which used
@@ -1875,7 +1867,14 @@ void versabus_tick(uint32_t cycles) {
                             for (const char *c = sq; (c = strchr(c, ',')); c++) n++;
                             const char *q = sq;
                             for (int j = 0; j < step % n; j++) q = strchr(q, ',') + 1;
-                            step++;
+                            /* FPS3K_SEQ_AFTER_SREC=1: hold the RESPSEQ index
+                             * at its first code until the S-record source is
+                             * exhausted, so a second code cannot arrive mid
+                             * stream and truncate the record load before the
+                             * S9 terminator writes $E7E.  Opt-in. */
+                            if (!(getenv("FPS3K_SEQ_AFTER_SREC")
+                                  && getenv("FPS3K_SREC") && !srec_exhausted))
+                                step++;
                             code = (uint8_t)strtoul(q, NULL, 0) & MODE0_RESP_MASK;
                         } else {
                             const char *e = getenv("FPS3K_RESP");
