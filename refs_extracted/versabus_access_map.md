@@ -37817,3 +37817,34 @@ without validating it.
 That completes the SLC handler set: **dispatcher (`$F04B68`), header-skipper (`$F0517E`), data handler
 (`$F051A2`), terminator/finalizer (`$F05256`), and the reject drain (`$F04C22`)** — five routines, all
 now read.
+
+## The SLC loader validates almost nothing — three demonstrated failure modes (2026-07-31)
+
+Testing the S0-length hazard predicted from the handler's reading:
+
+| stream | S0 count | data loaded |
+|---|---|---|
+| `S00600004844521B` + `S1…` + `S9` | `06` (correct) | **`DE AD BE EF`** |
+| `S00A00004844521B` + `S1…` + `S9` | `0A` (4 too many) | **NONE** |
+
+An over-long header count consumes four extra words, desynchronising the stream so the following `S1`
+is never recognised — and **nothing reports it**. The transfer simply produces no data.
+
+**That is the third silent failure mode demonstrated in this loader today:**
+
+| trusted without validation | demonstrated consequence |
+|---|---|
+| **the checksum** | records with wrong checksums load identically to correct ones |
+| **the framing** | a newline between records desynchronises the stream permanently |
+| **the S0 byte count** | an over-long header silently discards the entire transfer |
+
+Each was predicted from reading and then demonstrated by constructing the failing input. Together they
+say the SLC path **trusts its input almost completely**: it validates the record *type* (rejecting
+with `$25F`) and the destination *address range* (rejecting with `$25A`), and nothing else.
+
+**For the hardware effort this is the practical headline.** A microcode upload over this path can fail
+silently in three distinct ways, none of which produces an error code, and two of which
+(checksum, header length) would not be visible in any panel-code trace. The recorded advice that the
+monitor's `L` command is "a *safer* loader than the ROM" now rests on three demonstrated failures
+rather than one reading — and host-side validation should cover the count and the framing, not just
+the checksum.

@@ -8462,6 +8462,11 @@ check('the S0 handler reads d4 words and discards them',
       and _w(0xF0519A) == 0x0C44 and _w(0xF0519C) == 0x0000
       and _w(0xF051A0) == 0x4E75)
 
+check('the S0 handler takes its loop count from the dispatcher without validating it',
+      _w(0xF04B88) == 0x1802          # move.b d2,d4 -- the record byte count
+      and _w(0xF05198) == 0x5344      # subq.w #$1,d4
+      and _w(0xF0519A) == 0x0C44)     # cmpi.w #$0,d4
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
