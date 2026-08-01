@@ -38047,3 +38047,31 @@ Worth recording as a negative result: the uniform raw-backing-store design means
 right by construction, and only the registers with explicit read handlers (`$FF0218`'s arm bit,
 `$FF0202`'s busy bit, `$FF0204`'s `CHSEL_RD` override) can diverge. That narrows where readback bugs
 can hide to three registers rather than the whole block.
+
+## `FPS3K_CHSEL_RD` from reset breaks the self-test — predicted and confirmed (2026-07-31)
+
+Reasoning from the readback audit: only three XLTR registers have explicit read handlers that can
+diverge from the raw store, and one of them is **`$FF0204`**, whose `FPS3K_CHSEL_RD` override returns
+a fixed value. Phase `$1600` requires `cmp.w $204(a6),d6` — the phase counter must read back — so an
+active override should break the suite.
+
+| configuration | final PC | phase |
+|---|---|---|
+| `FPS3K_CHSEL_RD=28` (boot-gated, default) | `$F00FE6` idle | `$2903` |
+| **`…_FROM_RESET=1`** | **`$F09502`** | **`$1500`** |
+
+**Confirmed**: the machine hangs in the self-test rather than booting. The phase is `$1500` rather
+than the `$1600` I predicted — the readback the override breaks is reached one stage earlier — but the
+mechanism and the outcome are as reasoned.
+
+**Three things this establishes at once.**
+
+1. **The readback corollary is sound**: a diverging read handler on one of those three registers is
+   enough to hang the suite, which is why the general raw-backing-store design matters.
+2. **It explains why the hook is boot-gated.** This project records `FPS3K_CHSEL_RD` as gated on boot
+   completion alongside `FPS3K_DMA10AA` and `FPS3K_POKE`, each fixed after hanging the diagnostics.
+   The gate is not caution — it is required, and `_FROM_RESET` exists to reproduce the failure.
+3. **A fourth fault-injection demonstration**, on a mechanism distinct from the three earlier ones
+   (`apif_berr`, `xltr_alias`, `scm_bitrot`): a *readback override* rather than a corrupted value or a
+   suppressed fault. All four produce the same signature — a stalled phase counter and no error — which
+   is the retry-forever policy holding across four different provocations.

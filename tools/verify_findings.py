@@ -8504,6 +8504,10 @@ check('the RDHC command interface saves MODE2, pages to 0, and restores on every
       and _w(0xF0567E) == 0x315F and _w(0xF05680) == 0x0210
       and len(_re21a.findall(r'jmp\s+loc_F05678', _asm21a)) == 7)
 
+check('phase $1600 requires $FF0204 to read back the phase counter',
+      _w(0xF09582) == 0xBC6E and _w(0xF09584) == 0x0204
+      and _w(0xF09586) >> 8 == 0x66)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
