@@ -38075,3 +38075,30 @@ mechanism and the outcome are as reasoned.
    (`apif_berr`, `xltr_alias`, `scm_bitrot`): a *readback override* rather than a corrupted value or a
    suppressed fault. All four produce the same signature — a stalled phase counter and no error — which
    is the retry-forever policy holding across four different provocations.
+
+## Phase `$1500` is a dedicated `CHANNEL_SELECT` readback test (2026-07-31)
+
+```
+loc_F094F0:  clr.b   d6                       ; minor phase 0
+loc_F094F2:  cmpi.b  #$5,d6 / bgt $F09516     ; six iterations, d6 = 0..5
+             clr.l   d7
+loc_F094FA:  move.w  d6,$204(a6)              ; write the phase counter
+             cmp.w   $204(a6),d6              ; READ IT BACK
+$F09502:     beq.b   $F0950A                  ; must match
+```
+
+**Six write/read-back cycles on `$FF0204`, values 0 through 5.** That is the whole of the stage — a
+dedicated readback test for the register, distinct from phase `$1600`'s incidental
+`cmp.w $204(a6),d6` at the end of its register-file walk.
+
+**So the `FPS3K_CHSEL_RD_FROM_RESET` hang at `$F09502` is precisely this comparison failing**, on the
+first stage that tests the register at all. My prediction named phase `$1600` because that is where I
+had seen the readback requirement; the machine actually checks it two stages earlier, in a test whose
+only purpose is that check.
+
+That also explains why the failure is so early and so total: `$FF0204` is the phase counter itself, so
+a register that will not read back correctly means **the self-test cannot verify its own progress
+indicator** — and the suite tests exactly that before relying on it for the rest of the run. The
+ordering is deliberate.
+
+**A small addition to the phase map**: `$1500` = CHANNEL_SELECT readback, six sub-stages.

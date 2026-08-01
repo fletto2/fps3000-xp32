@@ -8508,6 +8508,13 @@ check('phase $1600 requires $FF0204 to read back the phase counter',
       _w(0xF09582) == 0xBC6E and _w(0xF09584) == 0x0204
       and _w(0xF09586) >> 8 == 0x66)
 
+check('phase $1500 is six write/read-back cycles on $FF0204',
+      _w(0xF094F0) == 0x4206
+      and _w(0xF094F2) == 0x0C06 and _w(0xF094F4) == 0x0005
+      and _w(0xF094FA) == 0x3D46 and _w(0xF094FC) == 0x0204
+      and _w(0xF094FE) == 0xBC6E and _w(0xF09500) == 0x0204
+      and _w(0xF09502) >> 8 == 0x67)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',
