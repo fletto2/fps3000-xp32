@@ -8406,6 +8406,16 @@ check('the SLC dispatcher tests for S0 and S1 by ASCII value',
       _w(0xF04B8A) == 0x0C41 and _w(0xF04B8C) == 0x5330
       and _w(0xF04B9A) == 0x0C41 and _w(0xF04B9C) == 0x5331)
 
+check('chassis op $8 has two arms: CH1 reset, or an $E7E range check',
+      _w(0xF04F52) == 0x3028 and _w(0xF04F54) == 0x0202
+      and _w(0xF04F56) == 0x0800 and _w(0xF04F58) == 0x000E
+      and _w(0xF04F5A) >> 8 == 0x67
+      and _w(0xF04F5C) == 0x0C68 and _w(0xF04F60) == 0x0204
+      and _w(0xF04F64) == 0x303C and _w(0xF04F66) == 0x0258
+      and _w(0xF04F70) == 0x0CB9 and _l(0xF04F72) == 0x00010000
+      and _w(0xF04F7C) == 0x0CB9 and _l(0xF04F7E) == 0x0001FFFF
+      and _w(0xF04F88) == 0x303C and _w(0xF04F8A) == 0x025A)
+
 check('the ASQ-post wrapper IS called, from $F043E8',
       insn(0xF043E8) == 'bsr.w $f04488')
 check('...and $F043E8 lies inside the $3C CMR handler at $F03D0C',

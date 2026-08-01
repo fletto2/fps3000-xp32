@@ -37367,3 +37367,42 @@ destination when the operation fires — the response sequence delivers `$08` wi
 record stream to finish, and `$E7E` is only written at the `S9`. **Not a firmware fault; a stimulus
 ordering problem**, and one that a real host would avoid by sending op `$8` after the records rather
 than interleaved.
+
+## Chassis operation `$8` decoded — the recorded condition is an OR, not an AND (2026-07-31)
+
+```
+$F04F52  move.w $202(a0),d0        ; MODE1
+$F04F56  btst.b #$e,d0             ; bit 14
+$F04F5A  beq.b  $F04F70            ; clear -> fall to the range check
+$F04F5C  cmpi.w #$0,$204(a0)       ; CHANNEL_SELECT == 0?
+$F04F62  bne.b  $F04F70            ; no  -> fall to the range check
+$F04F64  move.w #$258,d0           ; PCMD_CH1_RESET
+$F04F68  jsr    $F05688            ; issue it
+$F04F6E  bra.b  $F04F9C            ; ...and done
+loc_F04F70:
+$F04F70  cmpi.l #$10000,$e7e.l / blt $F04F88
+$F04F7C  cmpi.l #$1ffff,$e7e.l / ble $F04F94      ; in range -> ACCEPT
+loc_F04F88:
+$F04F88  move.w #$25a,d0           ; out of range -> reject
+```
+
+**Two independent arms, selected by MODE1 bit 14 and `CHANNEL_SELECT`:**
+
+| condition | action |
+|---|---|
+| MODE1 bit 14 **set** and `CHANNEL_SELECT == 0` | issue **`$258`** CH1 reset, return |
+| otherwise | range-check **`$E7E`** against `$10000`-`$1FFFF`; accept or report **`$25A`** |
+
+This project records the operation as "**CH1 reset conditional on `CHANNEL_SELECT == 0` and on `$E7E`
+lying in `$10000`-`$1FFFF` (panel `$25A` otherwise)". **The `$E7E` range check is not a condition on
+the CH1 reset** — it is the *other* arm, taken precisely when the reset conditions fail. A chassis can
+get `$25A` without ever being eligible for the reset, and can get the reset without `$E7E` being
+examined at all.
+
+What the record gets right: `$258` is the action, and the reset does require **MODE1 bit 14 set and
+`CHANNEL_SELECT == 0`** — both confirmed here.
+
+**This also explains the earlier measurement.** With `FPS3K_RESPSEQ=0x00,0x08` the run reached
+`$F04F70` and then `$25A`: the reset arm's conditions were not met, so control fell to the range
+check, where `$E7E` was still zero because the `S9` had not yet been processed. Two separate facts,
+not one failure.
