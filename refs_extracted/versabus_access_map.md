@@ -38030,3 +38030,20 @@ the decode predicted.
 **Three accesses per command is also a small cost worth knowing**: the interface pays a read and two
 writes of the page register on every command, which is why `$FF0210` shows up in access censuses more
 often than the handful of self-test writes would suggest.
+
+## MODE2 readback fidelity checked — the model is correct (2026-07-31)
+
+I flagged that the RDHC command bracket depends on `$FF0210` returning what was last written, and that
+a model returning a constant would silently corrupt the window page. Checked:
+
+- `xltr_write()` does **`xltr.raw[idx] = val;` before its switch**, so every XLTR write lands in the
+  raw backing store as well as in any named field.
+- `xltr_read()` falls through to **`return xltr.raw[idx];`** for the whole `$FF0200`-`$FF025F` block.
+
+So MODE2 — and every other XLTR register without special read handling — reads back exactly what was
+written. **The bracket's restore is faithful in the model**, and the concern is closed.
+
+Worth recording as a negative result: the uniform raw-backing-store design means the *general* case is
+right by construction, and only the registers with explicit read handlers (`$FF0218`'s arm bit,
+`$FF0202`'s busy bit, `$FF0204`'s `CHSEL_RD` override) can diverge. That narrows where readback bugs
+can hide to three registers rather than the whole block.
