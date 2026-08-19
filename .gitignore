@@ -39,3 +39,6 @@ emulator/ramdump.bin
 !build_clean_disasm.py
 !tools/
 !tools/*.py
+
+# accidental "2>1" redirect capture -- 424MB trace, regenerable
+/1
