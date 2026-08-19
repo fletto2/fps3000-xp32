@@ -2,9 +2,9 @@
 """Patch FPS-3000 ROM with the monitor.
 
 Two patch modes:
-  --reset    Replace reset PC ($F00004) with monitor entry ($F0A825).
+  --reset    Replace reset PC ($F00004) with monitor_cold ($F0A826).
              Bypasses normal boot — drops directly into monitor.
-  --panic    Replace F0A27A (the panic catch-all) with JMP $F0A825.
+  --panic    Replace F0A27A (the panic catch-all) with JMP $F0A840.
              Normal boot proceeds; monitor only runs on unhandled
              exceptions.  The default.
   --both     Apply both patches.
@@ -64,7 +64,7 @@ def main():
     if args.panic:
         # F0A27A: 30 3C 02 A6 60 00 02 FE
         #         (move.w #$2A6,d0; bra.w F0A57E)
-        # Patch to: JMP $F0A825 = 4E F9 00 F0 A8 25
+        # Patch to: JMP $F0A840 = 4E F9 00 F0 A8 40
         target = 0xF00000 + MON_ENTRY
         patch = bytes([0x4E, 0xF9]) + struct.pack('>I', target)
         rom[0xA27A:0xA27A + len(patch)] = patch

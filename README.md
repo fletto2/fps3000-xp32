@@ -21,16 +21,32 @@ The 64 KB SBC (Control Processor) firmware ROM, byte-identical to
 Motorola **M68KVM02-3** VERSAmodule monoboard (MC68000 @ 8 MHz).
 
 ### Disassembly
-- **`fps3k_clean.asm`** — *the readable one*. ~22 k lines with:
+- **`fps3k.asm`** — *the readable one*, 22,360 lines. Supersedes the old
+  `fps3k_clean.asm`, which is gone. Built by `tools/mk_consolidated_asm.py`
+  from `fps3k_custom_annotated.asm`, and carries:
   - meaningful labels (`TCBRDHC`, `PanelSendAndWait`, `SRecordParseLoop`, …)
   - hex addresses preserved as a leading column
+  - the eleven code regions bannered, with the six task boundaries taken from
+    the ROM's own TDTI table at `$F0A600`
   - XLTR register accesses resolved (`$202(a0)` → `[XLTR_MODE1]`)
   - panel-command-code immediates named (`#$26C, d0` → `; PCMD_RELEASE`)
   - SBC-RAM globals named (`$E58.l` → `; g__srec_addr`)
-  - Monte-Carlo-derived annotations as `;>>>>` lines above their target
-- **`fps3k_custom.asm`** — raw 68000 disasm (recursive-descent +
-  iterative convergence + RMS68K TRAP-skip heuristic).
+  - `;>>>>` Monte-Carlo annotations, and `;###` findings traceable to the
+    access map
+- **`fps3k_custom.asm`** — raw 68000 disasm of the application region
+  (recursive-descent + iterative convergence + RMS68K TRAP-skip heuristic).
+- **`fps3k_kernel.asm`** — the RMS68K kernel, seeded from its own TRAP #0 and
+  TRAP #1 dispatch tables.
 - **`fps3k_custom_annotated.asm`** — raw + MC annotations, intermediate.
+
+### `monitor/`
+A serial monitor and debugger patched into the ROM's unused tail, giving a
+terminal direct access to SBC memory, the AP I/F and XLTR registers, the
+`$400000` chassis window and the XP-32 channel windows — without a host on the
+far end of the AP I/F link. It has run on the real machine.
+- **`monitor/MONITOR_MANUAL.pdf`** — the user's guide.
+- **`monitor/README.md`** — building and burning it.
+- Four ready-to-burn images are checked in, in joined and split form.
 
 ### Documentation
 - **`architecture.md`** — system-level writeup: VersaBUS chassis,
@@ -137,7 +153,9 @@ Motorola **M68KVM02-3** VERSAmodule monoboard (MC68000 @ 8 MHz).
   with the updated context. 250 annotations, 99.6% YES, 77.2% BOTH-
   agreement (highest of any pass to date). Identified
   `ChannelConfigOffsetTable @ F046E0` (4 longwords of XLTR config
-  offsets) — now in `fps3k_clean.asm`.
+  offsets) — now in `fps3k.asm`. Since identified as the per-channel BIM
+  control-register table `$244 $246 $250 $252`, indexed by `(ch-1)*4`, which
+  ends exactly where RDHC's entry point `$F046F0` begins.
 - **`notes/mc_fps3k_adversarial_focus.md`** — focused 3-stage adversarial
   pass on the 55 disagreed samples from pass 2. 100% revised — but
   the pattern was vague-vs-specific not wrong-vs-right; debate
